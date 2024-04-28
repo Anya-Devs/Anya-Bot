@@ -24,9 +24,10 @@ import re
 # Third-Party Imports
 from colorama import Fore, Style
 
+# Files
+import depend
 
 # Package Management
-import os
 os.system("pip install -r requirements.txt")
 os.system("pip install --upgrade pip")
 
