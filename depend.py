@@ -1,6 +1,10 @@
 import os
 import subprocess
 
+# Package Management
+os.system("pip install -r requirements.txt")
+os.system("pip install --upgrade pip")
+
 def update_requirements(requirements_file='requirements.txt'):
     # Get installed packages using pip
     installed_packages = subprocess.check_output(['pip', 'freeze']).decode('utf-8').split('\n')
