@@ -45,7 +45,7 @@ async def get_emoji(name, ctx):
 class System(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        logger.info(f"{Fore.GREEN}[System cog] Initialized{Style.RESET_ALL}")
+        # logger.info(f"{Fore.GREEN}[System cog] Initialized{Style.RESET_ALL}")
 
     async def load_and_get_emojis(self, bot, ctx):
         return {
