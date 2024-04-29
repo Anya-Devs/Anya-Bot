@@ -49,7 +49,7 @@ class AvatarChanger(commands.Cog):
     async def change_avatar_countdown(self):
         while True:
             await self.change_avatar()
-            await asyncio.sleep(60)  # Wait for 60 seconds between avatar changes
+            await asyncio.sleep(self.countdown)  # Wait for 60 seconds between avatar changes
 
 def setup(bot):
     bot.add_cog(AvatarChanger(bot))
