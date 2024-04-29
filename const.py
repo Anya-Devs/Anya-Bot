@@ -1,116 +1,150 @@
-import platform
-from datetime import datetime
+import os
 import io
+import json
 import traceback
-
-import discord
+from datetime import datetime
 from PIL import Image
 
+import discord
+from discord.ext import commands
+import platform
+
+# Define URLs for Anya images
 class AnyaImages:
     shocked_anya = "https://img-03.stickers.cloud/packs/20d46227-dcb0-4583-8d66-ee78d4743129/webp/a65e28be-a5fd-4654-8e7d-736dbd809df2.webp"
     awake_anya = 'https://media.tenor.com/9kLYJilshNMAAAAe/spy-x-family-anya.png'
-    question_anya= 'https://i.pinimg.com/236x/b7/23/1f/b7231fbf87eee22b6d1f35f83e9a80bd.jpg'
-
+    question_anya = 'https://i.pinimg.com/236x/b7/23/1f/b7231fbf87eee22b6d1f35f83e9a80bd.jpg'
+    ping_banner_anya = 'https://i.redd.it/fvcg0u3kaiga1.jpg'
+# Custom error embed generator
 async def error_custom_embed(bot, ctx, e, title="Custom Error", thumbnail_url=AnyaImages.question_anya):
-    # Create an error embed after catching the exception
     error_embed = discord.Embed(
         description=f'```bash\n{e}```',
         color=discord.Color.red(),
         timestamp=datetime.now()
     )
     error_embed.set_author(name=f'{bot.user.display_name.title()} - {title}', icon_url=bot.user.avatar)
-    # Get the last traceback frame from the exception
     line_number = traceback.extract_tb(e.__traceback__)[-1].lineno
     tb_frame = traceback.extract_tb(e.__traceback__)[-1]
-    file_location = tb_frame.filename  # File location
-
-    print("Error found in line", line_number)
+    file_location = tb_frame.filename
     error_embed.add_field(
         name=" ",
-        value=f":warning: **Potential issue found:**\n- **File:** `{file_location}`\n- **Line:** `{line_number}`",
+        value=f"**Potential issue found:**\n- **File:** `{file_location}`\n- **Line:** `{line_number}`",
         inline=False
     )
     error_embed.set_footer(text='Error Found')
     error_embed.set_thumbnail(url=thumbnail_url)
-
-    # Inform the user about the error
     await ctx.reply(embed=error_embed)
 
+# Emoji loader and creator
 class Emojis:
-    @staticmethod
-    async def load(bot):
-        print('Loading emojis from local files')
-        cpu_emoji = await Emojis.create_emoji(bot, "Emojis/cpu.jpg")
-        memory_emoji = await Emojis.create_emoji(bot, "Emojis/memory.png")
-        python_emoji = await Emojis.create_emoji(bot, "Emojis/python.jpg")
-        return cpu_emoji, memory_emoji, python_emoji
+    emoji_paths = {
+        "cpu_emoji": "Emojis/cpu.png",
+        "memory_emoji": "Emojis/memory.png",
+        "python_emoji": "Emojis/python.png"
+    }
 
     @staticmethod
-    async def create_emoji(bot, file_path):
-            with open(file_path, "rb") as f:
-                image = Image.open(f)
-                img_byte_array = io.BytesIO()
-                image.save(img_byte_array, format=image.format)
-                img_byte_array.seek(0)
-                print(f"Creating emoji from file: {file_path}")
-                emoji = await bot.guild.create_custom_emoji(name=file_path.split("/")[-1].split(".")[0], image=img_byte_array.read())
-                print(f"Emoji created successfully: {emoji.name}")
-                return emoji
+    async def load(bot, ctx):
+     print('Loading emojis from local files')
+     emojis = {}
+     for emoji_name, file_path in Emojis.emoji_paths.items():
+        emoji = await Emojis.create_emoji(ctx, file_path, emoji_name)
+        emoji_id = emoji.split(":")[-1][:-1]
+        emoji_format = f"<:_:{emoji_id}>"
+        emojis[emoji_id] = emoji_format  # Store emoji format with emoji ID as key
+        print(emoji_format)
     
+     formatted_results = ""
+     for emoji_id in emojis.keys():
+        formatted_results += f"<:_:{emoji_id}>"
+    
+     return formatted_results
 
+
+
+     
+    @staticmethod
+    async def create_emoji(ctx, file_path, emoji_name):
+     # Check if emoji.json file exists, create if not
+     if not os.path.exists("Data"):
+        os.makedirs("Data")
+     if not os.path.exists("Data/emoji.json"):
+        with open("Data/emoji.json", "w") as f:
+            json.dump({}, f)  # Empty json file
+
+     # Load emoji data from emoji.json
+     with open("Data/emoji.json", "r") as f:
+        emoji_data = json.load(f)
+
+     # Check if emoji exists in the json
+     if emoji_name in emoji_data and "emoji_id" in emoji_data[emoji_name]:
+        # Emoji ID exists in json, return the emoji format
+        emoji_id = emoji_data[emoji_name]["emoji_id"]
+        return f"<:_:{emoji_id}>"
+
+     # Check if emoji exists in the guild
+     existing_emoji = discord.utils.get(ctx.guild.emojis, name=emoji_name)
+     if existing_emoji:
+        # Delete existing emoji from the guild
+        await existing_emoji.delete()
+        print(f"Deleted existing emoji: {existing_emoji.name}")
+
+     # Create new emoji
+     with open(file_path, "rb") as f:
+        image = Image.open(f)
+        img_byte_array = io.BytesIO()
+        image.save(img_byte_array, format=image.format)
+        img_byte_array.seek(0)
+        print(f"Creating emoji from file: {file_path}")
+        new_emoji = await ctx.guild.create_custom_emoji(name=emoji_name, image=img_byte_array.read())
+        print(f"Emoji created successfully: {new_emoji.name}")
+
+        # Update emoji data
+        emoji_data[emoji_name] = {"emoji_id": new_emoji.id, "emoji_name": "_"}
+        with open("Data/emoji.json", "w") as f:
+            json.dump(emoji_data, f, indent=4)  # Save updated json with indentation
+
+     # Return the emoji format
+     return f"<:_:{new_emoji.id}>"
+
+
+
+
+# Constants related to logging
 class LogConstants:
-    """
-    Constants related to logging.
-    """
-    # URL of the thumbnail image for the start log embed
     start_log_thumbnail = "https://example.com/start_log_thumbnail.png"
-    
-    # Footer details
     footer_text = "Please commit your changes to the repository."
     footer_icon = "https://example.com/footer_icon.png"
-    
-    # Author details
     author_name = "Your Bot Name"
     author_icon = "https://example.com/author_icon.png"
 
+# Constants related to the ping command
 class PingConstants:
-    """
-    Constants related to the ping command.
-    """
-    # Thumbnail URL for the ping command
     thumbnail_url = 'https://example.com'
-
-    # Image URL for the ping command
-    image_url =  AnyaImages.awake_anya
-    
-    # Embed color
+    image_url = AnyaImages.ping_banner_anya
+    footer_icon = None
     embed_color = None
-    
-    # System information
-    current_time = datetime.now().strftime("%I:%M:%S %p")  # Get current time
+
+    current_time = datetime.now().strftime("%I:%M:%S %p")
     system_info = {
         "Operating System": f"{platform.system()} {platform.release()}\n└── {platform.version()} ",
-        "System Time": current_time,  # Format time as "I M P"
+        "System Time": current_time,
         "Processor": platform.processor(),
         "Python Version": platform.python_version(),
-        "System Version": datetime.now().strftime("%I:%M:%S %p")  # Format system version as "I M P"
+        "System Version": current_time
     }
-    
-    # Language information
     language_info = {
         "Language": "Python",
         "Discord Library": f"\ndiscord.py\n└── {discord.__version__}"
     }
-    # Format i
+    @staticmethod
     def format_diff(value):
-        # Define thresholds for "bad" or "outdated" values
-        cpu_threshold = 80  # CPU usage percentage threshold
-        python_version_threshold = "3.7"  # Minimum required Python version
-
-        # Check if value is bad or outdated and format accordingly
+        cpu_threshold = 80
+        python_version_threshold = "3.10.13"
         if isinstance(value, str) and value < python_version_threshold:
             return f"- {value}\n"
         elif isinstance(value, (int, float)) and value > cpu_threshold:
             return f"- {value}\n"
         else:
             return f"+ {value}\n"
+
