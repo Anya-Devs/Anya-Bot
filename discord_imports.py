@@ -1,4 +1,5 @@
 # Discord Imports
+import discord
 from discord import File, Reaction, User, FFmpegPCMAudio, Activity, ActivityType
 from discord.ext import commands, tasks
 from discord.ui import Select, View, button
@@ -17,10 +18,9 @@ from discord.ext.commands import UserInputError, CommandInvokeError, CheckFailur
 from discord.ext.commands import ExtensionError, ExtensionNotFound, ExtensionFailed
 from discord.ext.commands import CommandOnCooldown, MaxConcurrencyReached
 from discord.ext.commands import when_mentioned, when_mentioned_or
-from discord.ext.commands import clean_content, escape_markdown
-from discord.ext.commands import Group, Context, NoExit
-from discord.ext.commands import slash_command, SlashContext, Option
-from discord.ext.commands import command, command_group, group, check, cooldown, bot_has_permissions, bot_missing_permissions
+from discord.ext.commands import clean_content
+from discord.ext.commands import Group, Context
+from discord.ext.commands import command, group, check, cooldown, bot_has_permissions
 
 # Discord Slash Commands
 from typing import Literal, Optional
