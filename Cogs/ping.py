@@ -7,8 +7,7 @@ import requests
 import platform
 import psutil
 import colorama
-import discord
-from discord.ext import commands
+from discord_imports import *
 from colorama import Fore, Style
 import const  # Importing the const module
 from datetime import datetime
