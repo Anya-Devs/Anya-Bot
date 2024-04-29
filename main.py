@@ -24,17 +24,27 @@ import re
 
 # Third-Party Imports
 from colorama import Fore, Style
-import discord
+
+# Discord Imports
 from discord.ext import commands
+
+# Files 
+from discord_imports import *
+
 
 # Package Management
 os.system("pip install -r requirements.txt")
 os.system("pip install --upgrade pip")
 
 
-class BotSetup:
-    def __init__(self, bot):
-        self.bot = bot
+class BotSetup(commands.Bot):
+    def __init__(self):
+        super().__init__(command_prefix=commands.when_mentioned_or(','), intents=discord.Intents.all(), help_command=None)
+
+    async def start_bot(self):
+        await self.setup()
+        token = os.getenv('TOKEN')
+        await self.start(token)
 
     async def setup(self):
         print("\n")
@@ -48,7 +58,7 @@ class BotSetup:
                 cog_name = filename[:-3]  # Remove the ".py" extension
                 cog_module = __import__(f"{cog_dir}.{cog_name}", fromlist=[""])
                 num_commands = len([obj for obj in dir(cog_module) if isinstance(getattr(cog_module, obj), commands.Command)])
-                print(Fore.BLUE + f"│   ├── {filename}" + Style.RESET_ALL)
+                print(Fore.BLUE + f"│   └── {filename}" + Style.RESET_ALL)
 
                 # Dynamically import the module
                 cog_module = __import__(f"{cog_dir}.{cog_name}", fromlist=[""])
@@ -60,8 +70,8 @@ class BotSetup:
                     # Check if the object is a subclass of commands.Cog
                     if isinstance(obj, commands.CogMeta):
                         # Add the Cog to the bot
-                        await self.bot.add_cog(obj(self.bot))
-                        print(Fore.GREEN + f"│   │       ├── {obj_name}" + Style.RESET_ALL)
+                        await self.add_cog(obj(self))
+                        print(Fore.GREEN + f"│   │       └── {obj_name}/" + Style.RESET_ALL)
 
         print(Fore.BLUE + "│" + Style.RESET_ALL)
         print(Fore.BLUE + "└── Events/" + Style.RESET_ALL)
@@ -70,21 +80,11 @@ class BotSetup:
         # Iterate through files in the events directory
         for filename in os.listdir(events_dir):
             if filename.endswith(".py"):  # Check if the file is a Python file
-                print(Fore.BLUE + f"    ├── {filename}" + Style.RESET_ALL)
+                print(Fore.BLUE + f"    └── {filename}" + Style.RESET_ALL)
 
         print("\n")
         print(Fore.BLUE + "===== Setup Completed =====" + Style.RESET_ALL)
 
+bot = BotSetup()
 
-async def main():
-    bot = BotSetup(commands.Bot(command_prefix=commands.when_mentioned_or(','), intents=discord.Intents.all(), help_command=None))
-    await bot.setup().bot.start(os.environ.get('TOKEN'))
-
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except discord.errors.HTTPException as e:
-        print(e)
-        print("\n\n\nBLOCKED BY RATE LIMITS\nRESTARTING NOW\n\n\n")
-        os.system('kill 1')
+asyncio.get_event_loop().run_until_complete(bot.start_bot())
