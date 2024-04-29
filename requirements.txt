@@ -54,3 +54,4 @@ discord-webhook
 psutil
 GitPython
 pypi-json
+colorlog

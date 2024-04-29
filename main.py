@@ -1,41 +1,8 @@
-# Standard Library Imports
 import os
-import sys
-import json
-import uuid
-import logging
-import threading
-import subprocess
-import traceback
-import cProfile
-import pstats
-import time
 import asyncio
 
-from datetime import datetime, timezone, timedelta
-from io import BytesIO
-from urllib.parse import quote_plus
-from random import choice
-from difflib import SequenceMatcher
-import string
-import random
-import math
-import re
-
-# Third-Party Imports
 from colorama import Fore, Style
-
-# Discord Imports
-from discord.ext import commands
-
-# Files 
 from discord_imports import *
-
-
-# Package Management
-os.system("pip install -r requirements.txt")
-os.system("pip install --upgrade pip")
-
 
 class BotSetup(commands.Bot):
     def __init__(self):
@@ -52,13 +19,18 @@ class BotSetup(commands.Bot):
         print(Fore.BLUE + "├── Cogs/" + Style.RESET_ALL)
         # Define the directory where your additional Cogs are located
         cog_dir = "Cogs"
+        # Get the list of files in the cog directory
+        cog_files = os.listdir(cog_dir)
         # Iterate through files in the cog directory
-        for filename in os.listdir(cog_dir):
+        for i, filename in enumerate(cog_files):
             if filename.endswith(".py"):  # Check if the file is a Python file
                 cog_name = filename[:-3]  # Remove the ".py" extension
                 cog_module = __import__(f"{cog_dir}.{cog_name}", fromlist=[""])
                 num_commands = len([obj for obj in dir(cog_module) if isinstance(getattr(cog_module, obj), commands.Command)])
-                print(Fore.BLUE + f"│   └── {filename}" + Style.RESET_ALL)
+                if i < len(cog_files) - 1:
+                    print(Fore.BLUE + f"│   ├── {filename}" + Style.RESET_ALL)
+                else:
+                    print(Fore.BLUE + f"│   └── {filename}" + Style.RESET_ALL)
 
                 # Dynamically import the module
                 cog_module = __import__(f"{cog_dir}.{cog_name}", fromlist=[""])
@@ -71,16 +43,34 @@ class BotSetup(commands.Bot):
                     if isinstance(obj, commands.CogMeta):
                         # Add the Cog to the bot
                         await self.add_cog(obj(self))
-                        print(Fore.GREEN + f"│   │       └── {obj_name}/" + Style.RESET_ALL)
+                        print(Fore.GREEN + f"│   └── {obj_name}" + Style.RESET_ALL)
 
         print(Fore.BLUE + "│" + Style.RESET_ALL)
         print(Fore.BLUE + "└── Events/" + Style.RESET_ALL)
         # Define the directory where your additional Event handlers are located
         events_dir = "Events"
+        # Get the list of files in the events directory
+        events_files = os.listdir(events_dir)
         # Iterate through files in the events directory
-        for filename in os.listdir(events_dir):
+        for i, filename in enumerate(events_files):
             if filename.endswith(".py"):  # Check if the file is a Python file
-                print(Fore.BLUE + f"    └── {filename}" + Style.RESET_ALL)
+                if i < len(events_files) - 1:
+                    print(Fore.BLUE + f"    ├── {filename}" + Style.RESET_ALL)
+                else:
+                    print(Fore.BLUE + f"    └── {filename}" + Style.RESET_ALL)
+
+                # Dynamically import the module
+                event_module = __import__(f"{events_dir}.{filename[:-3]}", fromlist=[""])
+
+                # Iterate through objects in the module
+                for obj_name in dir(event_module):
+                    # Get the object
+                    obj = getattr(event_module, obj_name)
+                    # Check if the object is a subclass of commands.Cog
+                    if isinstance(obj, commands.CogMeta):
+                        # Add the Cog to the bot
+                        await self.add_cog(obj(self))
+                        print(Fore.GREEN + f"│   └── {obj_name}" + Style.RESET_ALL)
 
         print("\n")
         print(Fore.BLUE + "===== Setup Completed =====" + Style.RESET_ALL)
