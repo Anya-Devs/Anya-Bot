@@ -6,8 +6,7 @@ import traceback
 from datetime import datetime
 from PIL import Image
 
-import discord
-from discord.ext import commands
+from Imports.discord_imports import *
 import platform
 
 # Constants
@@ -23,6 +22,7 @@ class LogConstants:
     footer_icon = "https://example.com/footer_icon.png"
     author_name = "Your Bot Name"
     author_icon = "https://example.com/author_icon.png"
+    embed_color = None
 
 class PingConstants:
     thumbnail_url = 'https://example.com'

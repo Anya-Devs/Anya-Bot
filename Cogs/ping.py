@@ -7,9 +7,9 @@ import requests
 import platform
 import psutil
 import colorama
-from discord_imports import *
+from Imports.discord_imports import *
 from colorama import Fore, Style
-import const  # Importing the const module
+import Data.const as const  # Importing the const module
 from datetime import datetime
 import sys
 import subprocess

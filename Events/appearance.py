@@ -24,7 +24,7 @@ class AvatarChanger(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.countdown = 200  # Initial countdown value in seconds
-        self.emojis_folder = 'Emojis'  # Path to the folder containing PNG files
+        self.emojis_folder = 'Data/Emojis'  # Path to the folder containing PNG files
         self.png_files = [f for f in os.listdir(self.emojis_folder) if f.endswith('.png')]
         self.png_weights = [1] * len(self.png_files)  # Equal weights for each PNG file
 

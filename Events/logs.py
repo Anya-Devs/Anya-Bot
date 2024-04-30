@@ -1,50 +1,78 @@
-# logs.py
+import os
+import logging
+from git import Repo
 
 import discord
-from discord import Embed
-from discord.ext import commands
-from git import Repo
-import const
+from discord.ext import commands, tasks
+
+import Data.const as const
+from Imports.log_imports import logger
+
+
+
 
 class Logs(commands.Cog):
+
     def __init__(self, bot):
         self.bot = bot
 
     async def send_log_embed(self, message):
-        channel = discord.utils.get(self.bot.guilds[0].channels, name="logs")
-        if not channel:
-            return
+        try:
+            channel = discord.utils.get(self.bot.guilds[0].channels, name="logs")
+            
+            if not channel:
+                return
 
-        embed = Embed(title="Bot Online", description="The bot is now online.", color=0x00ff00)
-        embed.add_field(name="Updated Commands", value="Here are the commands that have been updated:", inline=False)
-        embed.add_field(name="Uncommitted Changes", value="The following files have uncommitted changes:", inline=False)
-        
-        # Check for uncommitted changes in the Git repository
-        repo = Repo('.')
-        uncommitted_changes = [item.a_path for item in repo.index.diff(None)]
-        if uncommitted_changes:
-            # Highlight uncommitted files in red
-            uncommitted_files = "```diff\n"
-            for file in uncommitted_changes:
-                uncommitted_files += f"- {file}\n"
-            uncommitted_files += "```"
-            embed.add_field(name="Uncommitted Files", value=uncommitted_files, inline=False)
-            embed.set_footer(text=const.LogConstants.footer_text, icon_url=const.LogConstants.footer_icon)
-        else:
-            embed.add_field(name="Uncommitted Files", value="No uncommitted changes detected.", inline=False)
+            # Get updated commands
+            updated_commands = await self.get_updated_commands()
+            if updated_commands:
+                commands_str = "\n".join(updated_commands)
+                if len(commands_str) <= 2000:  # Check if content fits in embed
+                    await self.send_embed(channel, "Updated Files", commands_str)
+                else:
+                    await self.send_file(channel, "Data/uncommitted_changes.py", "Updated Files", commands_str)
 
-        # Set thumbnail URL
-        thumbnail_url = const.LogConstants.start_log_thumbnail
-        embed.set_thumbnail(url=thumbnail_url)
-        
-        # Set author details
+        except Exception as e:
+            logger.exception("An error occurred while sending log embed:")
+            await const.error_custom_embed(self.bot, None, e, title="Log Embed Error")
+
+    async def send_embed(self, channel, title, description):
+        embed = discord.Embed(
+            title=title,
+            description=description,
+            color=const.LogConstants.embed_color
+        )
+        embed.set_thumbnail(url=const.LogConstants.start_log_thumbnail)
+        embed.set_footer(text=const.LogConstants.footer_text, icon_url=const.LogConstants.footer_icon)
         embed.set_author(name=const.LogConstants.author_name, icon_url=const.LogConstants.author_icon)
-
         await channel.send(embed=embed)
+
+    async def send_file(self, channel, file_path, title, description):
+        with open(file_path, "w") as file:
+            file.write(description)
+        await channel.send(file=discord.File(file_path), content=f"**{title}**")
+
+    async def get_updated_commands(self):
+        root_dir = os.getcwd()
+        repo = Repo(root_dir)
+        diff = repo.head.commit.diff(None)
+        updated_commands = []
+
+        for d in diff:
+            if d.a_path.endswith('.py') and '__pycache__' not in d.a_path:
+                content = d.a_blob.data_stream.read().decode('utf-8')
+                x = '----------------------------------------------------------------------------'
+                entry = f"\n\n{x}\nFile: {d.a_path}\nLocation: {os.path.abspath(d.a_path)}\n{x}\n\n{content}"
+                updated_commands.append(entry)
+
+        return updated_commands
 
     @commands.Cog.listener()
     async def on_ready(self):
+        logger.info("Log cog is ready. This cog tells the server what updates are in the code.")
+
         await self.send_log_embed("Bot is online")
+
 
 def setup(bot):
     bot.add_cog(Logs(bot))

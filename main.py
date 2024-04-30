@@ -1,13 +1,13 @@
 
-import depend 
-from depend import *
+import Imports.depend_imports as depend_imports 
+from Imports.depend_imports import *
 
 from colorama import Fore, Style
-from discord_imports import *
+from Imports.discord_imports import *
 
 class BotSetup(commands.Bot):
     def __init__(self):
-        super().__init__(command_prefix=commands.when_mentioned_or(','), intents=discord.Intents.all(), help_command=None)
+        super().__init__(command_prefix=commands.when_mentioned_or('...'), intents=discord.Intents.all(), help_command=None)
 
     async def start_bot(self):
         await self.setup()
@@ -32,16 +32,16 @@ class BotSetup(commands.Bot):
         for i, filename in enumerate(files_dir):
             if filename.endswith(".py"):
                 if i < len(files_dir) - 1:
-                    print(Fore.BLUE + f"    ├── {filename}" + Style.RESET_ALL)
+                    print(Fore.BLUE + f"│    ├── {filename}" + Style.RESET_ALL)
                 else:
-                    print(Fore.BLUE + f"    └── {filename}" + Style.RESET_ALL)
+                    print(Fore.BLUE + f"│    └── {filename}" + Style.RESET_ALL)
 
                 module = __import__(f"{dir_name}.{filename[:-3]}", fromlist=[""])
                 for obj_name in dir(module):
                     obj = getattr(module, obj_name)
                     if isinstance(obj, commands.CogMeta):
                         await self.add_cog(obj(self))
-                        print(Fore.GREEN + f"│   └── {obj_name}" + Style.RESET_ALL)
+                        print(Fore.GREEN + f"│    └── {obj_name}" + Style.RESET_ALL)
 
 bot = BotSetup()
 
