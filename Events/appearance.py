@@ -1,25 +1,13 @@
+# Importing necessary modules
 import logging
-import colorlog
-from discord.ext import commands
 import os
 import asyncio
 import random
+import colorlog
+from discord.ext import commands
+from Imports.log_imports import logger
 
-# Set up logging with color
-logger = colorlog.getLogger(__name__)
-logger.setLevel(logging.INFO)
-handler = colorlog.StreamHandler()
-handler.setFormatter(colorlog.ColoredFormatter(
-    '%(log_color)s%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    log_colors={
-        'DEBUG': 'cyan',
-        'INFO': 'green',
-        'WARNING': 'yellow',
-        'ERROR': 'red',
-        'CRITICAL': 'red,bg_white',
-    }))
-logger.addHandler(handler)
-
+# Define a class for the AvatarChanger cog
 class AvatarChanger(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -28,6 +16,7 @@ class AvatarChanger(commands.Cog):
         self.png_files = [f for f in os.listdir(self.emojis_folder) if f.endswith('.png')]
         self.png_weights = [1] * len(self.png_files)  # Equal weights for each PNG file
 
+    # Method to change the bot's avatar
     async def change_avatar(self):
         try:
             if self.png_files:
@@ -41,15 +30,18 @@ class AvatarChanger(commands.Cog):
         except Exception as e:
             logger.error(f"An error occurred while changing avatar: {e}")
 
+    # Listener for when the bot is ready
     @commands.Cog.listener()
     async def on_ready(self):
         logger.info("AvatarChanger cog is ready. This cog periodically changes the bot's avatar.")
         await self.change_avatar_countdown()  # Start the countdown loop when bot is ready
 
+    # Method to start the countdown loop
     async def change_avatar_countdown(self):
         while True:
             await self.change_avatar()
-            await asyncio.sleep(self.countdown)  # Wait for 60 seconds between avatar changes
+            await asyncio.sleep(self.countdown)  # Wait for {self.countdown} seconds between avatar changes
 
+# Setup function to add the AvatarChanger cog to the bot
 def setup(bot):
     bot.add_cog(AvatarChanger(bot))

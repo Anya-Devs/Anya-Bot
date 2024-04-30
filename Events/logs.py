@@ -1,7 +1,8 @@
+# Imports
 import os
 import logging
+from datetime import datetime
 from git import Repo
-from datetime import datetime  # Import datetime module
 
 import discord
 from discord.ext import commands, tasks
@@ -9,15 +10,15 @@ from discord.ext import commands, tasks
 import Data.const as const
 from Imports.log_imports import logger
 
+# Define the Logs cog
 class Logs(commands.Cog):
-
     def __init__(self, bot):
         self.bot = bot
 
+    # Method to send a log embed message
     async def send_log_embed(self, message):
         try:
             channel = discord.utils.get(self.bot.guilds[0].channels, name="anya-logs")
-            
             if not channel:
                 return
 
@@ -34,6 +35,7 @@ class Logs(commands.Cog):
             logger.exception("An error occurred while sending log embed:")
             await const.error_custom_embed(self.bot, None, e, title="Log Embed Error")
 
+    # Method to send an embed message
     async def send_embed(self, channel, title, description):
         embed = discord.Embed(
             title=title,
@@ -46,11 +48,13 @@ class Logs(commands.Cog):
         embed.timestamp = datetime.now()  # Set current timestamp
         await channel.send(embed=embed)
 
+    # Method to send a file
     async def send_file(self, channel, file_path, title, description):
         with open(file_path, "w") as file:
             file.write(description)
         await channel.send(file=discord.File(file_path), content=f"**{title}**")
 
+    # Method to get updated commands
     async def get_updated_commands(self):
         root_dir = os.getcwd()
         repo = Repo(root_dir)
@@ -66,12 +70,12 @@ class Logs(commands.Cog):
 
         return updated_commands
 
+    # Listener for when the bot is ready
     @commands.Cog.listener()
     async def on_ready(self):
         logger.info("Log cog is ready. This cog tells the server what updates are in the code.")
-
         await self.send_log_embed("Bot is online")
 
-
+# Setup function to add the Logs cog to the bot
 def setup(bot):
     bot.add_cog(Logs(bot))

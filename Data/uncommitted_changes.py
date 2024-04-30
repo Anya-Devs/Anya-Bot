@@ -1,6 +1,13 @@
 
 
 ----------------------------------------------------------------------------
+File: Data/uncommitted_changes.py
+Location: /workspaces/Anya-Bot/Data/uncommitted_changes.py
+----------------------------------------------------------------------------
+
+
+
+----------------------------------------------------------------------------
 File: Cogs/ping.py
 Location: /workspaces/Anya-Bot/Cogs/ping.py
 ----------------------------------------------------------------------------
@@ -739,3 +746,224 @@ class Logs(commands.Cog):
 
 def setup(bot):
     bot.add_cog(Logs(bot))
+
+
+
+----------------------------------------------------------------------------
+File: Events/appearance.py
+Location: /workspaces/Anya-Bot/Events/appearance.py
+----------------------------------------------------------------------------
+
+import logging
+import colorlog
+from discord.ext import commands
+import os
+import asyncio
+import random
+
+# Set up logging with color
+logger = colorlog.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = colorlog.StreamHandler()
+handler.setFormatter(colorlog.ColoredFormatter(
+    '%(log_color)s%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    log_colors={
+        'DEBUG': 'cyan',
+        'INFO': 'green',
+        'WARNING': 'yellow',
+        'ERROR': 'red',
+        'CRITICAL': 'red,bg_white',
+    }))
+logger.addHandler(handler)
+
+class AvatarChanger(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.countdown = 200  # Initial countdown value in seconds
+        self.emojis_folder = 'Data/Emojis'  # Path to the folder containing PNG files
+        self.png_files = [f for f in os.listdir(self.emojis_folder) if f.endswith('.png')]
+        self.png_weights = [1] * len(self.png_files)  # Equal weights for each PNG file
+
+    async def change_avatar(self):
+        try:
+            if self.png_files:
+                random_png = random.choices(self.png_files, weights=self.png_weights)[0]
+                with open(os.path.join(self.emojis_folder, random_png), 'rb') as f:
+                    avatar_data = f.read()
+                await self.bot.user.edit(avatar=avatar_data)
+                logger.info(f"Changed avatar to {random_png} - Countdown: {self.countdown} seconds left")
+            else:
+                logger.info("No PNG files found in the Emojis folder.")
+        except Exception as e:
+            logger.error(f"An error occurred while changing avatar: {e}")
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        logger.info("AvatarChanger cog is ready. This cog periodically changes the bot's avatar.")
+        await self.change_avatar_countdown()  # Start the countdown loop when bot is ready
+
+    async def change_avatar_countdown(self):
+        while True:
+            await self.change_avatar()
+            await asyncio.sleep(self.countdown)  # Wait for 60 seconds between avatar changes
+
+def setup(bot):
+    bot.add_cog(AvatarChanger(bot))
+
+
+
+----------------------------------------------------------------------------
+File: Events/logs.py
+Location: /workspaces/Anya-Bot/Events/logs.py
+----------------------------------------------------------------------------
+
+import os
+import logging
+from git import Repo
+from datetime import datetime  # Import datetime module
+
+import discord
+from discord.ext import commands, tasks
+
+import Data.const as const
+from Imports.log_imports import logger
+
+class Logs(commands.Cog):
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    async def send_log_embed(self, message):
+        try:
+            channel = discord.utils.get(self.bot.guilds[0].channels, name="anya-logs")
+            
+            if not channel:
+                return
+
+            # Get updated commands
+            updated_commands = await self.get_updated_commands()
+            if updated_commands:
+                commands_str = "\n".join(updated_commands)
+                if len(commands_str) <= 2000:  # Check if content fits in embed
+                    await self.send_embed(channel, "Updated Files", commands_str)
+                else:
+                    await self.send_file(channel, "Data/uncommitted_changes.py", "Updated Files", commands_str)
+
+        except Exception as e:
+            logger.exception("An error occurred while sending log embed:")
+            await const.error_custom_embed(self.bot, None, e, title="Log Embed Error")
+
+    async def send_embed(self, channel, title, description):
+        embed = discord.Embed(
+            title=title,
+            description=description,
+            color=const.LogConstants.embed_color
+        )
+        embed.set_thumbnail(url=const.LogConstants.start_log_thumbnail)
+        embed.set_footer(text=const.LogConstants.footer_text, icon_url=const.LogConstants.footer_icon)
+        embed.set_author(name=const.LogConstants.author_name, icon_url=const.LogConstants.author_icon)
+        embed.timestamp = datetime.now()  # Set current timestamp
+        await channel.send(embed=embed)
+
+    async def send_file(self, channel, file_path, title, description):
+        with open(file_path, "w") as file:
+            file.write(description)
+        await channel.send(file=discord.File(file_path), content=f"**{title}**")
+
+    async def get_updated_commands(self):
+        root_dir = os.getcwd()
+        repo = Repo(root_dir)
+        diff = repo.head.commit.diff(None)
+        updated_commands = []
+
+        for d in diff:
+            if d.a_path.endswith('.py') and '__pycache__' not in d.a_path:
+                content = d.a_blob.data_stream.read().decode('utf-8')
+                x = '----------------------------------------------------------------------------'
+                entry = f"\n\n{x}\nFile: {d.a_path}\nLocation: {os.path.abspath(d.a_path)}\n{x}\n\n{content}"
+                updated_commands.append(entry)
+
+        return updated_commands
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        logger.info("Log cog is ready. This cog tells the server what updates are in the code.")
+
+        await self.send_log_embed("Bot is online")
+
+
+def setup(bot):
+    bot.add_cog(Logs(bot))
+
+
+
+----------------------------------------------------------------------------
+File: Imports/depend_imports.py
+Location: /workspaces/Anya-Bot/Imports/depend_imports.py
+----------------------------------------------------------------------------
+
+import os
+import asyncio
+os.system("pip install -r requirements.txt")
+os.system("pip install --upgrade pip")
+
+from dotenv import load_dotenv
+
+
+# Load environment variables from .env file
+load_dotenv()
+
+
+----------------------------------------------------------------------------
+File: main.py
+Location: /workspaces/Anya-Bot/main.py
+----------------------------------------------------------------------------
+
+
+import Imports.depend_imports as depend_imports 
+from Imports.depend_imports import *
+
+from colorama import Fore, Style
+from Imports.discord_imports import *
+
+class BotSetup(commands.Bot):
+    def __init__(self):
+        super().__init__(command_prefix=commands.when_mentioned_or('...'), intents=discord.Intents.all(), help_command=None)
+
+    async def start_bot(self):
+        await self.setup()
+        token = os.getenv('TOKEN') 
+        
+        await self.start(token)
+
+    async def setup(self):
+        print("\n")
+        print(Fore.BLUE + " /" + Style.RESET_ALL)
+        print(Fore.BLUE + "├── Cogs/" + Style.RESET_ALL)
+        await self.import_cogs("Cogs")
+        print(Fore.BLUE + "│" + Style.RESET_ALL)
+        print(Fore.BLUE + "└── Events/" + Style.RESET_ALL)
+        await self.import_cogs("Events")
+
+        print("\n")
+        print(Fore.BLUE + "===== Setup Completed =====" + Style.RESET_ALL)
+
+    async def import_cogs(self, dir_name):
+        files_dir = os.listdir(dir_name)
+        for i, filename in enumerate(files_dir):
+            if filename.endswith(".py"):
+                if i < len(files_dir) - 1:
+                    print(Fore.BLUE + f"│    ├── {filename}" + Style.RESET_ALL)
+                else:
+                    print(Fore.BLUE + f"│    └── {filename}" + Style.RESET_ALL)
+
+                module = __import__(f"{dir_name}.{filename[:-3]}", fromlist=[""])
+                for obj_name in dir(module):
+                    obj = getattr(module, obj_name)
+                    if isinstance(obj, commands.CogMeta):
+                        await self.add_cog(obj(self))
+                        print(Fore.GREEN + f"│    └── {obj_name}" + Style.RESET_ALL)
+
+bot = BotSetup()
+
+asyncio.get_event_loop().run_until_complete(bot.start_bot())
