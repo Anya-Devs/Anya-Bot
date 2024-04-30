@@ -1,15 +1,13 @@
 import os
 import logging
 from git import Repo
+from datetime import datetime  # Import datetime module
 
 import discord
 from discord.ext import commands, tasks
 
 import Data.const as const
 from Imports.log_imports import logger
-
-
-
 
 class Logs(commands.Cog):
 
@@ -18,7 +16,7 @@ class Logs(commands.Cog):
 
     async def send_log_embed(self, message):
         try:
-            channel = discord.utils.get(self.bot.guilds[0].channels, name="logs")
+            channel = discord.utils.get(self.bot.guilds[0].channels, name="anya-logs")
             
             if not channel:
                 return
@@ -45,6 +43,7 @@ class Logs(commands.Cog):
         embed.set_thumbnail(url=const.LogConstants.start_log_thumbnail)
         embed.set_footer(text=const.LogConstants.footer_text, icon_url=const.LogConstants.footer_icon)
         embed.set_author(name=const.LogConstants.author_name, icon_url=const.LogConstants.author_icon)
+        embed.timestamp = datetime.now()  # Set current timestamp
         await channel.send(embed=embed)
 
     async def send_file(self, channel, file_path, title, description):

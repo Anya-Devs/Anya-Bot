@@ -104,7 +104,7 @@ class System(commands.Cog):
             mem_usage = f"**Memory Usage**: ```diff\n{mem_usage_diff}{mem_usage_tree}```"
 
             language_info = f"**Language**: ```diff\n{const.PingConstants.language_info['Language']}\n```" \
-                            f"**Discord Library**: ```diff\n{const.PingConstants.language_info['Discord Library']}\n```"
+                            f"**Discord Library**: ```ymal\n{const.PingConstants.language_info['Discord Library']}\n```"
 
             embed = discord.Embed(title="Pong 🏓", description=f"{gateway_latency}",color=const.PingConstants.embed_color,timestamp=datetime.now())
             embed.add_field(name="", value=f"{cpu_usage}{mem_usage}", inline=True)
