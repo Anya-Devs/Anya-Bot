@@ -14,8 +14,38 @@ class AnyaImages:
     shocked_anya = "https://img-03.stickers.cloud/packs/20d46227-dcb0-4583-8d66-ee78d4743129/webp/a65e28be-a5fd-4654-8e7d-736dbd809df2.webp"
     awake_anya = 'https://media.tenor.com/9kLYJilshNMAAAAe/spy-x-family-anya.png'
     question_anya = 'https://i.pinimg.com/236x/b7/23/1f/b7231fbf87eee22b6d1f35f83e9a80bd.jpg'
-    ping_banner_anya = 'https://i.redd.it/fvcg0u3kaiga1.jpg'
+    ping_banner_anya = 'https://i.redd.it/fvcg0u3kaiga1.jpg'    
+    
+# Embed Avatar
+class EmbedFactory:
+    @staticmethod
+    async def change_avatar_prompt():
+        embed = discord.Embed(
+            title="Change Avatar",
+            description="Please provide the image attachment or the URL to replace the avatar.\n\n"
+                        "Type 'c' to cancel.",
+            color=discord.Color.blue()
+        )
+        return embed
 
+    @staticmethod
+    async def successful_avatar_change(emoji_filename):
+        embed = discord.Embed(
+            title="Avatar Change Successful",
+            description=f"The avatar has been successfully changed to `{emoji_filename}`.",
+            color=discord.Color.green()
+        )
+        return embed
+
+    @staticmethod
+    async def failed_avatar_change():
+        embed = discord.Embed(
+            title="Avatar Change Failed",
+            description=f"Failed to change the avatar.",
+            color=discord.Color.red()
+        )
+        return embed
+    
 class LogConstants:
     start_log_thumbnail = "https://example.com/start_log_thumbnail.png"
     footer_text = "Please commit your changes to the repository."
@@ -40,7 +70,7 @@ class PingConstants:
     }
     language_info = {
         "Language": "Python",
-        "Discord Library": f"\ndiscord.py\n└── {discord.__version__}"
+        "Discord Library": f"+ {discord.__version__}\n└── discord.py"
     }
     @staticmethod
     def format_diff(value):
