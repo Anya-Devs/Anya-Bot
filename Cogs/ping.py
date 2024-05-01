@@ -8,21 +8,12 @@ import platform
 import psutil
 import colorama
 from Imports.discord_imports import *
+from Imports.log_imports import *
 from colorama import Fore, Style
 import Data.const as const  # Importing the const module
 from datetime import datetime
 import sys
 import subprocess
-
-colorama.init()
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-ch = logging.StreamHandler()
-ch.setFormatter(formatter)
-logger.addHandler(ch)
-
 
 async def get_emoji(name, ctx):
     logger.info(f"{Fore.CYAN}[get_emoji] Attempting to get emoji: {name}{Style.RESET_ALL}")
@@ -74,21 +65,20 @@ class System(commands.Cog):
             python_version = platform.python_version()
             if python_version is not None:
                 python_version_diff = const.PingConstants.format_diff(python_version)
-                python_version_info = f"**Python Version**: ```diff\n{python_version_diff}"
+                python_version_info = python_version_diff
 
                 latest_python_version = await self.get_latest_python_version()
                 if latest_python_version and python_version < latest_python_version:
                     i = '-'
-                    python_version_info += "└── Outdated```"
+                    python_version_info += "└── Outdated"
                 else:
                     i = '-'
-                    python_version_info += "└── Up to Date```"
+                    python_version_info += "└── Up to Date"
             else:
                 python_version_info = "**Python Version**: ```diff\nVersion information not available\n```"
 
             system_info = f"**System**: ```diff\n{const.PingConstants.format_diff(platform.system())}\n```" \
-                          f"**Processor**: ```diff\n{const.PingConstants.format_diff(platform.processor())}\n```" \
-                          f"{python_version_info}"
+                          f"**Processor**: ```diff\n{const.PingConstants.format_diff(platform.processor())}\n```" 
             gateway_latency = f"```diff\n+ {round(self.bot.latency * 1000)}ms\n```"
 
             cpu_usage_value = psutil.cpu_percent()
@@ -102,17 +92,34 @@ class System(commands.Cog):
 
             cpu_usage = f"**CPU Usage**: ```diff\n{cpu_usage_diff}{cpu_usage_tree}```"
             mem_usage = f"**Memory Usage**: ```diff\n{mem_usage_diff}{mem_usage_tree}```"
+            
+            x = f"{const.PingConstants.language_info['Language']} : {python_version_info}"
+            y = x.replace('-','').replace('+','')
+            x = y.split(" ")
+            lang = ""
+            if len(x) > 1:
+                if x[0] == const.PingConstants.language_info['Language']:
+                    result = f"{x[0]} : {x[1]}"
+                else:
+                    result = f"+ {x[0]} : {x[1]}"
+                    if len(x) > 2:
+                        lang += " " + " ".join(x[2:])
+                    else:
+                        lang = x[0]
+            
+            
+            
+            language_info = f"**Language**: ```diff\n+ {y}```" \
+                            f"**Discord Library**: ```diff\n{const.PingConstants.language_info['Discord Library']}\n```" \
+                         
 
-            language_info = f"**Language**: ```diff\n{const.PingConstants.language_info['Language']}\n```" \
-                            f"**Discord Library**: ```ymal\n{const.PingConstants.language_info['Discord Library']}\n```"
-
-            embed = discord.Embed(title="Pong 🏓", description=f"{gateway_latency}",color=const.PingConstants.embed_color,timestamp=datetime.now())
+            embed = discord.Embed(title="Pong 🏓", description=f"{gateway_latency}", color=const.PingConstants.embed_color,timestamp=datetime.now())
             embed.add_field(name="", value=f"{cpu_usage}{mem_usage}", inline=True)
             embed.add_field(name="", value=f"{system_info}", inline=True)
-            embed.add_field(name="", value=f"{language_info}", inline=True)
+            embed.add_field(name="", value=f"{language_info}", inline=False)
             embed.set_thumbnail(url=const.PingConstants.thumbnail_url)
             embed.set_image(url=const.PingConstants.image_url)
-            embed.set_footer(text=f"Ping Request: {ctx.author.display_name}", icon_url=self.bot.user.avatar)
+            embed.set_footer(text=f"Ping Requested by {ctx.author.display_name}", icon_url=ctx.author.avatar)
 
             await ctx.reply(embed=embed)
 
