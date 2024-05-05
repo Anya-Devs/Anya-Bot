@@ -224,7 +224,7 @@ class Help(commands.Cog):
             """
             # embed.set_thumbnail(url=Help_Embed_Mapping.embed["thumbnail_url"])
             embed.set_image(url=Help_Embed_Mapping.embed["image_url"])
-            embed.set_footer(text=f"Prefix {ctx.prefix}{{command name}} or @{self.bot.user.display_name} {{command name}}")
+            embed.set_footer(text=f"● Prefix:\n├ {ctx.prefix}{{command name}}\n└ @{self.bot.user.display_name} {{command name}}")
             await ctx.reply(embed=embed, view=help_menu)
             await ctx.defer()
            except Exception as e:
