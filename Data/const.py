@@ -45,6 +45,38 @@ class EmbedFactory:
             color=discord.Color.red()
         )
         return embed
+
+class Help_Embed_Mapping:
+    embed = {
+            "description": "Need some help using certain commands? Take a look at the select options and choose the cog you need assistance with.",
+            "thumbnail_url": "https://static1.srcdn.com/wordpress/wp-content/uploads/2022/08/spy-x-family-anya-powers.jpg",
+            "image_url": "https://static1.cbrimages.com/wordpress/wp-content/uploads/2022/11/Spy-x-family-ep-18-Loid-and-Anyas-test-grades.jpg"
+    }
+    
+class Help_Select_Embed_Mapping:
+    embeds = {
+        "system": {
+            "title": "System",
+            "description": "View the status of the bot, including information about its current performance, system resources usage, and configuration settings.",
+            "color": discord.Color.red(),  # Customize color as needed
+            "thumbnail_url": "https://static1.srcdn.com/wordpress/wp-content/uploads/2022/08/spy-x-family-anya-powers.jpg",
+            "image_url": "https://static1.srcdn.com/wordpress/wp-content/uploads/2022/08/spy-x-family-anya-powers.jpg"
+        },
+        "Cog2": {
+            "title": "Title for Cog2",
+            "description": "Description for Cog2",
+            "color": discord.Color.blue(),  # Customize color as needed
+            "thumbnail_url": "Thumbnail URL for Cog2"
+        },
+        # Add more embed mappings for other cogs as needed
+    }
+
+    emojis = {
+        "system": "⚙️",
+        "Cog2": "Emoji for Cog2",
+        # Add more emoji mappings for other cogs as needed
+    }
+    
     
 class LogConstants:
     start_log_thumbnail = "https://example.com/start_log_thumbnail.png"
@@ -152,7 +184,16 @@ class Emojis:
         # Return the emoji format
         return f"<:_:{new_emoji.id}>"
 
+    
 # Functions
+def primary_color(image_path):
+    image = Image.open(image_path)
+    # Resize the image to 1x1 pixel to get the dominant color
+    resized_image = image.resize((1, 1))
+    dominant_color = resized_image.getpixel((0, 0))
+    return discord.Color.from_rgb(dominant_color[0], dominant_color[1], dominant_color[2])
+
+# Async Functions
 async def error_custom_embed(bot, ctx, e, title="Custom Error", thumbnail_url=AnyaImages.question_anya):
     error_embed = discord.Embed(
         description=f'```bash\n{e}```',
@@ -171,3 +212,7 @@ async def error_custom_embed(bot, ctx, e, title="Custom Error", thumbnail_url=An
     error_embed.set_footer(text='Error Found')
     error_embed.set_thumbnail(url=thumbnail_url)
     await ctx.reply(embed=error_embed)
+    
+    
+    
+ 
