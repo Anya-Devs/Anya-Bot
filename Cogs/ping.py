@@ -1,4 +1,5 @@
 import os
+import gc
 import pip
 import json
 import logging
@@ -53,7 +54,7 @@ class System(commands.Cog):
     async def on_ready(self):
         logger.info(f"{Fore.YELLOW}[System cog] Bot is ready.{Style.RESET_ALL}")
 
-    @commands.command()
+    @commands.command(name='ping')
     async def ping(self, ctx):
         try:
             emojis_data = await self.load_and_get_emojis(ctx.bot, ctx)
@@ -87,8 +88,8 @@ class System(commands.Cog):
             cpu_usage_diff = const.PingConstants.format_diff(cpu_usage_value)
             mem_usage_diff = const.PingConstants.format_diff(mem_usage_value)
 
-            cpu_usage_tree = "└── Good " if cpu_usage_value < 80 else "└── Bad | My head hurts!"
-            mem_usage_tree = "└── Good" if mem_usage_value < 80 else "└── Bad | Wh-my brains all clumpy~"
+            cpu_usage_tree = "└── Good" if cpu_usage_value < 80 else "└── Bad"
+            mem_usage_tree = "└── Good" if mem_usage_value < 80 else "└── Bad"
 
             cpu_usage = f"**CPU Usage**: ```diff\n{cpu_usage_diff}{cpu_usage_tree}```"
             mem_usage = f"**Memory Usage**: ```diff\n{mem_usage_diff}{mem_usage_tree}```"
@@ -120,11 +121,10 @@ class System(commands.Cog):
             embed.set_thumbnail(url=const.PingConstants.thumbnail_url)
             embed.set_image(url=const.PingConstants.image_url)
             embed.set_footer(text=f"Ping Requested by {ctx.author.display_name}", icon_url=ctx.author.avatar)
-
             await ctx.reply(embed=embed)
 
         except Exception as e:
-            await const.error_custom_embed(self.bot, ctx, e, title="Ping Error")
+            await const.error_custom_embed(self.bot, ctx, e, title="Ping")
             logger.error(f"{Fore.RED}[System cog] Error occurred while sending ping embed: {e}{Style.RESET_ALL}")
 
     def cog_unload(self):
