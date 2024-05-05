@@ -7,13 +7,17 @@ from Imports.discord_imports import *
 
 class BotSetup(commands.Bot):
     def __init__(self):
-        super().__init__(command_prefix=commands.when_mentioned_or('...'), intents=discord.Intents.all(), help_command=None)
+        intents = discord.Intents.all()
+        super().__init__(command_prefix=commands.when_mentioned_or('...'), intents=intents, help_command=None)
 
     async def start_bot(self):
         await self.setup()
-        token = os.getenv('TOKEN') 
+        token = os.getenv('TOKEN')
         
-        await self.start(token)
+        try:
+            await self.start(token)
+        except KeyboardInterrupt:
+            await self.close()
 
     async def setup(self):
         print("\n")
@@ -45,4 +49,8 @@ class BotSetup(commands.Bot):
 
 bot = BotSetup()
 
-asyncio.get_event_loop().run_until_complete(bot.start_bot())
+try:
+    asyncio.get_event_loop().run_until_complete(bot.start_bot())
+except Exception as e:
+    print(f"An error occurred: {e}")
+    asyncio.get_event_loop().run_until_complete(bot.close())
