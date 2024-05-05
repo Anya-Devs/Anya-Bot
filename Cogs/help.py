@@ -35,11 +35,11 @@ class Select(discord.ui.Select):
             color = self.primary_color
             self.cog_embed = discord.Embed(
                 title=cog_name.replace('_', ' '),
-                description=Help_Select_Embed_Mapping.embeds[cog_name]["description"] or '',
+                description=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["description"] or '',
                 color=color # Help_Select_Embed_Mapping.embeds[cog_name]["color"] or None
             )
-            self.cog_embed.set_thumbnail(url=Help_Select_Embed_Mapping.embeds[cog_name]["thumbnail_url"])
-            self.cog_embed.set_image(url=Help_Select_Embed_Mapping.embeds[cog_name]["image_url"])
+            # self.cog_embed.set_thumbnail(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["thumbnail_url"])
+            self.cog_embed.set_image(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["image_url"])
 
             cog = self.bot.get_cog(cog_name)
             if cog:
@@ -49,7 +49,7 @@ class Select(discord.ui.Select):
                 if cog_commands:
                     cog_commands_str = '\n'.join(cog_commands)
                     self.cog_embed.add_field(
-                        name=cog_name.replace('_', ' '),
+                        name='',
                         value=f"{cog_commands_str}",
                         inline=False
                     )
