@@ -2,12 +2,16 @@
 import os
 import traceback
 
+from datetime import datetime
+
 import discord
 from discord.ext import commands
+
+
 import aiohttp
 from PIL import Image
 from io import BytesIO
-from Data.const import primary_color, error_custom_embed, Help_Select_Embed_Mapping # Import primary_color function and error_custom_embed from Data.const
+from Data.const import primary_color, error_custom_embed, Help_Select_Embed_Mapping, Help_Embed_Mapping  # Import primary_color function and error_custom_embed from Data.const
 from Imports.log_imports import logger  # Import logger from Imports.log_imports
 
 
@@ -60,7 +64,7 @@ class Select(discord.ui.Select):
 
             help_menu = HelpMenu(self.bot, self.primary_color)
 
-            await button.response.edit_message(embed=self.cog_embed, view=View_All(self.bot, self.primary_color))
+            await button.response.edit_message(embed=self.cog_embed) # view=View_All(self.bot, self.primary_color)
             logger.info("Message edited successfully.")
 
         except Exception as e:
@@ -203,20 +207,24 @@ class Help(commands.Cog):
             def get_cog_commands_count(cog):
                 return len([cmd for cmd in cog.get_commands() if not cmd.hidden])
             me = ctx.guild.get_member(self.bot.user.id)
-            embed = discord.Embed(color=primary_color_value)
+            embed = discord.Embed(description=Help_Embed_Mapping.embed["description"],color=primary_color_value,timestamp=datetime.now())
             # Get all cogs
-            cogs = [cog for cog in self.bot.cogs]
+            # cogs = [cog for cog in self.bot.cogs]
             # Sort cogs based on the number of commands
-            sorted_cogs = sorted(cogs, key=lambda cog: get_cog_commands_count(self.bot.get_cog(cog)))
+            # sorted_cogs = sorted(cogs, key=lambda cog: get_cog_commands_count(self.bot.get_cog(cog)))
             # Iterate through sorted cogs and their commands
-            for cog_name in sorted_cogs:
+          
+            """
+              for cog_name in sorted_cogs:
                 cog = self.bot.get_cog(cog_name)
                 cog_commands = [f"`{cmd.name}`" for cmd in cog.get_commands() if not cmd.hidden]
                 if cog_commands:
                     cog_commands_str = ' '.join(cog_commands)
                     embed.add_field(name=f"{cog_name.replace('_', ' ')}", value=f"{cog_commands_str}", inline=False)
-            embed.set_thumbnail(url=self.bot.user.avatar)
-            # embed.set_footer(text="Prefix: ,[command name]")
+            """
+            # embed.set_thumbnail(url=Help_Embed_Mapping.embed["thumbnail_url"])
+            embed.set_image(url=Help_Embed_Mapping.embed["image_url"])
+            embed.set_footer(text=f"Prefix {ctx.prefix}{{command name}} or @{self.bot.user.display_name} {{command name}}")
             await ctx.reply(embed=embed, view=help_menu)
             await ctx.defer()
            except Exception as e:
