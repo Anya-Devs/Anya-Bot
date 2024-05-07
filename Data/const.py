@@ -59,8 +59,8 @@ class Help_Select_Embed_Mapping:
             "title": "System",
             "description": "View the status of the bot, including information about its current performance, system resources usage, and configuration settings.",
             "color": discord.Color.red(),  # Customize color as needed
-            "thumbnail_url": "https://static1.srcdn.com/wordpress/wp-content/uploads/2022/08/spy-x-family-anya-powers.jpg",
-            "image_url": "https://static1.srcdn.com/wordpress/wp-content/uploads/2022/08/spy-x-family-anya-powers.jpg"
+            "thumbnail_url": "https://i.pinimg.com/564x/f4/38/ef/f438ef92875df915c8d019780a76a346.jpg",
+            "image_url": "https://i.pinimg.com/564x/f4/38/ef/f438ef92875df915c8d019780a76a346.jpg"
         },
         "Cog2": {
             "title": "Title for Cog2",
@@ -77,6 +77,28 @@ class Help_Select_Embed_Mapping:
         # Add more emoji mappings for other cogs as needed
     }
     
+class Quest_Progress:
+    # Dictionary to store progress bar mappings
+    Progress_Bar_MAPPING = {
+        "front_empty": 1237456749674364969,
+        "front_full": 1237456617776218205,
+        "mid_empty": 1237456613527523328,
+        "mid_full": 1237456614697730139,
+        "back_empty": 1237456616119599164,
+        "back_full": 1237456619143696395
+    }
+
+    # Function to generate progress bar emojis
+    @staticmethod
+    async def generate_progress_bar(progress, bot):
+        bar = ""
+        for i in range(10):
+            front_emoji = discord.utils.get(bot.emojis, id=Quest_Progress.Progress_Bar_MAPPING["front_full" if progress >= (i + 1) * 0.1 else "front_empty"]) or ":_:"
+            mid_emoji = discord.utils.get(bot.emojis, id=Quest_Progress.Progress_Bar_MAPPING["mid_full" if progress >= (i + 1) * 0.1 else "mid_empty"]) or ":_:"
+            bar += f"{front_emoji}{mid_emoji}" if i == 0 else f"{mid_emoji}"
+        back_emoji = discord.utils.get(bot.emojis, id=Quest_Progress.Progress_Bar_MAPPING["back_full" if progress == 1 else "back_empty"]) or ":_:"
+        bar += f"{back_emoji}"  # Back part emoji
+        return bar
     
 class LogConstants:
     start_log_thumbnail = "https://example.com/start_log_thumbnail.png"
@@ -186,7 +208,7 @@ class Emojis:
 
     
 # Functions
-def primary_color(image_path):
+def primary_color(image_path='Data/Images/bot_icon.png'):
     image = Image.open(image_path)
     # Resize the image to 1x1 pixel to get the dominant color
     resized_image = image.resize((1, 1))
