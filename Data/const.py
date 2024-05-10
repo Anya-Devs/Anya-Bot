@@ -14,7 +14,9 @@ class AnyaImages:
     shocked_anya = "https://img-03.stickers.cloud/packs/20d46227-dcb0-4583-8d66-ee78d4743129/webp/a65e28be-a5fd-4654-8e7d-736dbd809df2.webp"
     awake_anya = 'https://media.tenor.com/9kLYJilshNMAAAAe/spy-x-family-anya.png'
     question_anya = 'https://i.pinimg.com/236x/b7/23/1f/b7231fbf87eee22b6d1f35f83e9a80bd.jpg'
-    ping_banner_anya = 'https://i.redd.it/fvcg0u3kaiga1.jpg'    
+    ping_banner_anya = 'https://i.pinimg.com/564x/db/98/ff/db98ffc40d53378a9999528b69d66d00.jpg'
+    sleepy_anya = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR9y_MT3QHxXZVVzVlA94oFM8uIN0QH1fdw8Q6inySFmQ&s'
+    ping_thumbnail = None
     
 # Embed Avatar
 class EmbedFactory:
@@ -48,8 +50,9 @@ class EmbedFactory:
 
 class Help_Embed_Mapping:
     embed = {
+            "title": "Command Help",
             "description": "Need some help using certain commands? Take a look at the select options and choose the cog you need assistance with.",
-            "thumbnail_url": "https://static1.srcdn.com/wordpress/wp-content/uploads/2022/08/spy-x-family-anya-powers.jpg",
+            "thumbnail_url": "https://i.pinimg.com/736x/7b/e3/13/7be313aa5bf6e5c1478cbf79669e029f.jpg",
             "image_url": "https://static1.cbrimages.com/wordpress/wp-content/uploads/2022/11/Spy-x-family-ep-18-Loid-and-Anyas-test-grades.jpg"
     }
     
@@ -62,6 +65,13 @@ class Help_Select_Embed_Mapping:
             "thumbnail_url": "https://i.pinimg.com/564x/f4/38/ef/f438ef92875df915c8d019780a76a346.jpg",
             "image_url": "https://i.pinimg.com/564x/f4/38/ef/f438ef92875df915c8d019780a76a346.jpg"
         },
+        "quest": {
+            "title": "Quest",
+            "description": "```Still in Testing```\n**Estimated Time:** <t:1716081060:R>",
+            "color": None,  # Customize color as needed
+            "thumbnail_url": AnyaImages.sleepy_anya
+        },
+        
         "Cog2": {
             "title": "Title for Cog2",
             "description": "Description for Cog2",
@@ -72,8 +82,8 @@ class Help_Select_Embed_Mapping:
     }
 
     emojis = {
-        "system": "⚙️",
-        "Cog2": "Emoji for Cog2",
+        "system": "<:system_icon:1238536111266201610>",
+        "quest": "<:loading_icon:1238532154292437022>",
         # Add more emoji mappings for other cogs as needed
     }
     
@@ -109,8 +119,8 @@ class LogConstants:
     embed_color = None
 
 class PingConstants:
-    thumbnail_url = 'https://example.com'
-    image_url = AnyaImages.ping_banner_anya
+    thumbnail_url = None
+    image_url =  AnyaImages.ping_banner_anya
     footer_icon = None
     embed_color = None
 
