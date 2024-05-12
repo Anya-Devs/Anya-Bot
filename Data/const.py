@@ -16,7 +16,9 @@ class AnyaImages:
     question_anya = 'https://i.pinimg.com/236x/b7/23/1f/b7231fbf87eee22b6d1f35f83e9a80bd.jpg'
     ping_banner_anya = 'https://i.pinimg.com/564x/db/98/ff/db98ffc40d53378a9999528b69d66d00.jpg'
     sleepy_anya = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR9y_MT3QHxXZVVzVlA94oFM8uIN0QH1fdw8Q6inySFmQ&s'
+    new_mission_anya = 'https://i.pinimg.com/236x/b5/90/49/b590497e5e776909274ba40b040bba8c.jpg'
     ping_thumbnail = None
+    help_thumbnail = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQggKtOcHg_2xDGNeqtciU_-7iZ19F3lFbV091fGKq7KtJI5MuOzLBEPg2rQRZ9ru-tDGY&usqp=CAU'
     
 # Embed Avatar
 class EmbedFactory:
@@ -50,9 +52,9 @@ class EmbedFactory:
 
 class Help_Embed_Mapping:
     embed = {
-            "title": "Command Help",
+            "title": "Help Command",
             "description": "Need some help using certain commands? Take a look at the select options and choose the cog you need assistance with.",
-            "thumbnail_url": "https://i.pinimg.com/736x/7b/e3/13/7be313aa5bf6e5c1478cbf79669e029f.jpg",
+            "thumbnail_url": AnyaImages.help_thumbnail,
             "image_url": "https://static1.cbrimages.com/wordpress/wp-content/uploads/2022/11/Spy-x-family-ep-18-Loid-and-Anyas-test-grades.jpg"
     }
     
@@ -109,6 +111,18 @@ class Quest_Progress:
         back_emoji = discord.utils.get(bot.emojis, id=Quest_Progress.Progress_Bar_MAPPING["back_full" if progress == 1 else "back_empty"]) or ":_:"
         bar += f"{back_emoji}"  # Back part emoji
         return bar
+
+class QuestEmbed:
+    @staticmethod
+    async def create_quest_embed(quest_id: int, action: str, details: str, channel: discord.TextChannel, times: int) -> discord.Embed:
+        embed = discord.Embed(
+            title=f"Quest #{quest_id}",
+            description=f"Action: `{action}`\nDetails: `{details}`\nChannel: {channel.mention}\nTimes: `{times}`",
+        )
+        embed.set_thumbnail(url=AnyaImages.new_mission_anya)  # Set thumbnail URL
+        return embed
+
+    
     
 class LogConstants:
     start_log_thumbnail = "https://example.com/start_log_thumbnail.png"
@@ -243,8 +257,12 @@ async def error_custom_embed(bot, ctx, e, title="Custom Error", thumbnail_url=An
     )
     error_embed.set_footer(text='Error Found')
     error_embed.set_thumbnail(url=thumbnail_url)
-    await ctx.reply(embed=error_embed)
     
-    
+    # Check if messageable is a Context (ctx) object or Interaction object and send message accordingly
+    if isinstance(ctx, commands.Context):
+        await ctx.reply(embed=error_embed)
+    elif isinstance(ctx, discord.Interaction):
+        await ctx.response.send_message(embed=error_embed)
+
     
  
