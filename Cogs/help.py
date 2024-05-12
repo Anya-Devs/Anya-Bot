@@ -2,8 +2,6 @@
 import os
 import traceback
 
-from datetime import datetime
-
 import discord
 from discord.ext import commands
 
@@ -42,8 +40,8 @@ class Select(discord.ui.Select):
                 description=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["description"] or '',
                 color=color # Help_Select_Embed_Mapping.embeds[cog_name]["color"] or None
             )
-            # self.cog_embed.set_thumbnail(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["thumbnail_url"])
-            self.cog_embed.set_image(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["image_url"])
+            self.cog_embed.set_thumbnail(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["thumbnail_url"])
+            # self.cog_embed.set_image(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["image_url"])
 
             cog = self.bot.get_cog(cog_name)
             if cog:
@@ -207,7 +205,7 @@ class Help(commands.Cog):
             def get_cog_commands_count(cog):
                 return len([cmd for cmd in cog.get_commands() if not cmd.hidden])
             me = ctx.guild.get_member(self.bot.user.id)
-            embed = discord.Embed(description=Help_Embed_Mapping.embed["description"],color=primary_color_value,timestamp=datetime.now())
+            embed = discord.Embed(title=Help_Embed_Mapping.embed["title"],description=Help_Embed_Mapping.embed["description"],color=primary_color_value)
             # Get all cogs
             # cogs = [cog for cog in self.bot.cogs]
             # Sort cogs based on the number of commands
@@ -222,9 +220,9 @@ class Help(commands.Cog):
                     cog_commands_str = ' '.join(cog_commands)
                     embed.add_field(name=f"{cog_name.replace('_', ' ')}", value=f"{cog_commands_str}", inline=False)
             """
-            # embed.set_thumbnail(url=Help_Embed_Mapping.embed["thumbnail_url"])
-            embed.set_image(url=Help_Embed_Mapping.embed["image_url"])
-            embed.set_footer(text=f"Prefix: {ctx.prefix}<command> | @{self.bot.user.display_name} <command>")
+            embed.set_thumbnail(url=Help_Embed_Mapping.embed["thumbnail_url"])
+            # embed.set_image(url=Help_Embed_Mapping.embed["image_url"])
+            # embed.add_field(name='Prefix',value=f'```ansi\n[34m1. {ctx.prefix}<command>```\n```ansi\n[34m2. @{self.bot.user.display_name} <command>```')
 
             await ctx.reply(embed=embed, view=help_menu)
             await ctx.defer()
