@@ -36,7 +36,7 @@ class Sync(commands.Cog):
                     synced_commands_count += len(synced_commands)
 
                 # Send feedback to the user about the synchronization result
-                message = f"Synced `{synced_commands_count}` app tree commands {'globally' if spec is None else 'to the current guild'}."
+                message = f"Synced {synced_commands_count} app tree commands {'globally' if spec is None else 'to the current guild'}."
                 embed = discord.Embed(description=message)
                 await ctx.send(embed=embed)
                 return
