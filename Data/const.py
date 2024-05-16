@@ -69,7 +69,7 @@ class Help_Select_Embed_Mapping:
         },
         "quest": {
             "title": "Quest",
-            "description": "```Still in Testing```\n**Estimated Time:** <t:1716081060:R>",
+            "description": "```Still in Testing```\n**Estimated Time:** <t:1717165320:R>",
             "color": None,  # Customize color as needed
             "thumbnail_url": AnyaImages.sleepy_anya
         },
@@ -111,19 +111,36 @@ class Quest_Progress:
         back_emoji = discord.utils.get(bot.emojis, id=Quest_Progress.Progress_Bar_MAPPING["back_full" if progress == 1 else "back_empty"]) or ":_:"
         bar += f"{back_emoji}"  # Back part emoji
         return bar
-
+    
 class QuestEmbed:
     @staticmethod
-    async def create_quest_embed(quest_id: int, action: str, details: str, channel: discord.TextChannel, times: int) -> discord.Embed:
-        embed = discord.Embed(
-            title=f"Quest #{quest_id}",
-            description=f"Action: `{action}`\nDetails: `{details}`\nChannel: {channel.mention}\nTimes: `{times}`",
+    async def create_quest_embed(
+        quest: str,
+        quest_id: int, 
+        action: str, 
+        method: str, 
+        channel: discord.TextChannel, 
+        times: int, 
+        content: str
+    ) -> discord.Embed:
+        description = (
+            f"**Action:** `{action}`\n"
+            f"**Method:** `{method}`\n"
+            f"**Channel:** {channel.mention}\n"
+            f"**Times:** `{times}`\n"
+            f"**Content:** `{content}`\n"
+            f"**Quest:**\n```{action} {method}: '{content}' in #{channel.name} {times}x```"
         )
-        embed.set_thumbnail(url=AnyaImages.new_mission_anya)  # Set thumbnail URL
+        
+        embed = discord.Embed(
+            title=f"{quest.title()} Quest #{quest_id}",
+            description=description,
+            color=None
+        )
+        embed.set_thumbnail(url=AnyaImages.new_mission_anya)
+        
         return embed
 
-    
-    
 class LogConstants:
     start_log_thumbnail = "https://example.com/start_log_thumbnail.png"
     footer_text = "Please commit your changes to the repository."
