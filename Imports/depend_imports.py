@@ -1,5 +1,4 @@
 import os
-from dotenv import load_dotenv
 import asyncio
 
 def install_dependencies():
@@ -12,6 +11,7 @@ def upgrade_pip():
 
 def load_environment_variables():
     """Load environment variables from .env file"""
+    from dotenv import load_dotenv
     load_dotenv()
 
 def setup():
