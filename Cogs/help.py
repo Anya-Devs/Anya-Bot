@@ -5,14 +5,11 @@ import traceback
 import discord
 from discord.ext import commands
 
-
 import aiohttp
 from PIL import Image
 from io import BytesIO
 from Data.const import primary_color, error_custom_embed, Help_Select_Embed_Mapping, Help_Embed_Mapping  # Import primary_color function and error_custom_embed from Data.const
 from Imports.log_imports import logger  # Import logger from Imports.log_imports
-
-
 
 
 class Select(discord.ui.Select):
@@ -21,6 +18,8 @@ class Select(discord.ui.Select):
             discord.SelectOption(label=cog_name.replace('_', ' '), value=cog_name, emoji=Help_Select_Embed_Mapping.emojis.get(cog_name.lower()))
             for cog_name in cog_commands.keys()
         ]
+        if not options:
+            options = [discord.SelectOption(label="No Categories Available", value="none")]
         super().__init__(placeholder="Select a Category", max_values=1, min_values=1, options=options)
         self.cog_commands = cog_commands
         self.bot = bot
@@ -29,19 +28,20 @@ class Select(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         try:
-            button: discord.ui.Button = interaction
-
             cog_name = self.values[0]
+            if cog_name == "none":
+                await interaction.response.send_message("No categories available.", ephemeral=True)
+                return
+
             cog_info = self.cog_commands.get(cog_name)
-            me = button.guild.get_member(self.bot.user.id)
+            me = interaction.guild.get_member(self.bot.user.id)
             color = self.primary_color
             self.cog_embed = discord.Embed(
                 title=cog_name.replace('_', ' '),
                 description=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["description"] or '',
-                color=color # Help_Select_Embed_Mapping.embeds[cog_name]["color"] or None
+                color=color
             )
             self.cog_embed.set_thumbnail(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["thumbnail_url"])
-            # self.cog_embed.set_image(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["image_url"])
 
             cog = self.bot.get_cog(cog_name)
             if cog:
@@ -51,7 +51,7 @@ class Select(discord.ui.Select):
                 if cog_commands:
                     cog_commands_str = '\n'.join(cog_commands)
                     self.cog_embed.add_field(
-                        name='',
+                        name='Commands',
                         value=f"{cog_commands_str}",
                         inline=False
                     )
@@ -60,9 +60,7 @@ class Select(discord.ui.Select):
             else:
                 logger.info(f"Cog not found: {cog_name}")
 
-            help_menu = HelpMenu(self.bot, self.primary_color)
-
-            await button.response.edit_message(embed=self.cog_embed) # view=View_All(self.bot, self.primary_color)
+            await interaction.response.edit_message(embed=self.cog_embed)
             logger.info("Message edited successfully.")
 
         except Exception as e:
@@ -70,9 +68,10 @@ class Select(discord.ui.Select):
             print(traceback_str)
             logger.debug(f"An error occurred: {traceback_str}")
             pass
-        
+
+
 class HelpMenu(discord.ui.View):
-    def __init__(self, bot, primary_color, *, timeout=180):
+    def __init__(self, bot, primary_color, select_view, *, timeout=180):
         super().__init__(timeout=timeout)
         self.bot = bot
         self.primary_color = primary_color
@@ -97,13 +96,13 @@ class HelpMenu(discord.ui.View):
                 subcommands = {cmd.name: cmd.help for cmd in cog_object.get_commands() if not cmd.hidden}
                 if subcommands:
                     cog_commands[cog_name] = subcommands
-        select_view = Select(cog_commands, self.bot, self.primary_color)
+        self.add_item(select_view)
         # Send only the embed without the button
         self.embed = help_embed
-        self.add_item(select_view)
+
 
 class View_All(discord.ui.View):
-    def __init__(self, bot, primary_color, *, timeout=180):
+    def __init__(self, bot, primary_color, select_view, *, timeout=180):
         super().__init__(timeout=timeout)
         self.bot = bot
         self.primary_color = primary_color
@@ -111,7 +110,7 @@ class View_All(discord.ui.View):
         # Create an embed to list non-cog commands with descriptions
         help_embed = discord.Embed(
             title="Commands",
-            color=self.primary_color # You can customize the color
+            color=self.primary_color  # You can customize the color
         )
         help_embed.set_image(url=self.bot.user.avatar.url)
         # Fetch only non-cog commands
@@ -128,7 +127,6 @@ class View_All(discord.ui.View):
                 subcommands = {cmd.name: cmd.help for cmd in cog_object.get_commands() if not cmd.hidden}
                 if subcommands:
                     cog_commands[cog_name] = subcommands
-        select_view = Select(cog_commands, self.bot, self.primary_color)
         self.add_item(select_view)
 
     @discord.ui.button(label="View All", style=discord.ButtonStyle.primary)
@@ -148,9 +146,9 @@ class View_All(discord.ui.View):
             if cog_commands:
                 cog_commands_str = ' '.join(cog_commands)
                 embed.add_field(name=f"{cog_name.replace('_', ' ')}", value=f"{cog_commands_str}", inline=False)
-        # embed.set_footer(text="Prefix: ,[command name]")
         embed.set_thumbnail(url=self.bot.user.avatar.url)
-        await interaction.response.edit_message(embed=embed, view=HelpMenu(self.bot, self.primary_color))
+        await interaction.response.edit_message(embed=embed, view=HelpMenu(self.bot, self.primary_color, select_view=self))
+
 
 class Help(commands.Cog):
     def __init__(self, bot):
@@ -199,38 +197,25 @@ class Help(commands.Cog):
             else:
                 await ctx.send("Invalid command name. Please provide a valid command.")
         else:
-           try: 
-            # Display the general help menu
-            help_menu = HelpMenu(self.bot, primary_color_value)
-            def get_cog_commands_count(cog):
-                return len([cmd for cmd in cog.get_commands() if not cmd.hidden])
-            me = ctx.guild.get_member(self.bot.user.id)
-            embed = discord.Embed(title=Help_Embed_Mapping.embed["title"],description=Help_Embed_Mapping.embed["description"],color=primary_color_value)
-            # Get all cogs
-            # cogs = [cog for cog in self.bot.cogs]
-            # Sort cogs based on the number of commands
-            # sorted_cogs = sorted(cogs, key=lambda cog: get_cog_commands_count(self.bot.get_cog(cog)))
-            # Iterate through sorted cogs and their commands
-          
-            """
-              for cog_name in sorted_cogs:
-                cog = self.bot.get_cog(cog_name)
-                cog_commands = [f"`{cmd.name}`" for cmd in cog.get_commands() if not cmd.hidden]
-                if cog_commands:
-                    cog_commands_str = ' '.join(cog_commands)
-                    embed.add_field(name=f"{cog_name.replace('_', ' ')}", value=f"{cog_commands_str}", inline=False)
-            """
-            embed.set_thumbnail(url=Help_Embed_Mapping.embed["thumbnail_url"])
-            # embed.set_image(url=Help_Embed_Mapping.embed["image_url"])
-            # embed.add_field(name='Prefix',value=f'```ansi\n[34m1. {ctx.prefix}<command>```\n```ansi\n[34m2. @{self.bot.user.display_name} <command>```')
+            try:
+                # Display the general help menu
+                for cog_name, cog_object in self.bot.cogs.items():
+                    if isinstance(cog_object, commands.Cog):
+                        subcommands = {cmd.name: cmd.help for cmd in cog_object.get_commands() if not cmd.hidden}
+                        if subcommands:
+                            cog_commands[cog_name] = subcommands
+                select_view = Select(cog_commands, self.bot, primary_color_value)
+                help_menu = HelpMenu(self.bot, primary_color_value, select_view)
+                embed = discord.Embed(title=Help_Embed_Mapping.embed["title"], description=Help_Embed_Mapping.embed["description"], color=primary_color_value)
+                embed.set_thumbnail(url=Help_Embed_Mapping.embed["thumbnail_url"])
+                await ctx.reply(embed=embed, view=help_menu)
+                await ctx.defer()
+            except Exception as e:
+                # If there's an error sending the help menu, display an error message
+                logger.error(f"Error sending HelpMenu: {e}")
+                await ctx.reply(embed=await error_custom_embed(self.bot, ctx, e, title="HelpMenu"))
+                return
 
-            await ctx.reply(embed=embed, view=help_menu)
-            await ctx.defer()
-           except Exception as e:
-            # If there's an error getting the primary color, display an error message
-            logger.error(f"Error sending HelpMenu: {e}")
-            await ctx.reply(embed=await error_custom_embed(self.bot, ctx, e, title="HelpMenu"))
-            return
 
 def setup(bot):
     bot.add_cog(Help(bot))
