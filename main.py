@@ -1,22 +1,39 @@
 import asyncio
+import os
+import traceback
+import ssl
+from colorama import Fore, Style
+from pymongo.errors import ConfigurationError
+from discord.ext import commands
+from pymongo import MongoClient
+from motor.motor_asyncio import AsyncIOMotorClient
+
+from Imports.log_imports import logger
 import Imports.depend_imports as depend_imports 
 from Imports.depend_imports import *
-
-from colorama import Fore, Style
 from Imports.discord_imports import *
 
 class BotSetup(commands.Bot):
     def __init__(self):
         intents = discord.Intents.all()
         super().__init__(command_prefix=commands.when_mentioned_or('...'), intents=intents, help_command=None)
+        self.mongoConnect = None  # Initialize the MongoDB connection attribute
 
     async def start_bot(self):
         await self.setup()
         token = os.getenv('TOKEN')
         
+        if not token:
+            logger.error("No token found. Please set the TOKEN environment variable.")
+            return
+
         try:
             await self.start(token)
         except KeyboardInterrupt:
+            await self.close()
+        except Exception as e:
+            traceback_string = traceback.format_exc()
+            logger.error(f"An error occurred while logging in: {e}\n{traceback_string}")
             await self.close()
 
     async def setup(self):
@@ -27,10 +44,26 @@ class BotSetup(commands.Bot):
         print(Fore.BLUE + "│" + Style.RESET_ALL)
         print(Fore.BLUE + "└── Events/" + Style.RESET_ALL)
         await self.import_cogs("Events")
-
+        
         print("\n")
         print(Fore.BLUE + "===== Setup Completed =====" + Style.RESET_ALL)
+        """
+        # Check if MongoDB URI is valid
+        try:
+            uri = str(os.getenv("MONGO_URI"))
+            if not uri:
+                raise ValueError("No MONGO_URI found in environment variables")
 
+            ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            client = AsyncIOMotorClient(uri, ssl=True)
+            await client.server_info()
+        except ConfigurationError as ce:
+            logger.error(f"Error connecting to MongoDB server: {ce}")
+            await self.close()
+        except Exception as e:
+            logger.error(f"Error connecting to MongoDB server: {e}")
+            await self.close()
+        """
     async def import_cogs(self, dir_name):
         files_dir = os.listdir(dir_name)
         for i, filename in enumerate(files_dir):
@@ -44,13 +77,19 @@ class BotSetup(commands.Bot):
                 for obj_name in dir(module):
                     obj = getattr(module, obj_name)
                     if isinstance(obj, commands.CogMeta):
-                        await self.add_cog(obj(self))
-                        print(Fore.GREEN + f"│    └── {obj_name}" + Style.RESET_ALL)
+                        if not self.get_cog(obj_name):  # Check if cog already added
+                            await self.add_cog(obj(self))
+                            print(Fore.GREEN + f"│    └── {obj_name}" + Style.RESET_ALL)
 
-bot = BotSetup()
+async def main():
+    bot = BotSetup()
 
-try:
-    asyncio.get_event_loop().run_until_complete(bot.start_bot())
-except Exception as e:
-    print(f"An error occurred: {e}")
-    asyncio.get_event_loop().run_until_complete(bot.close())
+    try:
+        await bot.start_bot()
+    except Exception as e:
+        traceback_string = traceback.format_exc()
+        logger.error(f"An error occurred: {e}\n{traceback_string}")
+        await bot.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
