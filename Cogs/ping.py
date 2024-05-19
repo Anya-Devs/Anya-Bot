@@ -12,6 +12,7 @@ from Imports.discord_imports import *
 from Imports.log_imports import *
 from colorama import Fore, Style
 import Data.const as const  # Importing the const module
+from Data.const import primary_color
 from datetime import datetime
 import sys
 import subprocess
@@ -80,7 +81,13 @@ class System(commands.Cog):
 
             system_info = f"**System**: ```diff\n{const.PingConstants.format_diff(platform.system())}\n```" \
                           f"**Processor**: ```diff\n{const.PingConstants.format_diff(platform.processor())}\n```" 
-            gateway_latency = f"```diff\n+ {round(self.bot.latency * 1000)}ms\n```"
+            
+            threshold = 200  
+            lag = self.bot.latency * 1000 
+            gateway_latency = f"diff\n{'-' if lag > threshold else '+'} {round(lag)}ms\n"
+            gateway_latency += '└── Good' if lag <  threshold else '└── Bad'
+            
+            
 
             cpu_usage_value = psutil.cpu_percent()
             mem_usage_value = psutil.virtual_memory().percent
@@ -91,8 +98,8 @@ class System(commands.Cog):
             cpu_usage_tree = "└── Good" if cpu_usage_value < 80 else "└── Bad"
             mem_usage_tree = "└── Good" if mem_usage_value < 80 else "└── Bad"
 
-            cpu_usage = f"**CPU Usage**: ```diff\n{cpu_usage_diff}{cpu_usage_tree}```"
-            mem_usage = f"**Memory Usage**: ```diff\n{mem_usage_diff}{mem_usage_tree}```"
+            cpu_usage = f'```diff\n{cpu_usage_diff}{cpu_usage_tree}```'
+            mem_usage = f'```diff\n{mem_usage_diff}{mem_usage_tree}```'
             
             x = f"{const.PingConstants.language_info['Language']} : {python_version_info}"
             y = x.replace('-','').replace('+','')
@@ -112,15 +119,18 @@ class System(commands.Cog):
             
             language_info = f"**Language**: ```diff\n+ {y}```" \
                             f"**Discord Library**: ```diff\n{const.PingConstants.language_info['Discord Library']}\n```" \
+            
                          
 
-            embed = discord.Embed(title="Pong 🏓", description=f"{gateway_latency}", color=const.PingConstants.embed_color,timestamp=datetime.now())
-            embed.add_field(name="", value=f"{cpu_usage}{mem_usage}", inline=True)
-            embed.add_field(name="", value=f"{system_info}", inline=True)
-            embed.add_field(name="", value=f"{language_info}", inline=False)
+            embed = discord.Embed(description=f"**Latency**```{gateway_latency}```", color=primary_color(),timestamp=datetime.now())
+            # embed.set_author(name=f"{self.bot.user.display_name} 🏓 ",icon_url=self.bot.user.avatar)
+            embed.add_field(name="CPU", value=f"{cpu_usage}", inline=True)
+            embed.add_field(name="Memory", value=f"{mem_usage}", inline=True)
+            # embed.add_field(name="", value=f"{system_info}", inline=True)
+            # embed.add_field(name="", value=f"{language_info}", inline=False)
             embed.set_thumbnail(url=const.PingConstants.thumbnail_url)
             embed.set_image(url=const.PingConstants.image_url)
-            embed.set_footer(text=f"Ping Requested by {ctx.author.display_name}", icon_url=ctx.author.avatar)
+            embed.set_footer(text=f"{ctx.author.display_name} activated pong 🏓", icon_url=ctx.author.avatar)
             await ctx.reply(embed=embed)
 
         except Exception as e:
