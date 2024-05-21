@@ -17,6 +17,7 @@ class AnyaImages:
     ping_banner_anya = 'https://i.pinimg.com/564x/db/98/ff/db98ffc40d53378a9999528b69d66d00.jpg'
     sleepy_anya = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR9y_MT3QHxXZVVzVlA94oFM8uIN0QH1fdw8Q6inySFmQ&s'
     new_mission_anya = 'https://i.pinimg.com/236x/b5/90/49/b590497e5e776909274ba40b040bba8c.jpg'
+    look_radiant_anya = 'https://i.pinimg.com/236x/0b/cf/4b/0bcf4b9002db8cbb5f5d42855b5d460c.jpg'
     ping_thumbnail = 'https://i.pinimg.com/236x/5d/d7/d1/5dd7d1d91933d59b8f21732efba70368.jpg'
     help_thumbnail = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQggKtOcHg_2xDGNeqtciU_-7iZ19F3lFbV091fGKq7KtJI5MuOzLBEPg2rQRZ9ru-tDGY&usqp=CAU'
     
@@ -88,6 +89,35 @@ class Help_Select_Embed_Mapping:
         "quest": "<:loading_icon:1238532154292437022>",
         # Add more emoji mappings for other cogs as needed
     }
+ 
+QUEST_PROMPT_EMBED = {
+    "title": None,
+    "description": (
+        "### **By accepting server quests, you agree to the following terms and conditions:**\n\n"
+        " ☆ \n"
+        " ┊ \n" 
+        "**:star:  Play fair:** ```Do not use self-bots or any form of automation.```\n"
+        " ┊ \n" 
+        "**:star:  Voluntary tracking:** ```Your messages may be tracked for quest purposes.```\n"
+        " ┊ \n"
+        "**:star:  Respect server admin:** ```You will receive quests from the server admin.```\n"
+        " ╰┈┈┈ ☆"
+    ),
+    "color": None, # You can specify a color in hex format if needed
+    "footer_text": "Server Quest Acceptance"
+}
+class Quest_Prompt:
+    @staticmethod
+    async def get_embed():
+        print('getting embed')
+        embed = discord.Embed(
+            description=QUEST_PROMPT_EMBED["description"],
+            color=QUEST_PROMPT_EMBED["color"],
+            timestamp = datetime.now()
+        )
+        embed.set_thumbnail(url=AnyaImages.look_radiant_anya)
+        embed.set_footer(text=QUEST_PROMPT_EMBED["footer_text"])
+        return embed
     
 class Quest_Progress:
     # Dictionary to store progress bar mappings
@@ -111,6 +141,7 @@ class Quest_Progress:
         back_emoji = discord.utils.get(bot.emojis, id=Quest_Progress.Progress_Bar_MAPPING["back_full" if progress == 1 else "back_empty"]) or ":_:"
         bar += f"{back_emoji}"  # Back part emoji
         return bar
+
     
 class QuestEmbed:
     @staticmethod
