@@ -189,16 +189,18 @@ class Quest(commands.Cog):
 
     @commands.command()
     async def quest(self, ctx):
-        logger.debug("Quest command invoked.")
-        try:
-            prompt_embed = await Quest_Prompt.get_embed()
-            prompt_message = await ctx.send(embed=prompt_embed, view=Quest_Button(self.bot, ctx))
-        except Exception as e:
-            error_message = "An error occurred while prompting user agreement."
-            logger.error(f"{error_message}: {e}")
-            traceback.print_exc()
-            await error_custom_embed(self.bot, ctx, error_message, title="User Agreement Error")
-            
+     logger.debug("Quest command invoked.")
+     try:
+        # Get the prompt embed from Quest_Prompt
+        prompt_embed = await Quest_Prompt.get_embed()
+        # Send the prompt message with buttons
+        prompt_message = await ctx.send(embed=prompt_embed, view=Quest_Button(self.bot, ctx))
+     except Exception as e:
+        error_message = "An error occurred while prompting user agreement."
+        logger.error(f"{error_message}: {e}")
+        traceback.print_exc()
+        await error_custom_embed(self.bot, ctx, error_message, title="User Agreement Error")
+        
 class Quest_Button(discord.ui.View):
     def __init__(self, bot, ctx):
         super().__init__()
@@ -217,10 +219,13 @@ class Quest_Button(discord.ui.View):
 
             if user_id not in users_in_server:
                 await self.quest_data.add_user_to_server(user_id, guild_id)
-                await interaction.response.send_message("You have been added to the game!", view=None ephemeral=True)
+                await interaction.response.send_message("You have been added to the game!", ephemeral=True)
+                await interaction.followup.edit_message(interaction.message.id, view=None)
+
                 logger.debug("User added to the game.")
             else:
-                await interaction.response.send_message("You are already part of the game!", view=None ,ephemeral=True)
+                await interaction.response.send_message("You are already part of the game!", ephemeral=True)
+                await interaction.followup.edit_message(interaction.message.id, view=None)
                 logger.debug("User is already part of the game.")
         except Exception as e:
             error_message = "An error occurred while adding user to server."
