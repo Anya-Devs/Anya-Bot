@@ -1,69 +1,73 @@
 from Imports.discord_imports import *
+import traceback
+
 class Sync(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     @commands.command(name='sync', hidden=True)
-    @commands.is_owner()
     @commands.guild_only()
-    async def sync(self, ctx: Context, guilds: Greedy[discord.Object], spec: Optional[Literal["~", "*", "^"]] = None) -> None:
+    @commands.is_owner()
+    async def sync(self, ctx: Context, spec: Optional[Literal["~", "*", "^"]] = None) -> None:
         try:
-            # Get the current guild
-            guild = ctx.guild
+            print(f"[DEBUG] Sync command called by {ctx.author} in guild {ctx.guild}")
+            print(f"[DEBUG] Spec: {spec}")
 
-            # Initialize the counter for synced commands
-            synced_commands_count = 0
+            # Determine the guilds to sync
+            if spec == "^":
+                guilds = [ctx.guild]
+            else:
+                guilds = self.bot.guilds
 
-            if not guilds:
-                if spec == "~":
-                    # Sync global commands to the current guild
-                    synced_commands = await self.bot.tree.sync(guild=guild)
-                    synced_commands_count += len(synced_commands)
-                elif spec == "*":
-                    # Copy global commands to the current guild
-                    self.bot.tree.copy_global_to(guild=guild)
-                    # Sync global commands to the current guild
-                    synced_commands = await self.bot.tree.sync(guild=guild)
-                    synced_commands_count += len(synced_commands)
-                elif spec == "^":
-                    # Clear all existing commands in the current guild
-                    self.bot.tree.clear_commands(guild=guild)
-                    # Sync global commands to the current guild
-                    await self.bot.tree.sync(guild=guild)
-                else:
-                    # Sync global commands to the current guild
-                    synced_commands = await self.bot.tree.sync(guild=guild)
-                    synced_commands_count += len(synced_commands)
+            total_synced_commands = 0
+            total_guilds = len(guilds)
+            failed_guilds = []
 
-                # Send feedback to the user about the synchronization result
-                message = f"Synced {synced_commands_count} app tree commands {'globally' if spec is None else 'to the current guild'}."
-                embed = discord.Embed(description=message)
-                await ctx.send(embed=embed)
-                return
-
-            # Sync commands for multiple guilds
-            for guild_obj in guilds:
+            for guild in guilds:
                 try:
-                    # Sync global commands to the current guild
-                    synced_commands = await self.bot.tree.sync(guild=guild_obj)
-                    synced_commands_count += len(synced_commands)
-                except discord.HTTPException as e:
-                    # Log the error
-                    print(f"Error syncing guild {guild_obj.id}: {e}")
+                    print(f"[DEBUG] Syncing commands for guild: {guild.name} (ID: {guild.id})")
 
-            # Send feedback to the user about the synchronization result for multiple guilds
-            message = f"Synced the app tree to {synced_commands_count}/{len(guilds)} guilds."
-            embed = discord.Embed(description=message)
-            await ctx.send(embed=embed)
+                    if spec == "~":
+                        # Sync global commands to the specific guild
+                        synced_commands = await self.bot.tree.sync(guild=guild)
+                    elif spec == "*":
+                        # Copy global commands to the specific guild
+                        await self.bot.tree.copy_global_to(guild=guild)
+                        # Sync commands after copying
+                        synced_commands = await self.bot.tree.sync(guild=guild)
+                    else:
+                        # Sync global commands
+                        synced_commands = await self.bot.tree.sync()
+
+                    synced_count = len(synced_commands)
+                    total_synced_commands += synced_count
+
+                    # Send feedback for each guild
+                    message = f"Synced {synced_count} commands in guild: {guild.name} (ID: {guild.id})."
+                    await ctx.send(embed=discord.Embed(description=message, color=discord.Color.green()))
+
+                except discord.HTTPException as e:
+                    error_message = f"Error syncing guild {guild.id}: {e}"
+                    print(f"[ERROR] {error_message}")
+                    failed_guilds.append(guild)
+                    await ctx.send(embed=discord.Embed(description=error_message, color=discord.Color.red()))
+
+            # Send final feedback
+            success_message = f"Successfully synced commands in {total_guilds} guild(s). Total commands synced: {total_synced_commands}."
+            await ctx.send(embed=discord.Embed(description=success_message, color=discord.Color.green()))
+
+            if failed_guilds:
+                failed_message = f"Failed to sync commands in the following guilds: {', '.join(guild.name for guild in failed_guilds)}."
+                await ctx.send(embed=discord.Embed(description=failed_message, color=discord.Color.red()))
+
         except Exception as e:
-            # Handle any unexpected errors
-            print(f"An error occurred during app tree synchronization: {e}")
+            error_message = f"An error occurred: {e}"
+            print(f"[ERROR] {error_message}")
             traceback.print_exc()
-            await ctx.send(f"An error occurred during app tree synchronization: {e}")
+            await ctx.send(embed=discord.Embed(description=error_message, color=discord.Color.red()))
 
     @sync.error
-    async def sync_error(self, ctx, error):
-        # Handle command errors
+    async def sync_error(self, ctx: Context, error: commands.CommandError):
         if isinstance(error, commands.MissingPermissions):
             await ctx.send("You don't have permission to use this command.")
         elif isinstance(error, commands.MissingRequiredArgument):
