@@ -7,12 +7,13 @@ import aiohttp
 import requests
 import platform
 import psutil
-import colorama
+
 from Imports.discord_imports import *
 from Imports.log_imports import *
 from colorama import Fore, Style
 import Data.const as const  # Importing the const module
 from Data.const import primary_color
+
 from datetime import datetime
 import sys
 import subprocess
@@ -126,11 +127,12 @@ class System(commands.Cog):
             # embed.set_author(name=f"{self.bot.user.display_name} 🏓 ",icon_url=self.bot.user.avatar)
             embed.add_field(name="CPU", value=f"{cpu_usage}", inline=True)
             embed.add_field(name="Memory", value=f"{mem_usage}", inline=True)
-            # embed.add_field(name="", value=f"{system_info}", inline=True)
+
+            # embed.add_field(name="", value=f"{system_info}", inline=False)
             # embed.add_field(name="", value=f"{language_info}", inline=False)
             embed.set_thumbnail(url=const.PingConstants.thumbnail_url)
             embed.set_image(url=const.PingConstants.image_url)
-            embed.set_footer(text=f"{ctx.author.display_name} activated pong 🏓", icon_url=ctx.author.avatar)
+            embed.set_footer(text=f"Pong 🏓")
             await ctx.reply(embed=embed)
 
         except Exception as e:
