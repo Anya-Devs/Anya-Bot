@@ -51,7 +51,7 @@ class Select(discord.ui.Select):
                 if cog_commands:
                     cog_commands_str = '\n'.join(cog_commands)
                     self.cog_embed.add_field(
-                        name='Commands',
+                        name=' ',
                         value=f"{cog_commands_str}",
                         inline=False
                     )
