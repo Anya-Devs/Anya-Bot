@@ -217,10 +217,10 @@ class Quest_Button(discord.ui.View):
 
             if user_id not in users_in_server:
                 await self.quest_data.add_user_to_server(user_id, guild_id)
-                await interaction.response.send_message("You have been added to the game!", ephemeral=True)
+                await interaction.response.send_message("You have been added to the game!", view=None ephemeral=True)
                 logger.debug("User added to the game.")
             else:
-                await interaction.response.send_message("You are already part of the game!", ephemeral=True)
+                await interaction.response.send_message("You are already part of the game!", view=None ,ephemeral=True)
                 logger.debug("User is already part of the game.")
         except Exception as e:
             error_message = "An error occurred while adding user to server."
@@ -230,13 +230,13 @@ class Quest_Button(discord.ui.View):
 
     @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
     async def accept_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-        await self.add_user_to_server(interaction)
+        await self.add_user_to_server(button)
 
 
     @discord.ui.button(label="Decline", style=discord.ButtonStyle.danger)
     async def decline_button(self, button: discord.ui.Button, interaction: discord.Interaction):
         embed = discord.Embed(title="Quest Canceled", description="You have declined the quest.", color=discord.Color.red())
-        await interaction.response.edit_message(embed=embed)
+        await button.response.edit_message(embed=embed, view=None)
            
 class Quest_Slash(commands.Cog):
     def __init__(self, bot):
