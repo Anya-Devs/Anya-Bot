@@ -11,10 +11,10 @@ from discord.ext import commands
 from Data import const
 from Imports.log_imports import logger
 
-class AvatarChanger(commands.Cog):
+class Changer(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.countdown = 200  # Initial countdown value in seconds
+        self.countdown = 900  # Initial countdown value in seconds
         self.emojis_folder = 'Data/Emojis'  # Path to the folder containing image files
         self.image_files = [f for f in os.listdir(self.emojis_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))]
         self.png_weights = [1] * len(self.image_files)  # Equal weights for each image file
@@ -56,7 +56,7 @@ class AvatarChanger(commands.Cog):
             await self.change_avatar()
             await asyncio.sleep(self.countdown)  # Wait for {self.countdown} seconds between avatar changes
 
-    @commands.command(name='avatar')
+    @commands.command(name='avatar',hidden=True)
     @commands.is_owner()
     async def change_avatar_command(self, ctx, emoji_filename=None):
         embed = await const.EmbedFactory.change_avatar_prompt()
@@ -102,7 +102,7 @@ class AvatarChanger(commands.Cog):
                 # Ask for the filename for the new image
                 embed = discord.Embed(
                     title="Change Avatar",
-                    description="Please provide a filename for the new image.\n\nType 'c' to cancel.",
+                    description="Please provide a filename for the new image.\n\nType `c` to cancel.",
                     color=discord.Color.blue()
                 )
                 await ctx.send(embed=embed)
