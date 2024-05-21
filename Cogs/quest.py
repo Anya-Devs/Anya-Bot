@@ -298,7 +298,6 @@ class Quest_Slash(commands.Cog):
     @app_commands.choices(action=[
         discord.app_commands.Choice(name='send', value='send'), 
         discord.app_commands.Choice(name='receive', value='receive'), 
-        discord.app_commands.Choice(name='react', value='react')
     ])
     @app_commands.choices(method=[
         discord.app_commands.Choice(name='message', value='message'),
