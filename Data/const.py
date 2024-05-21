@@ -17,7 +17,7 @@ class AnyaImages:
     ping_banner_anya = 'https://i.pinimg.com/564x/db/98/ff/db98ffc40d53378a9999528b69d66d00.jpg'
     sleepy_anya = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR9y_MT3QHxXZVVzVlA94oFM8uIN0QH1fdw8Q6inySFmQ&s'
     new_mission_anya = 'https://i.pinimg.com/236x/b5/90/49/b590497e5e776909274ba40b040bba8c.jpg'
-    ping_thumbnail = None
+    ping_thumbnail = 'https://i.pinimg.com/236x/5d/d7/d1/5dd7d1d91933d59b8f21732efba70368.jpg'
     help_thumbnail = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQggKtOcHg_2xDGNeqtciU_-7iZ19F3lFbV091fGKq7KtJI5MuOzLBEPg2rQRZ9ru-tDGY&usqp=CAU'
     
 # Embed Avatar
@@ -129,11 +129,11 @@ class QuestEmbed:
             f"**Channel:** {channel.mention}\n"
             f"**Times:** `{times}`\n"
             f"**Content:** `{content}`\n"
-            f"**Quest:**\n```{action} {method}: '{content}' in #{channel.name} {times}x```"
+            f"**Quest:**\n```{action} {method}: '{content}' in {channel.name} {times}x```"
         )
         
         embed = discord.Embed(
-            title=f"{quest.title()} Quest #{quest_id}",
+            title=f"{quest} Quest #{quest_id}",
             description=description,
             color=None
         )
@@ -150,8 +150,8 @@ class LogConstants:
     embed_color = None
 
 class PingConstants:
-    thumbnail_url = None
-    image_url =  AnyaImages.ping_banner_anya
+    thumbnail_url = AnyaImages.ping_thumbnail
+    image_url =  None
     footer_icon = None
     embed_color = None
 
