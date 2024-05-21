@@ -181,108 +181,63 @@ class Quest_Data(commands.Cog):
         except PyMongoError as e:
             logger.error(f"Error occurred while adding user to server: {e}")
 
-
-
-
          
 class Quest(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.quest_data = Quest_Data(bot)
 
-    async def prompt_user_agreement(self, ctx):
-        logger.debug("Prompting user for agreement.")
+    @commands.command()
+    async def quest(self, ctx):
+        logger.debug("Quest command invoked.")
         try:
             prompt_embed = await Quest_Prompt.get_embed()
-            prompt_message = await ctx.send(embed=prompt_embed)
-
-            def check(m):
-                return m.author == ctx.author and m.content.lower() == 'yes'
-
-            try:
-                msg = await self.bot.wait_for('message', check=check, timeout=30.0)
-                logger.debug("User agreed to the quest.")
-                return True
-            except asyncio.TimeoutError:
-                logger.debug("User did not respond in time.")
-                await ctx.send("You didn't respond in time. Please try again.")
-                return False
+            prompt_message = await ctx.send(embed=prompt_embed, view=Quest_Button(self.bot, ctx))
         except Exception as e:
             error_message = "An error occurred while prompting user agreement."
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
             await error_custom_embed(self.bot, ctx, error_message, title="User Agreement Error")
-            return False
+            
+class Quest_Button(discord.ui.View):
+    def __init__(self, bot, ctx):
+        super().__init__()
+        self.ctx = ctx
+        self.bot = bot
+        self.quest_data = Quest_Data(bot)
 
-    async def add_user_to_server(self, ctx):
+
+    async def add_user_to_server(self, interaction):
         logger.debug("Adding user to server.")
         try:
-            user_id = str(ctx.author.id)
-            guild_id = str(ctx.guild.id)
+            user_id = str(self.ctx.author.id)
+            guild_id = str(self.ctx.guild.id)
             users_in_server = await self.quest_data.find_users_in_server(guild_id)
             logger.debug(f"Users in server: {users_in_server}")
 
             if user_id not in users_in_server:
-                agreement = await self.prompt_user_agreement(ctx)
-                if agreement:
-                    await self.quest_data.add_user_to_server(user_id, guild_id)
-                    await ctx.send("You have been added to the game!")
-                    logger.debug("User added to the game.")
-                else:
-                    await ctx.send("You did not agree to the terms. You cannot play the game.")
-                    logger.debug("User did not agree to the terms.")
+                await self.quest_data.add_user_to_server(user_id, guild_id)
+                await interaction.response.send_message("You have been added to the game!", ephemeral=True)
+                logger.debug("User added to the game.")
             else:
-                await ctx.send("You are already part of the game!")
+                await interaction.response.send_message("You are already part of the game!", ephemeral=True)
                 logger.debug("User is already part of the game.")
         except Exception as e:
             error_message = "An error occurred while adding user to server."
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
-            await error_custom_embed(self.bot, ctx, error_message, title="Add User Error")
-            
-    @commands.command()
-    async def quest(self, ctx):
-        logger.debug("Quest command invoked.")
-        await self.add_user_to_server(ctx)
-        try:
-            user_id = str(ctx.author.id)
-            guild_id = str(ctx.guild.id)
-            logger.debug(f"Fetching quests for guild_id: {guild_id} and user_id: {user_id}")
+            await error_custom_embed(self.bot, self.ctx, error_message, title="Add User Error")
 
-            users_in_server = await self.quest_data.find_users_in_server(guild_id)
-            logger.debug(f"Users in server: {users_in_server}")
-            quests = []
-            for user_id in users_in_server:
-                user_quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
-                logger.debug(f"Quests for user_id {user_id}: {user_quests}")
-                quests.extend(user_quests)
+    @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
+    async def accept_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+        await self.add_user_to_server(interaction)
 
-            if quests:
-                embed = discord.Embed(title="Quest Progress", color=primary_color())
-                logger.debug("Creating quest progress embed.")
 
-                for quest_data in quests:
-                    quest_id = quest_data.get("quest_id")
-                    current_progress = quest_data.get("current_progress", 0)
-                    task_times = quest_data.get("times", 1)
-
-                    progress = current_progress / task_times
-                    progress_bar = await Quest_Progress.generate_progress_bar(progress, self.bot)
-                    logger.debug(f"Quest {quest_id}: Progress bar - {progress_bar}")
-
-                    embed.add_field(name=f"Quest {quest_id}", value=f"Progress: {progress_bar} ({current_progress}/{task_times})", inline=False)
-
-                await ctx.send(embed=embed)
-                logger.debug("Quest progress embed sent.")
-            else:
-                await ctx.send("No quest progress found for this user in this server.")
-                logger.debug("No quest progress found.")
-        except Exception as e:
-            error_message = "An error occurred while fetching or displaying quest progress."
-            logger.error(f"{error_message}: {e}")
-            traceback.print_exc()
-            await error_custom_embed(self.bot, ctx, error_message, title="Quest Error")
-         
+    @discord.ui.button(label="Decline", style=discord.ButtonStyle.danger)
+    async def decline_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+        embed = discord.Embed(title="Quest Canceled", description="You have declined the quest.", color=discord.Color.red())
+        await interaction.response.edit_message(embed=embed)
+           
 class Quest_Slash(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
