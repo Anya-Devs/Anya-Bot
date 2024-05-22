@@ -9,6 +9,8 @@ import motor.motor_asyncio
 from pymongo.errors import PyMongoError
 import os
 
+
+
 class Quest_Data(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -19,7 +21,6 @@ class Quest_Data(commands.Cog):
         if not mongo_url:
             raise ValueError("No MONGO_URI found in environment variables")
         self.mongoConnect = motor.motor_asyncio.AsyncIOMotorClient(mongo_url)
-        logger.debug("Quest_Data initialized with MongoDB connection.")
 
     async def handle_error(self, interaction, error, title):
         await error_custom_embed(self.bot, interaction, str(error), title=title)
@@ -28,7 +29,63 @@ class Quest_Data(commands.Cog):
         for key, value in kwargs.items():
             if value is None or value == "":
                 raise ValueError(f"{key} cannot be None or empty")
+                
+    async def find_users_in_server(self, guild_id: str):
+     try:
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+        
+        # Log the query being made
+        logger.debug(f"Querying for guild_id: {guild_id}")
+        
+        # Find the guild document by its ID
+        guild_document = await server_collection.find_one({'guild_id': str(guild_id)})
+        
+        if guild_document:
+            # Extract the members data from the guild document
+            members_data = guild_document.get('members', {})
+            users_in_server = list(members_data.keys())  # Extract user IDs
+            
+            logger.debug(f"Found {len(users_in_server)} users in server {guild_id}.")
+            return users_in_server
+        else:
+            logger.debug(f"No guild found with ID {guild_id}.")
+            return []
+     except PyMongoError as e:
+        logger.error(f"Error occurred while finding users in server: {e}")
+        return []
 
+    async def find_users_with_quest(self, guild_id: str, quest_id: int):
+     try:
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+        
+        # Log the query being made
+        logger.debug(f"Querying for guild_id: {guild_id} with quest_id: {quest_id}")
+        
+        # Find the guild document by its ID
+        guild_document = await server_collection.find_one({'guild_id': str(guild_id)})
+        
+        if guild_document:
+            # Extract the members data from the guild document
+            members_data = guild_document.get('members', {})
+            users_with_quest = []
+            
+            # Iterate through each user and their quests to find the specified quest
+            for user_id, user_data in members_data.items():
+                quests = user_data.get('quests', [])
+                if any(quest['quest_id'] == quest_id for quest in quests):
+                    users_with_quest.append(user_id)
+            
+            logger.debug(f"Found {len(users_with_quest)} users with quest ID {quest_id} in guild {guild_id}.")
+            return users_with_quest
+        else:
+            logger.debug(f"No guild found with ID {guild_id}.")
+            return []
+     except PyMongoError as e:
+        logger.error(f"Error occurred while finding users with quest: {e}")
+        return []
+    
     async def find_quests_by_user_and_server(self, user_id: str, guild_id: str, interaction=None):
         try:
             await self.validate_input(user_id=user_id, guild_id=guild_id)
@@ -130,49 +187,8 @@ class Quest_Data(commands.Cog):
             logger.error(f"Error occurred while creating new quest for all users: {e}")
             if interaction:
                 await self.handle_error(interaction, e, title="Quest Creation for All")
-    async def delete_quest(self, guild_id: str, user_id: str, quest_id: int, interaction=None):
-     try:
-        db = self.mongoConnect[self.DB_NAME]
-        server_collection = db['Servers']
-        
-        # Delete the quest with the given ID
-        await server_collection.update_one(
-            {'guild_id': guild_id},
-            {'$pull': {f'members.{user_id}.quests': {'quest_id': quest_id}}},
-            upsert=True
-        )
-        logger.debug(f"Deleted quest with ID {quest_id} for user {user_id} in guild {guild_id}.")
-     except PyMongoError as e:
-        logger.error(f"Error occurred while deleting quest: {e}")
-        if interaction:
-            await self.handle_error(interaction, e, title="Quest Deletion")
-     
-    async def find_users_in_server(self, guild_id: str):
-        try:
-            db = self.mongoConnect[self.DB_NAME]
-            server_collection = db['Servers']
-            server_data = await server_collection.find_one({'guild_id': guild_id})
-            if server_data:
-                members_data = server_data.get('members', [])
-                if isinstance(members_data, list):
-                    # Convert the list of member IDs to a dictionary with empty quest data
-                    members_data = {str(member_id): {'quests': []} for member_id in members_data}
-                    await server_collection.update_one(
-                        {'guild_id': guild_id},
-                        {'$set': {'members': members_data}},
-                        upsert=True
-                    )
-                    logger.info(f"Converted 'members' data to dictionary format for guild {guild_id}.")
-                users = list(members_data.keys())
-                logger.debug(f"Found {len(users)} users in server {guild_id}.")
-                return users
-            else:
-                logger.debug(f"No server data found for guild {guild_id}.")
-                return []
-        except PyMongoError as e:
-            logger.error(f"Error occurred while finding users in server: {e}")
-            return []
     
+
     async def add_user_to_server(self, user_id: str, guild_id: str):
         try:
             db = self.mongoConnect[self.DB_NAME]
@@ -191,25 +207,51 @@ class Quest_Data(commands.Cog):
             )
         except PyMongoError as e:
             logger.error(f"Error occurred while adding user to server: {e}")
-            
+
     
-    async def check_quest_exists(self, guild_id: str, user_id: str, quest_id: int) -> bool:
+    async def delete_quest(self, guild_id: str, quest_id: int, interaction=None):
      try:
         db = self.mongoConnect[self.DB_NAME]
         server_collection = db['Servers']
-        
-        # Find the user's quests and check if the given quest_id exists
-        quest_exists = await server_collection.count_documents(
-            {'guild_id': guild_id, f'members.{user_id}.quests': {'$elemMatch': {'quest_id': quest_id}}}
-        )
-        
-        return quest_exists > 0
-     except PyMongoError as e:
-        logger.error(f"Error occurred while checking quest existence: {e}")
-        return False
 
-    
-    
+        # Log the query being made
+        logger.debug(f"Querying for guild_id: {guild_id} with quest_id: {quest_id}")
+
+        # Find the guild document by its ID
+        guild_document = await server_collection.find_one({'guild_id': str(guild_id)})
+
+        if not guild_document:
+            logger.debug(f"No guild found with ID {guild_id}.")
+            return
+
+        # Extract the members data from the guild document
+        members_data = guild_document.get('members', {})
+
+        # Loop through each member
+        for member_id, member_data in members_data.items():
+            # Extract quests for the current member
+            quests = member_data.get('quests', [])
+            
+            # Check if any quest matches the specified quest ID
+            quests_to_delete = [quest for quest in quests if quest.get('quest_id') == quest_id]
+            
+            # If there are quests to delete, remove them
+            if quests_to_delete:
+                member_data['quests'] = [quest for quest in quests if quest not in quests_to_delete]
+                
+                # Update the guild document with the modified member data
+                await server_collection.update_one(
+                    {'guild_id': str(guild_id)},
+                    {'$set': {f'members.{member_id}.quests': member_data['quests']}}
+                )
+                logger.debug(f"Deleted quest with ID {quest_id} for user {member_id} in guild {guild_id}.")
+            else:
+                logger.debug(f"No quest with ID {quest_id} found for user {member_id} in guild {guild_id} to delete.")
+
+     except PyMongoError as e:
+        logger.error(f"Error occurred while deleting quest: {e}")
+        if interaction:
+            await self.handle_error(interaction, e, title="Quest Deletion")
 class Quest(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -360,28 +402,38 @@ class Quest_Slash(commands.Cog):
         description="Delete a quest by its ID.",
     )
     async def delete_quest(
-        self,
-        interaction: discord.Interaction,
-        quest_id: int
-    ) -> None:
-        try:
-            guild_id = interaction.guild.id
-            user_id = interaction.user.id
-            
-            # Check if the quest exists
-            quest_exists = await self.quest_data.check_quest_exists(guild_id, user_id, quest_id)
-            if not quest_exists:
-                await interaction.response.send_message("The specified quest does not exist.", ephemeral=True)
-                return
-            
-            # Delete the quest
-            await self.quest_data.delete_quest(guild_id, user_id, quest_id)
-            
-            await interaction.response.send_message(f"The quest with ID {quest_id} has been deleted.", ephemeral=True)
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            traceback.print_exc()
-            await error_custom_embed(self.bot, interaction, e, title="Quest Deletion")
+     self,
+     interaction: discord.Interaction,
+     quest_id: int) -> None:
+     try:
+        guild_id = interaction.guild.id
+        
+        # Find all users in the guild
+        users_in_guild = await self.quest_data.find_users_in_server(guild_id)
+        
+        if not users_in_guild:
+            await interaction.response.send_message("No users found in the server.", ephemeral=True)
+            return
+        
+        quest_deleted = False
+
+        for user_id in users_in_guild:
+            # Check if the quest exists for the user
+            quest_exists =  await self.quest_data.find_users_with_quest(guild_id, quest_id)
+            if quest_exists:
+                # Delete the quest for this user
+                await self.quest_data.delete_quest(guild_id, user_id, quest_id)
+                quest_deleted = True
+
+        if quest_deleted:
+            await interaction.response.send_message(f"The quest with ID {quest_id} has been deleted for all users who had it.", ephemeral=True)
+        else:
+            await interaction.response.send_message("The specified quest does not exist for any user.", ephemeral=True)
+        
+     except Exception as e:
+        print(f"An error occurred: {e}")
+        traceback.print_exc()
+        await self.quest_data.handle_error(interaction, e, title="Quest Deletion")
 
           
 def setup(bot):
