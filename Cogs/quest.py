@@ -56,17 +56,10 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db['Servers']
             
-            # Update the database to ensure 'members' field is a dictionary
-            await server_collection.update_one(
-                {'guild_id': guild_id},
-                {'$set': {f'members.{user_id}': {}}},
-                upsert=True
-            )
-            
             # Append the quest data to the appropriate spot
             await server_collection.update_one(
-                {'guild_id': guild_id},
-                {'$addToSet': {f'members.{user_id}.quests': quest_data}},
+                {'guild_id': guild_id, f'members.{user_id}.quests': {'$not': {'$elemMatch': {'quest_id': quest_data['quest_id']}}}},
+                {'$push': {f'members.{user_id}.quests': quest_data}},
                 upsert=True
             )
             logger.debug(f"Inserted quest data for user {user_id} in guild {guild_id}.")
@@ -137,7 +130,23 @@ class Quest_Data(commands.Cog):
             logger.error(f"Error occurred while creating new quest for all users: {e}")
             if interaction:
                 await self.handle_error(interaction, e, title="Quest Creation for All")
-
+    async def delete_quest(self, guild_id: str, user_id: str, quest_id: int, interaction=None):
+     try:
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+        
+        # Delete the quest with the given ID
+        await server_collection.update_one(
+            {'guild_id': guild_id},
+            {'$pull': {f'members.{user_id}.quests': {'quest_id': quest_id}}},
+            upsert=True
+        )
+        logger.debug(f"Deleted quest with ID {quest_id} for user {user_id} in guild {guild_id}.")
+     except PyMongoError as e:
+        logger.error(f"Error occurred while deleting quest: {e}")
+        if interaction:
+            await self.handle_error(interaction, e, title="Quest Deletion")
+            
     async def find_users_in_server(self, guild_id: str):
         try:
             db = self.mongoConnect[self.DB_NAME]
@@ -182,7 +191,7 @@ class Quest_Data(commands.Cog):
             )
         except PyMongoError as e:
             logger.error(f"Error occurred while adding user to server: {e}")
-           
+          
          
 class Quest(commands.Cog):
     def __init__(self, bot):
@@ -271,7 +280,7 @@ class Quest_Slash(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.quest_data = Quest_Data(bot)
-        super().__init__()
+        super().__init__()  # this is now required in this context.
 
     @app_commands.command(
         name="create_quest",
@@ -282,6 +291,7 @@ class Quest_Slash(commands.Cog):
     @app_commands.choices(action=[
         discord.app_commands.Choice(name='send', value='send'), 
         discord.app_commands.Choice(name='receive', value='receive'), 
+        discord.app_commands.Choice(name='react', value='react')
     ])
     @app_commands.choices(method=[
         discord.app_commands.Choice(name='message', value='message'),
@@ -296,8 +306,8 @@ class Quest_Slash(commands.Cog):
         times: typing.Optional[int] = 1,
     ) -> None:
         try:
-            guild_id = str(interaction.guild_id)
-            user_id = str(interaction.user.id)
+            guild_id = interaction.guild.id
+            user_id = interaction.user.id  # Assuming you want to associate the quest with the user who created it
             
             # Prompt user for additional content
             await interaction.response.send_message(
@@ -309,22 +319,49 @@ class Quest_Slash(commands.Cog):
             await response.delete()
 
             # Create the quest
-            quest_id = await self.quest_data.create_new_quest_for_all(guild_id, action.value, method.value, channel.id, times, content, interaction)
-            if quest_id is not None:
+            quest_id = await self.quest_data.create_new_quest(user_id, guild_id, action.value, method.value, channel.id, times, content)
+            if quest_id:
                 # Create the quest embed
                 embed = await QuestEmbed.create_quest_embed("Created", quest_id, action.value, method.value, channel, times=times, content=content)
                 
                 # Send the embed
                 await interaction.followup.send(embed=embed)
-                logger.debug("Quest creation successful.")
+                print("Embed sent.")
             else:
-                await interaction.followup.send("Try doing `...quest`")
-                logger.debug("Failed to create the quest.")
+                await interaction.followup.send("Failed to create the quest.")
                 
         except Exception as e:
-            logger.error(f"An error occurred: {e}")
+            print(f"An error occurred: {e}")
             traceback.print_exc()
             await error_custom_embed(self.bot, interaction, e, title="Quest Creation")
+
+    @app_commands.command(
+        name="delete_quest",
+        description="Delete a quest by its ID.",
+    )
+    async def delete_quest(
+        self,
+        interaction: discord.Interaction,
+        quest_id: int
+    ) -> None:
+        try:
+            guild_id = interaction.guild.id
+            user_id = interaction.user.id
+            
+            # Check if the quest exists
+            quest_exists = await self.quest_data.check_quest_exists(guild_id, user_id, quest_id)
+            if not quest_exists:
+                await interaction.response.send_message("The specified quest does not exist.", ephemeral=True)
+                return
+            
+            # Delete the quest
+            await self.quest_data.delete_quest(guild_id, user_id, quest_id)
+            
+            await interaction.response.send_message(f"The quest with ID {quest_id} has been deleted.", ephemeral=True)
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            traceback.print_exc()
+            await error_custom_embed(self.bot, interaction, e, title="Quest Deletion")
 
           
 def setup(bot):
