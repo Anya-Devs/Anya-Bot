@@ -132,7 +132,7 @@ class System(commands.Cog):
             # embed.add_field(name="", value=f"{language_info}", inline=False)
             embed.set_thumbnail(url=const.PingConstants.thumbnail_url)
             embed.set_image(url=const.PingConstants.image_url)
-            embed.set_footer(text=f"Pong 🏓")
+            embed.set_footer(text=f"{ctx.author.display_name} activated pong 🏓", icon_url=ctx.author.avatar)
             await ctx.reply(embed=embed)
 
         except Exception as e:
