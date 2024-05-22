@@ -70,7 +70,7 @@ class Help_Select_Embed_Mapping:
         },
         "quest": {
             "title": "Quest",
-            "description": "```Still in Testing```\n**Estimated Time:** <t:1717165320:R>",
+            "description": "```Still in Testing```\n**Estimated Time:** <t:1717955820:R>",
             "color": None,  # Customize color as needed
             "thumbnail_url": AnyaImages.sleepy_anya
         },
