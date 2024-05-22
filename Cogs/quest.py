@@ -259,7 +259,7 @@ class Quest_Button(discord.ui.View):
             else:
                 await interaction.response.send_message("You are already part of the game!", ephemeral=True)
                 await interaction.followup.edit_message(interaction.message.id, view=None)
-                logger.debug("User is already part of the game.")
+                logger.debug("User is already part of the game.\nBut you don't have any new quest given by your admin.")
         except Exception as e:
             error_message = "An error occurred while adding user to server."
             logger.error(f"{error_message}: {e}")
@@ -280,7 +280,7 @@ class Quest_Slash(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.quest_data = Quest_Data(bot)
-        super().__init__()  # this is now required in this context.
+        super().__init__()
 
     @app_commands.command(
         name="create_quest",
@@ -291,7 +291,6 @@ class Quest_Slash(commands.Cog):
     @app_commands.choices(action=[
         discord.app_commands.Choice(name='send', value='send'), 
         discord.app_commands.Choice(name='receive', value='receive'), 
-        discord.app_commands.Choice(name='react', value='react')
     ])
     @app_commands.choices(method=[
         discord.app_commands.Choice(name='message', value='message'),
@@ -306,8 +305,8 @@ class Quest_Slash(commands.Cog):
         times: typing.Optional[int] = 1,
     ) -> None:
         try:
-            guild_id = interaction.guild.id
-            user_id = interaction.user.id  # Assuming you want to associate the quest with the user who created it
+            guild_id = str(interaction.guild_id)
+            user_id = str(interaction.user.id)
             
             # Prompt user for additional content
             await interaction.response.send_message(
@@ -319,22 +318,26 @@ class Quest_Slash(commands.Cog):
             await response.delete()
 
             # Create the quest
-            quest_id = await self.quest_data.create_new_quest(user_id, guild_id, action.value, method.value, channel.id, times, content)
-            if quest_id:
+            quest_id = await self.quest_data.create_new_quest_for_all(guild_id, action.value, method.value, channel.id, times, content, interaction)
+            if quest_id is not None:
                 # Create the quest embed
                 embed = await QuestEmbed.create_quest_embed("Created", quest_id, action.value, method.value, channel, times=times, content=content)
                 
                 # Send the embed
                 await interaction.followup.send(embed=embed)
-                print("Embed sent.")
+                logger.debug("Quest creation successful.")
             else:
-                await interaction.followup.send("Failed to create the quest.")
+                await interaction.followup.send("Try doing `...quest`")
+                logger.debug("Failed to create the quest.")
                 
         except Exception as e:
-            print(f"An error occurred: {e}")
+            logger.error(f"An error occurred: {e}")
             traceback.print_exc()
             await error_custom_embed(self.bot, interaction, e, title="Quest Creation")
-
+            
+            
+            
+            
     @app_commands.command(
         name="delete_quest",
         description="Delete a quest by its ID.",
