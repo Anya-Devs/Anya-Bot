@@ -235,6 +235,12 @@ class Quest_Data(commands.Cog):
             # Check if any quest matches the specified quest ID
             quests_to_delete = [quest for quest in quests if quest.get('quest_id') == quest_id]
             
+            # Log the quests found for the member
+            if quests_to_delete:
+                logger.debug(f"Found quest with ID {quest_id} for user {member_id} in guild {guild_id}.")
+            else:
+                logger.debug(f"No quest with ID {quest_id} found for user {member_id} in guild {guild_id} to delete.")
+                
             # If there are quests to delete, remove them
             if quests_to_delete:
                 member_data['quests'] = [quest for quest in quests if quest not in quests_to_delete]
@@ -245,13 +251,17 @@ class Quest_Data(commands.Cog):
                     {'$set': {f'members.{member_id}.quests': member_data['quests']}}
                 )
                 logger.debug(f"Deleted quest with ID {quest_id} for user {member_id} in guild {guild_id}.")
-            else:
-                logger.debug(f"No quest with ID {quest_id} found for user {member_id} in guild {guild_id} to delete.")
 
      except PyMongoError as e:
         logger.error(f"Error occurred while deleting quest: {e}")
         if interaction:
             await self.handle_error(interaction, e, title="Quest Deletion")
+            
+            
+            
+            
+            
+            
 class Quest(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -278,7 +288,7 @@ class Quest(commands.Cog):
                     progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
                     embed.add_field(
                         name=" ",
-                        value=f"`{quest_id}`\t**{action.title()} {method.title()}: '{content}' in {channel.mention}**\n{progress_bar} `{progress}/{times}`",
+                        value=f"`{quest_id}` **{action.title()} {method.title()}: '{content}' in {channel.mention}**\n{progress_bar} `{progress}/{times}`",
                         inline=False
                     )
                 await ctx.send(embed=embed)
