@@ -51,6 +51,7 @@ class Quest_Data(commands.Cog):
 
     async def insert_quest(self, guild_id: str, user_id: str, quest_data: dict, interaction=None):
         try:
+            quest_data['progress'] = 0  # Add progress field with default value 0
             await self.validate_input(**quest_data)
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db['Servers']
@@ -122,7 +123,8 @@ class Quest_Data(commands.Cog):
                     'method': method,
                     'channel_id': channel_id,
                     'times': times,
-                    'content': content
+                    'content': content,
+                    'progress': 0  # Initialize progress to 0
                 }
                 logger.debug(f"Creating quest for user_id: {user_id}, guild_id: {guild_id}, quest_data: {quest_data}")
                 await self.insert_quest(guild_id, user_id, quest_data)
@@ -137,30 +139,30 @@ class Quest_Data(commands.Cog):
                 await self.handle_error(interaction, e, title="Quest Creation for All")
 
     async def find_users_in_server(self, guild_id: str):
-     try:
-        db = self.mongoConnect[self.DB_NAME]
-        server_collection = db['Servers']
-        server_data = await server_collection.find_one({'guild_id': guild_id})
-        if server_data:
-            members_data = server_data.get('members', [])
-            if isinstance(members_data, list):
-                # Convert the list of member IDs to a dictionary with empty quest data
-                members_data = {str(member_id): {'quests': []} for member_id in members_data}
-                await server_collection.update_one(
-                    {'guild_id': guild_id},
-                    {'$set': {'members': members_data}},
-                    upsert=True
-                )
-                logger.info(f"Converted 'members' data to dictionary format for guild {guild_id}.")
-            users = list(members_data.keys())
-            logger.debug(f"Found {len(users)} users in server {guild_id}.")
-            return users
-        else:
-            logger.debug(f"No server data found for guild {guild_id}.")
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db['Servers']
+            server_data = await server_collection.find_one({'guild_id': guild_id})
+            if server_data:
+                members_data = server_data.get('members', [])
+                if isinstance(members_data, list):
+                    # Convert the list of member IDs to a dictionary with empty quest data
+                    members_data = {str(member_id): {'quests': []} for member_id in members_data}
+                    await server_collection.update_one(
+                        {'guild_id': guild_id},
+                        {'$set': {'members': members_data}},
+                        upsert=True
+                    )
+                    logger.info(f"Converted 'members' data to dictionary format for guild {guild_id}.")
+                users = list(members_data.keys())
+                logger.debug(f"Found {len(users)} users in server {guild_id}.")
+                return users
+            else:
+                logger.debug(f"No server data found for guild {guild_id}.")
+                return []
+        except PyMongoError as e:
+            logger.error(f"Error occurred while finding users in server: {e}")
             return []
-     except PyMongoError as e:
-        logger.error(f"Error occurred while finding users in server: {e}")
-        return []
   
     async def add_user_to_server(self, user_id: str, guild_id: str):
         try:
@@ -180,7 +182,7 @@ class Quest_Data(commands.Cog):
             )
         except PyMongoError as e:
             logger.error(f"Error occurred while adding user to server: {e}")
-
+           
          
 class Quest(commands.Cog):
     def __init__(self, bot):
@@ -189,18 +191,40 @@ class Quest(commands.Cog):
 
     @commands.command()
     async def quest(self, ctx):
-     logger.debug("Quest command invoked.")
-     try:
-        # Get the prompt embed from Quest_Prompt
-        prompt_embed = await Quest_Prompt.get_embed()
-        # Send the prompt message with buttons
-        prompt_message = await ctx.send(embed=prompt_embed, view=Quest_Button(self.bot, ctx))
-     except Exception as e:
-        error_message = "An error occurred while prompting user agreement."
-        logger.error(f"{error_message}: {e}")
-        traceback.print_exc()
-        await error_custom_embed(self.bot, ctx, error_message, title="User Agreement Error")
-        
+        logger.debug("Quest command invoked.")
+        try:
+            user_id = str(ctx.author.id)
+            guild_id = str(ctx.guild.id)
+            quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
+
+            if quests:
+                embed = discord.Embed(title="Quest", color=primary_color())
+                for quest in quests:
+                    quest_id = quest['quest_id']
+                    progress = quest['progress']
+                    times = quest['times']
+                    action = quest['action']
+                    method = quest['method']
+                    content = quest['content']
+                    channel = self.bot.get_channel(quest['channel_id'])
+                    progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
+                    embed.add_field(
+                        name=" ",
+                        value=f"`{quest_id}`\t**{action.title()} {method.title()}: '{content}' in {channel.mention}**\n{progress_bar} `{progress}/{times}`",
+                        inline=False
+                    )
+                await ctx.send(embed=embed)
+            else:
+                # Get the prompt embed from Quest_Prompt
+                prompt_embed = await Quest_Prompt.get_embed()
+                # Send the prompt message with buttons
+                await ctx.send(embed=prompt_embed, view=Quest_Button(self.bot, ctx))
+        except Exception as e:
+            error_message = "An error occurred while fetching quests."
+            logger.error(f"{error_message}: {e}")
+            traceback.print_exc()
+            await error_custom_embed(self.bot, ctx, error_message, title="Quest Fetch Error")
+      
 class Quest_Button(discord.ui.View):
     def __init__(self, bot, ctx):
         super().__init__()
@@ -294,7 +318,7 @@ class Quest_Slash(commands.Cog):
                 await interaction.followup.send(embed=embed)
                 logger.debug("Quest creation successful.")
             else:
-                await interaction.followup.send("Failed to create the quest.")
+                await interaction.followup.send("Try doing `...quest`")
                 logger.debug("Failed to create the quest.")
                 
         except Exception as e:
