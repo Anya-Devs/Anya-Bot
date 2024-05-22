@@ -146,7 +146,7 @@ class Quest_Data(commands.Cog):
         logger.error(f"Error occurred while deleting quest: {e}")
         if interaction:
             await self.handle_error(interaction, e, title="Quest Deletion")
-            
+     
     async def find_users_in_server(self, guild_id: str):
         try:
             db = self.mongoConnect[self.DB_NAME]
@@ -172,7 +172,7 @@ class Quest_Data(commands.Cog):
         except PyMongoError as e:
             logger.error(f"Error occurred while finding users in server: {e}")
             return []
-  
+    
     async def add_user_to_server(self, user_id: str, guild_id: str):
         try:
             db = self.mongoConnect[self.DB_NAME]
@@ -191,8 +191,25 @@ class Quest_Data(commands.Cog):
             )
         except PyMongoError as e:
             logger.error(f"Error occurred while adding user to server: {e}")
-          
-         
+            
+    
+    async def check_quest_exists(self, guild_id: str, user_id: str, quest_id: int) -> bool:
+     try:
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+        
+        # Find the user's quests and check if the given quest_id exists
+        quest_exists = await server_collection.count_documents(
+            {'guild_id': guild_id, f'members.{user_id}.quests': {'$elemMatch': {'quest_id': quest_id}}}
+        )
+        
+        return quest_exists > 0
+     except PyMongoError as e:
+        logger.error(f"Error occurred while checking quest existence: {e}")
+        return False
+
+    
+    
 class Quest(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
