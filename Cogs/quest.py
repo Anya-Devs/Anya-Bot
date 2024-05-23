@@ -231,37 +231,35 @@ class Quest_Data(commands.Cog):
         for member_id, member_data in members_data.items():
             # Extract quests for the current member
             quests = member_data.get('quests', [])
-            
+
+            # Log the current quests for the member
+            logger.debug(f"Current quests for user {member_id}: {quests}")
+
             # Check if any quest matches the specified quest ID
-            quests_to_delete = [quest for quest in quests if quest.get('quest_id') == quest_id]
-            
-            # Log the quests found for the member
-            if quests_to_delete:
+            if any(quest.get('quest_id') == quest_id for quest in quests):
                 logger.debug(f"Found quest with ID {quest_id} for user {member_id} in guild {guild_id}.")
+                
+                # Remove the quests that match the quest_id
+                new_quests = [quest for quest in quests if quest.get('quest_id') != quest_id]
+
+                # Update the guild document with the modified member data
+                result = await server_collection.update_one(
+                    {'guild_id': str(guild_id)},
+                    {'$set': {f'members.{member_id}.quests': new_quests}}
+                )
+
+                if result.modified_count > 0:
+                    logger.debug(f"Deleted quest with ID {quest_id} for user {member_id} in guild {guild_id}.")
+                else:
+                    logger.debug(f"Failed to delete quest with ID {quest_id} for user {member_id} in guild {guild_id}.")
             else:
                 logger.debug(f"No quest with ID {quest_id} found for user {member_id} in guild {guild_id} to delete.")
-                
-            # If there are quests to delete, remove them
-            if quests_to_delete:
-                member_data['quests'] = [quest for quest in quests if quest not in quests_to_delete]
-                
-                # Update the guild document with the modified member data
-                await server_collection.update_one(
-                    {'guild_id': str(guild_id)},
-                    {'$set': {f'members.{member_id}.quests': member_data['quests']}}
-                )
-                logger.debug(f"Deleted quest with ID {quest_id} for user {member_id} in guild {guild_id}.")
 
      except PyMongoError as e:
         logger.error(f"Error occurred while deleting quest: {e}")
         if interaction:
             await self.handle_error(interaction, e, title="Quest Deletion")
-            
-            
-            
-            
-            
-            
+       
 class Quest(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -432,7 +430,7 @@ class Quest_Slash(commands.Cog):
             quest_exists =  await self.quest_data.find_users_with_quest(guild_id, quest_id)
             if quest_exists:
                 # Delete the quest for this user
-                await self.quest_data.delete_quest(guild_id, user_id, quest_id)
+                await self.quest_data.delete_quest(guild_id, quest_id)
                 quest_deleted = True
 
         if quest_deleted:
