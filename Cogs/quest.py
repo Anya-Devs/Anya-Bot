@@ -303,7 +303,22 @@ class Quest_Data(commands.Cog):
         logger.error(f"Error occurred while deleting quest for user: {e}")
         if interaction:
             await self.handle_error(interaction, e, title="Quest Deletion")
+    
+    async def update_quest_progress(self, guild_id: str, user_id: str, quest_id: int, progress: int):
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db['Servers']
+            
+            # Update the progress of the specified quest for the user
+            await server_collection.update_one(
+                {'guild_id': guild_id, f'members.{user_id}.quests.quest_id': quest_id},
+                {'$set': {f'members.{user_id}.quests.$.progress': progress}}
+            )
 
+            logger.debug(f"Quest {quest_id} progress updated for user {user_id} in guild {guild_id}.")
+        except PyMongoError as e:
+            logger.error(f"Error occurred while updating quest progress: {e}")
+            raise e
 
 class Quest_Checker(commands.Cog):
     def __init__(self, bot):
@@ -332,16 +347,7 @@ class Quest_Checker(commands.Cog):
                             await self.complete_quest(guild_id, user_id, quest)
                         else:
                             # Update progress
-                            await self.quest_data.insert_quest(guild_id, user_id, quest)
-                elif quest['action'] == 'receive' and quest['method'] == 'message':
-                    if quest['channel_id'] == message.channel.id and quest['content'] in message.content:
-                        quest['progress'] += 1
-                        if quest['progress'] >= quest['times']:
-                            # Quest completed
-                            await self.complete_quest(guild_id, user_id, quest)
-                        else:
-                            # Update progress
-                            await self.quest_data.insert_quest(guild_id, user_id, quest)
+                            await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
 
         except Exception as e:
             logger.error(f"Error occurred in on_message event: {e}")
@@ -369,7 +375,7 @@ class Quest_Checker(commands.Cog):
                             await self.complete_quest(guild_id, user_id, quest)
                         else:
                             # Update progress
-                            await self.quest_data.insert_quest(guild_id, user_id, quest)
+                            await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
 
         except Exception as e:
             logger.error(f"Error occurred in on_reaction_add event: {e}")
@@ -380,8 +386,8 @@ class Quest_Checker(commands.Cog):
             # Notify the user about the quest completion
             channel = self.bot.get_channel(quest['channel_id'])
             if channel:
-                embed = await QuestCompletedEmbed.create_embed(quest['content'], channel.mention)
-                await channel.send(embed=embed)
+              embed = await Quest_Completed_Embed.create_embed(self.bot,quest['content'], channel.mention)
+              await channel.send(embed=embed)
 
             # Delete the completed quest for this user
             await self.quest_data.delete_quest_for_user(guild_id, user_id, quest['quest_id'])
@@ -390,6 +396,14 @@ class Quest_Checker(commands.Cog):
 
         except Exception as e:
             logger.error(f"Error occurred while completing quest: {e}")
+            traceback.print_exc()
+
+    async def update_quest_progress(self, guild_id, user_id, quest_id, progress):
+        try:
+            await self.quest_data.update_quest_progress(guild_id, user_id, quest_id, progress)
+            logger.debug(f"Quest {quest_id} progress updated for user {user_id} in guild {guild_id}.")
+        except Exception as e:
+            logger.error(f"Error occurred while updating quest progress: {e}")
             traceback.print_exc()
 
        
