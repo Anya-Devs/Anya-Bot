@@ -175,21 +175,18 @@ class QuestEmbed:
     
 class Quest_Completed_Embed:
     @staticmethod
-    async def create_embed(bot,quest_content, channel_mention):
-        yay_emoji= discord.utils.get(bot.emojis, id=1243390639908065323)
-        description = (
-            f"{yay_emoji}\n"
-            f"Waku Waku! You have completed the quest: `{quest_content}`\n"
-            f"Channel: {channel_mention}"
-        )
+    async def create_embed(bot, quest_content, channel_mention, times):
+        yay_emoji = discord.utils.get(bot.emojis, id=1243390639908065323)
+        check_emoji = discord.utils.get(bot.emojis, id=1243403342722371645)
         
         embed = discord.Embed(
-            title="Quest Completed",
-            description=description,
+            title='Quest Complete'
+            timestamp=datetime.now()
         )
         embed.set_thumbnail(url=AnyaImages.quest_completed_anya)
+        embed.add_field(name=f"{check_emoji} Completed", value=f"**Waku Waku**, You've sent `{quest_content}` in {channel_mention} `{times}x` {yay_emoji}")
+        embed.set_footer(text='Quest Completed')
         return embed
-
     
 class LogConstants:
     start_log_thumbnail = "https://example.com/start_log_thumbnail.png"
