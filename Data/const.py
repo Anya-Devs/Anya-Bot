@@ -175,7 +175,7 @@ class QuestEmbed:
     
 class Quest_Completed_Embed:
     @staticmethod
-    async def create_embed(quest_content, channel_mention):
+    async def create_embed(bot,quest_content, channel_mention):
         yay_emoji= discord.utils.get(bot.emojis, id=1243390639908065323)
         description = (
             f"{yay_emoji}\n"
