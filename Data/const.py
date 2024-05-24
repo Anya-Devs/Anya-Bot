@@ -20,8 +20,10 @@ class AnyaImages:
     look_radiant_anya = 'https://i.pinimg.com/236x/0b/cf/4b/0bcf4b9002db8cbb5f5d42855b5d460c.jpg'
     ping_thumbnail = 'https://i.pinimg.com/236x/5d/d7/d1/5dd7d1d91933d59b8f21732efba70368.jpg'
     help_thumbnail = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQggKtOcHg_2xDGNeqtciU_-7iZ19F3lFbV091fGKq7KtJI5MuOzLBEPg2rQRZ9ru-tDGY&usqp=CAU'
-    quest_completed_anya = 'https://i.pinimg.com/236x/6c/8e/10/6c8e105783b17e017e95680f37da2732.jpg'
-    
+    quest_completed_anya = 'https://i.pinimg.com/236x/7a/0d/7e/7a0d7ef8a327fb2b8069845518ba9242.jpg'
+    agree_to_terms_anya = 'https://i.pinimg.com/474x/09/47/bc/0947bc96fe6f6af4a9779d994c0a2df0.jpg'
+    no_quest_anya = 'https://i.pinimg.com/236x/38/b5/89/38b5893e071f60a9dbcc3074cbf70016.jpg' 
+
 # Embed Avatar
 class EmbedFactory:
     @staticmethod
@@ -94,19 +96,19 @@ class Help_Select_Embed_Mapping:
 QUEST_PROMPT_EMBED = {
     "title": None,
     "description": (
-        "### **By accepting server quests, you agree to the following terms and conditions:**\n\n"
-        " ☆ \n"
-        " ┊ \n" 
-        "**:star:  Play fair:** ```Do not use self-bots or any form of automation.```\n"
-        " ┊ \n" 
-        "**:star:  Voluntary tracking:** ```Your messages may be tracked for quest purposes.```\n"
-        " ┊ \n"
-        "**:star:  Respect server admin:** ```You will receive quests from the server admin.```\n"
+        "**By accepting server quests, you agree to the following terms and conditions:**\n\n"
+        "- **Play fair:**\n"
+        "> ```Do not use self-bots or any form of automation.```\n"
+        "- **Voluntary tracking:**\n"
+        "> ```Your messages may be tracked for quest purposes.```\n"
+        "- **Respect server admin:**\n"
+        "> ```You will receive quests from the server admin.```\n"
         " ╰┈┈┈ ☆"
     ),
     "color": None, # You can specify a color in hex format if needed
     "footer_text": "Server Quest Acceptance"
 }
+
 class Quest_Prompt:
     @staticmethod
     async def get_embed():
@@ -173,18 +175,40 @@ class QuestEmbed:
         
         return embed
     
+    @staticmethod
+    async def get_agree_confirmation_embed():
+        confirmation_embed = discord.Embed(
+            title="Confirmation Complete",
+            description=f"Do `...quest` to check server quest."
+        )
+        file_path = "Data/Images/anya_quest.jpg"
+        file = discord.File(file_path, filename="anya_quest.jpg")
+        confirmation_embed.set_image(url="attachment://anya_quest.jpg")
+        return confirmation_embed
+    
+    @staticmethod
+    async def get_no_quest_embed():
+        no_quest_embed = discord.Embed(
+            title="No Quest Available",
+            description="There are no quests available for you at the moment.",
+        )
+        no_quest_embed.set_thumbnail(url=AnyaImages.no_quest_anya)
+        return no_quest_embed
+   
 class Quest_Completed_Embed:
     @staticmethod
-    async def create_embed(bot, quest_content, channel_mention, times):
+    async def create_embed(bot, quest_content, channel_mention, times, user_mention, quest_id):
         yay_emoji = discord.utils.get(bot.emojis, id=1243390639908065323)
         check_emoji = discord.utils.get(bot.emojis, id=1243403342722371645)
+        user_emoji = discord.utils.get(bot.emojis, id=1243452373213646890)
         
         embed = discord.Embed(
             title='Quest Complete',
+            description=f'{user_emoji} {user_mention}',
             timestamp=datetime.now()
         )
         embed.set_thumbnail(url=AnyaImages.quest_completed_anya)
-        embed.add_field(name=f"{check_emoji} Completed", value=f"**Waku Waku**, You've sent `{quest_content}` in {channel_mention} `{times}x` {yay_emoji}")
+        embed.add_field(name=f"{check_emoji} Completed Quest `{quest_id}`", value=f"> **Waku Waku**, You've sent `{quest_content}` in {channel_mention} `{times}x` {yay_emoji}")
         embed.set_footer(text='Quest Completed')
         return embed
     
