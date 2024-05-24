@@ -180,7 +180,7 @@ class Quest_Completed_Embed:
         check_emoji = discord.utils.get(bot.emojis, id=1243403342722371645)
         
         embed = discord.Embed(
-            title='Quest Complete'
+            title='Quest Complete',
             timestamp=datetime.now()
         )
         embed.set_thumbnail(url=AnyaImages.quest_completed_anya)
