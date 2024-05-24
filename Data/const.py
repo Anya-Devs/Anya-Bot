@@ -20,6 +20,7 @@ class AnyaImages:
     look_radiant_anya = 'https://i.pinimg.com/236x/0b/cf/4b/0bcf4b9002db8cbb5f5d42855b5d460c.jpg'
     ping_thumbnail = 'https://i.pinimg.com/236x/5d/d7/d1/5dd7d1d91933d59b8f21732efba70368.jpg'
     help_thumbnail = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQggKtOcHg_2xDGNeqtciU_-7iZ19F3lFbV091fGKq7KtJI5MuOzLBEPg2rQRZ9ru-tDGY&usqp=CAU'
+    quest_completed_anya = 'https://i.pinimg.com/236x/6c/8e/10/6c8e105783b17e017e95680f37da2732.jpg'
     
 # Embed Avatar
 class EmbedFactory:
@@ -171,7 +172,25 @@ class QuestEmbed:
         embed.set_thumbnail(url=AnyaImages.new_mission_anya)
         
         return embed
+    
+class Quest_Completed_Embed:
+    @staticmethod
+    async def create_embed(quest_content, channel_mention):
+        yay_emoji= discord.utils.get(bot.emojis, id=1243390639908065323)
+        description = (
+            f"{yay_emoji}\n"
+            f"Waku Waku! You have completed the quest: `{quest_content}`\n"
+            f"Channel: {channel_mention}"
+        )
+        
+        embed = discord.Embed(
+            title="Quest Completed",
+            description=description,
+        )
+        embed.set_thumbnail(url=AnyaImages.quest_completed_anya)
+        return embed
 
+    
 class LogConstants:
     start_log_thumbnail = "https://example.com/start_log_thumbnail.png"
     footer_text = "Please commit your changes to the repository."
