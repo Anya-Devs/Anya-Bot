@@ -3,13 +3,13 @@ import os
 import traceback
 import ssl
 from colorama import Fore, Style
-from pymongo.errors import ConfigurationError
-from discord.ext import commands
-from pymongo import MongoClient
+
+import pymongo # import database api
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import ConfigurationError
 
 from Imports.log_imports import logger
-import Imports.depend_imports as depend_imports 
+import Imports.depend_imports as depend_imports
 from Imports.depend_imports import *
 from Imports.discord_imports import *
 
@@ -22,7 +22,7 @@ class BotSetup(commands.Bot):
     async def start_bot(self):
         await self.setup()
         token = os.getenv('TOKEN')
-        
+
         if not token:
             logger.error("No token found. Please set the TOKEN environment variable.")
             return
@@ -44,26 +44,11 @@ class BotSetup(commands.Bot):
         print(Fore.BLUE + "│" + Style.RESET_ALL)
         print(Fore.BLUE + "└── Events/" + Style.RESET_ALL)
         await self.import_cogs("Events")
-        
+
         print("\n")
         print(Fore.BLUE + "===== Setup Completed =====" + Style.RESET_ALL)
-        """
-        # Check if MongoDB URI is valid
-        try:
-            uri = str(os.getenv("MONGO_URI"))
-            if not uri:
-                raise ValueError("No MONGO_URI found in environment variables")
 
-            ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-            client = AsyncIOMotorClient(uri, ssl=True)
-            await client.server_info()
-        except ConfigurationError as ce:
-            logger.error(f"Error connecting to MongoDB server: {ce}")
-            await self.close()
-        except Exception as e:
-            logger.error(f"Error connecting to MongoDB server: {e}")
-            await self.close()
-        """
+      
     async def import_cogs(self, dir_name):
         files_dir = os.listdir(dir_name)
         for i, filename in enumerate(files_dir):
