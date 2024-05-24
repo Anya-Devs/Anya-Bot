@@ -2,7 +2,7 @@ import traceback
 import re
 import typing
 from Imports.discord_imports import *
-from Data.const import Quest_Progress, error_custom_embed, primary_color, QuestEmbed, Quest_Prompt
+from Data.const import Quest_Progress, error_custom_embed, primary_color, QuestEmbed, Quest_Prompt, Quest_Completed_Embed
 
 from Imports.log_imports import *
 import motor.motor_asyncio
@@ -259,6 +259,139 @@ class Quest_Data(commands.Cog):
         logger.error(f"Error occurred while deleting quest: {e}")
         if interaction:
             await self.handle_error(interaction, e, title="Quest Deletion")
+   
+    async def delete_quest_for_user(self, guild_id: str, user_id: str, quest_id: int, interaction=None):
+     try:
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+
+        # Log the query being made
+        logger.debug(f"Querying for guild_id: {guild_id} with quest_id: {quest_id}")
+
+        # Find the guild document by its ID
+        guild_document = await server_collection.find_one({'guild_id': str(guild_id)})
+
+        if not guild_document:
+            logger.debug(f"No guild found with ID {guild_id}.")
+            return
+
+        # Extract the members data from the guild document
+        members_data = guild_document.get('members', {})
+
+        # Check if the specified user exists in the guild
+        if user_id not in members_data:
+            logger.debug(f"No user found with ID {user_id} in guild {guild_id}.")
+            return
+
+        # Extract quests for the specified user
+        user_quests = members_data[user_id].get('quests', [])
+
+        # Loop through the user's quests
+        for quest in user_quests:
+            if quest.get('quest_id') == quest_id:
+                user_quests.remove(quest)
+                logger.debug(f"Deleted quest with ID {quest_id} for user {user_id} in guild {guild_id}.")
+                break  # No need to continue searching once the quest is deleted
+
+        # Update the guild document with the modified member data
+        await server_collection.update_one(
+            {'guild_id': guild_id},
+            {'$set': {f'members.{user_id}.quests': user_quests}}
+        )
+
+     except PyMongoError as e:
+        logger.error(f"Error occurred while deleting quest for user: {e}")
+        if interaction:
+            await self.handle_error(interaction, e, title="Quest Deletion")
+
+
+class Quest_Checker(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.quest_data = Quest_Data(bot)
+
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if message.author.bot:
+            return
+        
+        try:
+            guild_id = str(message.guild.id)
+            user_id = str(message.author.id)
+            quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
+
+            if not quests:
+                return
+
+            for quest in quests:
+                if quest['action'] == 'send' and quest['method'] == 'message':
+                    if quest['channel_id'] == message.channel.id and quest['content'] in message.content:
+                        quest['progress'] += 1
+                        if quest['progress'] >= quest['times']:
+                            # Quest completed
+                            await self.complete_quest(guild_id, user_id, quest)
+                        else:
+                            # Update progress
+                            await self.quest_data.insert_quest(guild_id, user_id, quest)
+                elif quest['action'] == 'receive' and quest['method'] == 'message':
+                    if quest['channel_id'] == message.channel.id and quest['content'] in message.content:
+                        quest['progress'] += 1
+                        if quest['progress'] >= quest['times']:
+                            # Quest completed
+                            await self.complete_quest(guild_id, user_id, quest)
+                        else:
+                            # Update progress
+                            await self.quest_data.insert_quest(guild_id, user_id, quest)
+
+        except Exception as e:
+            logger.error(f"Error occurred in on_message event: {e}")
+            traceback.print_exc()
+
+    @commands.Cog.listener()
+    async def on_reaction_add(self, reaction, user):
+        if user.bot:
+            return
+        
+        try:
+            guild_id = str(reaction.message.guild.id)
+            user_id = str(user.id)
+            quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
+
+            if not quests:
+                return
+
+            for quest in quests:
+                if quest['action'] == 'react' and quest['method'] == 'reaction':
+                    if quest['channel_id'] == reaction.message.channel.id and quest['content'] in str(reaction.emoji):
+                        quest['progress'] += 1
+                        if quest['progress'] >= quest['times']:
+                            # Quest completed
+                            await self.complete_quest(guild_id, user_id, quest)
+                        else:
+                            # Update progress
+                            await self.quest_data.insert_quest(guild_id, user_id, quest)
+
+        except Exception as e:
+            logger.error(f"Error occurred in on_reaction_add event: {e}")
+            traceback.print_exc()
+
+    async def complete_quest(self, guild_id, user_id, quest):
+        try:
+            # Notify the user about the quest completion
+            channel = self.bot.get_channel(quest['channel_id'])
+            if channel:
+                embed = await QuestCompletedEmbed.create_embed(quest['content'], channel.mention)
+                await channel.send(embed=embed)
+
+            # Delete the completed quest for this user
+            await self.quest_data.delete_quest_for_user(guild_id, user_id, quest['quest_id'])
+
+            logger.debug(f"Quest {quest['quest_id']} completed for user {user_id} in guild {guild_id}.")
+
+        except Exception as e:
+            logger.error(f"Error occurred while completing quest: {e}")
+            traceback.print_exc()
+
        
 class Quest(commands.Cog):
     def __init__(self, bot):
@@ -286,7 +419,7 @@ class Quest(commands.Cog):
                     progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
                     embed.add_field(
                         name=" ",
-                        value=f"`{quest_id}` **{action.title()} {method.title()}: '{content}' in {channel.mention}**\n{progress_bar} `{progress}/{times}`",
+                        value=f"`{quest_id}` **{action.title()} {method.title()}: `{content}` in {channel.mention}**\n{progress_bar} `{progress}/{times}`",
                         inline=False
                     )
                 await ctx.send(embed=embed)
@@ -447,4 +580,5 @@ class Quest_Slash(commands.Cog):
 def setup(bot):
     bot.add_cog(Quest_Data(bot))
     bot.add_cog(Quest(bot))
+    bot.add_cog(Quest_Checker(bot))
     bot.add_cog(Quest_Slash(bot))
