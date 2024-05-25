@@ -1,6 +1,8 @@
 import traceback
 import re
 import typing
+from datetime import datetime, timedelta
+
 from Imports.discord_imports import *
 from Data.const import Quest_Progress, error_custom_embed, primary_color, QuestEmbed, Quest_Prompt, Quest_Completed_Embed
 
@@ -10,11 +12,129 @@ from pymongo.errors import PyMongoError
 import os
 
 
+         
+class Quest(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.quest_data = Quest_Data(bot)
+
+    @commands.command(name='quest',aliases=['q'])
+    async def quest(self, ctx, test=None):
+        logger.debug("Quest command invoked.")
+        if test:
+              author = ctx.author
+              guild_id = ctx.guild
+              content = await self.generate_random_quest_content(self.bot, author, guild_id)
+
+        try:
+            
+            user_id = str(ctx.author.id)
+            guild_id = str(ctx.guild.id)
+            
+            # Check if the user exists in the server
+            user_exists = await self.quest_data.find_user_in_server(user_id, guild_id)
+            
+            if not user_exists:
+                # Get the prompt embed from Quest_Prompt
+                prompt_embed = await Quest_Prompt.get_embed()
+                # Send the prompt message with buttons
+                await ctx.reply(embed=prompt_embed, view=Quest_Button(self.bot, ctx))
+                return
+            
+            # Fetch quests for the user
+            quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
+
+            if quests:
+                embed = await QuestEmbed.show_quest(self.bot,ctx)
+                
+                for quest in quests:
+                    quest_id = quest['quest_id']
+                    progress = quest['progress']
+                    times = quest['times']
+                    action = quest['action']
+                    method = quest['method']
+                    content = quest['content']
+                    channel = self.bot.get_channel(quest['channel_id'])
+                    progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
+                    embed.add_field(
+                        name=f"",
+                        value=f"`{quest_id}` {action.title()} {method} `{content}` in {channel.mention}\n{progress_bar} `{progress}/{times}`",
+                        inline=False
+                    )
+                await ctx.reply(embed=embed)
+            else:
+              # Get the prompt embed from Quest_Prompt
+                no_quest_embed = await QuestEmbed.get_no_quest_embed()
+                # Send the no quest message
+                await ctx.send(embed=no_quest_embed)
+        except Exception as e:
+            error_message = "An error occurred while fetching quests."
+            logger.error(f"{error_message}: {e}")
+            traceback.print_exc()
+            await error_custom_embed(self.bot, ctx, error_message, title="Quest Fetch Error")
+   
+class Quest_Button(discord.ui.View):
+    def __init__(self, bot, ctx):
+        super().__init__()
+        self.ctx = ctx
+        self.bot = bot
+        self.quest_data = Quest_Data(bot)
+
+    async def add_user_to_server(self):
+        logger.debug("Adding user to server.")
+        try:
+            user_id = str(self.ctx.author.id)
+            guild_id = str(self.ctx.guild.id)
+            users_in_server = await self.quest_data.find_users_in_server(guild_id)
+            logger.debug(f"Users in server: {users_in_server}")
+
+            if user_id not in users_in_server:
+                await self.quest_data.add_user_to_server(user_id, guild_id)
+                return True
+            else:
+                return False
+        except Exception as e:
+            error_message = "An error occurred while adding user to server."
+            logger.error(f"{error_message}: {e}")
+            traceback.print_exc()
+            await error_custom_embed(self.bot, self.ctx, error_message, title="Add User Error")
+            return False
+
+    @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
+    async def accept_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+        try:
+            added = await self.add_user_to_server()
+            
+            if added:
+                embed = await QuestEmbed.get_agree_confirmation_embed()
+                await button.response.send_message("You have been added!", ephemeral=True)
+
+                await button.followup.edit_message(button.message.id,embed=embed, view=None)
+            else:
+                await button.response.send_message("You are already part of the game!", ephemeral=True)
+                await button.followup.edit_message(button.message.id,view=None)
+        except Exception as e:
+            error_message = "An error occurred while processing the accept button."
+            logger.error(f"{error_message}: {e}")
+            traceback.print_exc()
+            await error_custom_embed(self.bot, self.ctx, error_message, title="Button Error")
+
+    @discord.ui.button(label="Decline", style=discord.ButtonStyle.danger)
+    async def decline_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+        try:
+            embed = discord.Embed(title="Quest Canceled", description="You have declined the quest.", color=discord.Color.red())
+            await button.response.edit_message(embed=embed, view=None)
+        except Exception as e:
+            error_message = "An error occurred while processing the decline button."
+            logger.error(f"{error_message}: {e}")
+            traceback.print_exc()
+            await error_custom_embed(self.bot, self.ctx, error_message, title="Button Error")
 
 class Quest_Data(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.DB_NAME = 'Quest'
+        self.quest_content_file = 'Data/Quest/quest_content.txt'
 
         # Initialize MongoDB connection
         mongo_url = os.getenv('MONGO_URI')
@@ -29,7 +149,22 @@ class Quest_Data(commands.Cog):
         for key, value in kwargs.items():
             if value is None or value == "":
                 raise ValueError(f"{key} cannot be None or empty")
-                
+    
+    async def find_user_in_server(self, user_id: str, guild_id: str) -> bool:
+     try:
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+        server_data = await server_collection.find_one({'guild_id': guild_id})
+        
+        if server_data:
+            members_data = server_data.get('members', {})
+            return user_id in members_data
+        else:
+            return False
+     except PyMongoError as e:
+        logger.error(f"Error occurred while finding user in server: {e}")
+        return False
+    
     async def find_users_in_server(self, guild_id: str):
      try:
         db = self.mongoConnect[self.DB_NAME]
@@ -96,7 +231,10 @@ class Quest_Data(commands.Cog):
                 member_data = server_data.get('members', {}).get(user_id, {})
                 quests = member_data.get('quests', [])
                 logger.debug(f"Found {len(quests)} quests for user {user_id} in guild {guild_id}.")
+                if  len(quests) == 0:
+                    return None
                 return quests
+                
             else:
                 logger.debug("No server data found.")
                 return []
@@ -188,6 +326,86 @@ class Quest_Data(commands.Cog):
             if interaction:
                 await self.handle_error(interaction, e, title="Quest Creation for All")
     
+    async def generate_random_quest_content(self, bot, author, guide_id):
+     try:
+        # Read quest content templates from file or list
+        with open(self.quest_content_file, 'r') as file:
+            quest_templates = file.readlines()
+
+        # Select a random quest template
+        quest_template = random.choice(quest_templates)
+
+        # Replace {member} with actual member mentions
+        if '{member}' in quest_template:
+            # Get members from the guide
+            guide = self.bot.get_guild(guide_id)
+            if guide is None:
+                logger.error("Failed to get guide.")
+                return None
+            
+            member_mentions = []
+            for member in guide.members:
+                # Check if member is not the author and not a bot
+                if member != author and not member.bot:
+                    member_mentions.append(f"<@{member.id}>")
+
+            # If no eligible members found, return None
+            if not member_mentions:
+                logger.error("No eligible members found.")
+                return None
+
+            # Replace {member} with a random member mention
+            replaced_content = quest_template.replace('{member}', random.choice(member_mentions))
+        else:
+            replaced_content = quest_template
+
+        return replaced_content
+     except Exception as e:
+        logger.error(f"Error occurred while generating random quest content: {e}")
+        return None
+
+    
+    async def add_new_quest(self, guide_id, action='send', method='message', chance=78):
+        try:
+            # Calculate chance of creating a new quest
+            if random.randint(1, 100) > chance:
+                return None
+
+            # Determine activity level of the guild or guide
+            activity_level = await self.calculate_activity_level(guide_id)
+
+            # Calculate times based on activity level
+            times = max(1, round(activity_level * 10))
+
+            # Generate random quest content
+            content = await self.generate_random_quest_content()
+            if content is None:
+                logger.error("Failed to generate random quest content.")
+                return None
+
+            # Determine channel with most users and permissions
+            # Assuming you have a function to get the most active channel
+            channel_id = await self.get_most_active_channel()
+
+            # Get all users in the guild
+            guild_id = guide_id
+            users_in_guild = await self.find_users_in_server(guild_id)
+
+            # Create new quest for all users
+            new_quest_id = await self.create_new_quest_for_all(
+                guild_id=guild_id,
+                action=action,
+                method=method,
+                channel_id=channel_id,
+                times=times,
+                content=content
+            )
+
+            return new_quest_id
+        except Exception as e:
+            logger.error(f"Error occurred while adding new quest: {e}")
+            return None
+
 
     async def add_user_to_server(self, user_id: str, guild_id: str):
         try:
@@ -320,176 +538,7 @@ class Quest_Data(commands.Cog):
             logger.error(f"Error occurred while updating quest progress: {e}")
             raise e
 
-class Quest_Checker(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-        self.quest_data = Quest_Data(bot)
-
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        if message.author.bot:
-            return
-        
-        try:
-            guild_id = str(message.guild.id)
-            user_id = str(message.author.id)
-            quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
-
-            if not quests:
-                return
-
-            for quest in quests:
-                if quest['action'] == 'send' and quest['method'] == 'message':
-                    if quest['channel_id'] == message.channel.id and quest['content'] in message.content:
-                        quest['progress'] += 1
-                        if quest['progress'] >= quest['times']:
-                            # Quest completed
-                            await self.complete_quest(guild_id, user_id, quest)
-                        else:
-                            # Update progress
-                            await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
-
-        except Exception as e:
-            logger.error(f"Error occurred in on_message event: {e}")
-            traceback.print_exc()
-
-    @commands.Cog.listener()
-    async def on_reaction_add(self, reaction, user):
-        if user.bot:
-            return
-        
-        try:
-            guild_id = str(reaction.message.guild.id)
-            user_id = str(user.id)
-            quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
-
-            if not quests:
-                return
-
-            for quest in quests:
-                if quest['action'] == 'react' and quest['method'] == 'reaction':
-                    if quest['channel_id'] == reaction.message.channel.id and quest['content'] in str(reaction.emoji):
-                        quest['progress'] += 1
-                        if quest['progress'] >= quest['times']:
-                            # Quest completed
-                            await self.complete_quest(guild_id, user_id, quest)
-                        else:
-                            # Update progress
-                            await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
-
-        except Exception as e:
-            logger.error(f"Error occurred in on_reaction_add event: {e}")
-            traceback.print_exc()
-
-    async def complete_quest(self, guild_id, user_id, quest):
-        try:
-            # Notify the user about the quest completion
-            channel = self.bot.get_channel(quest['channel_id'])
-            if channel:
-              embed = await Quest_Completed_Embed.create_embed(self.bot,quest['content'], channel.mention)
-              await channel.send(embed=embed)
-
-            # Delete the completed quest for this user
-            await self.quest_data.delete_quest_for_user(guild_id, user_id, quest['quest_id'])
-
-            logger.debug(f"Quest {quest['quest_id']} completed for user {user_id} in guild {guild_id}.")
-
-        except Exception as e:
-            logger.error(f"Error occurred while completing quest: {e}")
-            traceback.print_exc()
-
-    async def update_quest_progress(self, guild_id, user_id, quest_id, progress):
-        try:
-            await self.quest_data.update_quest_progress(guild_id, user_id, quest_id, progress)
-            logger.debug(f"Quest {quest_id} progress updated for user {user_id} in guild {guild_id}.")
-        except Exception as e:
-            logger.error(f"Error occurred while updating quest progress: {e}")
-            traceback.print_exc()
-
-       
-class Quest(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-        self.quest_data = Quest_Data(bot)
-
-    @commands.command()
-    async def quest(self, ctx):
-        logger.debug("Quest command invoked.")
-        try:
-            user_id = str(ctx.author.id)
-            guild_id = str(ctx.guild.id)
-            quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
-
-            if quests:
-                embed = discord.Embed(title="Quest", color=primary_color())
-                for quest in quests:
-                    quest_id = quest['quest_id']
-                    progress = quest['progress']
-                    times = quest['times']
-                    action = quest['action']
-                    method = quest['method']
-                    content = quest['content']
-                    channel = self.bot.get_channel(quest['channel_id'])
-                    progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
-                    embed.add_field(
-                        name=" ",
-                        value=f"`{quest_id}` **{action.title()} {method.title()}: `{content}` in {channel.mention}**\n{progress_bar} `{progress}/{times}`",
-                        inline=False
-                    )
-                await ctx.send(embed=embed)
-            else:
-                # Get the prompt embed from Quest_Prompt
-                prompt_embed = await Quest_Prompt.get_embed()
-                # Send the prompt message with buttons
-                await ctx.send(embed=prompt_embed, view=Quest_Button(self.bot, ctx))
-        except Exception as e:
-            error_message = "An error occurred while fetching quests."
-            logger.error(f"{error_message}: {e}")
-            traceback.print_exc()
-            await error_custom_embed(self.bot, ctx, error_message, title="Quest Fetch Error")
-      
-class Quest_Button(discord.ui.View):
-    def __init__(self, bot, ctx):
-        super().__init__()
-        self.ctx = ctx
-        self.bot = bot
-        self.quest_data = Quest_Data(bot)
-
-
-    async def add_user_to_server(self, interaction):
-        logger.debug("Adding user to server.")
-        try:
-            user_id = str(self.ctx.author.id)
-            guild_id = str(self.ctx.guild.id)
-            users_in_server = await self.quest_data.find_users_in_server(guild_id)
-            logger.debug(f"Users in server: {users_in_server}")
-
-            if user_id not in users_in_server:
-                await self.quest_data.add_user_to_server(user_id, guild_id)
-                await interaction.response.send_message("You have been added to the game!", ephemeral=True)
-                await interaction.followup.edit_message(interaction.message.id, view=None)
-
-                logger.debug("User added to the game.")
-            else:
-                await interaction.response.send_message("You are already part of the game!", ephemeral=True)
-                await interaction.followup.edit_message(interaction.message.id, view=None)
-                logger.debug("User is already part of the game.\nBut you don't have any new quest given by your admin.")
-        except Exception as e:
-            error_message = "An error occurred while adding user to server."
-            logger.error(f"{error_message}: {e}")
-            traceback.print_exc()
-            await error_custom_embed(self.bot, self.ctx, error_message, title="Add User Error")
-
-    @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
-    async def accept_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-        await self.add_user_to_server(button)
-
-
-    @discord.ui.button(label="Decline", style=discord.ButtonStyle.danger)
-    async def decline_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-        embed = discord.Embed(title="Quest Canceled", description="You have declined the quest.", color=discord.Color.red())
-        await button.response.edit_message(embed=embed, view=None)
-           
+   
 class Quest_Slash(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -521,10 +570,11 @@ class Quest_Slash(commands.Cog):
         try:
             guild_id = str(interaction.guild_id)
             user_id = str(interaction.user.id)
-            
+            embed = await QuestEmbed.send_content_request(method)
             # Prompt user for additional content
             await interaction.response.send_message(
                 content=f"Please provide the content for the {method.name}:",
+
                 ephemeral=True
             )
             response = await self.bot.wait_for("message", check=lambda m: m.author == interaction.user)
@@ -594,5 +644,4 @@ class Quest_Slash(commands.Cog):
 def setup(bot):
     bot.add_cog(Quest_Data(bot))
     bot.add_cog(Quest(bot))
-    bot.add_cog(Quest_Checker(bot))
     bot.add_cog(Quest_Slash(bot))
