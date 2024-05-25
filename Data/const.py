@@ -5,7 +5,6 @@ import json
 import traceback
 from datetime import datetime
 from PIL import Image
-
 from Imports.discord_imports import *
 import platform
 
@@ -23,6 +22,7 @@ class AnyaImages:
     quest_completed_anya = 'https://i.pinimg.com/236x/7a/0d/7e/7a0d7ef8a327fb2b8069845518ba9242.jpg'
     agree_to_terms_anya = 'https://i.pinimg.com/474x/09/47/bc/0947bc96fe6f6af4a9779d994c0a2df0.jpg'
     no_quest_anya = 'https://i.pinimg.com/236x/38/b5/89/38b5893e071f60a9dbcc3074cbf70016.jpg' 
+    show_quest_anya = 'https://i.pinimg.com/236x/23/2f/62/232f626bc0ec7a845198149fdc38e311.jpg'
 
 # Embed Avatar
 class EmbedFactory:
@@ -163,7 +163,7 @@ class QuestEmbed:
             f"**Channel:** {channel.mention}\n"
             f"**Times:** `{times}`\n"
             f"**Content:** `{content}`\n"
-            f"**Quest:**\n```{action} {method}: '{content}' in {channel.name} {times}x```"
+            f"**Quest:**\n```{action.title()} {method} {content} in {channel.name} {times}x```"
         )
         
         embed = discord.Embed(
@@ -179,7 +179,8 @@ class QuestEmbed:
     async def get_agree_confirmation_embed():
         confirmation_embed = discord.Embed(
             title="Confirmation Complete",
-            description=f"Do `...quest` to check server quest."
+            description=f"Do `...quest` to check server quest.",
+            color=discord.Color.green()
         )
         file_path = "Data/Images/anya_quest.jpg"
         file = discord.File(file_path, filename="anya_quest.jpg")
@@ -195,6 +196,31 @@ class QuestEmbed:
         no_quest_embed.set_thumbnail(url=AnyaImages.no_quest_anya)
         return no_quest_embed
    
+    @staticmethod
+    async def send_content_request(method):
+        embed = discord.Embed(
+            title=f"Content Request for {method.name}",
+            description=(
+                "Please provide the content for the quest. You can use the following variables in your content:\n\n"
+                "**{new_member}**: Checks if the member joined within the last 7 days.\n"
+                "**{old_member}**: Checks if the member joined more than 30 days ago.\n"
+                "**{role <role_name>}**: Checks if the member has the specified role.\n"
+                "**{unique_member}**: Ensures the member is unique for this quest."
+            )
+        )
+        return embed
+    
+    @staticmethod
+    async def show_quest(bot,ctx):
+        
+        embed = discord.Embed(
+            description='Here are your current quests and their progress:',
+            timestamp=datetime.now())
+        embed.set_footer(text='Server Quest')
+        embed.set_author(name=ctx.author.display_name,icon_url=ctx.author.avatar)
+        embed.set_thumbnail(url=AnyaImages.show_quest_anya)
+        return embed
+            
 class Quest_Completed_Embed:
     @staticmethod
     async def create_embed(bot, quest_content, channel_mention, times, user_mention, quest_id):
@@ -203,12 +229,11 @@ class Quest_Completed_Embed:
         user_emoji = discord.utils.get(bot.emojis, id=1243452373213646890)
         
         embed = discord.Embed(
-            title='Quest Complete',
             description=f'{user_emoji} {user_mention}',
             timestamp=datetime.now()
         )
         embed.set_thumbnail(url=AnyaImages.quest_completed_anya)
-        embed.add_field(name=f"{check_emoji} Completed Quest `{quest_id}`", value=f"> **Waku Waku**, You've sent `{quest_content}` in {channel_mention} `{times}x` {yay_emoji}")
+        embed.add_field(name=f"{check_emoji} Completed Quest #{quest_id}", value=f"> **Waku Waku**, You've sent `{quest_content}` in {channel_mention} `{times}x` {yay_emoji}") 
         embed.set_footer(text='Quest Completed')
         return embed
     
