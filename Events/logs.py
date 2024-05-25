@@ -4,11 +4,10 @@ import logging
 from datetime import datetime
 from git import Repo
 
-import discord
-from discord.ext import commands, tasks
 
 import Data.const as const
 from Imports.log_imports import logger
+from Imports.discord_imports import *
 
 # Define the Logs cog
 class Logs(commands.Cog):
