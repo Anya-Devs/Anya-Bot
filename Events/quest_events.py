@@ -30,7 +30,6 @@ class Quest_Checker(commands.Cog):
             if quest['action'] == 'send' and quest['method'] == 'message':
                 if quest['channel_id'] == message.channel.id:
                     quest_content = quest['content']  # Quest content with {member}
-                    logger.debug(f"Received message with content: {message.content}")
                     
                     member_id_pattern = r'<@!?(\d+)>'
                     message_content = message.content
@@ -39,23 +38,19 @@ class Quest_Checker(commands.Cog):
                         message_content = message_content.replace(f'<@{member_id}>', f'<@{member_id}>')  # Ensure mentions are properly formatted
                     
                     quest_content_replaced = quest_content.replace('{member}', f'<@{member_ids[0]}>' if member_ids else '{member}')  # Replace {member} with a placeholder for mention
-                    logger.debug(f"Replaced quest content: {quest_content_replaced}")
 
                     # Normalize the message content and the quest content for comparison
                     normalized_message_content = re.sub(r'\s+', ' ', message_content.strip())
                     normalized_quest_content = re.sub(r'\s+', ' ', quest_content_replaced.strip())
 
                     # Check if the quest content is exactly equal to the message content
-                    print(f'Does quest = message content?: {normalized_message_content == normalized_quest_content}')
                     if normalized_message_content == normalized_quest_content:
-                        logger.debug("Exact match found.")
                         mentions = [member for member in message.mentions if member.id != message.author.id and not member.bot]
 
-                        if mentions:
-                            quest['progress'] += 1
-                            logger.debug(f"Quest logic matched for user {message.author} in guild {message.guild} with content: {quest_content_replaced} and non-bot mentions: {', '.join([m.mention for m in mentions])}")
+                        # Update quest progress even if the quest does not contain {member}
+                        quest['progress'] += 1
 
-                            await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
+                        await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
 
                     if quest['progress'] >= quest['times']:
                         times = quest['times']
@@ -66,8 +61,7 @@ class Quest_Checker(commands.Cog):
                             await self.quest_data.add_new_quest(guild_id, message.author)
      except Exception as e:
         logger.error("An error occurred in on_message:")
-        logger.error(e)
-
+        logger.error(e)   
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
         if user.bot:
