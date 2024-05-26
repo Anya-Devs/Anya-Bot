@@ -30,27 +30,32 @@ class Quest_Checker(commands.Cog):
             if quest['action'] == 'send' and quest['method'] == 'message':
                 if quest['channel_id'] == message.channel.id:
                     quest_content = quest['content']  # Quest content with {member}
+                    logger.debug(f"Received message with content: {message.content}")
                     
                     member_id_pattern = r'<@!?(\d+)>'
                     message_content = message.content
                     member_ids = re.findall(member_id_pattern, message_content)
-                    if member_ids:
-                        # Filter out the message author's ID and bot IDs
-                        member_ids = [m_id for m_id in member_ids if m_id != str(message.author.id) and not message.guild.get_member(int(m_id)).bot]
-                        if member_ids:
-                            message_content = re.sub(member_id_pattern, f'<@{member_ids[0]}>', message_content)
-                        else:
-                            # If no valid member IDs left, continue to the next quest
-                            continue
+                    for member_id in member_ids:
+                        message_content = message_content.replace(f'<@{member_id}>', f'<@{member_id}>')  # Ensure mentions are properly formatted
                     
-                    quest_content_replaced = quest_content.replace('{member}', f'<@{member_ids[0]}>')  # Replace {member} with a placeholder for mention
-                    quest_content_re_pattern = re.escape(quest_content_replaced)
+                    quest_content_replaced = quest_content.replace('{member}', f'<@{member_ids[0]}>' if member_ids else '{member}')  # Replace {member} with a placeholder for mention
+                    logger.debug(f"Replaced quest content: {quest_content_replaced}")
 
-                    if re.search(quest_content_re_pattern, message_content, re.IGNORECASE):
-                        quest['progress'] += 1
-                        print(f"Quest logic matched for user {message.author} in guild {message.guild} with content: {quest_content_replaced}")
+                    # Normalize the message content and the quest content for comparison
+                    normalized_message_content = re.sub(r'\s+', ' ', message_content.strip())
+                    normalized_quest_content = re.sub(r'\s+', ' ', quest_content_replaced.strip())
 
-                        await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
+                    # Check if the quest content is exactly equal to the message content
+                    print(f'Does quest = message content?: {normalized_message_content == normalized_quest_content}')
+                    if normalized_message_content == normalized_quest_content:
+                        logger.debug("Exact match found.")
+                        mentions = [member for member in message.mentions if member.id != message.author.id and not member.bot]
+
+                        if mentions:
+                            quest['progress'] += 1
+                            logger.debug(f"Quest logic matched for user {message.author} in guild {message.guild} with content: {quest_content_replaced} and non-bot mentions: {', '.join([m.mention for m in mentions])}")
+
+                            await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
 
                     if quest['progress'] >= quest['times']:
                         times = quest['times']
@@ -59,8 +64,10 @@ class Quest_Checker(commands.Cog):
                         await self.complete_quest(guild_id, user_id, quest, times, user_mention, quest_id, message)
                         for _ in range(3):
                             await self.quest_data.add_new_quest(guild_id, message.author)
-     except Exception:
-        logger.exception("Error occurred in on_message")    
+     except Exception as e:
+        logger.error("An error occurred in on_message:")
+        logger.error(e)
+
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
         if user.bot:
