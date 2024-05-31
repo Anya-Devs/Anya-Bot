@@ -19,18 +19,17 @@ class Quest(commands.Cog):
         self.bot = bot
         self.quest_data = Quest_Data(bot)
 
-    @commands.command(name='quest',aliases=['q'])
+    @commands.command(name='quest', aliases=['q'])
     async def quest(self, ctx, test=None):
         logger.debug("Quest command invoked.")
         if test:
-              author = ctx.author
-              guild_id = str(ctx.guild.id)
-              print('guild_id:', guild_id)
-              content = await self.quest_data.generate_random_quest_content(self.bot, author, guild_id)
-              await ctx.send(str(content))
+            author = ctx.author
+            guild_id = str(ctx.guild.id)
+            print('guild_id:', guild_id)
+            content = await self.quest_data.generate_random_quest_content(self.bot, author, guild_id)
+            await ctx.send(str(content))
 
         try:
-            
             user_id = str(ctx.author.id)
             guild_id = str(ctx.guild.id)
             
@@ -48,11 +47,11 @@ class Quest(commands.Cog):
             quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
 
             if quests:
-                embed = await QuestEmbed.show_quest(self.bot,ctx)
+                embed = await QuestEmbed.show_quest(self.bot, ctx)
                 
                 for i, quest in enumerate(quests):
                     if i >= 5:
-                            break
+                        break
                             
                     quest_id = quest['quest_id']
                     progress = quest['progress']
@@ -61,15 +60,30 @@ class Quest(commands.Cog):
                     method = quest['method']
                     content = quest['content']
                     channel = self.bot.get_channel(quest['channel_id'])
+
+                    # Check if the content is an emoji ID and replace it with the actual emoji
+                    if re.match(r'^<:\w+:\d+>$', content):
+                        emoji_id = int(re.findall(r'\d+', content)[0])
+                        emoji = get(self.bot.emojis, id=emoji_id)
+                        if emoji:
+                            content = str(emoji)
+                    elif method == 'message':
+                        content = f"`{content}`"
+
                     progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
                     embed.add_field(
-                        name=f"",
-                        value=f"`{quest_id}` {action.title()} {method} `{content}` in {channel.mention}\n{progress_bar} `{progress}/{times}`",
+                        name="",
+                        value=(
+                            f"**ID:** `{quest_id}`\n"
+                            f"{channel.mention} | **Objective:** {action} {method} {content}\n"
+                            f"{progress_bar} `{progress}/{times}`"
+                        ),
                         inline=False
                     )
+
                 await ctx.reply(embed=embed)
             else:
-              # Get the prompt embed from Quest_Prompt
+                # Get the prompt embed from Quest_Prompt
                 no_quest_embed = await QuestEmbed.get_no_quest_embed()
                 # Send the no quest message
                 await ctx.reply(embed=no_quest_embed)
@@ -121,7 +135,7 @@ class Quest_Button(discord.ui.View):
                 button_user = button.user
                 
                 guild_id = str(button.guild.id)
-                for _ in range(5):
+                for _ in range(3):
                                 logger.debug("Adding new quest")
                                 await self.quest_data.add_new_quest(guild_id, button_user)
 
@@ -385,31 +399,71 @@ class Quest_Data(commands.Cog):
         except Exception as e:
             logger.error(f"Error occurred while generating random quest content: {e}")
             return None
-    async def get_most_active_channel(self, guild_id):
+    
+    async def generate_random_reaction_content(self, guild_id):
+     guild = self.bot.get_guild(int(guild_id))
+     if not guild:
+        return None
+    
+     # Get the list of emojis in the server
+     emojis = [emoji for emoji in guild.emojis if not emoji.animated]
+
+    
+     # If there are fewer than 5 custom emojis, use default Discord emojis
+     if len(emojis) < 5:
+        default_emojis = ['😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚']
+        emoji = random.choice(default_emojis)
+     else:
+        emoji = random.choice(emojis)
+    
+     logger.debug(f"Selected emoji: {emoji}")
+     return str(emoji)
+    
+    async def get_most_active_channel(self, guild_id, threshold=5, message_limit=100):
      try:
+        logger.debug('Entering get_most_active_channel function')
         guild = self.bot.get_guild(int(guild_id))
         if guild:
+            logger.debug(f"Guild found: {guild.name} (ID: {guild_id})")
             channel_activity = {}
             for channel in guild.text_channels:
-                # Fetch the channel object
-                channel_obj = guild.get_channel(channel.id)
-                # Check if the member has permissions to send messages in the channel
-                if channel_obj and channel_obj.permissions_for(guild.me).send_messages:
-                    # Count the number of members who have sent messages in the channel
+                # Check if the channel is accessible to all members or to a role with a significant number of members
+                if channel.permissions_for(guild.default_role).send_messages:
+                    logger.debug(f"Processing channel: {channel.name} (ID: {channel.id})")
+                    # Count the number of messages and the number of members who have sent messages in the channel
                     message_count = 0
-                    async for message in channel_obj.history(limit=None):
+                    member_set = set()
+                    async for message in channel.history(limit=message_limit):
                         message_count += 1
-                    channel_activity[channel.id] = message_count
-                
-            # Sort channels by activity (number of messages sent)
-            sorted_channels = sorted(channel_activity.items(), key=lambda x: x[1], reverse=True)
+                        if not message.author.bot:
+                            member_set.add(message.author.id)
+                    member_count = len(member_set)
+                    logger.debug(f"Message count for channel {channel.name} (ID: {channel.id}): {message_count}")
+                    logger.debug(f"Member count for channel {channel.name} (ID: {channel.id}): {member_count}")
+                    
+                    channel_activity[channel.id] = (message_count, member_count)
+            
+            # Sort channels by member count and then by message count
+            sorted_channels = sorted(channel_activity.items(), key=lambda x: (x[1][1], x[1][0]), reverse=True)
             if sorted_channels:
-                most_active_channel_id = sorted_channels[0][0]  # Get the ID of the most active channel
+                logger.debug(f"Sorted channels by activity: {sorted_channels}")
+                if len(sorted_channels) > threshold:
+                    # Select a random channel from the top active channels
+                    most_active_channel_id = random.choice(sorted_channels[:threshold])[0]
+                    logger.debug(f"Randomly selected active channel from top {threshold}: {most_active_channel_id}")
+                else:
+                    most_active_channel_id = sorted_channels[0][0]  # Get the ID of the most active channel
+                    logger.debug(f"Selected the most active channel: {most_active_channel_id}")
                 return most_active_channel_id
             else:
+                logger.debug('No active channels found')
                 return None  # No active channels found
+        else:
+            logger.debug(f"Guild not found: {guild_id}")
+            return None
      except Exception as e:
-        print(f"Error occurred while getting the most active channel: {e}")
+        logger.error(f"Error occurred while getting the most active channel: {e}")
+        traceback.print_exc()
         return None
 
     async def insert_quest_existing_path(self, guild_id: str, user_id: str, quest_data: dict, interaction=None):
@@ -438,7 +492,7 @@ class Quest_Data(commands.Cog):
             await self.handle_error(interaction, e, title="Quest Insertion")
         return False
     
-    async def add_new_quest(self, guild_id, message_author, action='send', method='message', chance=98):
+    async def add_new_quest(self, guild_id, message_author, action='send', method=None, chance=100):
      logger.debug(f"Attempting to add new quest for guild_id: {guild_id}, message_author: {message_author}, action: {action}, method: {method}, chance: {chance}")
      try:
         # Check the random chance first
@@ -453,8 +507,16 @@ class Quest_Data(commands.Cog):
         times = random.randint(1, 10)
         logger.debug(f"Random times selected: {times}")
 
-        # Generate random quest content
-        content = await self.generate_random_quest_content(self.bot, message_author, guild_id)
+        # Randomly choose method if not provided
+        if method is None:
+            method = random.choice(['message', 'reaction'])
+        logger.debug(f"Method chosen: {method}")
+
+        # Generate random quest content based on the method
+        if method == 'message':
+            content = await self.generate_random_quest_content(self.bot, message_author, guild_id)
+        else:  # method == 'reaction'
+            content = await self.generate_random_reaction_content(guild_id)
         if content is None:
             logger.error("Failed to generate random quest content.")
             return None
@@ -469,7 +531,7 @@ class Quest_Data(commands.Cog):
         
         # If latest_quest_id is None, set new_quest_id to 1
         new_quest_id = 1 if latest_quest_id is None else latest_quest_id + 1
-
+       
         # Define the new quest data
         quest_data = {
             'quest_id': new_quest_id,
@@ -500,7 +562,7 @@ class Quest_Data(commands.Cog):
      except Exception as e:
         logger.error(f"Error occurred while adding new quest: {e}")
         return None
-    
+
     async def add_user_to_server(self, user_id: str, guild_id: str):
         try:
             db = self.mongoConnect[self.DB_NAME]
@@ -671,12 +733,14 @@ class Quest_Slash(commands.Cog):
 
             guild_id = str(interaction.guild_id)
             user_id = str(interaction.user.id)
+            user = interaction.user
+            
             
             # Create the quest
             quest_id = await self.quest_data.create_new_quest_for_all(guild_id, action.value, method.value, channel.id, times, content, interaction)
             if quest_id is not None:
                 # Create the quest embed
-                embed = await QuestEmbed.create_quest_embed("Created", quest_id, action.value, method.value, channel, times=times, content=content)
+                embed = await QuestEmbed.create_quest_embed(self.bot,"Created", quest_id, action.value, method.value, channel, times=times, content=content,user=user)
                 
                 # Send the embed
                 await interaction.response.send_message(embed=embed)
