@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import random
 
 from Imports.discord_imports import *
-from Data.const import Quest_Progress, error_custom_embed, primary_color, QuestEmbed, Quest_Prompt, Quest_Completed_Embed
+from Data.const import Quest_Progress, error_custom_embed, primary_color, QuestEmbed, Quest_Prompt, Quest_Completed_Embed, AnyaImages
 
 from Imports.log_imports import *
 import motor.motor_asyncio
@@ -13,7 +13,6 @@ from pymongo.errors import PyMongoError
 import os
 
 
-         
 class Quest(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -22,6 +21,7 @@ class Quest(commands.Cog):
     @commands.command(name='quest', aliases=['q'])
     async def quest(self, ctx, test=None):
         logger.debug("Quest command invoked.")
+        embeds = []  # List to store all embeds
         if test:
             author = ctx.author
             guild_id = str(ctx.guild.id)
@@ -39,61 +39,77 @@ class Quest(commands.Cog):
             if not user_exists:
                 # Get the prompt embed from Quest_Prompt
                 prompt_embed = await Quest_Prompt.get_embed(self.bot)
-                # Send the prompt message with buttons
                 await ctx.reply(embed=prompt_embed, view=Quest_Button(self.bot, ctx))
                 return
-            
-            # Fetch quests for the user
-            quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
-
-            if quests:
-                embed = await QuestEmbed.show_quest(self.bot, ctx)
+                # Append prompt embed to the list
+                # embeds.append(prompt_embed)
                 
-                for i, quest in enumerate(quests):
-                    if i >= 5:
-                        break
-                            
-                    quest_id = quest['quest_id']
-                    progress = quest['progress']
-                    times = quest['times']
-                    action = quest['action']
-                    method = quest['method']
-                    content = quest['content']
-                    channel = self.bot.get_channel(quest['channel_id'])
-
-                    # Check if the content is an emoji ID and replace it with the actual emoji
-                    if re.match(r'^<:\w+:\d+>$', content):
-                        emoji_id = int(re.findall(r'\d+', content)[0])
-                        emoji = get(self.bot.emojis, id=emoji_id)
-                        if emoji:
-                            content = str(emoji)
-                    elif method == 'message':
-                        content = f"`{content}`"
-
-                    progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
-                    embed.add_field(
-                        name="",
-                        value=(
-                            f"**ID:** `{quest_id}`\n"
-                            f"{channel.mention} | **Objective:** {action} {method} {content}\n"
-                            f"{progress_bar} `{progress}/{times}`"
-                        ),
-                        inline=False
-                    )
-
-                await ctx.reply(embed=embed)
             else:
-                # Get the prompt embed from Quest_Prompt
-                no_quest_embed = await QuestEmbed.get_no_quest_embed()
-                # Send the no quest message
-                await ctx.reply(embed=no_quest_embed)
-                
+                # Append author's information
+                author_embed = discord.Embed()
+                author_embed.set_author(name=f"{ctx.author.display_name}'s quests", icon_url=ctx.author.avatar)
+                embeds.append(author_embed)
+
+                # Fetch quests for the user
+                quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
+
+                if quests:
+                    for quest in quests:
+                        quest_id = quest['quest_id']
+                        progress = quest['progress']
+                        times = quest['times']
+                        action = quest['action']
+                        method = quest['method']
+                        content = quest['content']
+                        channel = self.bot.get_channel(quest['channel_id'])
+
+                        # Check if the content is an emoji ID and replace it with the actual emoji
+                        if re.match(r'^<:\w+:\d+>$', content):
+                            emoji_id = int(re.findall(r'\d+', content)[0])
+                            emoji = get(self.bot.emojis, id=emoji_id)
+                            if emoji:
+                                content = str(emoji)
+                        elif method == 'message':
+                            content = f"`{content}`"
+
+                        progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
+                        
+                        # Create a new embed for each quest
+                        embed = discord.Embed(title=f"Quest `{quest_id}`")
+                        embed.add_field(
+                            name="",
+                            value=(
+                                f"{channel.mention} • *{action} {method}* • {content}\n"
+                                f"Progress: {progress_bar} `{progress}/{times}`"
+                            ),
+                            inline=False
+                        )
+
+                        # Append the embed to the list
+                        embeds.append(embed)
+
+                    # Create the last embed for server quests
+                    last_embed = discord.Embed()
+                    last_embed.set_footer(text='Server Quest\n', icon_url=AnyaImages.show_quest_anya)
+                    last_embed.timestamp = datetime.now()
+                    # Append the last embed to the list
+                    embeds.append(last_embed)
+
+                else:
+                    # Get the prompt embed from Quest_Prompt
+                    no_quest_embed = await QuestEmbed.get_no_quest_embed()
+                    # Append no quest embed to the list
+                    embeds.append(no_quest_embed)
+                    
         except Exception as e:
             error_message = "An error occurred while fetching quests."
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
             await error_custom_embed(self.bot, ctx, error_message, title="Quest Fetch Error")
-   
+        
+        # Send all embeds in one message
+        await ctx.send(embeds=embeds)
+
 class Quest_Button(discord.ui.View):
     def __init__(self, bot, ctx):
         super().__init__()
@@ -180,7 +196,98 @@ class Quest_Data(commands.Cog):
         for key, value in kwargs.items():
             if value is None or value == "":
                 raise ValueError(f"{key} cannot be None or empty")
+                
+    async def remove_all_server_quests(self, guild_id: str) -> None:
+     try:
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+
+        # Update documents where quests field is missing or not an array
+        await server_collection.update_many(
+            {
+                'guild_id': guild_id,
+                'members.quests': {'$exists': False}
+            },
+            {'$set': {'members.$.quests': []}}
+        )
+
+        # Remove all quests for all users in the server
+        await server_collection.update_many(
+            {'guild_id': guild_id},
+            {'$set': {'members.$[].quests': []}}
+        )
+
+        logger.debug(f"All server quests removed for guild {guild_id}.")
+     except PyMongoError as e:
+        logger.error(f"Error occurred while removing all server quests: {e}")
+        raise e
+
     
+    async def get_server_quest_count(self, guild_id: str) -> int:
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db['Servers']
+            guild_data = await server_collection.find_one({'guild_id': guild_id})
+            if guild_data:
+                members_data = guild_data.get('members', {})
+                total_quests = sum(len(member.get('quests', [])) for member in members_data.values())
+                return total_quests
+            else:
+                return 0
+        except PyMongoError as e:
+            logger.error(f"Error occurred while getting server quest count: {e}")
+            return 0
+
+    async def get_beginner_quests(self, guild_id: str) -> List[Dict[str, Union[str, int]]]:
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db['Servers']
+            guild_data = await server_collection.find_one({'guild_id': guild_id})
+            if guild_data:
+                beginner_quests = []
+                members_data = guild_data.get('members', {})
+                for member_id, member_data in members_data.items():
+                    quests = member_data.get('quests', [])
+                    for quest in quests:
+                        if quest.get('progress', 0) == 0:
+                            beginner_quests.append({
+                                'action': quest.get('action', ''),
+                                'method': quest.get('method', ''),
+                                'content': quest.get('content', ''),
+                                'times': quest.get('times', 0)
+                            })
+                return beginner_quests
+            else:
+                return []
+        except PyMongoError as e:
+            logger.error(f"Error occurred while getting beginner quests: {e}")
+            return []
+    async def set_quest_limit(self, guild_id: str, limit: int) -> None:
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db['Servers']
+            await server_collection.update_one(
+                {'guild_id': guild_id},
+                {'$set': {'quest_limit': limit}},
+                upsert=True
+            )
+        except PyMongoError as e:
+            logger.error(f"Error occurred while setting quest limit: {e}")
+            raise e
+
+    async def get_quest_limit(self, guild_id: str) -> int:
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db['Servers']
+            guild_doc = await server_collection.find_one({'guild_id': guild_id})
+            if guild_doc:
+                return guild_doc.get('quest_limit', 25)  # Default to 25 if limit is not found
+            else:
+                return 25  # Default limit if not set
+        except PyMongoError as e:
+            logger.error(f"Error occurred while getting quest limit: {e}")
+            raise e
+            
     async def find_user_in_server(self, user_id: str, guild_id: str) -> bool:
      try:
         db = self.mongoConnect[self.DB_NAME]
@@ -492,7 +599,7 @@ class Quest_Data(commands.Cog):
             await self.handle_error(interaction, e, title="Quest Insertion")
         return False
     
-    async def add_new_quest(self, guild_id, message_author, action='send', method=None, chance=100):
+    async def add_new_quest(self, guild_id, message_author, action='send', method=None, chance=50):
      logger.debug(f"Attempting to add new quest for guild_id: {guild_id}, message_author: {message_author}, action: {action}, method: {method}, chance: {chance}")
      try:
         # Check the random chance first
@@ -503,8 +610,15 @@ class Quest_Data(commands.Cog):
         user_id = str(message_author.id)
         logger.debug(f"User ID: {user_id}")
 
+        # Check quest limit
+        quest_limit = await self.get_quest_limit(guild_id)
+        existing_quests = await self.find_quests_by_user_and_server(user_id, guild_id)
+        if existing_quests is not None and len(existing_quests) >= quest_limit:
+            logger.debug("User has reached the quest limit. No quest will be created.")
+            return None
+
         # Generate random times for the quest
-        times = random.randint(1, 10)
+        times = random.randint(1, 5)
         logger.debug(f"Random times selected: {times}")
 
         # Randomly choose method if not provided
@@ -543,14 +657,6 @@ class Quest_Data(commands.Cog):
             'progress': 0  # Initialize progress to 0
         }
         logger.debug(f"Creating quest for user_id: {user_id}, guild_id: {guild_id}, quest_data: {quest_data}")
-
-        # Check if the generated content is not repeated
-        existing_quests = await self.find_quests_by_user_and_server(user_id, guild_id)
-        if existing_quests:
-            for quest in existing_quests:
-                if quest['content'] == content:
-                    logger.debug("Generated content already exists. Skipping quest creation.")
-                    continue
 
         # Insert the new quest for the user in the guild
         if await self.insert_quest_existing_path(guild_id, user_id, quest_data):
@@ -701,6 +807,16 @@ class Quest_Slash(commands.Cog):
         self.quest_data = Quest_Data(bot)
         super().__init__()
 
+    async def check_server_quest_limit(self, guild_id: int) -> bool:
+        """
+        Check if the server has reached its quest limit.
+        """
+        server_quest_count = await self.quest_data.get_server_quest_count(guild_id)
+        server_quest_limit = await self.quest_data.get_quest_limit(guild_id)
+        if server_quest_count >= server_quest_limit:
+            return False
+        return True
+
     @app_commands.command(
         name="create_quest",
         description="Create a new quest.",
@@ -791,6 +907,48 @@ class Quest_Slash(commands.Cog):
         print(f"An error occurred: {e}")
         traceback.print_exc()
         await self.quest_data.handle_error(interaction, e, title="Quest Deletion")
+    @app_commands.command(
+    name="remove_all_server_quests",
+    description="Remove all server quests from every member.",
+)
+    async def remove_all_server_quests(
+     self,
+     interaction: discord.Interaction
+     ) -> None:
+     try:
+        guild_id = str(interaction.guild_id)
+
+        # Remove all server quests
+        await self.quest_data.remove_all_server_quests(guild_id)
+
+        await interaction.response.send_message("All server quests have been removed from every member.", ephemeral=True)
+        logger.debug("All server quests removed successfully.")
+     except Exception as e:
+        logger.error(f"An error occurred: {e}")
+        traceback.print_exc()
+        await self.quest_data.handle_error(interaction, e, title="Remove All Server Quests")
+
+    @app_commands.command(
+        name="set_quest_limit",
+        description="Set the maximum number of quests a user can have.",
+    )
+    async def set_quest_limit(
+        self,
+        interaction: discord.Interaction,
+        limit: int
+    ) -> None:
+        try:
+            guild_id = str(interaction.guild_id)
+
+            # Update the quest limit for the guild
+            await self.quest_data.set_quest_limit(guild_id, limit)
+
+            await interaction.response.send_message(f"Quest limit set to {limit} for this server.", ephemeral=True)
+            logger.debug("Quest limit updated successfully.")
+        except Exception as e:
+            logger.error(f"An error occurred: {e}")
+            traceback.print_exc()
+            await error_custom_embed(self.bot, interaction, e, title="Quest Limit Update")
 
           
 def setup(bot):
