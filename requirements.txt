@@ -31,3 +31,8 @@ GitPython
 pypi-json
 colorlog
 motor
+openai
+fuzzywuzzy
+opencv-python-headless
+aiohttp
+scikit-image
