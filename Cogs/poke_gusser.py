@@ -96,20 +96,21 @@ class PokemonPredictor(commands.Cog):
                         score = len(matches) / len(descriptors1)
                         logger.debug(f"Matching score for {pokemon_name}: {score:.2%}")
 
-                        if score < highest_score:
+                        if score > highest_score:
                             highest_score = score
                             best_match = pokemon_name
 
-                        if highest_score >= threshold:
-                            break
-
-            logger.info(f"Best match: {best_match} with score {highest_score:.2%}")
+            if highest_score >= threshold:
+                logger.info(f"Best match: {best_match} with score {highest_score:.2%}")
+            else:
+                logger.info("No match found above the threshold.")
+                
             return best_match, highest_score
 
      except Exception as e:
         logger.error(f"An error occurred during prediction: {e}")
         return None, 0
-
+    
     def calculate_ssim(self, img1, img2):
      img1_gray = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
      img2_gray = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
@@ -119,11 +120,11 @@ class PokemonPredictor(commands.Cog):
 
 
     @commands.command(name='predict')
-    async def predict(self, ctx):
-        # Initial message asking the user to provide an image
+    async def predict(self, ctx, url: str = None):
+        # Initial message asking the user to provide an image or URL
         embed = discord.Embed(
             title="Predict Pokémon",
-            description="Please send an image of the Pokémon to predict.\n\nType `c` to cancel.",
+            description="Please send an image of the Pokémon to predict or provide a URL to the image.\n\nType `c` to cancel.",
             color=discord.Color.blue()
         )
         progress_message = await ctx.send(embed=embed)
@@ -132,32 +133,48 @@ class PokemonPredictor(commands.Cog):
             return m.author == ctx.author and m.channel == ctx.channel
 
         try:
-            user_response = await self.bot.wait_for('message', timeout=120, check=check)
-
-            if user_response.content.lower() == 'c':
-                await ctx.send("Operation cancelled.")
-                logger.debug("User cancelled the operation.")
-                return
-
-            if user_response.attachments:
-                attachment = user_response.attachments[0]
-                if attachment.filename.endswith(('png', 'jpg', 'jpeg')):
-                    img_bytes = await attachment.read()
-                    img = Image.open(io.BytesIO(img_bytes))
-                    img = img.resize((224, 224))
-                    img = np.array(img.convert('RGB'))  # Convert to RGB
-                    logger.debug("Image received and processed from attachment.")
-                else:
-                    await ctx.send("Please attach a valid image file.")
-                    logger.debug("Invalid image file attached.")
-                    return
+            if url:
+                # If URL is provided, download the image
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url) as response:
+                        if response.status == 200:
+                            img_bytes = await response.read()
+                            img = Image.open(io.BytesIO(img_bytes))
+                            img = img.resize((224, 224))
+                            img = np.array(img.convert('RGB'))  # Convert to RGB
+                            logger.debug("Image received and processed from URL.")
+                        else:
+                            await ctx.send("Failed to download image from the provided URL.")
+                            logger.debug("Failed to download image from URL.")
+                            return
             else:
-                await ctx.send("Please attach an image.")
-                logger.debug("No valid image provided.")
-                return
+                # Wait for user to send an image
+                user_response = await self.bot.wait_for('message', timeout=120, check=check)
+
+                if user_response.content.lower() == 'c':
+                    await ctx.send("Operation cancelled.")
+                    logger.debug("User cancelled the operation.")
+                    return
+
+                if user_response.attachments:
+                    attachment = user_response.attachments[0]
+                    if attachment.filename.endswith(('png', 'jpg', 'jpeg')):
+                        img_bytes = await attachment.read()
+                        img = Image.open(io.BytesIO(img_bytes))
+                        img = img.resize((224, 224))
+                        img = np.array(img.convert('RGB'))  # Convert to RGB
+                        logger.debug("Image received and processed from attachment.")
+                    else:
+                        await ctx.send("Please attach a valid image file.")
+                        logger.debug("Invalid image file attached.")
+                        return
+                else:
+                    await ctx.send("Please attach an image.")
+                    logger.debug("No valid image provided.")
+                    return
 
             # Perform prediction
-            predicted_pokemon, confidence_score = await self.predict_pokemon(ctx,img)
+            predicted_pokemon, confidence_score = await self.predict_pokemon(ctx, img)
 
             # If prediction is successful, send success message with prediction result
             if predicted_pokemon:
