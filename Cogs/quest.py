@@ -14,9 +14,10 @@ import os
 
 
 class Quest_Select(Select):
-    def __init__(self, bot, quests, max_pages):
+    def __init__(self, bot, quests, ctx, max_pages):
         self.bot = bot
         self.quests = quests
+        self.ctx = ctx
         self.max_pages = max_pages
         options = []
 
@@ -24,19 +25,23 @@ class Quest_Select(Select):
             start_index = i * 3
             end_index = min((i + 1) * 3, len(quests))
             label = f"Page {i+1}"
-            description = f"View quests {start_index + 1} to {end_index} out of {len(quests)}"
-            options.append(discord.SelectOption(label=label, description=description, value=str(i)))
+            # description = f"View quests {start_index + 1} to {end_index} out of {len(quests)}"
+            options.append(discord.SelectOption(label=label, value=str(i)))
 
         super().__init__(placeholder="Select page...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
+     try:
         page_index = int(self.values[0])
-        start_index = page_index * 3
-        end_index = min((page_index + 1) * 3, len(self.quests))
-        page_quests = self.quests[start_index:end_index]
-        view = QuestView(self.bot, page_quests, interaction, page_index)
+        view = Quest_View(self.bot, self.quests, self.ctx, page=page_index)
         embeds = await view.generate_embeds()
         await interaction.response.edit_message(embeds=embeds, view=view)
+     except Exception as e:
+        error_message = "An error occurred while fetching quests."
+        logger.error(f"{error_message}: {e}")
+        traceback.print_exc()
+        await error_custom_embed(self.bot, ctx, error_message, title="Quest Fetch Error")
+
 
 class QuestButton(discord.ui.Button):
     def __init__(self, label, style, custom_id, bot, quests, ctx, page):
@@ -63,13 +68,14 @@ class Quest_View(View):
         self.ctx = ctx
         self.page = page
         self.max_pages = (len(quests) + 2) // 3  # Calculate max pages, showing 3 quests per page
+        
+        self.add_item(Quest_Select(bot, quests, ctx, self.max_pages))
 
         if self.page > 0:
             self.add_item(QuestButton("Previous", discord.ButtonStyle.primary, "previous", bot, quests, ctx, self.page))
         if self.page < self.max_pages - 1:
             self.add_item(QuestButton("Next", discord.ButtonStyle.primary, "next", bot, quests, ctx, self.page))
 
-        self.add_item(Quest_Select(bot, quests, self.max_pages))
 
     async def generate_embeds(self):
         start_index = self.page * 3
