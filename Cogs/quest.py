@@ -13,6 +13,108 @@ from pymongo.errors import PyMongoError
 import os
 
 
+class Quest_Select(Select):
+    def __init__(self, bot, quests, max_pages):
+        self.bot = bot
+        self.quests = quests
+        self.max_pages = max_pages
+        options = []
+
+        for i in range(max_pages):
+            start_index = i * 3
+            end_index = min((i + 1) * 3, len(quests))
+            label = f"Page {i+1}"
+            description = f"View quests {start_index + 1} to {end_index} out of {len(quests)}"
+            options.append(discord.SelectOption(label=label, description=description, value=str(i)))
+
+        super().__init__(placeholder="Select page...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        page_index = int(self.values[0])
+        start_index = page_index * 3
+        end_index = min((page_index + 1) * 3, len(self.quests))
+        page_quests = self.quests[start_index:end_index]
+        view = QuestView(self.bot, page_quests, interaction, page_index)
+        embeds = await view.generate_embeds()
+        await interaction.response.edit_message(embeds=embeds, view=view)
+
+class QuestButton(discord.ui.Button):
+    def __init__(self, label, style, custom_id, bot, quests, ctx, page):
+        super().__init__(label=label, style=style, custom_id=custom_id)
+        self.bot = bot
+        self.quests = quests
+        self.ctx = ctx
+        self.page = page
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.custom_id == "previous":
+            self.page -= 1
+        elif self.custom_id == "next":
+            self.page += 1
+        view = Quest_View(self.bot, self.quests, self.ctx, self.page)  # Change to Quest_View
+        embeds = await view.generate_embeds()  # Await the method call
+        await interaction.response.edit_message(embeds=embeds, view=view)
+
+class Quest_View(View):
+    def __init__(self, bot, quests, ctx, page=0):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.quests = quests
+        self.ctx = ctx
+        self.page = page
+        self.max_pages = (len(quests) + 2) // 3  # Calculate max pages, showing 3 quests per page
+
+        if self.page > 0:
+            self.add_item(QuestButton("Previous", discord.ButtonStyle.primary, "previous", bot, quests, ctx, self.page))
+        if self.page < self.max_pages - 1:
+            self.add_item(QuestButton("Next", discord.ButtonStyle.primary, "next", bot, quests, ctx, self.page))
+
+        self.add_item(Quest_Select(bot, quests, self.max_pages))
+
+    async def generate_embeds(self):
+        start_index = self.page * 3
+        end_index = start_index + 3
+        embeds = []
+        """
+         author_embed = discord.Embed()
+         author_embed.set_author(name=f"{self.ctx.author.display_name}'s quests", icon_url=self.ctx.author.avatar.url)
+         embeds.append(author_embed)
+        """
+
+        for quest in self.quests[start_index:end_index]:
+            quest_id = quest['quest_id']
+            progress = quest['progress']
+            times = quest['times']
+            action = quest['action']
+            method = quest['method']
+            content = quest['content']
+            channel = self.bot.get_channel(quest['channel_id'])
+
+            if re.match(r'^<:\w+:\d+>$', content):
+                emoji_id = int(re.findall(r'\d+', content)[0])
+                emoji = discord.utils.get(self.bot.emojis, id=emoji_id)
+                if emoji:
+                    content = str(emoji)
+            elif method == 'message':
+                content = f"`{content}`"
+
+            progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
+
+            embed = discord.Embed()
+            embed.add_field(name="\n", value=f'**Mission**: {content}\n`{progress}/{times}` {progress_bar}', inline=True)
+            embed.add_field(name="Location", value=channel.mention, inline=True)
+            embed.set_footer(text=f"Quest ID: {quest_id}\nKey: {action.title()} {method.title()}")
+            embeds.append(embed)
+            
+        """
+         last_embed = discord.Embed()
+         last_embed.set_footer(text='Server Quest\n', icon_url=AnyaImages.show_quest_anya)
+         last_embed.timestamp = datetime.now()
+         embeds.append(last_embed)
+        """
+
+        return embeds
+
 class Quest(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -21,94 +123,39 @@ class Quest(commands.Cog):
     @commands.command(name='quest', aliases=['q'])
     async def quest(self, ctx, test=None):
         logger.debug("Quest command invoked.")
-        embeds = []  # List to store all embeds
         if test:
             author = ctx.author
             guild_id = str(ctx.guild.id)
-            print('guild_id:', guild_id)
             content = await self.quest_data.generate_random_quest_content(self.bot, author, guild_id)
             await ctx.send(str(content))
+            return
 
         try:
             user_id = str(ctx.author.id)
             guild_id = str(ctx.guild.id)
-            
-            # Check if the user exists in the server
+
             user_exists = await self.quest_data.find_user_in_server(user_id, guild_id)
             
             if not user_exists:
-                # Get the prompt embed from Quest_Prompt
                 prompt_embed = await Quest_Prompt.get_embed(self.bot)
                 await ctx.reply(embed=prompt_embed, view=Quest_Button(self.bot, ctx))
                 return
-                # Append prompt embed to the list
-                # embeds.append(prompt_embed)
-                
+
+            quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
+
+            if quests:
+                view = Quest_View(self.bot, quests, ctx)
+                embeds = await view.generate_embeds()
+                await ctx.reply(embeds=embeds, view=view)
             else:
-                # Append author's information
-                author_embed = discord.Embed()
-                author_embed.set_author(name=f"{ctx.author.display_name}'s quests", icon_url=ctx.author.avatar)
-                embeds.append(author_embed)
-
-                # Fetch quests for the user
-                quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
-
-                if quests:
-                    for quest in quests:
-                        quest_id = quest['quest_id']
-                        progress = quest['progress']
-                        times = quest['times']
-                        action = quest['action']
-                        method = quest['method']
-                        content = quest['content']
-                        channel = self.bot.get_channel(quest['channel_id'])
-
-                        # Check if the content is an emoji ID and replace it with the actual emoji
-                        if re.match(r'^<:\w+:\d+>$', content):
-                            emoji_id = int(re.findall(r'\d+', content)[0])
-                            emoji = get(self.bot.emojis, id=emoji_id)
-                            if emoji:
-                                content = str(emoji)
-                        elif method == 'message':
-                            content = f"`{content}`"
-
-                        progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
-                        
-                        # Create a new embed for each quest
-                        embed = discord.Embed(title=f"Quest `{quest_id}`")
-                        embed.add_field(
-                            name="",
-                            value=(
-                                f"{channel.mention} • *{action} {method}* • {content}\n"
-                                f"Progress: {progress_bar} `{progress}/{times}`"
-                            ),
-                            inline=False
-                        )
-
-                        # Append the embed to the list
-                        embeds.append(embed)
-
-                    # Create the last embed for server quests
-                    last_embed = discord.Embed()
-                    last_embed.set_footer(text='Server Quest\n', icon_url=AnyaImages.show_quest_anya)
-                    last_embed.timestamp = datetime.now()
-                    # Append the last embed to the list
-                    embeds.append(last_embed)
-
-                else:
-                    # Get the prompt embed from Quest_Prompt
-                    no_quest_embed = await QuestEmbed.get_no_quest_embed()
-                    # Append no quest embed to the list
-                    embeds.append(no_quest_embed)
-                    
+                no_quest_embed = await QuestEmbed.get_no_quest_embed()
+                await ctx.reply(embed=no_quest_embed)
+                
         except Exception as e:
             error_message = "An error occurred while fetching quests."
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
             await error_custom_embed(self.bot, ctx, error_message, title="Quest Fetch Error")
-        
-        # Send all embeds in one message
-        await ctx.send(embeds=embeds)
 
 class Quest_Button(discord.ui.View):
     def __init__(self, bot, ctx):
