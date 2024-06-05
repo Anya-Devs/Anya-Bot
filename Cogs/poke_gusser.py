@@ -71,26 +71,37 @@ class PokemonPredictor(commands.Cog):
             highest_score = 0
 
             img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-            img = cv2.resize(img, (64, 64))
+            img = cv2.resize(img, (224, 224))
+
+            orb = cv2.ORB_create()
+
+            keypoints1, descriptors1 = orb.detectAndCompute(img, None)
 
             for pokemon_file in pokemon_files:
                 pokemon_name, _ = os.path.splitext(pokemon_file)
                 stored_img_path = os.path.join(self.image_folder, pokemon_file)
                 stored_img = Image.open(stored_img_path)
                 stored_img = stored_img.convert("RGBA") if stored_img.mode == "P" else stored_img
-                stored_img = stored_img.resize((64, 64)).convert('RGB')
+                stored_img = stored_img.resize((224, 224)).convert('RGB')
                 stored_img = cv2.cvtColor(np.array(stored_img), cv2.COLOR_RGB2BGR)
 
-                ssim_score = self.calculate_ssim(img, stored_img)
+                keypoints2, descriptors2 = orb.detectAndCompute(stored_img, None)
 
-                logger.debug(f"SSIM score for {pokemon_name}: {ssim_score:.2%}")
+                if descriptors1 is not None and descriptors2 is not None:
+                    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+                    matches = bf.match(descriptors1, descriptors2)
+                    matches = sorted(matches, key=lambda x: x.distance)
 
-                if ssim_score > highest_score:
-                    highest_score = ssim_score
-                    best_match = pokemon_name
+                    if matches:
+                        score = len(matches) / len(descriptors1)
+                        logger.debug(f"Matching score for {pokemon_name}: {score:.2%}")
 
-                if highest_score >= threshold:
-                    break
+                        if score < highest_score:
+                            highest_score = score
+                            best_match = pokemon_name
+
+                        if highest_score >= threshold:
+                            break
 
             logger.info(f"Best match: {best_match} with score {highest_score:.2%}")
             return best_match, highest_score
