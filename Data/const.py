@@ -7,6 +7,7 @@ from datetime import datetime
 from PIL import Image
 from Imports.discord_imports import *
 import platform
+import random
 
 # Constants
 class AnyaImages:
@@ -14,14 +15,15 @@ class AnyaImages:
     awake_anya = 'https://media.tenor.com/9kLYJilshNMAAAAe/spy-x-family-anya.png'
     question_anya = 'https://i.pinimg.com/236x/b7/23/1f/b7231fbf87eee22b6d1f35f83e9a80bd.jpg'
     ping_banner_anya = 'https://i.pinimg.com/564x/db/98/ff/db98ffc40d53378a9999528b69d66d00.jpg'
+    ping_image = 'https://i.pinimg.com/564x/25/da/ee/25daee24ea5fb98b5590d542d2879708.jpg'
     sleepy_anya = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR9y_MT3QHxXZVVzVlA94oFM8uIN0QH1fdw8Q6inySFmQ&s'
     new_mission_anya = 'https://i.pinimg.com/236x/b5/90/49/b590497e5e776909274ba40b040bba8c.jpg'
     look_radiant_anya = 'https://i.pinimg.com/236x/0b/cf/4b/0bcf4b9002db8cbb5f5d42855b5d460c.jpg'
     ping_thumbnail = 'https://i.pinimg.com/236x/5d/d7/d1/5dd7d1d91933d59b8f21732efba70368.jpg'
     help_thumbnail = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQggKtOcHg_2xDGNeqtciU_-7iZ19F3lFbV091fGKq7KtJI5MuOzLBEPg2rQRZ9ru-tDGY&usqp=CAU'
-    quest_completed_anya = 'https://i.pinimg.com/236x/7a/0d/7e/7a0d7ef8a327fb2b8069845518ba9242.jpg'
+    quest_completed_anya = 'https://i.pinimg.com/236x/26/3b/90/263b90473c3651b4fc3d30b462152c0b.jpg'
     agree_to_terms_anya = 'https://i.pinimg.com/474x/09/47/bc/0947bc96fe6f6af4a9779d994c0a2df0.jpg'
-    no_quest_anya = 'https://i.pinimg.com/236x/38/b5/89/38b5893e071f60a9dbcc3074cbf70016.jpg' 
+    no_quest_anya = 'https://i.pinimg.com/236x/24/55/33/24553356591ac5daebf976a6d641b1cc.jpg' # 'https://i.pinimg.com/236x/38/b5/89/38b5893e071f60a9dbcc3074cbf70016.jpg' 
     show_quest_anya = 'https://i.pinimg.com/236x/23/2f/62/232f626bc0ec7a845198149fdc38e311.jpg'
 
 # Embed Avatar
@@ -64,6 +66,7 @@ class Help_Embed_Mapping:
     
 class Help_Select_Embed_Mapping:
     embeds = {
+       
         "system": {
             "title": "System",
             "description": "View the status of the bot, including information about its current performance, system resources usage, and configuration settings.",
@@ -77,7 +80,6 @@ class Help_Select_Embed_Mapping:
             "color": None,  # Customize color as needed
             "thumbnail_url": AnyaImages.sleepy_anya
         },
-        
         "Cog2": {
             "title": "Title for Cog2",
             "description": "Description for Cog2",
@@ -92,34 +94,59 @@ class Help_Select_Embed_Mapping:
         "quest": "<:loading_icon:1238532154292437022>",
         # Add more emoji mappings for other cogs as needed
     }
- 
+
+class TutorialMission:
+    def __init__(self):
+        self.steps = [
+            {
+                'action': 'send',
+                'method': 'message',
+                'content': 'Hello',
+                'description': 'Welcome to the tutorial mission! Your first task is to say "Hello" in the server chat.',
+                'times': 1
+            },
+            {
+                'action': 'react',
+                'method': 'reaction',
+                'content': '👍',
+                'description': 'React to this message with a thumbs up emoji.',
+                'times': 1
+            },
+            {
+                'description': 'Welcome them and tell them they have a new quest.'
+            }
+        ]    
+    
 QUEST_PROMPT_EMBED = {
     "title": None,
-    "description": (
-        "**By accepting server quests, you agree to the following terms and conditions:**\n\n"
-        "- **Play fair:**\n"
-        "> ```Do not use self-bots or any form of automation.```\n"
-        "- **Voluntary tracking:**\n"
-        "> ```Your messages may be tracked for quest purposes.```\n"
-        "- **Respect server admin:**\n"
-        "> ```You will receive quests from the server admin.```\n"
-        " ╰┈┈┈ ☆"
-    ),
-    "color": None, # You can specify a color in hex format if needed
-    "footer_text": "Server Quest Acceptance"
+    "color": discord.Color.yellow(), # You can specify a color in hex format if needed
+    "footer_text": "Quest Terms Agreement"
 }
 
 class Quest_Prompt:
     @staticmethod
-    async def get_embed():
+    async def get_embed(bot):
+        # terms_emoji = discord.utils.get(bot.emojis, id=1244193792400031835)
+        fair_emoji = discord.utils.get(bot.emojis, id=1244196046565802015)
+        tracking_emoji = discord.utils.get(bot.emojis, id=1244195699331960863)
+        respect_emoji = discord.utils.get(bot.emojis, id=1244196427828301825)
+                          
         print('getting embed')
         embed = discord.Embed(
-            description=QUEST_PROMPT_EMBED["description"],
+            description=(
+        f"**By accepting server quests, you agree to the following terms and conditions:**\n\n"
+        f"- **{fair_emoji} Play fair:**\n"
+        "> ```Do not use self-bots or any form of automation.```\n"
+        f"- **{tracking_emoji} Voluntary tracking:**\n"
+        "> ```Your messages may be tracked for quest purposes.```\n"
+        f"- **{respect_emoji} Respect server admin:**\n"
+        "> ```You may receive quests from the server admin.```\n"
+    ),
             color=QUEST_PROMPT_EMBED["color"],
             timestamp = datetime.now()
         )
-        embed.set_thumbnail(url=AnyaImages.look_radiant_anya)
-        embed.set_footer(text=QUEST_PROMPT_EMBED["footer_text"])
+        # embed.set_thumbnail(url=AnyaImages.look_radiant_anya)
+        embed.set_footer(text=QUEST_PROMPT_EMBED["footer_text"],icon_url=AnyaImages.look_radiant_anya)
         return embed
     
 class Quest_Progress:
@@ -149,28 +176,42 @@ class Quest_Progress:
 class QuestEmbed:
     @staticmethod
     async def create_quest_embed(
+        bot: discord.Client,  # Add bot parameter
         quest: str,
         quest_id: int, 
         action: str, 
         method: str, 
         channel: discord.TextChannel, 
         times: int, 
-        content: str
+        content: str,
+        user: discord.User
     ) -> discord.Embed:
+        # Construct a more readable description
         description = (
-            f"**Action:** `{action}`\n"
+            f"**Quest ID:** `{quest_id}`\n"
+            f"**Action:** `{action.title()}`\n"
             f"**Method:** `{method}`\n"
             f"**Channel:** {channel.mention}\n"
             f"**Times:** `{times}`\n"
-            f"**Content:** `{content}`\n"
-            f"**Quest:**\n```{action.title()} {method} {content} in {channel.name} {times}x```"
+            f"**Content:** `{content}`"
         )
         
+        # Retrieve the emoji
+        added_emoji = discord.utils.get(bot.emojis, id=1244440519514521600)
+        
+        # Create the embed
         embed = discord.Embed(
-            title=f"{quest} Quest #{quest_id}",
+            # title=f"{added_emoji}  New Quest",
             description=description,
-            color=None
+            color=discord.Color.green(),
+            timestamp=datetime.now()
         )
+        
+        # Set the author using the user parameter
+        embed.set_author(name=user.name, icon_url=user.avatar)
+        
+        # Set the footer and thumbnail
+        embed.set_footer(text='Quest Created')
         embed.set_thumbnail(url=AnyaImages.new_mission_anya)
         
         return embed
@@ -212,30 +253,62 @@ class QuestEmbed:
     
     @staticmethod
     async def show_quest(bot,ctx):
+        help_emoji = discord.utils.get(bot.emojis, id=1245611790176616510)
+
         
         embed = discord.Embed(
-            description='Here are your current quests and their progress:',
+            # description='{member}: Mention someone in your server (excluding bots and yourself)',
             timestamp=datetime.now())
-        embed.set_footer(text='Server Quest')
-        embed.set_author(name=ctx.author.display_name,icon_url=ctx.author.avatar)
-        embed.set_thumbnail(url=AnyaImages.show_quest_anya)
+        embed.set_footer(text='Server Quest\n',icon_url=AnyaImages.show_quest_anya)
+        embed.set_author(name=f"{ctx.author.display_name} quests",icon_url=ctx.author.avatar)
+        # embed.set_thumbnail(url=AnyaImages.show_quest_anya)
         return embed
             
 class Quest_Completed_Embed:
     @staticmethod
-    async def create_embed(bot, quest_content, channel_mention, times, user_mention, quest_id):
-        yay_emoji = discord.utils.get(bot.emojis, id=1243390639908065323)
-        check_emoji = discord.utils.get(bot.emojis, id=1243403342722371645)
-        user_emoji = discord.utils.get(bot.emojis, id=1243452373213646890)
-        
+    async def create_embed(bot, quest_content, channel_mention, times, user, quest_id, method=None):
+        # Define emoji ids
+        yay_emoji_id = 1243390639908065323
+        cheer_emoji_id = 1244432132265345064
+        user_emoji_id = 1243452373213646890
+        right_arrow_emoji_id = 1244102053043896353
+        check_emoji_id = 1243403342722371645
+        reward_emoji_id = 1247800150479339581
+        info_emoji_id = 1248834245401514095
+
+        # Get emojis
+        yay_emoji = discord.utils.get(bot.emojis, id=yay_emoji_id)
+        cheer_emoji = discord.utils.get(bot.emojis, id=cheer_emoji_id)
+        user_emoji = discord.utils.get(bot.emojis, id=user_emoji_id)
+        right_arrow_emoji = discord.utils.get(bot.emojis, id=right_arrow_emoji_id)
+        check_emoji = discord.utils.get(bot.emojis, id=check_emoji_id)
+        reward_emoji = discord.utils.get(bot.emojis, id=reward_emoji_id)
+        info_emoji = discord.utils.get(bot.emojis, id=info_emoji_id)
+
+
+
+
+        # Create embed
         embed = discord.Embed(
-            description=f'{user_emoji} {user_mention}',
-            timestamp=datetime.now()
+            title=f"{check_emoji} Mission Completed",
+            timestamp=datetime.now(),
+            color= discord.Color.pink()
         )
-        embed.set_thumbnail(url=AnyaImages.quest_completed_anya)
-        embed.add_field(name=f"{check_emoji} Completed Quest #{quest_id}", value=f"> **Waku Waku**, You've sent `{quest_content}` in {channel_mention} `{times}x` {yay_emoji}") 
-        embed.set_footer(text='Quest Completed')
-        return embed
+        embed.add_field(name=f' ',value=f'> {user.mention} {method} {quest_content.replace("`", "")}\n- *Times {method}:* `{times}x`', inline=True)
+
+        embed.add_field(name=f'{reward_emoji} Reward',value=f'```js\nN/A```', inline=True)
+        # Set thumbnail image
+        embed.set_thumbnail(url=user.avatar) #AnyaImages.quest_completed_anya)
+        # Set footer text
+
+
+
+
+
+
+        return embed   
+
+    
     
 class LogConstants:
     start_log_thumbnail = "https://example.com/start_log_thumbnail.png"
@@ -246,8 +319,8 @@ class LogConstants:
     embed_color = None
 
 class PingConstants:
-    thumbnail_url = AnyaImages.ping_thumbnail
-    image_url =  None
+    thumbnail_url = None # AnyaImages.ping_thumbnail
+    image_url =  AnyaImages.ping_image
     footer_icon = None
     embed_color = None
 
