@@ -137,19 +137,41 @@ class Quest(commands.Cog):
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
             await error_custom_embed(self.bot, ctx, error_message, title="Quest Fetch Error")
+            
     @commands.command(name='stars', aliases=['bal','points','balance'])
-    async def balance(self, ctx):
+    @commands.is_owner()
+    async def balance(self, ctx, method=None, amount: int = None, member: discord.Member = None):
      user_id = str(ctx.author.id)
      guild_id = str(ctx.guild.id)
+     if member is None:
+        member = ctx.author
+        
+     try:
+        # Check if the command includes the "add" flag
+        if method == "add":
+            # Check if the user has administrator permissions
+            if ctx.author.guild_permissions.administrator:
+                await self.quest_data.add_balance(str(member.id), guild_id, amount)
+                amount_with_commas = "{:,}".format(amount)  # Add commas to amount
+                await ctx.send(f":white_check_mark: Successfully added {amount_with_commas} balance to {member.display_name}'s account.")
+            else:
+                await ctx.send("You don't have permission to use this command to add balance to other users.")
+        else:
+            if member is None and amount is None:
+                # Ensure the user has a balance
+                await self.quest_data.initialize_balance(user_id, guild_id)
 
-     # Ensure the user has a balance
-     await self.quest_data.initialize_balance(user_id, guild_id)
+            # Retrieve and display the user's balance
+            balance = await self.quest_data.get_balance(user_id, guild_id)
+            balance_with_commas = "{:,}".format(balance)  # Add commas to balance
+            await ctx.send(f"Your balance: {balance_with_commas} Stella Points")
 
-     # Retrieve and display the user's balance
-     balance = await self.quest_data.get_balance(user_id, guild_id)
-     await ctx.send(f"Your balance: {balance} Stella Points")
-     
-    
+     except Exception as e:
+        # Log the error
+        logger.error(f"An error occurred in the balance command: {e}")
+        # Send a message to the user indicating an error occurred
+        await ctx.send("An error occurred while processing your request. Please try again later.")
+
 class Quest_Select(Select):
     def __init__(self, bot, quests, ctx, max_pages):
         self.bot = bot
@@ -232,10 +254,12 @@ class Quest_Button(discord.ui.View):
             
             
             if added:
-                embed = await QuestEmbed.get_agree_confirmation_embed()
-                await button.response.send_message("You have been added!", ephemeral=True)
+                embed = await QuestEmbed.get_agree_confirmation_embed(self.bot, button.user)
+                await button.response.send_message("You have been added!", embed=embed, ephemeral=True)
 
-                await button.followup.edit_message(button.message.id,embed=embed, view=None)
+                # await button.followup.edit_message(button.message.id,embed=embed, view=None)
+                await button.followup.delete_message(button.message.id)
+
                 button_user = button.user
                 
                 guild_id = str(button.guild.id)
@@ -930,7 +954,47 @@ class Quest_Data(commands.Cog):
         except PyMongoError as e:
             logger.error(f"Error occurred while getting balance: {e}")
             return 0
-    
+
+    async def add_balance(self, user_id: str, guild_id: str, amount: int):
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db['Servers']
+
+            user_balance_key = f"members.{user_id}.stella_points"
+
+            await server_collection.update_one(
+                {'guild_id': guild_id},
+                {
+                    '$inc': {user_balance_key: amount},
+                    '$setOnInsert': {
+                        'members.{user_id}.stella_points': 0,
+                    }
+                },
+                upsert=True
+            )
+        except PyMongoError as e:
+            logger.error(f"Error occurred while adding balance: {e}")
+
+    async def remove_balance(self, user_id: str, guild_id: str, amount: int):
+        try:
+            db = self.bot.mongoConnect[self.DB_NAME]
+            server_collection = db['Servers']
+
+            user_balance_key = f"members.{user_id}.stella_points"
+
+            await server_collection.update_one(
+                {'guild_id': guild_id},
+                {
+                    '$inc': {user_balance_key: -amount},
+                    '$setOnInsert': {
+                        'members.{user_id}.stella_points': 0,
+                    }
+                },
+                upsert=True
+            )
+        except PyMongoError as e:
+            logger.error(f"Error occurred while removing balance: {e}")
+
     async def initialize_balance(self, user_id: str, guild_id: str):
         try:
             db = self.mongoConnect[self.DB_NAME]
@@ -940,12 +1004,15 @@ class Quest_Data(commands.Cog):
 
             await server_collection.update_one(
                 {'guild_id': guild_id},
-                {'$set': {user_balance_key: 0}},
+                {
+                    '$setOnInsert': {
+                        user_balance_key: 0,
+                    }
+                },
                 upsert=True
             )
         except PyMongoError as e:
             logger.error(f"Error occurred while initializing balance: {e}")
-
 class Quest_Slash(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
