@@ -13,52 +13,7 @@ from pymongo.errors import PyMongoError
 import os
 
 
-class Quest_Select(Select):
-    def __init__(self, bot, quests, ctx, max_pages):
-        self.bot = bot
-        self.quests = quests
-        self.ctx = ctx
-        self.max_pages = max_pages
-        options = []
 
-        for i in range(max_pages):
-            start_index = i * 3
-            end_index = min((i + 1) * 3, len(quests))
-            label = f"Page {i+1}"
-            # description = f"View quests {start_index + 1} to {end_index} out of {len(quests)}"
-            options.append(discord.SelectOption(label=label, value=str(i)))
-
-        super().__init__(placeholder="Select page...", min_values=1, max_values=1, options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-     try:
-        page_index = int(self.values[0])
-        view = Quest_View(self.bot, self.quests, self.ctx, page=page_index)
-        embeds = await view.generate_embeds()
-        await interaction.response.edit_message(embeds=embeds, view=view)
-     except Exception as e:
-        error_message = "An error occurred while fetching quests."
-        logger.error(f"{error_message}: {e}")
-        traceback.print_exc()
-        await error_custom_embed(self.bot, ctx, error_message, title="Quest Fetch Error")
-
-
-class QuestButton(discord.ui.Button):
-    def __init__(self, label, style, custom_id, bot, quests, ctx, page):
-        super().__init__(label=label, style=style, custom_id=custom_id)
-        self.bot = bot
-        self.quests = quests
-        self.ctx = ctx
-        self.page = page
-
-    async def callback(self, interaction: discord.Interaction):
-        if self.custom_id == "previous":
-            self.page -= 1
-        elif self.custom_id == "next":
-            self.page += 1
-        view = Quest_View(self.bot, self.quests, self.ctx, self.page)  # Change to Quest_View
-        embeds = await view.generate_embeds()  # Await the method call
-        await interaction.response.edit_message(embeds=embeds, view=view)
 
 class Quest_View(View):
     def __init__(self, bot, quests, ctx, page=0):
@@ -81,6 +36,9 @@ class Quest_View(View):
         start_index = self.page * 3
         end_index = start_index + 3
         embeds = []
+        
+        
+       
         """
          author_embed = discord.Embed()
          author_embed.set_author(name=f"{self.ctx.author.display_name}'s quests", icon_url=self.ctx.author.avatar.url)
@@ -94,6 +52,7 @@ class Quest_View(View):
             action = quest['action']
             method = quest['method']
             content = quest['content']
+            reward = quest['reward']
             channel = self.bot.get_channel(quest['channel_id'])
 
             if re.match(r'^<:\w+:\d+>$', content):
@@ -105,12 +64,22 @@ class Quest_View(View):
                 content = f"`{content}`"
 
             progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
+            
+            reward_emoji_id = 1247800150479339581
+            reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
+            
+            objective = f"{action.title()} - {method.title()}: {content}"
 
-            embed = discord.Embed()
-            embed.add_field(name="\n", value=f'**Mission**: {content}\n`{progress}/{times}` {progress_bar}', inline=True)
+
+            embed = discord.Embed(title=f'Quest {quest_id}',description=objective)
+            embed.add_field(name='Progress',value=f'{progress}/{times} {progress_bar}',inline=True)
             embed.add_field(name="Location", value=channel.mention, inline=True)
-            embed.set_footer(text=f"Quest ID: {quest_id}\nKey: {action.title()} {method.title()}")
+
+            if reward:
+                embed.add_field(name="Reward", value=f"{reward} Stella Points", inline=False)
+
             embeds.append(embed)
+            
             
         """
          last_embed = discord.Embed()
@@ -152,7 +121,13 @@ class Quest(commands.Cog):
             if quests:
                 view = Quest_View(self.bot, quests, ctx)
                 embeds = await view.generate_embeds()
-                await ctx.reply(embeds=embeds, view=view)
+                
+                if len(quests) > 0:  # Check if there are any embeds generated
+                 if len(quests) > 3:
+                    await ctx.reply(embeds=embeds, view=view)  # Send first 3 embeds
+                 else:
+                  await ctx.reply(embeds=embeds)  # Send all embeds
+
             else:
                 no_quest_embed = await QuestEmbed.get_no_quest_embed()
                 await ctx.reply(embed=no_quest_embed)
@@ -162,6 +137,66 @@ class Quest(commands.Cog):
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
             await error_custom_embed(self.bot, ctx, error_message, title="Quest Fetch Error")
+    @commands.command(name='stars', aliases=['bal','points','balance'])
+    async def balance(self, ctx):
+     user_id = str(ctx.author.id)
+     guild_id = str(ctx.guild.id)
+
+     # Ensure the user has a balance
+     await self.quest_data.initialize_balance(user_id, guild_id)
+
+     # Retrieve and display the user's balance
+     balance = await self.quest_data.get_balance(user_id, guild_id)
+     await ctx.send(f"Your balance: {balance} Stella Points")
+     
+    
+class Quest_Select(Select):
+    def __init__(self, bot, quests, ctx, max_pages):
+        self.bot = bot
+        self.quests = quests
+        self.ctx = ctx
+        self.max_pages = max_pages
+        options = []
+
+        for i in range(max_pages):
+            start_index = i * 3
+            end_index = min((i + 1) * 3, len(quests))
+            label = f"Page {i+1}"
+            # description = f"View quests {start_index + 1} to {end_index} out of {len(quests)}"
+            options.append(discord.SelectOption(label=label, value=str(i)))
+
+        super().__init__(placeholder="Select page...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+     try:
+        page_index = int(self.values[0])
+        view = Quest_View(self.bot, self.quests, self.ctx, page=page_index)
+        embeds = await view.generate_embeds()
+        await interaction.response.edit_message(embeds=embeds, view=view)
+     except Exception as e:
+        error_message = "An error occurred while fetching quests."
+        logger.error(f"{error_message}: {e}")
+        traceback.print_exc()
+        await error_custom_embed(self.bot, ctx, error_message, title="Quest Fetch Error")
+    
+
+
+class QuestButton(discord.ui.Button):
+    def __init__(self, label, style, custom_id, bot, quests, ctx, page):
+        super().__init__(label=label, style=style, custom_id=custom_id)
+        self.bot = bot
+        self.quests = quests
+        self.ctx = ctx
+        self.page = page
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.custom_id == "previous":
+            self.page -= 1
+        elif self.custom_id == "next":
+            self.page += 1
+        view = Quest_View(self.bot, self.quests, self.ctx, self.page)  # Change to Quest_View
+        embeds = await view.generate_embeds()  # Await the method call
+        await interaction.response.edit_message(embeds=embeds, view=view)
 
 class Quest_Button(discord.ui.View):
     def __init__(self, bot, ctx):
@@ -473,45 +508,51 @@ class Quest_Data(commands.Cog):
             if interaction:
                 await self.handle_error(interaction, e, title="Latest Quest ID")
             return 0
-    async def create_quest(self, guild_id: str, action: str, method: str, content: str, channel_id: int, times: int, reward: int, interaction=None):
 
+    async def create_quest(self, guild_id: str, action: str, method: str, content: str, channel_id: int ,times: int, reward: int, interaction=None):
         try:
+            # Calculate reward as a random value between 4 and 20 times the `times` value
             reward = random.randint(4, 20) * times
-            logger.debug('create_new_quest_for_all has been activated')
-            await self.validate_input(guild_id=guild_id, action=action, method=method, channel_id=channel_id, times=times, content=content)
+            
+            # Ensure the reward is correctly set in the quest data
+            quest_data = {
+                'action': action,
+                'method': method,
+                'content': content,
+                'channel_id': channel_id,
+                'times': times,
+                'reward': reward
+                
+            }
+            await self.validate_input(**quest_data)
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db['Servers']
+
+            quest_count = await self.get_server_quest_count(guild_id)
+            quest_limit = await self.get_quest_limit(guild_id)
+
+            if quest_count >= quest_limit:
+                raise ValueError("Quest limit exceeded for this server.")
+
             users_in_server = await self.find_users_in_server(guild_id)
-            logger.debug(f"Found {len(users_in_server)} users in server.")
-            
-            new_quest_id = None  # Initialize new_quest_id outside the loop
-            
+            if not users_in_server:
+                raise ValueError("No users found in the server.")
+
             for user_id in users_in_server:
-                latest_quest_id = await self.get_latest_quest_id(guild_id, user_id)
-                new_quest_id = latest_quest_id + 1 if latest_quest_id is not None else 1
-            
-                quest_data = {
-                 'quest_id': new_quest_id,
-                 'action': action,
-                 'method': method,
-                 'content': content,
-                 'channel_id': channel_id,
-                 'times': times,
-                 'reward': reward,
-                 'progress': 0  # Initialize progress to 0
-                }
-        
-                logger.debug(f"Creating quest for user_id: {user_id}, guild_id: {guild_id}, quest_data: {quest_data}")
-                await self.insert_quest(guild_id, user_id, quest_data)
-                logger.debug(f"Quest created for user_id: {user_id}, guild_id: {guild_id}, quest_data: {quest_data}")
-            
-            # Return new_quest_id after the loop
-            return new_quest_id  # Return the new quest_id
-        
-        except Exception as e:
-            logger.error(f"Error occurred while creating new quest for all users: {e}")
+                quest_data['quest_id'] = quest_count + 1  # Set the quest_id to be the next number
+                await self.insert_quest(guild_id, user_id, quest_data, interaction)
+
+                # Update the quest_count to ensure unique quest IDs
+                quest_count += 1
+            logger.debug(f"Created quest for guild {guild_id} with action {action} and content {content}.")
+            return quest_count
+
+        except (ValueError, PyMongoError) as e:
+            logger.error(f"Error occurred while creating quest: {e}")
             if interaction:
-                await self.handle_error(interaction, e, title="Quest Creation for All")
-    
-   
+                await self.handle_error(interaction, e, title="Quest Creation")
+            raise e
+
     async def create_member_quest(self, guild_id: str, user_id: str, action: str, method: str, content: str, times: int, interaction=None):
         try:
             # Calculate reward as a random value between 4 and 20 times the `times` value
@@ -871,8 +912,40 @@ class Quest_Data(commands.Cog):
         except PyMongoError as e:
             logger.error(f"Error occurred while updating quest progress: {e}")
             raise e
+            
+    async def get_balance(self, user_id: str, guild_id: str):
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db['Servers']
 
-   
+            user_balance_key = f"members.{user_id}.stella_points"
+
+            user_data = await server_collection.find_one(
+                {'guild_id': guild_id},
+                {user_balance_key: 1, '_id': 0}
+            )
+
+            balance = user_data.get('members', {}).get(user_id, {}).get('stella_points', 0)
+            return balance
+        except PyMongoError as e:
+            logger.error(f"Error occurred while getting balance: {e}")
+            return 0
+    
+    async def initialize_balance(self, user_id: str, guild_id: str):
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db['Servers']
+
+            user_balance_key = f"members.{user_id}.stella_points"
+
+            await server_collection.update_one(
+                {'guild_id': guild_id},
+                {'$set': {user_balance_key: 0}},
+                upsert=True
+            )
+        except PyMongoError as e:
+            logger.error(f"Error occurred while initializing balance: {e}")
+
 class Quest_Slash(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -891,7 +964,8 @@ class Quest_Slash(commands.Cog):
 
     @app_commands.command(
         name="create_quest",
-        description="Create a new quest.",)
+        description="Create a new quest.",
+    )
     @app_commands.describe(action='The action to perform for the quest. (e.g., send, receive)')
     @app_commands.describe(method='The method to use for the quest. (e.g., message, reaction)')
     @app_commands.describe(content='The content for the quest.')
@@ -979,7 +1053,8 @@ class Quest_Slash(commands.Cog):
         await self.quest_data.handle_error(interaction, e, title="Quest Deletion")
     @app_commands.command(
     name="remove_all_server_quests",
-    description="Remove all server quests from every member.",)
+    description="Remove all server quests from every member.",
+)
     async def remove_all_server_quests(
      self,
      interaction: discord.Interaction
@@ -1018,7 +1093,6 @@ class Quest_Slash(commands.Cog):
             logger.error(f"An error occurred: {e}")
             traceback.print_exc()
             await error_custom_embed(self.bot, interaction, e, title="Quest Limit Update")
-
 
           
 def setup(bot):
