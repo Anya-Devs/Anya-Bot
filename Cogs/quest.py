@@ -957,7 +957,7 @@ class Quest_Data(commands.Cog):
             logger.error(f"Error occurred while updating quest progress: {e}")
             raise e
             
-    async def get_balance(self, user_id: str, guild_id: str) -> int:
+    async def get_balance(self, user_id: str, guild_id: str):
         try:
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db['Servers']
@@ -974,26 +974,28 @@ class Quest_Data(commands.Cog):
         except PyMongoError as e:
             logger.error(f"Error occurred while getting balance: {e}")
             return 0
-
+        
     async def add_balance(self, user_id: str, guild_id: str, amount: int):
-     try:
-        db = self.mongoConnect[self.DB_NAME]
-        server_collection = db['Servers']
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db['Servers']
 
-        user_balance_key = f"members.{user_id}.stella_points"
+            user_balance_key = f"members.{user_id}.stella_points"
 
-        await server_collection.update_one(
-            {'guild_id': guild_id},
-            {
-                '$inc': {user_balance_key: amount},  # Add the provided amount to the existing balance
-                '$setOnInsert': {
-                    f'members.{user_id}.stella_points': amount,  # Set the balance if it doesn't exist
-                }
-            },
-            upsert=True
-        )
-     except PyMongoError as e:
-        logger.error(f"Error occurred while adding balance: {e}")
+            await server_collection.update_one(
+                {'guild_id': guild_id},
+                {
+                    '$inc': {user_balance_key: amount},
+                    '$setOnInsert': {
+                        'members.{user_id}.stella_points': 0,
+                    }
+                },
+                upsert=True
+            )
+        except PyMongoError as e:
+            logger.error(f"Error occurred while adding balance: {e}")
+
+
 
     async def initialize_balance(self, user_id: str, guild_id: str):
         try:
@@ -1013,6 +1015,7 @@ class Quest_Data(commands.Cog):
             )
         except PyMongoError as e:
             logger.error(f"Error occurred while initializing balance: {e}")
+            
 class Quest_Slash(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
