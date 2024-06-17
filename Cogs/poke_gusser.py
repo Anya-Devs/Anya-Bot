@@ -67,25 +67,7 @@ class PokemonPredictor(commands.Cog):
                 logger.debug(f"Removed sRGB profile from {img_path}")
         except Exception as e:
             logger.error(f"Error removing sRGB profile: {e}")
-    def remove_background(self, img_np):
-     try:
-        gray_img = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
-        _, binary_img = cv2.threshold(gray_img, 127, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-        contours, _ = cv2.findContours(binary_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        if contours:
-            largest_contour = max(contours, key=cv2.contourArea)
-            mask = np.zeros_like(gray_img)
-            cv2.drawContours(mask, [largest_contour], -1, 255, thickness=cv2.FILLED)
-
-            result = cv2.bitwise_and(img_np, img_np, mask=mask)
-            return result
-        else:
-            return img_np
-     except Exception as e:
-        logger.error(f"Error removing background: {e}")
-        return img_np      
-    
+            
     def ensure_correct_color_format(self, img):
      """
      Convert image to RGB format.
@@ -103,79 +85,120 @@ class PokemonPredictor(commands.Cog):
             if not os.path.exists(self.image_folder):
                 os.makedirs(self.image_folder)
 
-            pokemon_files = [f for f in os.listdir(self.image_folder) if os.path.isfile(os.path.join(self.image_folder, f))]
+            pokemon_files = os.listdir(self.image_folder)
             logger.debug(f"Number of Pokémon images found: {len(pokemon_files)}")
 
             best_match = None
-            highest_score = (float('-inf'), float('-inf'))  # Initialize with very low scores
+            highest_score = (float('-inf'), float('-inf'))  # Initialize with very low SSIM and MSE scores
 
             # Convert image to numpy array and ensure correct color format
             img_np = np.array(img)
             img_np = self.ensure_correct_color_format(img_np)
+            # Convert image to uint8 depth if needed
             if img_np.dtype != np.uint8:
                 img_np = img_np.astype(np.uint8)
-
-            # Remove background and extract the main object
-            img_np = self.remove_background(img_np)
 
             # Convert image to PIL Image for comparison
             img_pil = Image.fromarray(img_np)
 
-            orb = cv2.ORB_create()
+            # Convert image to binary for contour detection
+            gray_img = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+            _, binary_img = cv2.threshold(gray_img, 127, 255, cv2.THRESH_BINARY)
 
-            # Compute keypoints and descriptors for the input image
-            kp1, des1 = orb.detectAndCompute(img_np, None)
+            # Find contours
+            contours, _ = cv2.findContours(binary_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            for pokemon_file in pokemon_files:
-                pokemon_name, _ = os.path.splitext(pokemon_file)
-                stored_img_path = os.path.join(self.image_folder, pokemon_file)
+            # Initialize variables to store the largest contour's index and area
+            largest_contour_idx = -1
+            largest_contour_area = 0
 
-                if not os.path.isfile(stored_img_path):
-                    logger.warning(f"Not a file: {stored_img_path}")
-                    continue
+            for idx, contour in enumerate(contours):
+                # Calculate contour area
+                contour_area = cv2.contourArea(contour)
 
-                try:
+                # Check if contour area is greater than the current largest contour area
+                if contour_area > largest_contour_area:
+                    largest_contour_idx = idx
+                    largest_contour_area = contour_area
+
+            # Only proceed if a valid contour is found
+            if largest_contour_idx != -1:
+                x, y, w, h = cv2.boundingRect(contours[largest_contour_idx])
+
+                # Draw rectangle around the largest contour
+                cv2.rectangle(img_np, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+                # Determine padding dynamically based on the dimensions of the bounding box
+                padding_x = min(w // 2, img_np.shape[1] - w)
+                padding_y = min(h // 2, img_np.shape[0] - h)
+
+                # Crop region of interest (ROI) from the original image with adaptive padding
+                roi = img_np[max(y - padding_y, 0):min(y + h + padding_y, img_np.shape[0]),
+                             max(x - padding_x, 0):min(x + w + padding_x, img_np.shape[1])]
+
+                orb = cv2.ORB_create()
+
+                # Compute keypoints and descriptors for the ROI
+                kp1, des1 = orb.detectAndCompute(roi, None)
+
+                for pokemon_file in pokemon_files:
+                    pokemon_name, _ = os.path.splitext(pokemon_file)
+                    stored_img_path = os.path.join(self.image_folder, pokemon_file)
+
+                    # Remove sRGB profile
+                    self.remove_srgb_profile(stored_img_path)
+
                     stored_img = Image.open(stored_img_path)
-                except Exception as e:
-                    logger.warning(f"Unable to read image: {stored_img_path}")
-                    continue
 
-                stored_img_np = np.array(stored_img)
-                stored_img_np = self.ensure_correct_color_format(stored_img_np)
-                stored_img_np = self.remove_background(stored_img_np)
+                    if stored_img is None:
+                        logger.warning(f"Unable to read image: {stored_img_path}")
+                        continue
 
-                # Compute keypoints and descriptors for the stored image
-                kp2, des2 = orb.detectAndCompute(stored_img_np, None)
+                    # Calculate similarity between the input image and stored image
+                    similarity_score = await self.calculate_similarity(img_pil, stored_img)
+                    print(similarity_score)
 
-                # Match features and calculate similarity
-                similarity_score = await self.calculate_similarity_features(kp1, des1, kp2, des2, img_np, stored_img_np)
+                    # Update best match if criteria are met
+                    try:
+                        if isinstance(similarity_score, list):
+                           if similarity_score[0] > highest_score[0] or (similarity_score[0] == highest_score[0] and similarity_score[2] < highest_score[2]):
+                                highest_score = tuple(similarity_score)
+                                best_match = pokemon_name
+                        else:
+                            logger.warning(f"Similarity score is not a tuple: {similarity_score}")
+                    except Exception as e:
+                        error_message = "An error occurred while fetching predicting pokemon."
+                        logger.error(f"{error_message}: {e}")
+                        traceback.print_exc()
+                        await error_custom_embed(self.bot, ctx, error_message, title="Pokemon Prediction Error")
 
-                try:
-                    if similarity_score[0] > highest_score[0] or (similarity_score[0] == highest_score[0] and similarity_score[1] < highest_score[1]):
-                        highest_score = similarity_score
-                        best_match = pokemon_name
-                except Exception as e:
-                    error_message = "An error occurred while predicting Pokémon."
-                    logger.error(f"{error_message}: {e}")
-                    traceback.print_exc()
-                    await self.error_custom_embed(self.bot, ctx, error_message, title="Pokemon Prediction Error")
 
-                logger.debug(f"Comparing {pokemon_name} with similarity score: {similarity_score[0]:.2f}")
+                    logger.debug(f"Comparing {pokemon_name} with similarity score: {similarity_score[0]:.2f}")
+                # Draw rectangle around the largest contour
+                if largest_contour_idx != -1:
+                    cv2.rectangle(img_np, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-            if best_match:
-                matched_img_path = os.path.join(self.image_folder, best_match + ".png")
-                matched_img = cv2.imread(matched_img_path)
-                matched_img = self.ensure_correct_color_format(matched_img)
-                resized_matched_img = cv2.resize(matched_img, (img_np.shape[1], img_np.shape[0]))
+                if best_match:
+                 matched_img_path = os.path.join(self.image_folder, best_match + ".png")
+                 matched_img = cv2.imread(matched_img_path)
+                 matched_img = self.ensure_correct_color_format(matched_img)
+                 resized_matched_img = cv2.resize(matched_img, (roi.shape[1], roi.shape[0]))
+                roi_path = 'Data/roi.png'
+                matched_img_path = 'Data/matched_img.png'                    
+                combined_img = np.hstack((roi, resized_matched_img))
+                combined_img_path = 'Data/combined_comparison.png'
+                detected_objects_path = "Data/detected_objects.png"
 
-                combined_img = np.hstack((img_np, resized_matched_img))
-                combined_img_path = 'Data/pokemon_images/detection/combined_comparison.png'
-                os.makedirs("Data/pokemon_images/detection", exist_ok=True)
+                # Save the images
+                os.makedirs("Data", exist_ok=True)
+                cv2.imwrite(roi_path, roi)
+                cv2.imwrite(matched_img_path, resized_matched_img)
                 cv2.imwrite(combined_img_path, combined_img)
 
+                # Send the combined image
                 await ctx.send(file=discord.File(combined_img_path))
 
-            detected_objects_path = "Data/pokemon_images/detection/detected_objects.png"
+            # Save and send the detected objects image
             cv2.imwrite(detected_objects_path, img_np)
             await ctx.send(file=discord.File(detected_objects_path))
 
@@ -187,38 +210,46 @@ class PokemonPredictor(commands.Cog):
                 await ctx.send("No good match found")
 
             return best_match, highest_score[0]
-
      except Exception as e:
-        error_message = "An error occurred while predicting Pokémon."
+        error_message = "An error occurred while fetching predicting pokemon."
         logger.error(f"{error_message}: {e}")
         traceback.print_exc()
-        await self.error_custom_embed(self.bot, ctx, error_message, title="Pokemon Prediction Error")
+        await error_custom_embed(self.bot, ctx, error_message, title="Pokemon Prediction Error")
         return None, 0
 
-    async def calculate_similarity_features(self, kp1, des1, kp2, des2, img1_np, img2_np):
+    
+    async def calculate_similarity(self, img1, img2, size=(256, 256)):
      try:
-        bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-        matches = bf.match(des1, des2)
-        matches = sorted(matches, key=lambda x: x.distance)
-        
-        if len(matches) > 4:
-            src_pts = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
-            dst_pts = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
+        # Resize images to the specified size
+        img1_resized = img1.resize(size)
+        img2_resized = img2.resize(size)
 
-            H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-            height, width = img1_np.shape[:2]
-            transformed_img1 = cv2.warpPerspective(img1_np, H, (width, height))
+        # Convert images to grayscale
+        img1_gray = img1_resized.convert('L')
+        img2_gray = img2_resized.convert('L')
 
-            ssim_score = ssim(transformed_img1, img2_np, multichannel=True)
-            mse_score = np.mean((transformed_img1 - img2_np) ** 2)
+        # Convert images to numpy arrays
+        img1_np = np.array(img1_gray)
+        img2_np = np.array(img2_gray)
 
-            return [ssim_score, mse_score]
-        else:
-            return [0, 0]
+        # Calculate SSIM (Structural Similarity Index) for img1
+        ssim_score_img1 = ssim(img1_np, img2_np)
+
+        # Calculate SSIM (Structural Similarity Index) for img2
+        ssim_score_img2 = ssim(img2_np, img1_np)
+
+        # Calculate MSE (Mean Squared Error) for img1
+        mse_score_img1 = np.mean((img1_np - img2_np) ** 2)
+
+        # Calculate MSE (Mean Squared Error) for img2
+        mse_score_img2 = np.mean((img2_np - img1_np) ** 2)
+
+        return [ssim_score_img1, ssim_score_img2, mse_score_img1, mse_score_img2]
      except Exception as e:
         logger.error(f"Error calculating similarity: {e}")
-        return [0, 0]
+        return [0, 0, 0, 0]
 
+    
     @commands.command(name='predict')
     async def predict(self, ctx, url: str = None):
         # Initial message asking the user to provide an image or URL
