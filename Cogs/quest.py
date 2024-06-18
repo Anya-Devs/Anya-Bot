@@ -769,7 +769,7 @@ class Quest_Data(commands.Cog):
         while True:
             # Randomly choose method if not provided
             if method is None:
-             method = random.choice(['message', 'reaction'])
+             method = random.choice(['message', 'reaction', 'emoji'])
              logger.debug(f"Method chosen: {method}")
                 
             # Generate random quest content based on the method
@@ -1032,12 +1032,14 @@ class Quest_Slash(commands.Cog):
             return False
         return True
 
-    @app_commands.command(
-        name="create_quest",
+    quest_group = app_commands.Group(name="quest", description="Quest related commands")
+
+    @quest_group.command(
+        name="create",
         description="Create a new quest.",
     )
-    @app_commands.describe(action='The action to perform for the quest. (e.g., send, receive)')
-    @app_commands.describe(method='The method to use for the quest. (e.g., message, reaction)')
+    @app_commands.describe(action='The action to perform for the quest.')
+    @app_commands.describe(method='The method to use for the quest.')
     @app_commands.describe(content='The content for the quest.')
     @app_commands.choices(action=[
         discord.app_commands.Choice(name='send', value='send'), 
@@ -1045,7 +1047,9 @@ class Quest_Slash(commands.Cog):
     ])
     @app_commands.choices(method=[
         discord.app_commands.Choice(name='message', value='message'),
-        discord.app_commands.Choice(name='reaction', value='reaction')
+        discord.app_commands.Choice(name='reaction', value='reaction'),
+        discord.app_commands.Choice(name='emoji', value='emoji')
+
     ])
     async def create_quest(
         self,
@@ -1084,8 +1088,8 @@ class Quest_Slash(commands.Cog):
             traceback.print_exc()
             await error_custom_embed(self.bot, interaction, e, title="Quest Creation")
 
-    @app_commands.command(
-        name="delete_quest",
+    @quest_group.command(
+        name="delete",
         description="Delete a quest by its ID.",
     )
     async def delete_quest(
@@ -1121,10 +1125,11 @@ class Quest_Slash(commands.Cog):
         print(f"An error occurred: {e}")
         traceback.print_exc()
         await self.quest_data.handle_error(interaction, e, title="Quest Deletion")
-    @app_commands.command(
-    name="remove_all_server_quests",
-    description="Remove all server quests from every member.",
-)
+
+    @quest_group.command(
+        name="removeall",
+        description="Remove all server quests from every member.",
+    )
     async def remove_all_server_quests(
      self,
      interaction: discord.Interaction
@@ -1142,8 +1147,8 @@ class Quest_Slash(commands.Cog):
         traceback.print_exc()
         await self.quest_data.handle_error(interaction, e, title="Remove All Server Quests")
 
-    @app_commands.command(
-        name="set_quest_limit",
+    @quest_group.command(
+        name="setlimit",
         description="Set the maximum number of quests a user can have.",
     )
     async def set_quest_limit(
@@ -1163,6 +1168,7 @@ class Quest_Slash(commands.Cog):
             logger.error(f"An error occurred: {e}")
             traceback.print_exc()
             await error_custom_embed(self.bot, interaction, e, title="Quest Limit Update")
+
 
           
 def setup(bot):
