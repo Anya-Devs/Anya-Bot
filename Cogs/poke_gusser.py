@@ -176,7 +176,10 @@ class PokemonPredictor(commands.Cog):
                         contour_similarity = await self.calculate_similarity(roi, stored_img)
 
                         # Combine similarity scores (for example, averaging or another method)
-                        combined_similarity = (similarity_score + contour_similarity[0]) / 2
+                        if similarity_score + contour_similarity[0] != 0:
+                         combined_similarity = (similarity_score + contour_similarity[0]) / 2
+                        else:
+                            combined_similarity = 0 
 
                         # Update best match if criteria are met
                         if combined_similarity > highest_score[0]:
@@ -227,11 +230,14 @@ class PokemonPredictor(commands.Cog):
                 matches_list_sorted = sorted(matches_list, key=lambda x: x[1], reverse=True)
                 embed = discord.Embed(title="Best Match", description=f"The best match found is {best_match}")
                 embed.add_field(name="Combined Similarity", value=f"{highest_score[0]:.2f}", inline=False)
-                embed.add_field(name="Number of Matches", value=f"{highest_score[1]}", inline=True)
+                # embed.add_field(name="Number of Matches", value=f"{highest_score[1]}", inline=True)
                 # You can iterate over matches_list to add more details to the embed if needed
-                for match in matches_list_sorted:
-                    pokemon_name, similarity_score = match
-                    embed.add_field(name=f"{pokemon_name}", value=f"Similarity: {similarity_score:.2f}", inline=True)
+                for index, match in enumerate(matches_list_sorted):
+                     if index >= 6:
+                        break
+                    
+                     pokemon_name, similarity_score = match
+                     embed.add_field(name=f"{pokemon_name}", value=f"Similarity: {similarity_score:.2f}", inline=True)
                     
                 await ctx.send(embed=embed)
     
