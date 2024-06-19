@@ -408,8 +408,18 @@ class PokemonPredictor(commands.Cog):
 
     @commands.command(name='add')
     async def add_pokemon(self, ctx, pokemon_name: str):
+     if isinstance(pokemon_name, int):
+        logger.error(f"Invalid Pokémon name (integer provided): {pokemon_name}")
+        await ctx.send("Invalid Pokémon name. Please provide a valid string.")
+        return
+
+     if pokemon_name.isdigit():
+        logger.error(f"Invalid Pokémon name (numeric string provided): {pokemon_name}")
+        await ctx.send("Invalid Pokémon name. Please provide a valid string.")
+        return
+
      logger.info(f"Attempting to add Pokémon: {pokemon_name}")
-     filename = f"{pokemon_name}.png"
+     filename = f"{pokemon_name.lower()}.png"
      filepath = os.path.join(self.image_folder, filename)
     
      try:
