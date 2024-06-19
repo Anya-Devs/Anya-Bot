@@ -12,6 +12,9 @@ from Data.const import error_custom_embed
 
 
 from skimage.metrics import structural_similarity as ssim
+from sklearn.metrics.pairwise import cosine_similarity
+
+
 
 
 import asyncio
@@ -167,12 +170,18 @@ class PokemonPredictor(commands.Cog):
                         # Calculate similarity score based on matches
                         similarity_score = len(matches) / len(kp1)
 
+                        # Calculate contour-based similarity score
+                        contour_similarity = await self.calculate_similarity(roi, stored_img)
+
+                        # Combine similarity scores (for example, averaging or another method)
+                        combined_similarity = (similarity_score + contour_similarity[0]) / 2
+
                         # Update best match if criteria are met
-                        if similarity_score > highest_score[0]:
-                            highest_score = (similarity_score, len(matches), pokemon_name)
+                        if combined_similarity > highest_score[0]:
+                            highest_score = (combined_similarity, len(matches), pokemon_name)
                             best_match = pokemon_name
 
-                        logger.debug(f"Comparing {pokemon_name} with similarity score: {similarity_score:.2f}")
+                        logger.debug(f"Comparing {pokemon_name} with combined similarity score: {combined_similarity:.2f}")
 
                     except Exception as e:
                         logger.warning(f"Unable to process image: {stored_img_path}. Error: {e}")
@@ -223,39 +232,72 @@ class PokemonPredictor(commands.Cog):
         traceback.print_exc()
         await self.error_custom_embed(self.bot, ctx, error_message, title="Pokemon Prediction Error")
         return None, 0
-
-    async def calculate_similarity(self, img1, img2, size=(256, 256)):
+    
+    async def calculate_similarity(self, img1, img2, size=(256, 256), num_sections=4):
      try:
+        # Function to calculate color histogram similarity
+        def calculate_color_histogram_similarity(hist1, hist2):
+            # Use histogram intersection for comparison
+            similarity = cv2.compareHist(hist1, hist2, cv2.HISTCMP_INTERSECT)
+            return similarity
+
         # Resize images to the specified size
-        img1_resized = img1.resize(size)
-        img2_resized = img2.resize(size)
+        img1_resized = cv2.resize(np.array(img1), size)
+        img2_resized = cv2.resize(np.array(img2), size)
 
-        # Convert images to grayscale
-        img1_gray = img1_resized.convert('L')
-        img2_gray = img2_resized.convert('L')
+        # Convert images to RGB (since we are working with hex color codes)
+        img1_rgb = cv2.cvtColor(img1_resized, cv2.COLOR_BGR2RGB)
+        img2_rgb = cv2.cvtColor(img2_resized, cv2.COLOR_BGR2RGB)
 
-        # Convert images to numpy arrays
-        img1_np = np.array(img1_gray)
-        img2_np = np.array(img2_gray)
+        # Split images into sections
+        height1, width1, _ = img1_rgb.shape
+        height2, width2, _ = img2_rgb.shape
 
-        # Calculate SSIM (Structural Similarity Index) for img1
-        ssim_score_img1 = ssim(img1_np, img2_np)
+        section_height = height1 // num_sections
+        section_width = width1 // num_sections
 
-        # Calculate SSIM (Structural Similarity Index) for img2
-        ssim_score_img2 = ssim(img2_np, img1_np)
+        # Initialize lists to store histogram similarities for each section
+        section_similarities = []
 
-        # Calculate MSE (Mean Squared Error) for img1
-        mse_score_img1 = np.mean((img1_np - img2_np) ** 2)
+        # Iterate through sections
+        for i in range(num_sections):
+            for j in range(num_sections):
+                # Calculate section boundaries
+                start_row1 = i * section_height
+                end_row1 = (i + 1) * section_height
+                start_col1 = j * section_width
+                end_col1 = (j + 1) * section_width
 
-        # Calculate MSE (Mean Squared Error) for img2
-        mse_score_img2 = np.mean((img2_np - img1_np) ** 2)
+                start_row2 = i * (height2 // num_sections)
+                end_row2 = (i + 1) * (height2 // num_sections)
+                start_col2 = j * (width2 // num_sections)
+                end_col2 = (j + 1) * (width2 // num_sections)
 
-        return [ssim_score_img1, ssim_score_img2, mse_score_img1, mse_score_img2]
+                # Extract sections from both images
+                section_img1 = img1_rgb[start_row1:end_row1, start_col1:end_col1, :]
+                section_img2 = img2_rgb[start_row2:end_row2, start_col2:end_col2, :]
+
+                # Calculate color histograms for the sections
+                hist_img1 = cv2.calcHist([section_img1], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+                hist_img2 = cv2.calcHist([section_img2], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+
+                # Normalize histograms
+                cv2.normalize(hist_img1, hist_img1, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+                cv2.normalize(hist_img2, hist_img2, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+
+                # Calculate similarity between color histograms
+                section_similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
+                section_similarities.append(section_similarity)
+
+        # Calculate overall similarity as average of section similarities
+        overall_similarity = np.mean(section_similarities)
+
+        # Return overall similarity as a list (for consistency with previous implementation)
+        return [overall_similarity]
+
      except Exception as e:
         logger.error(f"Error calculating similarity: {e}")
-        return [0, 0, 0, 0]
-
-    
+        return [0]  # Return default similarity in case of errors
     @commands.command(name='predict')
     async def predict(self, ctx, url: str = None):
         # Initial message asking the user to provide an image or URL
