@@ -90,6 +90,8 @@ class PokemonPredictor(commands.Cog):
 
             pokemon_files = [f for f in os.listdir(self.image_folder) if os.path.isfile(os.path.join(self.image_folder, f))]
             logger.debug(f"Number of Pokémon images found: {len(pokemon_files)}")
+            
+            matches_list = []
 
             best_match = None
             highest_score = (float('-inf'), float('-inf'), '')  # Initialize with very low similarity score and empty name
@@ -182,6 +184,9 @@ class PokemonPredictor(commands.Cog):
                             best_match = pokemon_name
 
                         logger.debug(f"Comparing {pokemon_name} with combined similarity score: {combined_similarity:.2f}")
+                        matches_list.append((pokemon_name, combined_similarity))
+
+                        
 
                     except Exception as e:
                         logger.warning(f"Unable to process image: {stored_img_path}. Error: {e}")
@@ -217,6 +222,19 @@ class PokemonPredictor(commands.Cog):
                 await ctx.send(file=discord.File(detected_objects_path))
 
                 # Provide result based on threshold
+                
+                # Assuming ctx is your discord.py context object
+                matches_list_sorted = sorted(matches_list, key=lambda x: x[1], reverse=True)
+                embed = discord.Embed(title="Best Match", description=f"The best match found is {best_match}")
+                embed.add_field(name="Combined Similarity", value=f"{highest_score[0]:.2f}", inline=False)
+                embed.add_field(name="Number of Matches", value=f"{highest_score[1]}", inline=True)
+                # You can iterate over matches_list to add more details to the embed if needed
+                for match in matches_list_sorted:
+                    pokemon_name, similarity_score = match
+                    embed.add_field(name=f"{pokemon_name}", value=f"Similarity: {similarity_score:.2f}", inline=True)
+                    
+                await ctx.send(embed=embed)
+    
                 if highest_score[0] > threshold:
                     logger.info(f"Best match: {best_match} with score {highest_score[0]:.2f}")
                     await ctx.send(f"Best match: {best_match} with score {highest_score[0]:.2f}")
@@ -234,70 +252,74 @@ class PokemonPredictor(commands.Cog):
         return None, 0
     
     async def calculate_similarity(self, img1, img2, size=(256, 256), num_sections=4):
-     try:
-        # Function to calculate color histogram similarity
-        def calculate_color_histogram_similarity(hist1, hist2):
-            # Use histogram intersection for comparison
-            similarity = cv2.compareHist(hist1, hist2, cv2.HISTCMP_INTERSECT)
-            return similarity
-
-        # Resize images to the specified size
-        img1_resized = cv2.resize(np.array(img1), size)
-        img2_resized = cv2.resize(np.array(img2), size)
-
-        # Convert images to RGB (since we are working with hex color codes)
-        img1_rgb = cv2.cvtColor(img1_resized, cv2.COLOR_BGR2RGB)
-        img2_rgb = cv2.cvtColor(img2_resized, cv2.COLOR_BGR2RGB)
-
-        # Split images into sections
-        height1, width1, _ = img1_rgb.shape
-        height2, width2, _ = img2_rgb.shape
-
-        section_height = height1 // num_sections
-        section_width = width1 // num_sections
-
-        # Initialize lists to store histogram similarities for each section
-        section_similarities = []
-
-        # Iterate through sections
-        for i in range(num_sections):
-            for j in range(num_sections):
-                # Calculate section boundaries
-                start_row1 = i * section_height
-                end_row1 = (i + 1) * section_height
-                start_col1 = j * section_width
-                end_col1 = (j + 1) * section_width
-
-                start_row2 = i * (height2 // num_sections)
-                end_row2 = (i + 1) * (height2 // num_sections)
-                start_col2 = j * (width2 // num_sections)
-                end_col2 = (j + 1) * (width2 // num_sections)
-
-                # Extract sections from both images
-                section_img1 = img1_rgb[start_row1:end_row1, start_col1:end_col1, :]
-                section_img2 = img2_rgb[start_row2:end_row2, start_col2:end_col2, :]
-
-                # Calculate color histograms for the sections
-                hist_img1 = cv2.calcHist([section_img1], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
-                hist_img2 = cv2.calcHist([section_img2], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
-
-                # Normalize histograms
-                cv2.normalize(hist_img1, hist_img1, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-                cv2.normalize(hist_img2, hist_img2, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-
-                # Calculate similarity between color histograms
-                section_similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
-                section_similarities.append(section_similarity)
-
-        # Calculate overall similarity as average of section similarities
-        overall_similarity = np.mean(section_similarities)
-
-        # Return overall similarity as a list (for consistency with previous implementation)
-        return [overall_similarity]
-
-     except Exception as e:
-        logger.error(f"Error calculating similarity: {e}")
-        return [0]  # Return default similarity in case of errors
+        try:
+            # Function to calculate color histogram similarity
+            def calculate_color_histogram_similarity(hist1, hist2):
+                # Use histogram intersection for comparison
+                similarity = cv2.compareHist(hist1, hist2, cv2.HISTCMP_INTERSECT)
+                return similarity
+            
+            # Resize images to the specified size
+            img1_resized = cv2.resize(np.array(img1), size)
+            img2_resized = cv2.resize(np.array(img2), size)
+            
+            # Convert images to RGB (assuming they are BGR due to cv2)
+            img1_rgb = cv2.cvtColor(img1_resized, cv2.COLOR_BGR2RGB)
+            img2_rgb = cv2.cvtColor(img2_resized, cv2.COLOR_BGR2RGB)
+            
+            # Split images into sections
+            height1, width1, _ = img1_rgb.shape
+            height2, width2, _ = img2_rgb.shape
+            
+            section_height = height1 // num_sections
+            section_width = width1 // num_sections
+            
+            # Initialize a list to store section similarities
+            section_similarities = []
+            
+            # Iterate through sections
+            for i in range(num_sections):
+                for j in range(num_sections):
+                    # Calculate section boundaries for both images
+                    start_row1 = i * section_height
+                    end_row1 = (i + 1) * section_height
+                    start_col1 = j * section_width
+                    end_col1 = (j + 1) * section_width
+                    
+                    start_row2 = i * (height2 // num_sections)
+                    end_row2 = (i + 1) * (height2 // num_sections)
+                    start_col2 = j * (width2 // num_sections)
+                    end_col2 = (j + 1) * (width2 // num_sections)
+                    
+                    # Extract sections from both images
+                    section_img1 = img1_rgb[start_row1:end_row1, start_col1:end_col1, :]
+                    section_img2 = img2_rgb[start_row2:end_row2, start_col2:end_col2, :]
+                    
+                    # Calculate color histograms for the sections
+                    hist_img1 = cv2.calcHist([section_img1], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+                    hist_img2 = cv2.calcHist([section_img2], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+                    
+                    # Normalize histograms
+                    cv2.normalize(hist_img1, hist_img1, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+                    cv2.normalize(hist_img2, hist_img2, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+                    
+                    # Calculate similarity between color histograms
+                    section_similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
+                    section_similarities.append(section_similarity)
+            
+            # Calculate overall similarity as the average of section similarities
+            overall_similarity = np.mean(section_similarities)
+            
+            # Round overall_similarity to 4 decimal places
+            rounded_similarity = round(overall_similarity, 4)
+            
+            # Return overall similarity as a list (for consistency with previous implementation)
+            return [rounded_similarity]
+        
+        except Exception as e:
+            logger.error(f"Error calculating similarity: {e}")
+            return [0.0]  # Return default similarity in case of errors
+    
     @commands.command(name='predict')
     async def predict(self, ctx, url: str = None):
         # Initial message asking the user to provide an image or URL
