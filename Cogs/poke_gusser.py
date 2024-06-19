@@ -150,7 +150,7 @@ class PokemonPredictor(commands.Cog):
                         continue
 
                     try:
-                        stored_img = cv2.imread(stored_img_path)
+                        stored_img = cv2.imread(stored_img_path, cv2.IMREAD_UNCHANGED)
                         stored_img = self.ensure_correct_color_format(stored_img)
                         stored_img_gray = cv2.cvtColor(stored_img, cv2.COLOR_RGB2GRAY)
 
@@ -181,7 +181,7 @@ class PokemonPredictor(commands.Cog):
                 # Visualize and save comparison images (optional)
                 if best_match:
                     matched_img_path = os.path.join(self.image_folder, best_match + ".png")
-                    matched_img = cv2.imread(matched_img_path)
+                    matched_img = cv2.imread(matched_img_path, cv2.IMREAD_UNCHANGED)
                     matched_img = self.ensure_correct_color_format(matched_img)
                     resized_matched_img = cv2.resize(matched_img, (roi.shape[1], roi.shape[0]))
 
@@ -224,7 +224,6 @@ class PokemonPredictor(commands.Cog):
         await self.error_custom_embed(self.bot, ctx, error_message, title="Pokemon Prediction Error")
         return None, 0
 
-    
     async def calculate_similarity(self, img1, img2, size=(256, 256)):
      try:
         # Resize images to the specified size
