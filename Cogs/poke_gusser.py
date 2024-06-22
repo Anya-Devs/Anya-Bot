@@ -170,7 +170,7 @@ class PokemonPredictor(commands.Cog):
                         matches = sorted(matches, key=lambda x: x.distance)
 
                         # Calculate similarity score based on matches
-                        similarity_score = len(matches) / len(kp1)
+                        similarity_score = len(matches) / len(kp1) if kp1 else 0
 
                         # Calculate contour-based similarity score
                         contour_similarity = await self.calculate_similarity(roi, stored_img)
