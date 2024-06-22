@@ -113,52 +113,51 @@ class Quest_Checker(commands.Cog):
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
-        if user.bot:
+     if user.bot:
+        return
+
+     try:
+        message = reaction.message
+        guild_id = str(message.guild.id)
+        user_id = str(user.id)
+        print(f"Reaction added in guild: {guild_id}, user: {user_id}")
+
+        quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
+
+        logger.debug(f"Found {len(quests)} quests for user: {user_id} in guild: {guild_id}")
+
+        if not quests:
             return
 
-        try:
-            message = reaction.message
-            guild_id = str(message.guild.id)
-            user_id = str(user.id)
-            logger.debug(f"Reaction added in guild: {guild_id}, user: {user_id}")
+        for quest in quests:
+            logger.debug(f"Checking quest: {quest['quest_id']} for user: {user_id} in guild: {guild_id}")
+            if quest['action'] == 'send' and quest['method'] == 'reaction':
+                if quest['channel_id'] == message.channel.id:
+                    logger.debug(f"Quest {quest['quest_id']} is a reaction quest and matches channel: {message.channel.id}")
+                    quest_emoji = quest['content']
 
-            quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
+                    # Convert quest_emoji to string for comparison
+                    if isinstance(quest_emoji, int):
+                        quest_emoji = str(await self.bot.fetch_emoji(quest_emoji))  # Fetch emoji object
 
-            logger.debug(f"Found {len(quests)} quests for user: {user_id} in guild: {guild_id}")
+                    reaction_emoji = str(reaction.emoji)
 
-            if not quests:
-                return
+                    if quest_emoji == reaction_emoji:
+                        logger.debug(f"Reaction matches quest emoji: {reaction_emoji}. Updating quest progress.")
+                        quest['progress'] += 1
+                        await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
 
-            for quest in quests:
-                logger.debug(f"Checking quest: {quest['quest_id']} for user: {user_id} in guild: {guild_id}")
-                if quest['action'] == 'send' and quest['method'] == 'reaction':
-                    if quest['channel_id'] == message.channel.id:
-                        logger.debug(f"Quest {quest['quest_id']} is a reaction quest and matches channel: {message.channel.id}")
-                        quest_emoji = quest['content']
+                        if quest['progress'] >= quest['times']:
+                            logger.debug("Quest progress meets or exceeds required times. Completing quest.")
+                            times = quest['times']
+                            quest_id = quest['quest_id']
+                            reward = quest['reward']
 
-                        if isinstance(quest_emoji, int):
-                            quest_emoji = str(discord.utils.get(self.bot.emojis, id=int(quest_emoji)))
-                        
-                        reaction_emoji = str(reaction.emoji)
+                            await self.complete_quest(guild_id, user_id, quest, times, user, quest_id, message, method='reacted with', reward=reward)
 
-                        if quest_emoji == reaction_emoji:
-                            logger.debug("Reaction matches quest emoji. Updating quest progress.")
-                            quest['progress'] += 1
-                            await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
-
-                            if quest['progress'] >= quest['times']:
-                                logger.debug("Quest progress meets or exceeds required times. Completing quest.")
-                                times = quest['times']
-                                user = user
-                                quest_id = quest['quest_id']
-                                reward = quest['reward']
-
-                                await self.complete_quest(guild_id, user_id, quest, times, user, quest_id, message, method='reacted with', reward=reward)
-                                for _ in range(1):
-                                    await self.quest_data.add_new_quest(guild_id, user)
-        except Exception as e:
-            logger.error("An error occurred in on_reaction_add:")
-            logger.error(e)
+     except Exception as e:
+        logger.error("An error occurred in on_reaction_add:")
+        logger.error(e)
 
     async def complete_quest(self, guild_id, user_id, quest, times, user_mention, quest_id, message, method=None, reward='N/A'):
         try:
