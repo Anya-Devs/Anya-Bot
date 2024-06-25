@@ -72,11 +72,12 @@ class Quest_View(View):
 
             embed = discord.Embed()
             embed.add_field(name=f'Quest {quest_id}', value=objective, inline=True)
+            embed.add_field(name='Progress', value=f'{progress_bar} {progress}/{times} ', inline=True)
+       
             if reward:
                 embed.add_field(name="Reward", value=f"{reward_emoji} `{reward} stp`", inline=True)
             embed.add_field(name=" ", value=" ", inline=False)
 
-            embed.add_field(name='Progress', value=f'{progress}/{times} {progress_bar}', inline=True)
             embed.add_field(name="Location", value=channel.mention, inline=True)
 
 
