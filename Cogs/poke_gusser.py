@@ -10,7 +10,7 @@ from Imports.discord_imports import *
 from Imports.log_imports import logger
 from Data.const import error_custom_embed
 
-
+from collections import Counter
 from skimage.metrics import structural_similarity as ssim
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -257,75 +257,83 @@ class PokemonPredictor(commands.Cog):
         await self.error_custom_embed(self.bot, ctx, error_message, title="Pokemon Prediction Error")
         return None, 0
     
-    async def calculate_similarity(self, img1, img2, size=(256, 256), num_sections=4):
-        try:
-            # Function to calculate color histogram similarity
-            def calculate_color_histogram_similarity(hist1, hist2):
-                # Use histogram intersection for comparison
-                similarity = cv2.compareHist(hist1, hist2, cv2.HISTCMP_INTERSECT)
-                return similarity
-            
-            # Resize images to the specified size
-            img1_resized = cv2.resize(np.array(img1), size)
-            img2_resized = cv2.resize(np.array(img2), size)
-            
-            # Convert images to RGB (assuming they are BGR due to cv2)
-            img1_rgb = cv2.cvtColor(img1_resized, cv2.COLOR_BGR2RGB)
-            img2_rgb = cv2.cvtColor(img2_resized, cv2.COLOR_BGR2RGB)
-            
-            # Split images into sections
-            height1, width1, _ = img1_rgb.shape
-            height2, width2, _ = img2_rgb.shape
-            
-            section_height = height1 // num_sections
-            section_width = width1 // num_sections
-            
-            # Initialize a list to store section similarities
-            section_similarities = []
-            
-            # Iterate through sections
-            for i in range(num_sections):
-                for j in range(num_sections):
-                    # Calculate section boundaries for both images
-                    start_row1 = i * section_height
-                    end_row1 = (i + 1) * section_height
-                    start_col1 = j * section_width
-                    end_col1 = (j + 1) * section_width
-                    
-                    start_row2 = i * (height2 // num_sections)
-                    end_row2 = (i + 1) * (height2 // num_sections)
-                    start_col2 = j * (width2 // num_sections)
-                    end_col2 = (j + 1) * (width2 // num_sections)
-                    
-                    # Extract sections from both images
-                    section_img1 = img1_rgb[start_row1:end_row1, start_col1:end_col1, :]
-                    section_img2 = img2_rgb[start_row2:end_row2, start_col2:end_col2, :]
-                    
-                    # Calculate color histograms for the sections
-                    hist_img1 = cv2.calcHist([section_img1], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
-                    hist_img2 = cv2.calcHist([section_img2], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
-                    
-                    # Normalize histograms
-                    cv2.normalize(hist_img1, hist_img1, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-                    cv2.normalize(hist_img2, hist_img2, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-                    
-                    # Calculate similarity between color histograms
-                    section_similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
-                    section_similarities.append(section_similarity)
-            
-            # Calculate overall similarity as the average of section similarities
-            overall_similarity = np.mean(section_similarities)
-            
-            # Round overall_similarity to 4 decimal places
-            rounded_similarity = round(overall_similarity, 4)
-            
-            # Return overall similarity as a list (for consistency with previous implementation)
-            return [rounded_similarity]
+    async def calculate_similarity(self, img1, img2, size=(256, 256), num_sections=4, num_colors=5):
+     try:
+        # Function to calculate color histogram similarity
+        def calculate_color_histogram_similarity(hist1, hist2):
+            # Use histogram intersection for comparison
+            similarity = cv2.compareHist(hist1, hist2, cv2.HISTCMP_INTERSECT)
+            return similarity
         
-        except Exception as e:
-            logger.error(f"Error calculating similarity: {e}")
-            return [0.0]  # Return default similarity in case of errors
+        # Function to get dominant colors from an image
+        def get_dominant_colors(image, num_colors=5):
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB
+            
+            # Reshape the image to be a list of pixels
+            pixels = image.reshape(-1, 3)
+            
+            # Convert to float32 to avoid overflow issues during calculation
+            pixels = np.float32(pixels)
+            
+            # Define criteria for k-means clustering
+            criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 200, 0.1)
+            
+            # Perform k-means clustering
+            _, labels, centers = cv2.kmeans(pixels, num_colors, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+            
+            # Convert centers from float32 back to uint8
+            centers = np.uint8(centers)
+            
+            # Flatten the labels array
+            labels = labels.flatten()
+            
+            # Count frequencies of labels to find dominant colors
+            label_counts = Counter(labels)
+            
+            # Find the most common labels
+            dominant_color_indices = sorted(label_counts, key=label_counts.get, reverse=True)[:num_colors]
+            
+            # Extract dominant colors
+            dominant_colors = [centers[idx].tolist() for idx in dominant_color_indices]
+            
+            return dominant_colors
+        
+        # Resize images to the specified size
+        img1_resized = cv2.resize(np.array(img1), size)
+        img2_resized = cv2.resize(np.array(img2), size)
+        
+        # Get dominant colors for both images
+        dominant_colors_img1 = get_dominant_colors(img1_resized, num_colors=num_colors)
+        dominant_colors_img2 = get_dominant_colors(img2_resized, num_colors=num_colors)
+        
+        # Convert dominant colors to numpy arrays
+        dominant_colors_img1 = np.array(dominant_colors_img1)
+        dominant_colors_img2 = np.array(dominant_colors_img2)
+        
+        # Log or print dominant colors found in each image
+        print("Dominant colors in Image 1:")
+        for color in dominant_colors_img1:
+            print(color)
+        
+        print("\nDominant colors in Image 2:")
+        for color in dominant_colors_img2:
+            print(color)
+        
+        # Calculate Euclidean distance between dominant colors
+        color_similarity = np.linalg.norm(dominant_colors_img1 - dominant_colors_img2, axis=1)
+        
+        # Calculate overall similarity based on color similarity
+        overall_similarity = 1 - np.mean(color_similarity)
+        
+        # Round overall_similarity to 4 decimal places
+        rounded_similarity = round(overall_similarity, 4)
+        
+        # Return overall similarity as a list (for consistency with previous implementation)
+        return [rounded_similarity]
     
+     except Exception as e:
+        logger.error(f"Error calculating similarity: {e}")
+        return [0.0]  # Return default similarity in case of errors
     @commands.command(name='predict')
     async def predict(self, ctx, url: str = None):
         # Initial message asking the user to provide an image or URL
