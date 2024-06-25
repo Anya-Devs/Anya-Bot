@@ -25,6 +25,7 @@ class AnyaImages:
     agree_to_terms_anya = 'https://i.pinimg.com/474x/09/47/bc/0947bc96fe6f6af4a9779d994c0a2df0.jpg'
     no_quest_anya = 'https://i.pinimg.com/236x/24/55/33/24553356591ac5daebf976a6d641b1cc.jpg' # 'https://i.pinimg.com/236x/38/b5/89/38b5893e071f60a9dbcc3074cbf70016.jpg' 
     show_quest_anya = 'https://i.pinimg.com/236x/23/2f/62/232f626bc0ec7a845198149fdc38e311.jpg'
+    comfirmation_image_url = 'https://media.tenor.com/mWAIV_rO9FUAAAAe/happy-anime-girl-happy-anime.png'
 
 # Embed Avatar
 class EmbedFactory:
@@ -217,15 +218,16 @@ class QuestEmbed:
         return embed
     
     @staticmethod
-    async def get_agree_confirmation_embed():
+    async def get_agree_confirmation_embed(bot,user):
+        check_emoji_id = 1243403342722371645
+        check_emoji = discord.utils.get(bot.emojis, id=check_emoji_id)
+
         confirmation_embed = discord.Embed(
-            title="Confirmation Complete",
+            title=f"{check_emoji} Confirmation Complete",
             description=f"Do `...quest` to check server quest.",
-            color=discord.Color.green()
+            color=discord.Color.pink()
         )
-        file_path = "Data/Images/anya_quest.jpg"
-        file = discord.File(file_path, filename="anya_quest.jpg")
-        confirmation_embed.set_image(url="attachment://anya_quest.jpg")
+        
         return confirmation_embed
     
     @staticmethod
@@ -266,7 +268,7 @@ class QuestEmbed:
             
 class Quest_Completed_Embed:
     @staticmethod
-    async def create_embed(bot, quest_content, channel_mention, times, user, quest_id, method=None):
+    async def create_embed(bot, quest_content, channel_mention, times, user, quest_id, method=None, reward='N/A'):
         # Define emoji ids
         yay_emoji_id = 1243390639908065323
         cheer_emoji_id = 1244432132265345064
@@ -275,6 +277,7 @@ class Quest_Completed_Embed:
         check_emoji_id = 1243403342722371645
         reward_emoji_id = 1247800150479339581
         info_emoji_id = 1248834245401514095
+        details_emoji_id = 1249206024569622639
 
         # Get emojis
         yay_emoji = discord.utils.get(bot.emojis, id=yay_emoji_id)
@@ -284,29 +287,25 @@ class Quest_Completed_Embed:
         check_emoji = discord.utils.get(bot.emojis, id=check_emoji_id)
         reward_emoji = discord.utils.get(bot.emojis, id=reward_emoji_id)
         info_emoji = discord.utils.get(bot.emojis, id=info_emoji_id)
-
-
-
+        details_emoji = discord.utils.get(bot.emojis, id=details_emoji_id)
 
         # Create embed
         embed = discord.Embed(
-            title=f"{check_emoji} Mission Completed",
             timestamp=datetime.now(),
-            color= discord.Color.pink()
+            color=discord.Color.random()
         )
-        embed.add_field(name=f' ',value=f'> {user.mention} {method} {quest_content.replace("`", "")}\n- *Times {method}:* `{times}x`', inline=True)
-
-        embed.add_field(name=f'{reward_emoji} Reward',value=f'```js\nN/A```', inline=True)
+        
+        embed.add_field(name=f'{check_emoji} Completed', value=f'{user.mention} {method} {quest_content.replace("`", "")} - {times}x',inline=True)
+        embed.add_field(
+            name=f'{reward_emoji} Reward',
+            value=f'`{reward} stp`',
+            inline=True
+        )
+        
         # Set thumbnail image
         embed.set_thumbnail(url=user.avatar) #AnyaImages.quest_completed_anya)
-        # Set footer text
 
-
-
-
-
-
-        return embed   
+        return embed
 
     
     
