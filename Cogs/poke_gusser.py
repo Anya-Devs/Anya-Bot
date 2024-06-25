@@ -310,14 +310,6 @@ class PokemonPredictor(commands.Cog):
         dominant_colors_img1 = np.array(dominant_colors_img1)
         dominant_colors_img2 = np.array(dominant_colors_img2)
         
-        # Log or print dominant colors found in each image
-        print("Dominant colors in Image 1:")
-        for color in dominant_colors_img1:
-            print(color)
-        
-        print("\nDominant colors in Image 2:")
-        for color in dominant_colors_img2:
-            print(color)
         
         # Calculate Euclidean distance between dominant colors
         color_similarity = np.linalg.norm(dominant_colors_img1 - dominant_colors_img2, axis=1)
