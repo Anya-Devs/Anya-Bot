@@ -10,10 +10,8 @@ from Imports.discord_imports import *
 from Imports.log_imports import logger
 from Data.const import error_custom_embed
 
-
+from urllib.request import urlopen, urlretrieve
 from skimage.metrics import structural_similarity as ssim
-from sklearn.metrics.pairwise import cosine_similarity
-
 
 
 
@@ -81,6 +79,12 @@ class PokemonPredictor(commands.Cog):
         return cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
      return img
     
+    def download_file(self, url, filename):
+        response = urlopen(url)
+        with open(filename, 'wb') as f:
+            f.write(response.read())
+
+    
     async def predict_pokemon(self, ctx, img, threshold=0.8):
      try:
         logger.debug("Predicting Pokémon from provided image...")
@@ -105,10 +109,18 @@ class PokemonPredictor(commands.Cog):
 
             # Convert image to grayscale for contour detection
             gray_img = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
-            _, binary_img = cv2.threshold(gray_img, 127, 255, cv2.THRESH_BINARY)
+
+            # Apply GaussianBlur to reduce noise and improve contour detection
+            blurred_img = cv2.GaussianBlur(gray_img, (5, 5), 0)
+
+            # Apply Canny edge detector
+            edged_img = cv2.Canny(blurred_img, 50, 150)
+
+            # Dilate the edges to close gaps
+            dilated_img = cv2.dilate(edged_img, None, iterations=2)
 
             # Find contours
-            contours, _ = cv2.findContours(binary_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            contours, _ = cv2.findContours(dilated_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
             # Initialize variables to store the largest contour's index and area
             largest_contour_idx = -1
@@ -162,7 +174,7 @@ class PokemonPredictor(commands.Cog):
                         # Compute keypoints and descriptors for the stored image
                         kp2, des2 = orb.detectAndCompute(stored_img_gray, None)
 
-                        # Match descriptors using FLANN (Fast Approximate Nearest Neighbor) matcher
+                        # Match descriptors using BFMatcher (Brute Force Matcher)
                         bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
                         matches = bf.match(des1, des2)
 
@@ -176,10 +188,7 @@ class PokemonPredictor(commands.Cog):
                         contour_similarity = await self.calculate_similarity(roi, stored_img)
 
                         # Combine similarity scores (for example, averaging or another method)
-                        if similarity_score + contour_similarity[0] != 0:
-                         combined_similarity = (similarity_score + contour_similarity[0]) / 2
-                        else:
-                            combined_similarity = 0 
+                        combined_similarity = (similarity_score + contour_similarity[0]) / 2
 
                         # Update best match if criteria are met
                         if combined_similarity > highest_score[0]:
@@ -188,8 +197,6 @@ class PokemonPredictor(commands.Cog):
 
                         logger.debug(f"Comparing {pokemon_name} with combined similarity score: {combined_similarity:.2f}")
                         matches_list.append((pokemon_name, combined_similarity))
-
-                        
 
                     except Exception as e:
                         logger.warning(f"Unable to process image: {stored_img_path}. Error: {e}")
@@ -225,22 +232,19 @@ class PokemonPredictor(commands.Cog):
                 await ctx.send(file=discord.File(detected_objects_path))
 
                 # Provide result based on threshold
-                
-                # Assuming ctx is your discord.py context object
                 matches_list_sorted = sorted(matches_list, key=lambda x: x[1], reverse=True)
                 embed = discord.Embed(title="Best Match", description=f"The best match found is {best_match}")
                 embed.add_field(name="Combined Similarity", value=f"{highest_score[0]:.2f}", inline=False)
-                # embed.add_field(name="Number of Matches", value=f"{highest_score[1]}", inline=True)
-                # You can iterate over matches_list to add more details to the embed if needed
+
                 for index, match in enumerate(matches_list_sorted):
-                     if index >= 6:
+                    if index >= 6:
                         break
-                    
-                     pokemon_name, similarity_score = match
-                     embed.add_field(name=f"{pokemon_name}", value=f"Similarity: {similarity_score:.2f}", inline=True)
-                    
+
+                    pokemon_name, similarity_score = match
+                    embed.add_field(name=f"{pokemon_name}", value=f"Similarity: {similarity_score:.2f}", inline=True)
+
                 await ctx.send(embed=embed)
-    
+
                 if highest_score[0] > threshold:
                     logger.info(f"Best match: {best_match} with score {highest_score[0]:.2f}")
                     await ctx.send(f"Best match: {best_match} with score {highest_score[0]:.2f}")
@@ -256,7 +260,9 @@ class PokemonPredictor(commands.Cog):
         traceback.print_exc()
         await self.error_custom_embed(self.bot, ctx, error_message, title="Pokemon Prediction Error")
         return None, 0
-    
+
+        
+        
     async def calculate_similarity(self, img1, img2, size=(256, 256), num_sections=4):
         try:
             # Function to calculate color histogram similarity
@@ -325,6 +331,7 @@ class PokemonPredictor(commands.Cog):
         except Exception as e:
             logger.error(f"Error calculating similarity: {e}")
             return [0.0]  # Return default similarity in case of errors
+    
     
     @commands.command(name='predict')
     async def predict(self, ctx, url: str = None):
@@ -408,18 +415,8 @@ class PokemonPredictor(commands.Cog):
 
     @commands.command(name='add')
     async def add_pokemon(self, ctx, pokemon_name: str):
-     if isinstance(pokemon_name, int):
-        logger.error(f"Invalid Pokémon name (integer provided): {pokemon_name}")
-        await ctx.send("Invalid Pokémon name. Please provide a valid string.")
-        return
-
-     if pokemon_name.isdigit():
-        logger.error(f"Invalid Pokémon name (numeric string provided): {pokemon_name}")
-        await ctx.send("Invalid Pokémon name. Please provide a valid string.")
-        return
-
      logger.info(f"Attempting to add Pokémon: {pokemon_name}")
-     filename = f"{pokemon_name.lower()}.png"
+     filename = f"{pokemon_name}.png"
      filepath = os.path.join(self.image_folder, filename)
     
      try:
