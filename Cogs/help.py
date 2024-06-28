@@ -45,20 +45,20 @@ class Select(discord.ui.Select):
 
             cog = self.bot.get_cog(cog_name)
             if cog:
-                # Get visible commands in the cog
-                cog_commands = [f'`{cmd.name}`' for cmd in cog.get_commands() if not cmd.hidden]
-                # If there are visible commands, add a field to the embed
-                if cog_commands:
-                    cog_commands_str = '\n'.join(cog_commands)
-                    self.cog_embed.add_field(
-                        name=' ',
-                        value=f"{cog_commands_str}",
-                        inline=False
-                    )
-                else:
-                    logger.info(f"No visible commands found for cog: {cog_name}")
+                 # Get visible commands in the cog
+                 cog_commands = [cmd for cmd in cog.get_commands() if not cmd.hidden]
+                 # If there are visible commands, add a field to the embed for each command
+                 if cog_commands:
+                     for cmd in cog_commands:
+                         self.cog_embed.add_field(
+                             name='',
+                             value=f"`{cmd.name}`",
+                             inline=True
+                         )
+                 else:
+                     logger.info(f"No visible commands found for cog: {cog_name}")
             else:
-                logger.info(f"Cog not found: {cog_name}")
+                 logger.info(f"Cog not found: {cog_name}")
 
             await interaction.response.edit_message(embed=self.cog_embed)
             logger.info("Message edited successfully.")
@@ -88,7 +88,7 @@ class HelpMenu(discord.ui.View):
             help_embed.add_field(
                 name=f'{command.qualified_name}',
                 value=f"> **{command.help}**",
-                inline=False
+                inline=True
             )
         # Fetch cogs and their subcommands dynamically
         for cog_name, cog_object in self.bot.cogs.items():
@@ -119,7 +119,7 @@ class View_All(discord.ui.View):
             help_embed.add_field(
                 name=f'{command.qualified_name}',
                 value=f"> **{command.help}**",
-                inline=False
+                inline=True
             )
         # Fetch cogs and their subcommands dynamically
         for cog_name, cog_object in self.bot.cogs.items():
@@ -145,7 +145,7 @@ class View_All(discord.ui.View):
             cog_commands = [f"`{cmd.name}`" for cmd in cog.get_commands() if not cmd.hidden]
             if cog_commands:
                 cog_commands_str = ' '.join(cog_commands)
-                embed.add_field(name=f"{cog_name.replace('_', ' ')}", value=f"{cog_commands_str}", inline=False)
+                embed.add_field(name=f"{cog_name.replace('_', ' ')}", value=f"{cog_commands_str}", inline=True)
         embed.set_thumbnail(url=self.bot.user.avatar.url)
         await interaction.response.edit_message(embed=embed, view=HelpMenu(self.bot, self.primary_color, select_view=self))
 
@@ -191,8 +191,8 @@ class Help(commands.Cog):
                     title=command.qualified_name,
                     color=primary_color_value
                 )
-                help_embed.add_field(name=" ", value=f"> **{command.help}**", inline=False)
-                help_embed.add_field(name="Usage", value=f"```{usage}```", inline=False)
+                help_embed.add_field(name=" ", value=f"> **{command.help}**", inline=True)
+                help_embed.add_field(name="Usage", value=f"```{usage}```", inline=True)
                 await ctx.send(embed=help_embed)
             else:
                 await ctx.send("Invalid command name. Please provide a valid command.")
