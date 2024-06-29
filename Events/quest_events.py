@@ -17,7 +17,8 @@ class Quest_Checker(commands.Cog):
     async def on_message(self, message):
         if message.author.bot:
             return
-        
+        if message.author.id == 1253741261626802269:
+            return
         try:
             guild_id = str(message.guild.id)
             user_id = str(message.author.id)
