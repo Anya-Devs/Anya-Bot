@@ -86,7 +86,123 @@ class Ai(commands.Cog):
         with open(filename, 'wb') as f:
             f.write(response.read())
 
-    
+    async def predict_pokemon_command(self, ctx, url: str):
+        embed = discord.Embed(
+            title="Predict Pokémon",
+            description="Please send an image of the Pokémon to predict or provide a URL to the image.\n\nType `c` to cancel.",
+            color=discord.Color.blue()
+        )
+        progress_message = await ctx.send(embed=embed)
+
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel
+
+        try:
+            if url:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url) as response:
+                        if response.status == 200:
+                            img_bytes = await response.read()
+                            img = Image.open(io.BytesIO(img_bytes))
+                            img = img.resize((224, 224))
+                            img = np.array(img.convert('RGB'))
+                            logger.debug("Image received and processed from URL.")
+                        else:
+                            await ctx.send("Failed to download image from the provided URL.")
+                            logger.debug("Failed to download image from URL.")
+                            return
+            else:
+                user_response = await self.bot.wait_for('message', timeout=120, check=check)
+
+                if user_response.content.lower() == 'c':
+                    await ctx.send("Operation cancelled.")
+                    logger.debug("User cancelled the operation.")
+                    return
+
+                if user_response.attachments:
+                    attachment = user_response.attachments[0]
+                    if attachment.filename.endswith(('png', 'jpg', 'jpeg')):
+                        img_bytes = await attachment.read()
+                        img = Image.open(io.BytesIO(img_bytes))
+                        img = img.resize((224, 224))
+                        img = np.array(img.convert('RGB'))
+                        logger.debug("Image received and processed from attachment.")
+                    else:
+                        await ctx.send("Please attach a valid image file.")
+                        logger.debug("Invalid image file attached.")
+                        return
+                else:
+                    await ctx.send("Please attach an image.")
+                    logger.debug("No valid image provided.")
+                    return
+
+            predicted_pokemon, confidence_score = await self.predict_pokemon(ctx, img)
+
+            if predicted_pokemon:
+                success_embed = discord.Embed(
+                    title="Prediction Result",
+                    description=f"The predicted Pokémon is: **{predicted_pokemon}** with a confidence score of **{confidence_score:.2%}**.",
+                    color=discord.Color.green()
+                )
+                await ctx.send(embed=success_embed)
+                logger.info(f"Prediction result sent: {predicted_pokemon} with score {confidence_score:.2%}")
+            else:
+                failure_embed = discord.Embed(
+                    title="Prediction Failed",
+                    description="Failed to predict the Pokémon. Please try again with a different image.",
+                    color=discord.Color.red()
+                )
+                await ctx.send(embed=failure_embed)
+                logger.error("Prediction failed.")
+
+        except asyncio.TimeoutError:
+            await ctx.send("Time's up. Operation cancelled.")
+            logger.info("Timeout occurred. Operation cancelled.")
+
+        except Exception as e:
+            traceback_string = traceback.format_exc()
+            logger.error(f"An error occurred during prediction: {e}\n{traceback_string}")
+            await ctx.send("An error occurred during prediction. Please try again later.")
+
+    async def add_pokemon_command(self, ctx, pokemon_name: str):
+        logger.info(f"Attempting to add Pokémon: {pokemon_name}")
+        filename = f"{pokemon_name}.png"
+        filepath = os.path.join(self.image_folder, filename)
+
+        try:
+            if os.path.exists(filepath):
+                await ctx.send(f"The Pokémon {pokemon_name} already exists in the database.")
+                logger.debug(f"The Pokémon {pokemon_name} already exists in the database.")
+                return
+
+            official_artwork_url = await self.fetch_pokemon_info(pokemon_name)
+            logger.debug(f"Official artwork URL for {pokemon_name}: {official_artwork_url}")
+
+            if official_artwork_url:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(official_artwork_url) as response:
+                        if response.status == 200:
+                            image_data = await response.read()
+                            with open(filepath, 'wb') as f:
+                                f.write(image_data)
+                            await ctx.send(f"Added the Pokémon {pokemon_name} to the database.")
+                            logger.info(f"Added the Pokémon {pokemon_name} to the database.")
+                        else:
+                            await ctx.send("Failed to download the image.")
+                            logger.error("Failed to download the image.")
+            else:
+                await ctx.send(f"Failed to fetch information for the Pokémon {pokemon_name}.")
+                logger.error(f"Failed to fetch information for the Pokémon {pokemon_name}.")
+
+        except Exception as e:
+            await ctx.send("An error occurred while adding the Pokémon. Please try again later.")
+            logger.error(f"An error occurred while adding the Pokémon {pokemon_name}: {e}")
+
+    async def download_all_images_command(self, ctx):
+        await ctx.send("Starting download of all Pokémon images. This may take a while.")
+        await self.download_all_images()
+        await ctx.send("Completed download of all Pokémon images.")
+
     async def predict_pokemon(self, ctx, img, threshold=0.8):
      try:
         logger.debug("Predicting Pokémon from provided image...")
@@ -335,132 +451,25 @@ class Ai(commands.Cog):
             return [0.0]  # Return default similarity in case of errors
     
     
-    @commands.command(name='guess')
-    async def predict(self, ctx, url: str = None):
-        # Initial message asking the user to provide an image or URL
-        embed = discord.Embed(
-            title="Predict Pokémon",
-            description="Please send an image of the Pokémon to predict or provide a URL to the image.\n\nType `c` to cancel.",
-            color=discord.Color.blue()
-        )
-        progress_message = await ctx.send(embed=embed)
-
-        def check(m):
-            return m.author == ctx.author and m.channel == ctx.channel
-
-        try:
-            if url:
-                # If URL is provided, download the image
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url) as response:
-                        if response.status == 200:
-                            img_bytes = await response.read()
-                            img = Image.open(io.BytesIO(img_bytes))
-                            img = img.resize((224, 224))
-                            img = np.array(img.convert('RGB'))  # Convert to RGB
-                            logger.debug("Image received and processed from URL.")
-                        else:
-                            await ctx.send("Failed to download image from the provided URL.")
-                            logger.debug("Failed to download image from URL.")
-                            return
-            else:
-                # Wait for user to send an image
-                user_response = await self.bot.wait_for('message', timeout=120, check=check)
-
-                if user_response.content.lower() == 'c':
-                    await ctx.send("Operation cancelled.")
-                    logger.debug("User cancelled the operation.")
-                    return
-
-                if user_response.attachments:
-                    attachment = user_response.attachments[0]
-                    if attachment.filename.endswith(('png', 'jpg', 'jpeg')):
-                        img_bytes = await attachment.read()
-                        img = Image.open(io.BytesIO(img_bytes))
-                        img = img.resize((224, 224))
-                        img = np.array(img.convert('RGB'))  # Convert to RGB
-                        logger.debug("Image received and processed from attachment.")
-                    else:
-                        await ctx.send("Please attach a valid image file.")
-                        logger.debug("Invalid image file attached.")
-                        return
-                else:
-                    await ctx.send("Please attach an image.")
-                    logger.debug("No valid image provided.")
-                    return
-
-            # Perform prediction
-            predicted_pokemon, confidence_score = await self.predict_pokemon(ctx, img)
-
-            # If prediction is successful, send success message with prediction result
-            if predicted_pokemon:
-                success_embed = discord.Embed(
-                    title="Prediction Result",
-                    description=f"The predicted Pokémon is: **{predicted_pokemon}** with a confidence score of **{confidence_score:.2%}**.",
-                    color=discord.Color.green()
-                )
-                await ctx.send(embed=success_embed)
-                logger.info(f"Prediction result sent: {predicted_pokemon} with score {confidence_score:.2%}")
-            else:
-                # If prediction fails, send failure message
-                failure_embed = discord.Embed(
-                    title="Prediction Failed",
-                    description="Failed to predict the Pokémon. Please try again with a different image.",
-                    color=discord.Color.red()
-                )
-                await ctx.send(embed=failure_embed)
-                logger.error("Prediction failed.")
-
-        except asyncio.TimeoutError:
-            await ctx.send("Time's up. Operation cancelled.")
-            logger.info("Timeout occurred. Operation cancelled.")
-
-    @commands.command(name='add')
-    async def add_pokemon(self, ctx, pokemon_name: str):
-     logger.info(f"Attempting to add Pokémon: {pokemon_name}")
-     filename = f"{pokemon_name}.png"
-     filepath = os.path.join(self.image_folder, filename)
-    
-     try:
-        # Create the directory if it doesn't exist
-        if not os.path.exists(self.image_folder):
-            os.makedirs(self.image_folder)
-
-        if os.path.exists(filepath):
-            await ctx.send(f"The Pokémon {pokemon_name} already exists in the database.")
-            logger.debug(f"The Pokémon {pokemon_name} already exists in the database.")
-            return
-
-        official_artwork_url = await self.fetch_pokemon_info(pokemon_name)
-        logger.debug(f"Official artwork URL for {pokemon_name}: {official_artwork_url}")
-        
-        if official_artwork_url:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(official_artwork_url) as response:
-                    if response.status == 200:
-                        image_data = await response.read()
-                        with open(filepath, 'wb') as f:
-                            f.write(image_data)
-                        await ctx.send(f"Added the Pokémon {pokemon_name} to the database.")
-                        logger.info(f"Added the Pokémon {pokemon_name} to the database.")
-                    else:
-                        await ctx.send("Failed to download the image.")
-                        logger.error("Failed to download the image.")
+      @commands.command(name='pokemon', description="Predict Pokémon from image, add new Pokémon, or download all images")
+      async def pokemon_command(self, ctx, action: str = None, *, arg: str = None):
+        if action == 'predict':
+            await self.predict_pokemon_command(ctx, arg)
+        elif action == 'add':
+            await self.add_pokemon_command(ctx, arg)
+        elif action == 'all':
+            await self.download_all_images_command(ctx)
         else:
-            await ctx.send(f"Failed to fetch information for the Pokémon {pokemon_name}.")
-            logger.error(f"Failed to fetch information for the Pokémon {pokemon_name}.")
-            
-     except Exception as e:
-        await ctx.send("An error occurred while adding the Pokémon. Please try again later.")
-        logger.error(f"An error occurred while adding the Pokémon {pokemon_name}: {e}")
+            embed = discord.Embed(
+                title="Pokémon Commands",
+                description="Available actions:\n"
+                            "`predict <url>`: Predict Pokémon from an image URL.\n"
+                            "`add <pokemon_name>`: Add a Pokémon to the database.\n"
+                            "`all`: Download all Pokémon images.",
+                color=discord.Color.blue()
+            )
+            await ctx.send(embed=embed)
 
-    
-    @commands.command(name='all')
-    async def download_images(self, ctx):
-        await ctx.send("Starting download of all Pokémon images. This may take a while.")
-        await self.download_all_images()
-        await ctx.send("Completed download of all Pokémon images.")
-        
     @commands.command(name='imagine', description="Generate an image", aliases=['i'])
     async def imagine(self, ctx: commands.Context, *, prompt: str):
         try:
