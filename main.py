@@ -1,17 +1,21 @@
 import asyncio
 import os
 import traceback
-import ssl
-from colorama import Fore, Style
 
-import pymongo # import database api
+import Imports.depend_imports as depend_imports
+from Imports.log_imports import logger
+from Imports.depend_imports import *
+from Imports.discord_imports import *
+from colorama import Fore, Style  # Import Fore and Style explicitly
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+import pymongo  # Import database API
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import ConfigurationError
 
-from Imports.log_imports import logger
-import Imports.depend_imports as depend_imports
-from Imports.depend_imports import *
-from Imports.discord_imports import *
 
 class BotSetup(commands.Bot):
     def __init__(self):
@@ -38,33 +42,36 @@ class BotSetup(commands.Bot):
 
     async def setup(self):
         print("\n")
-        print(Fore.BLUE + " /" + Style.RESET_ALL)
-        print(Fore.BLUE + "├── Cogs/" + Style.RESET_ALL)
+        print(Fore.BLUE + "── Cogs/" + Style.RESET_ALL)
         await self.import_cogs("Cogs")
-        print(Fore.BLUE + "│" + Style.RESET_ALL)
-        print(Fore.BLUE + "└── Events/" + Style.RESET_ALL)
+        print("\n")
+        print(Fore.BLUE + "── Events/" + Style.RESET_ALL)
         await self.import_cogs("Events")
 
         print("\n")
         print(Fore.BLUE + "===== Setup Completed =====" + Style.RESET_ALL)
 
-      
     async def import_cogs(self, dir_name):
         files_dir = os.listdir(dir_name)
-        for i, filename in enumerate(files_dir):
+        for filename in files_dir:
             if filename.endswith(".py"):
-                if i < len(files_dir) - 1:
-                    print(Fore.BLUE + f"│    ├── {filename}" + Style.RESET_ALL)
-                else:
-                    print(Fore.BLUE + f"│    └── {filename}" + Style.RESET_ALL)
+                print(Fore.BLUE + f"│   ├── {filename}" + Style.RESET_ALL)
 
-                module = __import__(f"{dir_name}.{filename[:-3]}", fromlist=[""])
+                module = __import__(f"{dir_name}.{os.path.splitext(filename)[0]}", fromlist=[""])
                 for obj_name in dir(module):
                     obj = getattr(module, obj_name)
                     if isinstance(obj, commands.CogMeta):
-                        if not self.get_cog(obj_name):  # Check if cog already added
-                            await self.add_cog(obj(self))
-                            print(Fore.GREEN + f"│    └── {obj_name}" + Style.RESET_ALL)
+                        if obj_name == "PokemonPredictor":
+                            # Remove the cog if detected
+                            existing_cog = self.get_cog("PokemonPredictor")
+                            if existing_cog:
+                                await self.remove_cog("PokemonPredictor")
+                                print(Fore.RED + f"│   │   Removed {obj_name} cog" + Style.RESET_ALL)
+                        else:
+                            # Add other cogs
+                            if not self.get_cog(obj_name):  # Check if cog already added
+                                await self.add_cog(obj(self))
+                                print(Fore.GREEN + f"│   │   └── {obj_name}" + Style.RESET_ALL)
 
 async def main():
     bot = BotSetup()
