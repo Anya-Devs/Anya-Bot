@@ -15,7 +15,7 @@ class AnyaImages:
     awake_anya = 'https://media.tenor.com/9kLYJilshNMAAAAe/spy-x-family-anya.png'
     question_anya = 'https://i.pinimg.com/236x/b7/23/1f/b7231fbf87eee22b6d1f35f83e9a80bd.jpg'
     select_quest = 'https://i.pinimg.com/474x/d9/af/95/d9af956f06d0de95689e2094f753aa2f.jpg' 
-    select_ai = 'blob:https://www.zmo.ai/ccd11364-b124-4205-8703-9082d1892892'
+    select_ai = None
     ping_banner_anya = 'https://i.pinimg.com/564x/db/98/ff/db98ffc40d53378a9999528b69d66d00.jpg'
     ping_image = 'https://i.pinimg.com/564x/25/da/ee/25daee24ea5fb98b5590d542d2879708.jpg'
     sleepy_anya = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR9y_MT3QHxXZVVzVlA94oFM8uIN0QH1fdw8Q6inySFmQ&s'
@@ -102,6 +102,7 @@ class Help_Select_Embed_Mapping:
     emojis = {
         "system": "<:system_icon:1238536111266201610>",
         "quest": "<:star:1247800150479339581>",
+        "ai": '✨',
         # Add more emoji mappings for other cogs as needed
     }
 
@@ -424,8 +425,24 @@ class Emojis:
         # Return the emoji format
         return f"<:_:{new_emoji.id}>"
 
+
     
 # Functions
+async def sdxl(prompt):
+    openai_client = AsyncOpenAI(
+        api_key='ng-YgkaT8abn2sWaqZRUmVPzs07BdtrE',  # API key remains the same as provided
+        base_url="https://api.naga.ac/v1"
+    )
+
+    response = await openai_client.images.generate(
+        model="playground-v2.5",  # Using a valid model for image generation
+        prompt=prompt,
+        n=1,  # images count
+        size="1024x1024"  # Standard size for image generation
+    )
+    return response.data[0].url
+
+
 def primary_color(image_path='Data/Images/bot_icon.png'):
     image = Image.open(image_path)
     # Resize the image to 1x1 pixel to get the dominant color
