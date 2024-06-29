@@ -34,42 +34,54 @@ class Select(discord.ui.Select):
                 return
 
             cog_info = self.cog_commands.get(cog_name)
-            me = interaction.guild.get_member(self.bot.user.id)
             color = self.primary_color
             self.cog_embed = discord.Embed(
                 title=cog_name.replace('_', ' '),
                 description=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["description"] or '',
                 color=color
             )
-            self.cog_embed.set_thumbnail(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["thumbnail_url"])
+
+            file = None
+            if 'ai' in Help_Select_Embed_Mapping.embeds and cog_name.lower() == 'ai':
+                file_path = 'Data/Images/Help_Thumbnails/ai.png'
+                if os.path.exists(file_path):
+                    file = discord.File(file_path, filename='thumbnail.png')
+                    self.cog_embed.set_thumbnail(url='attachment://thumbnail.png')
+                else:
+                    logger.error(f"Thumbnail file '{file_path}' not found.")
+            else:
+                self.cog_embed.set_thumbnail(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["thumbnail_url"])
 
             cog = self.bot.get_cog(cog_name)
             if cog:
-                 # Get visible commands in the cog
-                 cog_commands = [cmd for cmd in cog.get_commands() if not cmd.hidden]
-                 # If there are visible commands, add a field to the embed for each command
-                 if cog_commands:
-                     for cmd in cog_commands:
-                         self.cog_embed.add_field(
-                             name='',
-                             value=f"`{cmd.name}`",
-                             inline=True
-                         )
-                 else:
-                     logger.info(f"No visible commands found for cog: {cog_name}")
+                cog_commands = [cmd for cmd in cog.get_commands() if not cmd.hidden]
+                if cog_commands:
+                    for cmd in cog_commands:
+                        self.cog_embed.add_field(
+                            name='',
+                            value=f"`{cmd.name}`",
+                            inline=True
+                        )
+                else:
+                    logger.info(f"No visible commands found for cog: {cog_name}")
             else:
-                 logger.info(f"Cog not found: {cog_name}")
+                logger.info(f"Cog not found: {cog_name}")
 
-            await interaction.response.edit_message(embed=self.cog_embed)
+            # Respond to the interaction with the embed and the file
+            if file:
+                await interaction.response.edit_message(embed=self.cog_embed, attachments=[file])
+            else:
+                await interaction.response.edit_message(embed=self.cog_embed)
+
             logger.info("Message edited successfully.")
-
         except Exception as e:
             traceback_str = traceback.format_exc()
             print(traceback_str)
             logger.debug(f"An error occurred: {traceback_str}")
-            pass
-
-
+            pass       
+        
+        
+        
 class HelpMenu(discord.ui.View):
     def __init__(self, bot, primary_color, select_view, *, timeout=180):
         super().__init__(timeout=timeout)
@@ -208,6 +220,8 @@ class Help(commands.Cog):
                 help_menu = HelpMenu(self.bot, primary_color_value, select_view)
                 embed = discord.Embed(title=Help_Embed_Mapping.embed["title"], description=Help_Embed_Mapping.embed["description"], color=primary_color_value)
                 embed.set_thumbnail(url=Help_Embed_Mapping.embed["thumbnail_url"])
+                
+               
                 await ctx.reply(embed=embed, view=help_menu)
                 await ctx.defer()
             except Exception as e:
