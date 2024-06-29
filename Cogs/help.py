@@ -71,7 +71,7 @@ class Select(discord.ui.Select):
             if file:
                 await interaction.response.edit_message(embed=self.cog_embed, attachments=[file])
             else:
-                await interaction.response.edit_message(embed=self.cog_embed)
+                await interaction.response.edit_message(embed=self.cog_embed, attachments=[])
 
             logger.info("Message edited successfully.")
         except Exception as e:
