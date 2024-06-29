@@ -14,6 +14,8 @@ class AnyaImages:
     shocked_anya = "https://img-03.stickers.cloud/packs/20d46227-dcb0-4583-8d66-ee78d4743129/webp/a65e28be-a5fd-4654-8e7d-736dbd809df2.webp"
     awake_anya = 'https://media.tenor.com/9kLYJilshNMAAAAe/spy-x-family-anya.png'
     question_anya = 'https://i.pinimg.com/236x/b7/23/1f/b7231fbf87eee22b6d1f35f83e9a80bd.jpg'
+    select_quest = 'https://i.pinimg.com/474x/d9/af/95/d9af956f06d0de95689e2094f753aa2f.jpg' 
+    select_ai = 'blob:https://www.zmo.ai/ccd11364-b124-4205-8703-9082d1892892'
     ping_banner_anya = 'https://i.pinimg.com/564x/db/98/ff/db98ffc40d53378a9999528b69d66d00.jpg'
     ping_image = 'https://i.pinimg.com/564x/25/da/ee/25daee24ea5fb98b5590d542d2879708.jpg'
     sleepy_anya = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR9y_MT3QHxXZVVzVlA94oFM8uIN0QH1fdw8Q6inySFmQ&s'
@@ -77,10 +79,17 @@ class Help_Select_Embed_Mapping:
         },
         "quest": {
             "title": "Quest",
-            "description": "```Still in Testing```\n**Estimated Time:** <t:1717955820:R>",
+            "description": 'Participate in activities within your server, staying active with simple quests one at a time. Earn Stella Stars to purchase spy gear.',
             "color": None,  # Customize color as needed
-            "thumbnail_url": AnyaImages.sleepy_anya
+            "thumbnail_url": AnyaImages.select_quest
         },
+        "ai": {
+            "title": "AI",
+            "description": "Interact with advanced artificial intelligence functionalities, capable of handling various tasks including natural language processing, image recognition, and more.",
+            "color": discord.Color.green(),  # Customize color as needed
+            "thumbnail_url": AnyaImages.select_ai
+        },
+        
         "Cog2": {
             "title": "Title for Cog2",
             "description": "Description for Cog2",
@@ -92,7 +101,7 @@ class Help_Select_Embed_Mapping:
 
     emojis = {
         "system": "<:system_icon:1238536111266201610>",
-        "quest": "<:loading_icon:1238532154292437022>",
+        "quest": "<:star:1247800150479339581>",
         # Add more emoji mappings for other cogs as needed
     }
 
