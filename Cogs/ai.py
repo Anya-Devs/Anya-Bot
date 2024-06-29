@@ -377,9 +377,7 @@ class Ai(commands.Cog):
         logger.error(f"{error_message}: {e}")
         traceback.print_exc()
         await self.error_custom_embed(self.bot, ctx, error_message, title="Pokemon Prediction Error")
-        return None, 0
-
-        
+        return None, 0      
         
     async def calculate_similarity(self, img1, img2, size=(256, 256), num_sections=4):
         try:
@@ -451,8 +449,8 @@ class Ai(commands.Cog):
             return [0.0]  # Return default similarity in case of errors
     
     
-     @commands.command(name='pokemon', description="Predict Pokémon from image, add new Pokémon, or download all images")
-     async def pokemon_command(self, ctx, action: str = None, *, arg: str = None):
+    @commands.command(name='pokemon', description="Predict Pokémon from image, add new Pokémon, or download all images")
+    async def pokemon_command(self, ctx, action: str = None, *, arg: str = None):
         if action == 'predict':
             await self.predict_pokemon_command(ctx, arg)
         elif action == 'add':
