@@ -35,9 +35,10 @@ class Select(discord.ui.Select):
 
             cog_info = self.cog_commands.get(cog_name)
             color = self.primary_color
+            emoji = Help_Select_Embed_Mapping.emojis.get(cog_name.lower())
             self.cog_embed = discord.Embed(
                 title=cog_name.replace('_', ' '),
-                description=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["description"] or '',
+                description=f'{emoji} {Help_Select_Embed_Mapping.embeds[cog_name.lower()]["description"] or ''}',
                 color=color
             )
 
