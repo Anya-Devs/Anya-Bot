@@ -459,14 +459,16 @@ class Ai(commands.Cog):
             await self.download_all_images_command(ctx)
         else:
             embed = discord.Embed(
-                title="Pokémon Commands",
-                description="Available actions:\n"
-                            "`predict <url>`: Predict Pokémon from an image URL.\n"
-                            "`add <pokemon_name>`: Add a Pokémon to the database.\n"
-                            "`all`: Download all Pokémon images.",
-                color=discord.Color.blue()
+                title=" ",
+                description="Use these commands to interact with Pokémon predictions and database:\n\n"
+                            "- **`pokemon predict <url:optional>`**: Predict Pokémon from an image.\n"
+                            "- **`pokemon add <pokemon_name>`**: Add a Pokémon to the database.\n"
+                            "- **`pokemon all`**: Download all Pokémon images. (in testing)\n\n"
+                            "> <:help:1245611726838169642>  Remember to replace `<url>` with a valid image `url (.png, .jpg)` and `<pokemon_name>` with the Pokémon's name.",
+                color=discord.Color.green()
             )
-            await ctx.send(embed=embed)
+           
+            await ctx.reply(embed=embed)
 
     @commands.command(name='imagine', description="Generate an image", aliases=['i'])
     async def imagine(self, ctx: commands.Context, *, prompt: str):
