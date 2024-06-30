@@ -158,11 +158,23 @@ class ShopView(discord.ui.View):
      except Exception as e:
         await self.handle_error(ctx, e)   
         
-        
+       
+    async def handle_error(self, interaction, exception):
+        traceback_msg = ''.join(traceback.format_exception(type(exception), exception, exception.__traceback__))
+        error_message = f"An error occurred: {exception}\n\n```{traceback_msg}```"
+        print(traceback_msg)
+        await interaction.response.send_message(error_message, ephemeral=True)
+
+    
+class MaterialsButton(discord.ui.View):
+    def __init__(self, shop_data):
+        super().__init__()  # Initialize the discord.ui.View class
+        self.shop_data = shop_data
+
     @discord.ui.button(label='Materials', style=discord.ButtonStyle.secondary, custom_id='materials_button')
     async def materials_button(self, button: discord.ui.Button, interaction: discord.Interaction):
         try:
-            shop_embed = discord.Embed(title="Materials Shop", color=primary_color())
+            shop_embed = discord.Embed(title="Materials Shop", color=discord.Color.blurple())
             
             materials = self.shop_data["Materials"]
             
@@ -172,17 +184,11 @@ class ShopView(discord.ui.View):
                 price = material.get("price", 0)
                 shop_embed.add_field(name=f"{emoji} {name}", value=f"**Price:** {price} points", inline=True)
             
-            await button.response.edit_message(embed=shop_embed)
+            await button.response.send_message(embed=shop_embed,ephemeral=True)
+
         except Exception as e:
             await button.response.send_message(f"An error occurred: {e}", ephemeral=True)
 
-    async def handle_error(self, interaction, exception):
-        traceback_msg = ''.join(traceback.format_exception(type(exception), exception, exception.__traceback__))
-        error_message = f"An error occurred: {exception}\n\n```{traceback_msg}```"
-        print(traceback_msg)
-        await interaction.response.send_message(error_message, ephemeral=True)
-
-    
     
     
 class SpyToolSelect(discord.ui.Select):
@@ -197,22 +203,28 @@ class SpyToolSelect(discord.ui.Select):
         self.materials_dict = materials_dict
 
     async def callback(self, interaction: discord.Interaction):
-        selected_tool_name = self.values[0]
-        tool = next((t for t in self.shop_data.get("Spy Tools", []) if t.get("name") == selected_tool_name), None)
-        
-        if not tool:
-            await interaction.response.send_message("Spy Tool not found.", ephemeral=True)
-            return
-        
-        emoji = tool.get("emoji", "")
-        description = tool.get("description", "No description available.")
-        materials_list = "\n".join([f"{self.materials_dict.get(item.get('material', ''), '')} - {item.get('quantity', 0)}" for item in tool.get("materials", [])])
+        try:
+            selected_tool_name = self.values[0]
+            tool = next((t for t in self.shop_data.get("Spy Tools", []) if t.get("name") == selected_tool_name), None)
+            
+            if not tool:
+                await interaction.response.send_message("Spy Tool not found.", ephemeral=True)
+                return
+            
+            emoji = tool.get("emoji", "")
+            description = tool.get("description", "No description available.")
+            materials_list = "\n".join([f"{self.materials_dict.get(item.get('material', ''), '')} - {item.get('quantity', 0)}" for item in tool.get("materials", [])])
 
-        shop_embed = discord.Embed(title=f"{emoji} {selected_tool_name}", description=description, color=primary_color())
-        shop_embed.add_field(name="Materials", value=materials_list or "No materials needed", inline=False)
-
-        await interaction.response.send_message(embed=shop_embed,ephemeral=True)
-    
+            shop_embed = discord.Embed(title=f"{selected_tool_name}", description=f'{emoji} {description}', color=discord.Color.blurple())
+            shop_embed.add_field(name="Materials", value=materials_list or "No materials needed", inline=False)
+            
+            # Create MaterialsButton view
+            materials_button_view = MaterialsButton(self.shop_data)
+            
+            await interaction.response.send_message(embed=shop_embed, view=materials_button_view, ephemeral=True)
+        
+        except Exception as e:
+            await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
     
     
     
