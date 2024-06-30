@@ -5,6 +5,7 @@ import random
 import re
 from datetime import timedelta
 import typing
+import traceback
 
 # Third-Party Library Imports
 import json
@@ -106,19 +107,7 @@ class Quest(commands.Cog):
         try:
             shop_data = self.read_shop_file(self.shop_file)
             view = ShopView(self.bot, shop_data)
-            shop_embed = discord.Embed(title="Spy Tools Shop", color=primary_color())
-            
-            materials_dict = {material['name']: material['emoji'] for material in shop_data.get("Materials", [])}
-            spy_tools = shop_data["Spy Tools"]
-            
-            for tool in spy_tools:
-                name = tool.get("name", "Unknown Item")
-                emoji = tool.get("emoji", "")
-                description = tool.get("description", "No description available.")
-                materials = "\n".join([f"{materials_dict.get(item.get('material', ''))} - {item.get('quantity', 0)}" for item in tool.get("materials", [])])
-                shop_embed.add_field(name=f"{emoji} {name}", value=f"\n**Description:** {description}\n\n**Materials:**\n{materials}", inline=True)
-
-            await ctx.send(embed=shop_embed, view=view)
+            await view.start(ctx)
 
         except Exception as e:
             await ctx.send(f"An error occurred while processing the shop: {e}")
@@ -131,7 +120,103 @@ class Quest(commands.Cog):
         
         return shop_data
 
+class ShopView(discord.ui.View):
+    def __init__(self, bot, shop_data):
+        super().__init__()
+        self.bot = bot
+        self.shop_data = shop_data
+        self.materials_dict = {material['name']: material['emoji'] for material in self.shop_data.get("Materials", [])}
 
+    async def start(self, ctx):
+     try:
+        spy_tools = self.shop_data.get("Spy Tools", [])
+        shop_embed = discord.Embed(title="Spy Tools Shop", color=primary_color())
+
+        # Adding spy tools to the embed without descriptions or materials
+        for tool in spy_tools:
+            name = tool.get("name", "Unknown Item")
+            emoji = tool.get("emoji", "")
+            shop_embed.add_field(name=f"{emoji} {name}", value=' ', inline=False)
+
+        # Create and add the select menu
+        select = SpyToolSelect(self.shop_data,self.materials_dict)
+        self.add_item(select)    
+        # Send the initial embed with the select menu
+        await ctx.send(embed=shop_embed, view=self)
+        
+        # Setting up select menu options
+        select_options = []
+        for tool in spy_tools:
+            name = tool.get("name", "Unknown Item")
+            emoji = tool.get("emoji", "")
+            select_options.append(discord.SelectOption(label=f"{emoji} {name}", value=name))
+
+        # Creating the select menu
+        self.add_item(select)
+
+
+     except Exception as e:
+        await self.handle_error(ctx, e)   
+        
+        
+    @discord.ui.button(label='Materials', style=discord.ButtonStyle.secondary, custom_id='materials_button')
+    async def materials_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+        try:
+            shop_embed = discord.Embed(title="Materials Shop", color=primary_color())
+            
+            materials = self.shop_data["Materials"]
+            
+            for material in materials:
+                name = material.get("name", "Unknown Material")
+                emoji = material.get("emoji", "")
+                price = material.get("price", 0)
+                shop_embed.add_field(name=f"{emoji} {name}", value=f"**Price:** {price} points", inline=True)
+            
+            await button.response.edit_message(embed=shop_embed)
+        except Exception as e:
+            await button.response.send_message(f"An error occurred: {e}", ephemeral=True)
+
+    async def handle_error(self, interaction, exception):
+        traceback_msg = ''.join(traceback.format_exception(type(exception), exception, exception.__traceback__))
+        error_message = f"An error occurred: {exception}\n\n```{traceback_msg}```"
+        print(traceback_msg)
+        await interaction.response.send_message(error_message, ephemeral=True)
+
+    
+    
+    
+class SpyToolSelect(discord.ui.Select):
+    def __init__(self, shop_data, materials_dict):
+        spy_tools = shop_data.get("Spy Tools", [])
+        options = [
+            discord.SelectOption(label=f"{tool.get('emoji', '')} {tool.get('name', 'Unknown Item')}", value=tool.get('name', 'Unknown Item'))
+            for tool in spy_tools
+        ]
+        super().__init__(placeholder="Select a Spy Tool", options=options)
+        self.shop_data = shop_data
+        self.materials_dict = materials_dict
+
+    async def callback(self, interaction: discord.Interaction):
+        selected_tool_name = self.values[0]
+        tool = next((t for t in self.shop_data.get("Spy Tools", []) if t.get("name") == selected_tool_name), None)
+        
+        if not tool:
+            await interaction.response.send_message("Spy Tool not found.", ephemeral=True)
+            return
+        
+        emoji = tool.get("emoji", "")
+        description = tool.get("description", "No description available.")
+        materials_list = "\n".join([f"{self.materials_dict.get(item.get('material', ''), '')} - {item.get('quantity', 0)}" for item in tool.get("materials", [])])
+
+        shop_embed = discord.Embed(title=f"{emoji} {selected_tool_name}", description=description, color=primary_color())
+        shop_embed.add_field(name="Materials", value=materials_list or "No materials needed", inline=False)
+
+        await interaction.response.send_message(embed=shop_embed,ephemeral=True)
+    
+    
+    
+    
+    
 class Quest_View(View):
     def __init__(self, bot, quests, ctx, page=0, filtered_quests=None):
         super().__init__(timeout=None)
@@ -204,47 +289,6 @@ class Quest_View(View):
         return embeds
         
     
-class ShopView(discord.ui.View):
-    def __init__(self, bot, shop_data):
-        super().__init__()
-        self.bot = bot
-        self.shop_data = shop_data
-
-    @discord.ui.button(label='Spy Tools', style=discord.ButtonStyle.primary)
-    async def spy_tools_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-        try:
-            shop_embed = discord.Embed(title="Spy Tools Shop", color=primary_color())
-            
-            materials_dict = {material['name']: material['emoji'] for material in self.shop_data.get("Materials", [])}
-            spy_tools = self.shop_data["Spy Tools"]
-            
-            for tool in spy_tools:
-                name = tool.get("name", "Unknown Item")
-                emoji = tool.get("emoji", "")
-                description = tool.get("description", "No description available.")
-                materials = "\n".join([f"{materials_dict.get(item.get('material', ''))} - {item.get('quantity', 0)}" for item in tool.get("materials", [])])
-                shop_embed.add_field(name=f"{emoji} {name}", value=f"**Description:** {description}\n**Materials:**\n{materials}", inline=True)
-            
-            await button.response.edit_message(embed=shop_embed, view=self)
-        except Exception as e:
-            await button.response.send_message(f"An error occurred: {e}", ephemeral=True)
-
-    @discord.ui.button(label='Materials', style=discord.ButtonStyle.secondary)
-    async def materials_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-        try:
-            shop_embed = discord.Embed(title="Materials Shop", color=primary_color())
-            
-            materials = self.shop_data["Materials"]
-            
-            for material in materials:
-                name = material.get("name", "Unknown Material")
-                emoji = material.get("emoji", "")
-                price = material.get("price", 0)
-                shop_embed.add_field(name=f"{emoji} {name}", value=f"**Price:** {price} points", inline=True)
-            
-            await button.response.edit_message(embed=shop_embed, view=self)
-        except Exception as e:
-            await button.response.send_message(f"An error occurred: {e}", ephemeral=True)
 
     
 class Quest_Select(Select):
