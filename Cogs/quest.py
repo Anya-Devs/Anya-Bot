@@ -1,96 +1,29 @@
-import traceback
-import re
-import typing
-from datetime import datetime, timedelta
+# Standard Library Imports
+import os
+import datetime
 import random
+import re
+from datetime import timedelta
+import typing
 
-from Imports.discord_imports import *
-from Data.const import Quest_Progress, error_custom_embed, primary_color, QuestEmbed, Quest_Prompt, Quest_Completed_Embed, AnyaImages
-
-from Imports.log_imports import *
+# Third-Party Library Imports
+import json
 import motor.motor_asyncio
 from pymongo.errors import PyMongoError
-import os
+
+# Project-Specific Imports
+from Data.const import Quest_Progress, error_custom_embed, primary_color, QuestEmbed, Quest_Prompt, Quest_Completed_Embed, AnyaImages
+from Imports.discord_imports import *
+from Imports.log_imports import *
 
 
 
 
-
-class Quest_View(View):
-    def __init__(self, bot, quests, ctx, page=0, filtered_quests=None):
-        super().__init__(timeout=None)
-        self.bot = bot
-        self.quests = quests
-        self.filtered_quests = filtered_quests if filtered_quests is not None else quests
-        self.ctx = ctx
-        self.page = page
-        self.max_pages = min((len(self.filtered_quests) + 2) // 3, 2)  # Calculate max pages, with a maximum of 2 pages
-
-        # Add Quest_Select_Filter regardless of page
-        self.add_item(Quest_Select_Filter(bot, quests, ctx))  # Pass original quests list
-
-        # Add Quest_Select if page > 1
-        if self.page < self.max_pages - 1:
-            self.add_item(Quest_Select(bot, self.filtered_quests, ctx, self.max_pages))
-
-        # Add Previous and Next buttons based on page
-        if self.page > 0:
-            self.add_item(QuestButton("Previous", discord.ButtonStyle.primary, "previous", bot, self.filtered_quests, ctx, self.page))
-        if self.page < self.max_pages - 1:
-            self.add_item(QuestButton("Next", discord.ButtonStyle.primary, "next", bot, self.filtered_quests, ctx, self.page))
-
-    async def generate_embeds(self):
-        start_index = self.page * 2
-        end_index = start_index + 2
-        embeds = []
-        
-        for quest in self.filtered_quests[start_index:end_index]:
-            quest_id = quest['quest_id']
-            progress = quest['progress']
-            times = quest['times']
-            action = quest['action']
-            method = quest['method']
-            content = quest['content']
-            reward = quest['reward']
-            channel = self.bot.get_channel(quest['channel_id'])
-
-            if re.match(r'^<:\w+:\d+>$', content):
-                emoji_id = int(re.findall(r'\d+', content)[0])
-                emoji = discord.utils.get(self.bot.emojis, id=emoji_id)
-                if emoji:
-                    content = str(emoji)
-            elif method == 'message':
-                content = f"`{content}`"
-
-            progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
-            
-            reward_emoji_id = 1247800150479339581
-            reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
-            
-            objective = f"{action.title()} - {method.title()}: {content}"
-
-
-            embed = discord.Embed()
-            embed.add_field(name=f'Quest {quest_id}', value=objective, inline=True)
-            embed.add_field(name="Location", value=channel.mention, inline=True)
-
-       
-            embed.add_field(name=" ", value=" ", inline=False)
-            embed.add_field(name='Progress', value=f'{progress_bar} {progress}/{times} ', inline=True)
-
-            if reward:
-             embed.add_field(name="Reward", value=f"{reward_emoji} `{reward} stp`", inline=True)
-
-
-
-            embeds.append(embed)
-
-        return embeds
-    
 class Quest(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.quest_data = Quest_Data(bot)
+        self.shop_file = 'Data/Quest/shop.json'
 
     @commands.command(name='quest', aliases=['q'])
     async def quest(self, ctx, test=None):
@@ -171,61 +104,148 @@ class Quest(commands.Cog):
     @commands.command(name='shop')
     async def shop(self, ctx):
         try:
-            shop_items = self.read_shop_file('Data/Quest/shop.txt')
-            shop_embed = discord.Embed(title="Shop", color=primary_color())
+            shop_data = self.read_shop_file(self.shop_file)
+            view = ShopView(self.bot, shop_data)
+            shop_embed = discord.Embed(title="Spy Tools Shop", color=primary_color())
+            
+            materials_dict = {material['name']: material['emoji'] for material in shop_data.get("Materials", [])}
+            spy_tools = shop_data["Spy Tools"]
+            
+            for tool in spy_tools:
+                name = tool.get("name", "Unknown Item")
+                emoji = tool.get("emoji", "")
+                description = tool.get("description", "No description available.")
+                materials = "\n".join([f"{materials_dict.get(item.get('material', ''))} - {item.get('quantity', 0)}" for item in tool.get("materials", [])])
+                shop_embed.add_field(name=f"{emoji} {name}", value=f"\n**Description:** {description}\n\n**Materials:**\n{materials}", inline=True)
 
-            for category, items in shop_items.items():
-                value = "\n".join([f"{item['emoji']} {item['name']} - {item['price']} points" for item in items])
-                shop_embed.add_field(name=category, value=value, inline=True)
-
-            await ctx.send(embed=shop_embed)
+            await ctx.send(embed=shop_embed, view=view)
 
         except Exception as e:
-            logger.error(f"An error occurred while displaying the shop: {e}")
-            await ctx.send("An error occurred while processing the shop. Please try again later.")
+            await ctx.send(f"An error occurred while processing the shop: {e}")
+
+
 
     def read_shop_file(self, filename):
-        shop_items = {}
-        category_pattern = re.compile(r'(\w+ \w+) {')
-        item_pattern = re.compile(r'\s*item name {')
-        emoji_pattern = re.compile(r'\s*item emoji: (.*),')
-        price_pattern = re.compile(r'\s*price: (\d+)')
-
-        with open(filename, 'r') as file:
-            lines = file.readlines()
+        with open(filename, 'r', encoding='utf-8') as file:
+            shop_data = json.load(file)
         
-        current_category = None
-        current_item = {}
+        return shop_data
 
-        for line in lines:
-            category_match = category_pattern.match(line)
-            if category_match:
-                current_category = category_match.group(1)
-                shop_items[current_category] = []
-                continue
 
-            item_match = item_pattern.match(line)
-            if item_match:
-                if current_item:
-                    shop_items[current_category].append(current_item)
-                current_item = {"name": "item name", "emoji": "", "price": 0}
-                continue
+class Quest_View(View):
+    def __init__(self, bot, quests, ctx, page=0, filtered_quests=None):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.quests = quests
+        self.filtered_quests = filtered_quests if filtered_quests is not None else quests
+        self.ctx = ctx
+        self.page = page
+        self.max_pages = min((len(self.filtered_quests) + 2) // 3, 2)  # Calculate max pages, with a maximum of 2 pages
 
-            emoji_match = emoji_pattern.match(line)
-            if emoji_match:
-                current_item["emoji"] = emoji_match.group(1).strip()
-                continue
+        # Add Quest_Select_Filter regardless of page
+        self.add_item(Quest_Select_Filter(bot, quests, ctx))  # Pass original quests list
 
-            price_match = price_pattern.match(line)
-            if price_match:
-                current_item["price"] = int(price_match.group(1))
-                continue
+        # Add Quest_Select if page > 1
+        if self.page < self.max_pages - 1:
+            self.add_item(Quest_Select(bot, self.filtered_quests, ctx, self.max_pages))
+
+        # Add Previous and Next buttons based on page
+        if self.page > 0:
+            self.add_item(QuestButton("Previous", discord.ButtonStyle.primary, "previous", bot, self.filtered_quests, ctx, self.page))
+        if self.page < self.max_pages - 1:
+            self.add_item(QuestButton("Next", discord.ButtonStyle.primary, "next", bot, self.filtered_quests, ctx, self.page))
+
+    async def generate_embeds(self):
+        start_index = self.page * 2
+        end_index = start_index + 2
+        embeds = []
         
-        if current_item:
-            shop_items[current_category].append(current_item)
+        for quest in self.filtered_quests[start_index:end_index]:
+            quest_id = quest['quest_id']
+            progress = quest['progress']
+            times = quest['times']
+            action = quest['action']
+            method = quest['method']
+            content = quest['content']
+            reward = quest['reward']
+            channel = self.bot.get_channel(quest['channel_id'])
 
-        return shop_items
+            if re.match(r'^<:\w+:\d+>$', content):
+                emoji_id = int(re.findall(r'\d+', content)[0])
+                emoji = discord.utils.get(self.bot.emojis, id=emoji_id)
+                if emoji:
+                    content = str(emoji)
+            elif method == 'message':
+                content = f"`{content}`"
+
+            progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
+            
+            reward_emoji_id = 1247800150479339581
+            reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
+            
+            objective = f"{action.title()} - {method.title()}: {content}"
+
+
+            embed = discord.Embed(color=primary_color())
+            embed.add_field(name=f'Quest {quest_id}', value=objective, inline=True)
+            embed.add_field(name="Location", value=channel.mention, inline=True)
+
+       
+            embed.add_field(name=" ", value=" ", inline=False)
+            embed.add_field(name='Progress', value=f'{progress_bar} {progress}/{times} ', inline=True)
+
+            if reward:
+             embed.add_field(name="Reward", value=f"{reward_emoji} `{reward} stp`", inline=True)
+
+
+
+            embeds.append(embed)
+
+        return embeds
+        
     
+class ShopView(discord.ui.View):
+    def __init__(self, bot, shop_data):
+        super().__init__()
+        self.bot = bot
+        self.shop_data = shop_data
+
+    @discord.ui.button(label='Spy Tools', style=discord.ButtonStyle.primary)
+    async def spy_tools_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+        try:
+            shop_embed = discord.Embed(title="Spy Tools Shop", color=primary_color())
+            
+            materials_dict = {material['name']: material['emoji'] for material in self.shop_data.get("Materials", [])}
+            spy_tools = self.shop_data["Spy Tools"]
+            
+            for tool in spy_tools:
+                name = tool.get("name", "Unknown Item")
+                emoji = tool.get("emoji", "")
+                description = tool.get("description", "No description available.")
+                materials = "\n".join([f"{materials_dict.get(item.get('material', ''))} - {item.get('quantity', 0)}" for item in tool.get("materials", [])])
+                shop_embed.add_field(name=f"{emoji} {name}", value=f"**Description:** {description}\n**Materials:**\n{materials}", inline=True)
+            
+            await button.response.edit_message(embed=shop_embed, view=self)
+        except Exception as e:
+            await button.response.send_message(f"An error occurred: {e}", ephemeral=True)
+
+    @discord.ui.button(label='Materials', style=discord.ButtonStyle.secondary)
+    async def materials_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+        try:
+            shop_embed = discord.Embed(title="Materials Shop", color=primary_color())
+            
+            materials = self.shop_data["Materials"]
+            
+            for material in materials:
+                name = material.get("name", "Unknown Material")
+                emoji = material.get("emoji", "")
+                price = material.get("price", 0)
+                shop_embed.add_field(name=f"{emoji} {name}", value=f"**Price:** {price} points", inline=True)
+            
+            await button.response.edit_message(embed=shop_embed, view=self)
+        except Exception as e:
+            await button.response.send_message(f"An error occurred: {e}", ephemeral=True)
+
     
 class Quest_Select(Select):
     def __init__(self, bot, quests, ctx, max_pages):
