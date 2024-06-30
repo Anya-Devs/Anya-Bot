@@ -120,10 +120,10 @@ class Quest(commands.Cog):
                 embeds = await view.generate_embeds()
                 
                 if len(quests) > 0:  # Check if there are any embeds generated
-                 if len(quests) > 2:
-                    await ctx.reply(embeds=embeds, view=view)  # Send first 2 embeds
-                 else:
-                  await ctx.reply(embeds=embeds)  # Send all embeds
+                    if len(quests) > 2:
+                        await ctx.reply(embeds=embeds, view=view)  # Send first 2 embeds
+                    else:
+                        await ctx.reply(embeds=embeds)  # Send all embeds
 
             else:
                 no_quest_embed = await QuestEmbed.get_no_quest_embed()
@@ -137,37 +137,96 @@ class Quest(commands.Cog):
             
     @commands.command(name='stars', aliases=['bal','points','balance'])
     async def balance(self, ctx, method=None, amount: int = None, member: discord.Member = None):
-     user_id = str(ctx.author.id)
-     guild_id = str(ctx.guild.id)
-     if member is None:
-        member = ctx.author
-        
-     try:
-        # Check if the command includes the "add" flag
-        if method == "add":
-            # Check if the user has administrator permissions
-            if ctx.author.id == 1030285330739363880:
-                await self.quest_data.add_balance(str(member.id), guild_id, amount)
-                amount_with_commas = "{:,}".format(amount)  # Add commas to amount
-                await ctx.send(f":white_check_mark: Successfully added {amount_with_commas} balance to {member.display_name}'s account.")
+        user_id = str(ctx.author.id)
+        guild_id = str(ctx.guild.id)
+        if member is None:
+            member = ctx.author
+            
+        try:
+            # Check if the command includes the "add" flag
+            if method == "add":
+                # Check if the user has administrator permissions
+                if ctx.author.id == 1030285330739363880:
+                    await self.quest_data.add_balance(str(member.id), guild_id, amount)
+                    amount_with_commas = "{:,}".format(amount)  # Add commas to amount
+                    await ctx.send(f":white_check_mark: Successfully added {amount_with_commas} balance to {member.display_name}'s account.")
+                else:
+                    await ctx.send("You don't have permission to use this command to add balance to other users.")
             else:
-                await ctx.send("You don't have permission to use this command to add balance to other users.")
-        else:
-            if member is None and amount is None:
-                # Ensure the user has a balance
-                await self.quest_data.initialize_balance(user_id, guild_id)
+                if member is None and amount is None:
+                    # Ensure the user has a balance
+                    await self.quest_data.initialize_balance(user_id, guild_id)
 
-            # Retrieve and display the user's balance
-            balance = await self.quest_data.get_balance(user_id, guild_id)
-            balance_with_commas = "{:,}".format(balance)  # Add commas to balance
-            await ctx.send(f"Your balance: {balance_with_commas} Stella Points")
+                # Retrieve and display the user's balance
+                balance = await self.quest_data.get_balance(user_id, guild_id)
+                balance_with_commas = "{:,}".format(balance)  # Add commas to balance
+                await ctx.send(f"Your balance: {balance_with_commas} Stella Points")
 
-     except Exception as e:
-        # Log the error
-        logger.error(f"An error occurred in the balance command: {e}")
-        # Send a message to the user indicating an error occurred
-        await ctx.send("An error occurred while processing your request. Please try again later.")
+        except Exception as e:
+            # Log the error
+            logger.error(f"An error occurred in the balance command: {e}")
+            # Send a message to the user indicating an error occurred
+            await ctx.send("An error occurred while processing your request. Please try again later.")
 
+    @commands.command(name='shop')
+    async def shop(self, ctx):
+        try:
+            shop_items = self.read_shop_file('Data/Quest/shop.txt')
+            shop_embed = discord.Embed(title="Shop", color=primary_color())
+
+            for category, items in shop_items.items():
+                value = "\n".join([f"{item['emoji']} {item['name']} - {item['price']} points" for item in items])
+                shop_embed.add_field(name=category, value=value, inline=True)
+
+            await ctx.send(embed=shop_embed)
+
+        except Exception as e:
+            logger.error(f"An error occurred while displaying the shop: {e}")
+            await ctx.send("An error occurred while processing the shop. Please try again later.")
+
+    def read_shop_file(self, filename):
+        shop_items = {}
+        category_pattern = re.compile(r'(\w+ \w+) {')
+        item_pattern = re.compile(r'\s*item name {')
+        emoji_pattern = re.compile(r'\s*item emoji: (.*),')
+        price_pattern = re.compile(r'\s*price: (\d+)')
+
+        with open(filename, 'r') as file:
+            lines = file.readlines()
+        
+        current_category = None
+        current_item = {}
+
+        for line in lines:
+            category_match = category_pattern.match(line)
+            if category_match:
+                current_category = category_match.group(1)
+                shop_items[current_category] = []
+                continue
+
+            item_match = item_pattern.match(line)
+            if item_match:
+                if current_item:
+                    shop_items[current_category].append(current_item)
+                current_item = {"name": "item name", "emoji": "", "price": 0}
+                continue
+
+            emoji_match = emoji_pattern.match(line)
+            if emoji_match:
+                current_item["emoji"] = emoji_match.group(1).strip()
+                continue
+
+            price_match = price_pattern.match(line)
+            if price_match:
+                current_item["price"] = int(price_match.group(1))
+                continue
+        
+        if current_item:
+            shop_items[current_category].append(current_item)
+
+        return shop_items
+    
+    
 class Quest_Select(Select):
     def __init__(self, bot, quests, ctx, max_pages):
         options = [
@@ -320,7 +379,7 @@ class Quest_Data(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.DB_NAME = 'Quest'
-        self.quest_content_file = 'Data/quest_content.txt'
+        self.quest_content_file = 'Data/Quest/quest_content.txt'
 
         # Initialize MongoDB connection
         mongo_url = os.getenv('MONGO_URI')
