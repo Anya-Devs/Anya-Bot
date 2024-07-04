@@ -13,7 +13,7 @@ import motor.motor_asyncio
 from pymongo.errors import PyMongoError
 
 # Project-Specific Imports
-from Data.const import Quest_Progress, error_custom_embed, primary_color, QuestEmbed, Quest_Prompt, Quest_Completed_Embed, AnyaImages
+from Data.const import Quest_Progress, error_custom_embed, primary_color, ShopEmbed,QuestEmbed, Quest_Prompt, Quest_Completed_Embed, AnyaImages
 from Imports.discord_imports import *
 from Imports.log_imports import *
 
@@ -129,31 +129,25 @@ class ShopView(discord.ui.View):
 
     async def start(self, ctx):
      try:
+        shop_embed = await ShopEmbed.start_shop_embed(self.bot, ctx)
+        
         spy_tools = self.shop_data.get("Spy Tools", [])
-        shop_embed = discord.Embed(title="Spy Tools Shop", color=primary_color())
-
-        # Adding spy tools to the embed without descriptions or materials
-        for tool in spy_tools:
+        
+        """
+         # Adding spy tools to the embed without descriptions or materials
+         for tool in spy_tools:
             name = tool.get("name", "Unknown Item")
             emoji = tool.get("emoji", "")
-            shop_embed.add_field(name=f"{emoji} {name}", value=' ', inline=False)
-
+            shop_embed.add_field(name=f"", value=f'{emoji} `{name}`', inline=True)
+        """
+        
+                
         # Create and add the select menu
-        select = SpyToolSelect(self.shop_data,self.materials_dict)
+        select = SpyToolSelect(self.shop_data, self.materials_dict)
         self.add_item(select)    
         # Send the initial embed with the select menu
         await ctx.send(embed=shop_embed, view=self)
-        
-        # Setting up select menu options
-        select_options = []
-        for tool in spy_tools:
-            name = tool.get("name", "Unknown Item")
-            emoji = tool.get("emoji", "")
-            select_options.append(discord.SelectOption(label=f"{emoji} {name}", value=name))
-
-        # Creating the select menu
-        self.add_item(select)
-
+       
 
      except Exception as e:
         await self.handle_error(ctx, e)   
@@ -174,7 +168,7 @@ class MaterialsButton(discord.ui.View):
     @discord.ui.button(label='Materials', style=discord.ButtonStyle.secondary, custom_id='materials_button')
     async def materials_button(self, button: discord.ui.Button, interaction: discord.Interaction):
         try:
-            shop_embed = discord.Embed(title="Materials Shop", color=discord.Color.blurple())
+            shop_embed = discord.Embed(title="Material Shop", color=discord.Color.blurple())
             
             materials = self.shop_data["Materials"]
             
@@ -221,7 +215,8 @@ class SpyToolSelect(discord.ui.Select):
             # Create MaterialsButton view
             materials_button_view = MaterialsButton(self.shop_data)
             
-            await interaction.response.send_message(embed=shop_embed, view=materials_button_view, ephemeral=True)
+            await interaction.response.send_message(embed=shop_embed, view=materials_button_view, ephemeral=True) # 
+            
         
         except Exception as e:
             await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
