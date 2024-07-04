@@ -5,6 +5,7 @@ import json
 import traceback
 from datetime import datetime
 from PIL import Image
+from openai import AsyncOpenAI  # Assuming AsyncOpenAI is the correct import from your module
 from Imports.discord_imports import *
 import platform
 import random
@@ -16,6 +17,7 @@ class AnyaImages:
     question_anya = 'https://i.pinimg.com/236x/b7/23/1f/b7231fbf87eee22b6d1f35f83e9a80bd.jpg'
     select_quest = 'https://i.pinimg.com/474x/d9/af/95/d9af956f06d0de95689e2094f753aa2f.jpg' 
     select_ai = None
+    start_shop_thumbnail = 'https://i.pinimg.com/474x/0d/40/be/0d40be55c48956df31e023460b293197.jpg'
     ping_banner_anya = 'https://i.pinimg.com/564x/db/98/ff/db98ffc40d53378a9999528b69d66d00.jpg'
     ping_image = 'https://i.pinimg.com/564x/25/da/ee/25daee24ea5fb98b5590d542d2879708.jpg'
     sleepy_anya = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR9y_MT3QHxXZVVzVlA94oFM8uIN0QH1fdw8Q6inySFmQ&s'
@@ -79,7 +81,7 @@ class Help_Select_Embed_Mapping:
         },
         "quest": {
             "title": "Quest",
-            "description": 'Participate in activities within your server, staying active with simple quests one at a time. Earn Stella Stars to purchase spy gear.',
+            "description": 'Participate in activities within your server, staying active with simple quests.',
             "color": None,  # Customize color as needed
             "thumbnail_url": AnyaImages.select_quest
         },
@@ -100,9 +102,9 @@ class Help_Select_Embed_Mapping:
     }
 
     emojis = {
-        "system": "<:system_icon:1238536111266201610>",
-        "quest": "<:star:1247800150479339581>",
-        "ai": '✨',
+        "system": "<a:anya:1258564276046790677>", # "<:system_icon:1238536111266201610>",
+        "quest": "<:anyasus:1258563706518765669> ",
+        "ai": '<:ai:1258206841737973842> ',
         # Add more emoji mappings for other cogs as needed
     }
 
@@ -317,7 +319,14 @@ class Quest_Completed_Embed:
 
         return embed
 
-    
+class ShopEmbed:
+    @staticmethod
+    async def start_shop_embed(bot, ctx):
+        embed = discord.Embed(title='Spy Shop')
+        embed.description =  f":warning: Waku waku! *Remember these tools might make or break relshinships*, so be careful .\n\n**Please, don't tell papa~**"
+        embed.set_footer(text=f"Use the {bot.user.name}'s option menu to aocuire your spy tool.")
+        embed.set_thumbnail(url=AnyaImages.start_shop_thumbnail)
+        return embed
     
 class LogConstants:
     start_log_thumbnail = "https://example.com/start_log_thumbnail.png"
