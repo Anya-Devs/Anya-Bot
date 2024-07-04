@@ -323,8 +323,8 @@ class ShopEmbed:
     @staticmethod
     async def start_shop_embed(bot, ctx):
         embed = discord.Embed(title='Spy Shop')
-        embed.description =  f":warning: Waku waku! *Remember these tools might make or break relshinships*, so please be careful."
-        embed.set_footer(text=f"Use the {bot.user.name}'s option menu to aocuire your spy tool.")
+        embed.description =  f":warning: *Remember these tools might make or break relshinships*, so please be careful. ||**Please, don't tell papa~**||"
+        embed.set_footer(text=f"Use the {bot.user.name}'s option menu to acquire your spy tool.")
         embed.set_thumbnail(url=AnyaImages.start_shop_thumbnail)
         return embed
     
