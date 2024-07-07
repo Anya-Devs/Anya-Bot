@@ -221,16 +221,14 @@ class Ai(commands.Cog):
 
             pokemon_files = [f for f in os.listdir(self.image_folder) if os.path.isfile(os.path.join(self.image_folder, f))]
             logger.debug(f"Number of Pokémon images found: {len(pokemon_files)}")
-            
-            matches_list = []
 
+            matches_list = []
             best_match = None
             highest_score = (float('-inf'), float('-inf'), '')  # Initialize with very low similarity score and empty name
 
             # Convert image to numpy array and ensure correct color format
             img_np = np.array(img)
             img_np = self.ensure_correct_color_format(img_np)
-            # Convert image to uint8 depth if needed
             if img_np.dtype != np.uint8:
                 img_np = img_np.astype(np.uint8)
 
@@ -264,14 +262,16 @@ class Ai(commands.Cog):
 
             # Only proceed if a valid contour is found
             if largest_contour_idx != -1:
+                # Get the bounding box of the largest contour
                 x, y, w, h = cv2.boundingRect(contours[largest_contour_idx])
 
-                # Draw rectangle around the largest contour (for visualization)
-                cv2.rectangle(img_np, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
-                # Determine padding dynamically based on the dimensions of the bounding box
+                # Adjust padding dynamically based on the dimensions of the bounding box
                 padding_x = min(w // 2, img_np.shape[1] - w)
                 padding_y = min(h // 2, img_np.shape[0] - h)
+
+                # Ensure padding does not exceed image dimensions
+                padding_x = max(0, min(padding_x, x, img_np.shape[1] - (x + w)))
+                padding_y = max(0, min(padding_y, y, img_np.shape[0] - (y + h)))
 
                 # Crop region of interest (ROI) from the original image with adaptive padding
                 roi = img_np[max(y - padding_y, 0):min(y + h + padding_y, img_np.shape[0]),
@@ -348,12 +348,7 @@ class Ai(commands.Cog):
                     # Save the images
                     cv2.imwrite(roi_path, roi)
                     cv2.imwrite(matched_img_path, resized_matched_img)
-                    if roi.shape[2] != resized_matched_img.shape[2]: # Resize or adjust dimensions as needed
-                        resized_roi = cv2.resize(roi, (resized_matched_img.shape[1], resized_matched_img.shape[0]))
-                        combined_img = np.hstack((resized_roi, resized_matched_img))
-                    else:
-                        combined_img = np.hstack((roi, resized_matched_img))
-                        
+                    combined_img = np.hstack((roi, resized_matched_img))
                     cv2.imwrite(combined_img_path, combined_img)
 
                     # Send the combined image (assuming Discord bot context)
@@ -392,6 +387,7 @@ class Ai(commands.Cog):
         traceback.print_exc()
         await self.error_custom_embed(self.bot, ctx, error_message, title="Pokemon Prediction Error")
         return None, 0
+    
     async def calculate_similarity(self, img1, img2, size=(256, 256), num_sections=4):
         try:
             # Function to calculate color histogram similarity
@@ -563,5 +559,7 @@ class Ai(commands.Cog):
         
         
         
+        
+
 def setup(bot):
     bot.add_cog(Ai(bot))
