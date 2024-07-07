@@ -275,19 +275,16 @@ class Quest_View(View):
             reward_emoji_id = 1247800150479339581
             reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
             
-            objective = f"{action.title()} - {method.title()}: {content}"
+            objective = f"{action.title()} - {method.title()}: {content}" 
 
 
-            embed = discord.Embed(color=primary_color())
-            embed.add_field(name=f'Quest {quest_id}', value=objective, inline=True)
+            embed = discord.Embed(title=f'Quest {quest_id}', color=primary_color())
+            embed.add_field(name=f' ', value=f'{objective}\n{progress_bar} {progress}/{times} ', inline=True)
             embed.add_field(name="Location", value=channel.mention, inline=True)
 
        
-            embed.add_field(name=" ", value=" ", inline=False)
-            embed.add_field(name='Progress', value=f'{progress_bar} {progress}/{times} ', inline=True)
-
             if reward:
-             embed.add_field(name="Reward", value=f"{reward_emoji} `{reward} stp`", inline=True)
+             embed.add_field(name="Reward", value=f"{reward_emoji} `{reward} stp`", inline=False)
 
 
 
@@ -588,7 +585,7 @@ class Quest_Data(commands.Cog):
             members_data = guild_document.get('members', {})
             users_in_server = list(members_data.keys())  # Extract user IDs
             
-            logger.debug(f"Found {len(users_in_server)} users in server {guild_id}.")
+            # logger.debug(f"Found {len(users_in_server)} users in server {guild_id}.")
             return users_in_server
         else:
             logger.debug(f"No guild found with ID {guild_id}.")
@@ -619,7 +616,7 @@ class Quest_Data(commands.Cog):
                 if any(quest['quest_id'] == quest_id for quest in quests):
                     users_with_quest.append(user_id)
             
-            logger.debug(f"Found {len(users_with_quest)} users with quest ID {quest_id} in guild {guild_id}.")
+            # logger.debug(f"Found {len(users_with_quest)} users with quest ID {quest_id} in guild {guild_id}.")
             return users_with_quest
         else:
             logger.debug(f"No guild found with ID {guild_id}.")
@@ -637,7 +634,7 @@ class Quest_Data(commands.Cog):
             if server_data:
                 member_data = server_data.get('members', {}).get(user_id, {})
                 quests = member_data.get('quests', [])
-                logger.debug(f"Found {len(quests)} quests for user {user_id} in guild {guild_id}.")
+                # logger.debug(f"Found {len(quests)} quests for user {user_id} in guild {guild_id}.")
                 if  len(quests) == 0:
                     return None
                 return quests
@@ -689,50 +686,89 @@ class Quest_Data(commands.Cog):
             if interaction:
                 await self.handle_error(interaction, e, title="Latest Quest ID")
             return 0
-
-    async def create_quest(self, guild_id: str, action: str, method: str, content: str, channel_id: int ,times: int, reward: int, interaction=None):
+        
+    async def store_server_quest(self, guild_id: str, quest_data: dict):
+     try:
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+        
+        # Find the server document by guild_id or create a new one if not exists
+        server_doc = await server_collection.find_one({'_id': guild_id})
+        if not server_doc:
+            server_doc = {'_id': guild_id, 'server_quest': []}
+        
+        # Assign a quest_id based on the current number of quests
+        quest_id = len(server_doc['server_quest']) + 1
+        quest_data['quest_id'] = quest_id
+        
+        # Append the quest data and update the document
+        server_doc['server_quest'].append(quest_data)
+        
+        # Update the document in MongoDB
+        await server_collection.update_one({'_id': guild_id}, {'$set': server_doc}, upsert=True)
+        
+        logger.debug(f"Stored quest data for guild {guild_id}: {quest_data}")
+        
+     except PyMongoError as e:
+        logger.error(f"Error occurred while storing quest data: {e}")
+        raise e
+        
+    async def server_quests(self, guild_id: str):
         try:
-            # Calculate reward as a random value between 4 and 20 times the `times` value
-            reward = random.randint(4, 20) * times
-            
-            # Ensure the reward is correctly set in the quest data
-            quest_data = {
-                'action': action,
-                'method': method,
-                'content': content,
-                'channel_id': channel_id,
-                'times': times,
-                'reward': reward
-                
-            }
-            await self.validate_input(**quest_data)
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db['Servers']
-
-            quest_count = await self.get_server_quest_count(guild_id)
-            quest_limit = await self.get_quest_limit(guild_id)
-
-            if quest_count >= quest_limit:
-                raise ValueError("Quest limit exceeded for this server.")
-
-            users_in_server = await self.find_users_in_server(guild_id)
-            if not users_in_server:
-                raise ValueError("No users found in the server.")
-
-            for user_id in users_in_server:
-                quest_data['quest_id'] = quest_count + 1  # Set the quest_id to be the next number
-                await self.insert_quest(guild_id, user_id, quest_data, interaction)
-
-                # Update the quest_count to ensure unique quest IDs
-                quest_count += 1
-            logger.debug(f"Created quest for guild {guild_id} with action {action} and content {content}.")
-            return quest_count
-
-        except (ValueError, PyMongoError) as e:
-            logger.error(f"Error occurred while creating quest: {e}")
-            if interaction:
-                await self.handle_error(interaction, e, title="Quest Creation")
+            
+            # Find the server document by guild_id
+            server_doc = await server_collection.find_one({'_id': guild_id})
+            if not server_doc or 'server_quest' not in server_doc:
+                return None
+            
+            return server_doc['server_quest']
+        
+        except PyMongoError as e:
+            logger.error(f"Error occurred while getting server quests: {e}")
             raise e
+    async def create_quest(self, guild_id: str, action: str, method: str, content: str, channel_id: int, times: int, reward: int, interaction=None):
+     try:
+        # Calculate reward as a random value between 4 and 20 times the `times` value
+        reward = random.randint(4, 20) * times
+
+        # Ensure the reward is correctly set in the quest data
+        quest_data = {
+            'action': action,
+            'method': method,
+            'content': content,
+            'channel_id': channel_id,
+            'times': times,
+            'reward': reward
+        }
+        
+        await self.validate_input(**quest_data)
+        
+        # Store the quest data in MongoDB
+        await self.store_server_quest(guild_id, quest_data)
+
+        # Increment and assign the quest ID
+        quest_count = await self.get_server_quest_count(guild_id)
+        quest_data['quest_id'] = quest_count + 1
+        
+        # Insert the quest for each user in the server
+        users_in_server = await self.find_users_in_server(guild_id)
+        if not users_in_server:
+            raise ValueError("No users found in the server.")
+
+        for user_id in users_in_server:
+            await self.insert_quest(guild_id, user_id, quest_data, interaction)
+
+        logger.debug(f"Created quest for guild {guild_id} with action {action} and content {content}.")
+        
+        return quest_count + 1  # Return the incremented quest count
+
+     except (ValueError, PyMongoError) as e:
+        logger.error(f"Error occurred while creating quest: {e}")
+        if interaction:
+            await self.handle_error(interaction, e, title="Quest Creation")
+        raise e
 
     async def create_member_quest(self, guild_id: str, user_id: str, action: str, method: str, content: str, times: int, interaction=None):
         try:
@@ -770,6 +806,8 @@ class Quest_Data(commands.Cog):
             if interaction:
                 await self.handle_error(interaction, e, title="Member Quest Creation")
             raise e
+            
+            
     async def generate_random_quest_content(self, bot, author, guild_id):
         try:
             with open(self.quest_content_file, 'r') as quest_content_file:
@@ -1011,7 +1049,7 @@ class Quest_Data(commands.Cog):
 
             # Check if any quest matches the specified quest ID
             if any(quest.get('quest_id') == quest_id for quest in quests):
-                logger.debug(f"Found quest with ID {quest_id} for user {member_id} in guild {guild_id}.")
+                # logger.debug(f"Found quest with ID {quest_id} for user {member_id} in guild {guild_id}.")
                 
                 # Remove the quests that match the quest_id
                 new_quests = [quest for quest in quests if quest.get('quest_id') != quest_id]
@@ -1286,13 +1324,11 @@ class Quest_Slash(commands.Cog):
 
     @quest_group.command(
         name="setlimit",
-        description="Set the maximum number of quests a user can have.",
-    )
+        description="Set the maximum number of quests a user can have.",)
     async def set_quest_limit(
         self,
         interaction: discord.Interaction,
-        limit: int
-    ) -> None:
+        limit: int) -> None:
         try:
             guild_id = str(interaction.guild_id)
 
@@ -1305,6 +1341,40 @@ class Quest_Slash(commands.Cog):
             logger.error(f"An error occurred: {e}")
             traceback.print_exc()
             await error_custom_embed(self.bot, interaction, e, title="Quest Limit Update")
+            
+    @quest_group.command(
+     name="serverquest",
+     description="View all quests created for the server.",)        
+    async def view_all_server_quests(
+    self,
+    interaction: discord.Interaction
+) -> None:
+     try:
+        guild_id = str(interaction.guild_id)
+        
+        quests = await self.quest_data.server_quests(guild_id)
+        
+        embed = discord.Embed(title=f"All Server Quests for Server {guild_id}", color=0x7289DA)
+        
+        for quest_data in quests:
+            embed.add_field(
+                name=f"Quest ID: {quest_data['quest_id']}",
+                value=f"**Action:** {quest_data['action']}\n"
+                      f"**Method:** {quest_data['method']}\n"
+                      f"**Content:** {quest_data['content']}\n"
+                      f"**Channel ID:** {quest_data['channel_id']}\n"
+                      f"**Times:** {quest_data['times']}\n"
+                      f"**Reward:** {quest_data['reward']}\n",
+                inline=False
+            )
+        
+        await interaction.response.send_message(embed=embed)
+        logger.debug("Viewed all server quests successfully.")
+    
+     except Exception as e:
+        logger.error(f"An error occurred: {e}")
+        traceback.print_exc()
+        await self.quest_data.handle_error(interaction, e, title="View All Server Quests")
 
 
           
