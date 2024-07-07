@@ -7,13 +7,12 @@ import aiohttp
 import requests
 import platform
 import psutil
-
+import colorama
 from Imports.discord_imports import *
 from Imports.log_imports import *
 from colorama import Fore, Style
 import Data.const as const  # Importing the const module
 from Data.const import primary_color
-
 from datetime import datetime
 import sys
 import subprocess
@@ -66,78 +65,36 @@ class System(commands.Cog):
             python_emoji = emojis_data.get("python_emoji")
 
             python_version = platform.python_version()
-            if python_version is not None:
-                python_version_diff = const.PingConstants.format_diff(python_version)
-                python_version_info = python_version_diff
+            python_version_info = f"{python_version} {'Up to Date' if python_version >= await self.get_latest_python_version() else 'Outdated'}"
 
-                latest_python_version = await self.get_latest_python_version()
-                if latest_python_version and python_version < latest_python_version:
-                    i = '-'
-                    python_version_info += "└── Outdated"
-                else:
-                    i = '-'
-                    python_version_info += "└── Up to Date"
-            else:
-                python_version_info = "**Python Version**: ```diff\nVersion information not available\n```"
-
-            system_info = f"**System**: ```diff\n{const.PingConstants.format_diff(platform.system())}\n```" \
-                          f"**Processor**: ```diff\n{const.PingConstants.format_diff(platform.processor())}\n```" 
+            system_info = f"{platform.system()} {platform.processor()}"
             
-            threshold = 200  
-            lag = self.bot.latency * 1000 
-            gateway_latency = f"diff\n{'-' if lag > threshold else '+'} {round(lag)}ms\n"
-            gateway_latency += '└── Good' if lag <  threshold else '└── Bad'
+            threshold = 200
+            lag = self.bot.latency * 1000
+            gateway_latency = f"{'+' if lag < threshold else '-'} {round(lag)}ms"
             
-            
-
             cpu_usage_value = psutil.cpu_percent()
             mem_usage_value = psutil.virtual_memory().percent
 
-            cpu_usage_diff = const.PingConstants.format_diff(cpu_usage_value)
-            mem_usage_diff = const.PingConstants.format_diff(mem_usage_value)
+            cpu_status = "Good" if cpu_usage_value < 80 else "Bad"
+            mem_status = "Good" if mem_usage_value < 80 else "Bad"
+            
+            color =  discord.Color.green() if lag < threshold else discord.Color.red()
 
-            cpu_usage_tree = "└── Good" if cpu_usage_value < 80 else "└── Bad"
-            mem_usage_tree = "└── Good" if mem_usage_value < 80 else "└── Bad"
+            embed = discord.Embed(title='Pong', description=f"```diff\n{gateway_latency}```", color=color, timestamp=datetime.now())
 
-            cpu_usage = f'```diff\n{cpu_usage_diff}{cpu_usage_tree}```'
-            mem_usage = f'```diff\n{mem_usage_diff}{mem_usage_tree}```'
-            
-            x = f"{const.PingConstants.language_info['Language']} : {python_version_info}"
-            y = x.replace('-','').replace('+','')
-            x = y.split(" ")
-            lang = ""
-            if len(x) > 1:
-                if x[0] == const.PingConstants.language_info['Language']:
-                    result = f"{x[0]} : {x[1]}"
-                else:
-                    result = f"+ {x[0]} : {x[1]}"
-                    if len(x) > 2:
-                        lang += " " + " ".join(x[2:])
-                    else:
-                        lang = x[0]
-            
-            
-            
-            language_info = f"**Language**: ```diff\n+ {y}```" \
-                            f"**Discord Library**: ```diff\n{const.PingConstants.language_info['Discord Library']}\n```" \
-            
-                         
+            # embed.add_field(name="\u200b", value=f"```diff\nCPU: {cpu_usage_value}% {cpu_status}\n```", inline=True)
+            # embed.add_field(name="\u200b", value=f"```diff\nMemory: {mem_usage_value}% {mem_status}\n```", inline=True)
+            # embed.add_field(name="\u200b", value=f"```diff\nSystem: {system_info}\n```", inline=True)
+            # embed.add_field(name="\u200b", value=f"```diff\nPython: {python_version_info}\n```", inline=True)
+            # embed.add_field(name="\u200b", value=f"```diff\nDiscord Library: {const.PingConstants.language_info['Discord Library']}\n```", inline=True)
 
-            embed = discord.Embed(description=f"**Latency**```{gateway_latency}```", color=primary_color(),timestamp=datetime.now())
-            # embed.set_author(name=f"{self.bot.user.display_name} 🏓 ",icon_url=self.bot.user.avatar)
-            embed.add_field(name="CPU", value=f"{cpu_usage}", inline=True)
-            embed.add_field(name="Memory", value=f"{mem_usage}", inline=True)
-
-            # embed.add_field(name="", value=f"{system_info}", inline=False)
-            # embed.add_field(name="", value=f"{language_info}", inline=False)
-            embed.set_thumbnail(url=const.PingConstants.thumbnail_url)
-            embed.set_image(url=const.PingConstants.image_url)
-            embed.set_footer(text=f"{ctx.author.display_name} activated pong 🏓", icon_url=ctx.author.avatar)
+            # embed.set_thumbnail(url=ctx.author.avatar.url)
             await ctx.reply(embed=embed)
 
         except Exception as e:
             await const.error_custom_embed(self.bot, ctx, e, title="Ping")
-            logger.error(f"{Fore.RED}[System cog] Error occurred while sending ping embed: {e}{Style.RESET_ALL}")
+            logger.error(f"[System cog] Error occurred while sending ping embed: {e}")
 
     def cog_unload(self):
         logger.info(f"{Fore.RED}[System cog] Unloaded{Style.RESET_ALL}")
