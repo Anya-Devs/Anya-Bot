@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 from openai import AsyncOpenAI  # Assuming AsyncOpenAI is the correct import from your module
 
-
+import aiohttp
 import logging
 import traceback
 
@@ -21,10 +21,15 @@ from skimage.metrics import structural_similarity as ssim
 import asyncio
 import aiohttp
 
+
+
 class Ai(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.image_folder = 'Data/pokemon_images'
+        self.image_folder = 'Data/Images/pokemon_images'
+        self.huggingface_url = 'https://api-inference.huggingface.co/models/ehristoforu/dalle-3-xl-v2'
+        self.api_key = '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'
+
         
     @staticmethod
     async def fetch_pokemon_info(pokemon_name):
@@ -170,6 +175,10 @@ class Ai(commands.Cog):
         filepath = os.path.join(self.image_folder, filename)
 
         try:
+            # Ensure the image folder exists, create if it doesn't
+            if not os.path.exists(self.image_folder):
+                os.makedirs(self.image_folder)
+
             if os.path.exists(filepath):
                 await ctx.send(f"The Pokémon {pokemon_name} already exists in the database.")
                 logger.debug(f"The Pokémon {pokemon_name} already exists in the database.")
@@ -328,10 +337,10 @@ class Ai(commands.Cog):
                     resized_matched_img = cv2.resize(matched_img, (roi.shape[1], roi.shape[0]))
 
                     # Paths for saving images
-                    roi_path = 'Data/pokemon_images/detection/roi.png'
-                    matched_img_path = 'Data/pokemon_images/detection/matched_img.png'
-                    combined_img_path = 'Data/pokemon_images/detection/combined_comparison.png'
-                    detected_objects_path = "Data/pokemon_images/detection/detected_objects.png"
+                    roi_path = f'{self.image_folder}/detection/roi.png'
+                    matched_img_path = f'{self.image_folder}/detection/matched_img.png'
+                    combined_img_path = f'{self.image_folder}/detection/combined_comparison.png'
+                    detected_objects_path = f'{self.image_folder}/detection/detected_objects.png'
 
                     # Create necessary directories if they don't exist
                     os.makedirs(os.path.dirname(roi_path), exist_ok=True)
@@ -339,7 +348,12 @@ class Ai(commands.Cog):
                     # Save the images
                     cv2.imwrite(roi_path, roi)
                     cv2.imwrite(matched_img_path, resized_matched_img)
-                    combined_img = np.hstack((roi, resized_matched_img))
+                    if roi.shape[2] != resized_matched_img.shape[2]: # Resize or adjust dimensions as needed
+                        resized_roi = cv2.resize(roi, (resized_matched_img.shape[1], resized_matched_img.shape[0]))
+                        combined_img = np.hstack((resized_roi, resized_matched_img))
+                    else:
+                        combined_img = np.hstack((roi, resized_matched_img))
+                        
                     cv2.imwrite(combined_img_path, combined_img)
 
                     # Send the combined image (assuming Discord bot context)
@@ -377,8 +391,7 @@ class Ai(commands.Cog):
         logger.error(f"{error_message}: {e}")
         traceback.print_exc()
         await self.error_custom_embed(self.bot, ctx, error_message, title="Pokemon Prediction Error")
-        return None, 0      
-        
+        return None, 0
     async def calculate_similarity(self, img1, img2, size=(256, 256), num_sections=4):
         try:
             # Function to calculate color histogram similarity
@@ -447,11 +460,24 @@ class Ai(commands.Cog):
         except Exception as e:
             logger.error(f"Error calculating similarity: {e}")
             return [0.0]  # Return default similarity in case of errors
+
+    def ensure_correct_color_format(self, img):
+     """
+     Convert image to RGB format.
+     """
+     if img.shape[2] == 3:  # Check if the image has 3 color channels
+        return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+     elif img.shape[2] == 4:  # Check if the image has 4 color channels (with alpha)
+        return cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
+     return img
     
     
-    @commands.command(name='pokemon', description="Predict Pokémon from image, add new Pokémon, or download all images")
+
+
+    
+    @commands.command(name='predict', description="Predict Pokémon from image, add new Pokémon, or download all images", aliases=['p'])
     async def pokemon_command(self, ctx, action: str = None, *, arg: str = None):
-        if action == 'predict':
+        if action == 'predict' or action == None:
             await self.predict_pokemon_command(ctx, arg)
         elif action == 'add':
             await self.add_pokemon_command(ctx, arg)
@@ -469,29 +495,73 @@ class Ai(commands.Cog):
             )
            
             await ctx.reply(embed=embed)
+            
+    async def generate_image(self, prompt: str) -> bytes:
+        headers = {
+            "Authorization": f"Bearer {self.api_key}"
+        }
+        payload = {
+            "inputs": prompt,
+            "options": {
+                "wait_for_model": True
+            }
+        }
+
+        max_retries = 5
+        backoff_factor = 2
+
+        for attempt in range(max_retries):
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.huggingface_url, headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        return await response.read()  # Return image bytes
+                    elif response.status == 500:
+                        if attempt < max_retries - 1:
+                            # Wait before retrying
+                            wait_time = backoff_factor ** attempt
+                            await asyncio.sleep(wait_time)
+                        else:
+                            raise Exception(f"Failed to generate image: {response.status} - {await response.text()}")
+                    else:
+                        raise Exception(f"Failed to generate image: {response.status} - {await response.text()}")
+
+        raise Exception("Max retries exceeded")
 
     @commands.command(name='imagine', description="Generate an image", aliases=['i'])
     async def imagine(self, ctx: commands.Context, *, prompt: str):
-        try:
-            # Send initial message
-            embed = discord.Embed(title="Generating image...", color=discord.Color.blue())
-            message = await ctx.send(embed=embed)
+     try:
+        # Send initial message
+        embed = discord.Embed(title="Generating image...", color=discord.Color.blue())
+        message = await ctx.send(embed=embed)
 
-            # Generate image
-            image_url = await sdxl(prompt)
+        # Generate image
+        image_bytes = await self.generate_image(prompt)
+        
+        # Create a file-like object from image bytes
+        image_fp = io.BytesIO(image_bytes)
+        image_fp.seek(0)
 
-            # Edit message with the generated image
-            embed.title = "Generated Image"
-            embed.set_image(url=image_url)
-            await message.edit(embed=embed)
 
-        except Exception as e:
-            await ctx.send(f"An error occurred: {e}")
-     
+        # Save image bytes to a file-like object
+        image_path = "Data/Images/generated_image.png"
+        os.makedirs(os.path.dirname(image_path), exist_ok=True)  # Ensure directory exists
+        with open(image_path, "wb") as f:
+            f.write(image_bytes)
+
+        # Send the image in the response
+        file = discord.File(image_fp, filename="generated_image.png")
+        await ctx.send(file=file)
+
+        # Edit message with the generated image
+        embed.title = "Generated Image"
+        embed.set_image(url=f"attachment://generated_image.png")
+        await message.edit(embed=embed, attachments=[file])
+
+     except Exception as e:
+        await ctx.send(f"An error occurred: {e}")
+
         
         
         
-        
-
 def setup(bot):
     bot.add_cog(Ai(bot))
