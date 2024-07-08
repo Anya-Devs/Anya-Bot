@@ -2,7 +2,8 @@ import os
 import io
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageChops
+
 from openai import AsyncOpenAI  # Assuming AsyncOpenAI is the correct import from your module
 
 import aiohttp
@@ -14,7 +15,10 @@ from Imports.log_imports import logger
 from Data.const import error_custom_embed, sdxl
 
 from urllib.request import urlopen, urlretrieve
+
+from skimage.feature import match_template
 from skimage.metrics import structural_similarity as ssim
+
 
 
 
@@ -91,7 +95,26 @@ class Ai(commands.Cog):
         with open(filename, 'wb') as f:
             f.write(response.read())
 
-    async def predict_pokemon_command(self, ctx, url: str):
+    async def predict_pokemon_command(self, ctx, arg):
+        image_url = None
+        
+        if arg:
+            image_url = arg
+        elif ctx.message.attachments:
+            image_url = ctx.message.attachments[0].url
+        elif ctx.message.reference:
+            # Handle replying to a message with an image
+            reference_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+            if reference_message.attachments:
+                image_url = reference_message.attachments[0].url
+            elif reference_message.embeds:
+                embed = reference_message.embeds[0]
+                if embed.image:
+                    image_url = embed.image.url
+
+        await self.process_prediction(ctx, image_url)
+        
+    async def process_prediction(self, ctx, url):
         embed = discord.Embed(
             title="Predict Pokémon",
             description="Please send an image of the Pokémon to predict or provide a URL to the image.\n\nType `c` to cancel.",
@@ -169,6 +192,7 @@ class Ai(commands.Cog):
             logger.error(f"An error occurred during prediction: {e}\n{traceback_string}")
             await ctx.send("An error occurred during prediction. Please try again later.")
 
+
     async def add_pokemon_command(self, ctx, pokemon_name: str):
         logger.info(f"Attempting to add Pokémon: {pokemon_name}")
         filename = f"{pokemon_name}.png"
@@ -221,14 +245,16 @@ class Ai(commands.Cog):
 
             pokemon_files = [f for f in os.listdir(self.image_folder) if os.path.isfile(os.path.join(self.image_folder, f))]
             logger.debug(f"Number of Pokémon images found: {len(pokemon_files)}")
-
+            
             matches_list = []
+
             best_match = None
             highest_score = (float('-inf'), float('-inf'), '')  # Initialize with very low similarity score and empty name
 
             # Convert image to numpy array and ensure correct color format
             img_np = np.array(img)
             img_np = self.ensure_correct_color_format(img_np)
+            # Convert image to uint8 depth if needed
             if img_np.dtype != np.uint8:
                 img_np = img_np.astype(np.uint8)
 
@@ -262,16 +288,14 @@ class Ai(commands.Cog):
 
             # Only proceed if a valid contour is found
             if largest_contour_idx != -1:
-                # Get the bounding box of the largest contour
                 x, y, w, h = cv2.boundingRect(contours[largest_contour_idx])
 
-                # Adjust padding dynamically based on the dimensions of the bounding box
+                # Draw rectangle around the largest contour (for visualization)
+                cv2.rectangle(img_np, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+                # Determine padding dynamically based on the dimensions of the bounding box
                 padding_x = min(w // 2, img_np.shape[1] - w)
                 padding_y = min(h // 2, img_np.shape[0] - h)
-
-                # Ensure padding does not exceed image dimensions
-                padding_x = max(0, min(padding_x, x, img_np.shape[1] - (x + w)))
-                padding_y = max(0, min(padding_y, y, img_np.shape[0] - (y + h)))
 
                 # Crop region of interest (ROI) from the original image with adaptive padding
                 roi = img_np[max(y - padding_y, 0):min(y + h + padding_y, img_np.shape[0]),
@@ -342,6 +366,7 @@ class Ai(commands.Cog):
                     combined_img_path = f'{self.image_folder}/detection/combined_comparison.png'
                     detected_objects_path = f'{self.image_folder}/detection/detected_objects.png'
 
+
                     # Create necessary directories if they don't exist
                     os.makedirs(os.path.dirname(roi_path), exist_ok=True)
 
@@ -387,6 +412,8 @@ class Ai(commands.Cog):
         traceback.print_exc()
         await self.error_custom_embed(self.bot, ctx, error_message, title="Pokemon Prediction Error")
         return None, 0
+    
+    
     
     async def calculate_similarity(self, img1, img2, size=(256, 256), num_sections=4):
         try:
@@ -456,7 +483,18 @@ class Ai(commands.Cog):
         except Exception as e:
             logger.error(f"Error calculating similarity: {e}")
             return [0.0]  # Return default similarity in case of errors
-
+    
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
     def ensure_correct_color_format(self, img):
      """
      Convert image to RGB format.
@@ -466,9 +504,6 @@ class Ai(commands.Cog):
      elif img.shape[2] == 4:  # Check if the image has 4 color channels (with alpha)
         return cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
      return img
-    
-    
-
 
     
     @commands.command(name='predict', description="Predict Pokémon from image, add new Pokémon, or download all images", aliases=['p'])
