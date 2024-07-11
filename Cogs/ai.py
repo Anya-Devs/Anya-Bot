@@ -3,6 +3,8 @@ import io
 import cv2
 import numpy as np
 from PIL import Image, ImageChops
+from io import BytesIO
+
 
 from openai import AsyncOpenAI  # Assuming AsyncOpenAI is the correct import from your module
 
@@ -16,8 +18,11 @@ from Data.const import error_custom_embed, sdxl
 
 from urllib.request import urlopen, urlretrieve
 
+from sklearn.cluster import KMeans
+from scipy.spatial import distance
 from skimage.feature import match_template
 from skimage.metrics import structural_similarity as ssim
+
 
 
 
@@ -27,12 +32,14 @@ import aiohttp
 
 
 
+
 class Ai(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.image_folder = 'Data/Images/pokemon_images'
         self.huggingface_url = 'https://api-inference.huggingface.co/models/ehristoforu/dalle-3-xl-v2'
         self.api_key = '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'
+        self.error_custom_embed = error_custom_embed
 
         
     @staticmethod
@@ -416,78 +423,130 @@ class Ai(commands.Cog):
     
     
     async def calculate_similarity(self, img1, img2, size=(256, 256), num_sections=4):
-        try:
-            # Function to calculate color histogram similarity
-            def calculate_color_histogram_similarity(hist1, hist2):
-                # Use histogram intersection for comparison
-                similarity = cv2.compareHist(hist1, hist2, cv2.HISTCMP_INTERSECT)
-                return similarity
-            
-            # Resize images to the specified size
-            img1_resized = cv2.resize(np.array(img1), size)
-            img2_resized = cv2.resize(np.array(img2), size)
-            
-            # Convert images to RGB (assuming they are BGR due to cv2)
-            img1_rgb = cv2.cvtColor(img1_resized, cv2.COLOR_BGR2RGB)
-            img2_rgb = cv2.cvtColor(img2_resized, cv2.COLOR_BGR2RGB)
-            
-            # Split images into sections
-            height1, width1, _ = img1_rgb.shape
-            height2, width2, _ = img2_rgb.shape
-            
-            section_height = height1 // num_sections
-            section_width = width1 // num_sections
-            
-            # Initialize a list to store section similarities
-            section_similarities = []
-            
-            # Iterate through sections
+     try:
+        # Function to calculate color histogram similarity
+        def calculate_color_histogram_similarity(hist1, hist2):
+            # Use histogram intersection for comparison
+            similarity = cv2.compareHist(hist1, hist2, cv2.HISTCMP_INTERSECT)
+            return similarity
+        
+        # Resize images to the specified size
+        img1_resized = cv2.resize(np.array(img1), size)
+        img2_resized = cv2.resize(np.array(img2), size)
+        
+        # Convert images to RGB (assuming they are BGR due to cv2)
+        img1_rgb = cv2.cvtColor(img1_resized, cv2.COLOR_BGR2RGB)
+        img2_rgb = cv2.cvtColor(img2_resized, cv2.COLOR_BGR2RGB)
+        
+        # Split images into sections
+        height1, width1, _ = img1_rgb.shape
+        height2, width2, _ = img2_rgb.shape
+        
+        section_height = height1 // num_sections
+        section_width = width1 // num_sections
+        
+        # Initialize lists to store section similarities
+        section_similarities = []
+        
+        # Function to extract histogram for a given section
+        def extract_histogram(image, start_row, end_row, start_col, end_col):
+            section = image[start_row:end_row, start_col:end_col, :]
+            hist = cv2.calcHist([section], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+            cv2.normalize(hist, hist, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+            return hist
+        
+        # Iterate through sections
+        for i in range(num_sections):
+            for j in range(num_sections):
+                # Calculate section boundaries for both images
+                start_row1 = i * section_height
+                end_row1 = (i + 1) * section_height
+                start_col1 = j * section_width
+                end_col1 = (j + 1) * section_width
+                
+                start_row2 = i * (height2 // num_sections)
+                end_row2 = (i + 1) * (height2 // num_sections)
+                start_col2 = j * (width2 // num_sections)
+                end_col2 = (j + 1) * (width2 // num_sections)
+                
+                # Extract histograms for the sections
+                hist_img1 = extract_histogram(img1_rgb, start_row1, end_row1, start_col1, end_col1)
+                hist_img2 = extract_histogram(img2_rgb, start_row2, end_row2, start_col2, end_col2)
+                
+                # Calculate similarity between color histograms
+                section_similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
+                section_similarities.append(section_similarity)
+
+        # Additional types of sections
+        def calculate_additional_similarities(img1_rgb, img2_rgb):
+            additional_similarities = []
+
+            # Horizontal sections
             for i in range(num_sections):
-                for j in range(num_sections):
-                    # Calculate section boundaries for both images
-                    start_row1 = i * section_height
-                    end_row1 = (i + 1) * section_height
-                    start_col1 = j * section_width
-                    end_col1 = (j + 1) * section_width
-                    
-                    start_row2 = i * (height2 // num_sections)
-                    end_row2 = (i + 1) * (height2 // num_sections)
-                    start_col2 = j * (width2 // num_sections)
-                    end_col2 = (j + 1) * (width2 // num_sections)
-                    
-                    # Extract sections from both images
-                    section_img1 = img1_rgb[start_row1:end_row1, start_col1:end_col1, :]
-                    section_img2 = img2_rgb[start_row2:end_row2, start_col2:end_col2, :]
-                    
-                    # Calculate color histograms for the sections
-                    hist_img1 = cv2.calcHist([section_img1], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
-                    hist_img2 = cv2.calcHist([section_img2], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
-                    
-                    # Normalize histograms
-                    cv2.normalize(hist_img1, hist_img1, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-                    cv2.normalize(hist_img2, hist_img2, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-                    
-                    # Calculate similarity between color histograms
-                    section_similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
-                    section_similarities.append(section_similarity)
-            
-            # Calculate overall similarity as the average of section similarities
-            overall_similarity = np.mean(section_similarities)
-            
-            # Round overall_similarity to 4 decimal places
-            rounded_similarity = round(overall_similarity, 4)
-            
-            # Return overall similarity as a list (for consistency with previous implementation)
-            return [rounded_similarity]
+                start_row1 = i * section_height
+                end_row1 = (i + 1) * section_height
+                start_row2 = i * (height2 // num_sections)
+                end_row2 = (i + 1) * (height2 // num_sections)
+                
+                hist_img1 = extract_histogram(img1_rgb, start_row1, end_row1, 0, width1)
+                hist_img2 = extract_histogram(img2_rgb, start_row2, end_row2, 0, width2)
+                similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
+                additional_similarities.append(similarity)
+
+            # Vertical sections
+            for j in range(num_sections):
+                start_col1 = j * section_width
+                end_col1 = (j + 1) * section_width
+                start_col2 = j * (width2 // num_sections)
+                end_col2 = (j + 1) * (width2 // num_sections)
+                
+                hist_img1 = extract_histogram(img1_rgb, 0, height1, start_col1, end_col1)
+                hist_img2 = extract_histogram(img2_rgb, 0, height2, start_col2, end_col2)
+                similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
+                additional_similarities.append(similarity)
+
+            # Diagonal sections (top-left to bottom-right)
+            for k in range(num_sections):
+                start_row1 = k * section_height
+                end_row1 = (k + 1) * section_height
+                start_col1 = k * section_width
+                end_col1 = (k + 1) * section_width
+                
+                start_row2 = k * (height2 // num_sections)
+                end_row2 = (k + 1) * (height2 // num_sections)
+                start_col2 = k * (width2 // num_sections)
+                end_col2 = (k + 1) * (width2 // num_sections)
+                
+                hist_img1 = extract_histogram(img1_rgb, start_row1, end_row1, start_col1, end_col1)
+                hist_img2 = extract_histogram(img2_rgb, start_row2, end_row2, start_col2, end_col2)
+                similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
+                additional_similarities.append(similarity)
+
+            # Central section
+            central_section_size = (height1 // 2, width1 // 2)
+            central_hist_img1 = extract_histogram(img1_rgb, height1 // 4, 3 * height1 // 4, width1 // 4, 3 * width1 // 4)
+            central_hist_img2 = extract_histogram(img2_rgb, height2 // 4, 3 * height2 // 4, width2 // 4, 3 * width2 // 4)
+            central_similarity = calculate_color_histogram_similarity(central_hist_img1, central_hist_img2)
+            additional_similarities.append(central_similarity)
+
+            return additional_similarities
         
-        except Exception as e:
-            logger.error(f"Error calculating similarity: {e}")
-            return [0.0]  # Return default similarity in case of errors
+        # Calculate additional similarities and combine with section similarities
+        additional_similarities = calculate_additional_similarities(img1_rgb, img2_rgb)
+        section_similarities.extend(additional_similarities)
+        
+        # Calculate overall similarity as the average of all section similarities
+        overall_similarity = np.mean(section_similarities)
+        
+        # Round overall_similarity to 4 decimal places
+        rounded_similarity = round(overall_similarity, 4)
+        
+        # Return overall similarity as a list (for consistency with previous implementation)
+        return [rounded_similarity]
     
-        
-        
-        
-        
+     except Exception as e:
+        logger.error(f"Error calculating similarity: {e}")
+        return [0.0]  # Return default similarity in case of errors
         
         
         
@@ -593,8 +652,7 @@ class Ai(commands.Cog):
 
         
         
+      
         
-        
-
 def setup(bot):
     bot.add_cog(Ai(bot))
