@@ -17,7 +17,7 @@ class AnyaImages:
     question_anya = 'https://i.pinimg.com/236x/b7/23/1f/b7231fbf87eee22b6d1f35f83e9a80bd.jpg'
     select_quest = 'https://i.pinimg.com/474x/d9/af/95/d9af956f06d0de95689e2094f753aa2f.jpg' 
     select_ai = None
-    start_shop_thumbnail = 'https://i.pinimg.com/474x/0d/40/be/0d40be55c48956df31e023460b293197.jpg'
+    start_shop_thumbnail = 'https://i.pinimg.com/564x/fd/1d/49/fd1d49d255ca18236a27a38b8710681b.jpg'
     ping_banner_anya = 'https://i.pinimg.com/564x/db/98/ff/db98ffc40d53378a9999528b69d66d00.jpg'
     ping_image = 'https://i.pinimg.com/564x/25/da/ee/25daee24ea5fb98b5590d542d2879708.jpg'
     sleepy_anya = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR9y_MT3QHxXZVVzVlA94oFM8uIN0QH1fdw8Q6inySFmQ&s'
@@ -27,7 +27,7 @@ class AnyaImages:
     help_thumbnail = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQggKtOcHg_2xDGNeqtciU_-7iZ19F3lFbV091fGKq7KtJI5MuOzLBEPg2rQRZ9ru-tDGY&usqp=CAU'
     quest_completed_anya = 'https://i.pinimg.com/236x/26/3b/90/263b90473c3651b4fc3d30b462152c0b.jpg'
     agree_to_terms_anya = 'https://i.pinimg.com/474x/09/47/bc/0947bc96fe6f6af4a9779d994c0a2df0.jpg'
-    no_quest_anya = 'https://i.pinimg.com/236x/24/55/33/24553356591ac5daebf976a6d641b1cc.jpg' # 'https://i.pinimg.com/236x/38/b5/89/38b5893e071f60a9dbcc3074cbf70016.jpg' 
+    no_quest_anya = 'https://th.bing.com/th/id/OIP.iwQwh6xaDNpS2519HlwV8gHaKg?rs=1&pid=ImgDetMain' # 'https://i.pinimg.com/236x/38/b5/89/38b5893e071f60a9dbcc3074cbf70016.jpg' 
     show_quest_anya = 'https://i.pinimg.com/236x/23/2f/62/232f626bc0ec7a845198149fdc38e311.jpg'
     comfirmation_image_url = 'https://media.tenor.com/mWAIV_rO9FUAAAAe/happy-anime-girl-happy-anime.png'
 
@@ -307,7 +307,8 @@ class Quest_Completed_Embed:
             color=discord.Color.random()
         )
         
-        embed.add_field(name=f'{check_emoji} Completed', value=f'{user.mention} {method} {quest_content.replace("`", "")} - {times}x',inline=True)
+        embed.add_field(name=f'{check_emoji} Completed', value=f'{cheer_emoji} {method} {quest_content.replace("`", "")} - {times}x' ,inline=True)
+        embed.add_field(name='',value='',inline=True)
         embed.add_field(
             name=f'{reward_emoji} Reward',
             value=f'`{reward} stp`',
@@ -323,7 +324,7 @@ class ShopEmbed:
     @staticmethod
     async def start_shop_embed(bot, ctx):
         embed = discord.Embed(title='Spy Shop')
-        embed.description =  f":warning: *Remember these tools might make or break relshinships*, so please be careful. ||**Please, don't tell papa~**||"
+        embed.description = '```py\nBalance: 0 ```'  # f"*Remember these tools might make or break relshinships, so please be careful.*"
         embed.set_footer(text=f"Use the {bot.user.name}'s option menu to acquire your spy tool.")
         embed.set_thumbnail(url=AnyaImages.start_shop_thumbnail)
         return embed
