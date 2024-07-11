@@ -1,11 +1,29 @@
-import asyncio
 import os
+import sys
+import subprocess
 import traceback
+import asyncio
 
-import Imports.depend_imports as depend_imports
-from Imports.log_imports import logger
+"""
+   : Run This if any installation problems occur
+
+"""
+
+""" 
+def run_package_installer():
+    try:
+        subprocess.check_call([sys.executable, "Imports/depend_imports.py"])
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred while running the package installer: {e}")
+        
+run_package_installer()
+"""
+
 from Imports.depend_imports import *
+import Imports.depend_imports as depend_imports
 from Imports.discord_imports import *
+from Imports.log_imports import logger
+
 from colorama import Fore, Style  # Import Fore and Style explicitly
 from dotenv import load_dotenv
 
@@ -15,6 +33,7 @@ load_dotenv()
 import pymongo  # Import database API
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import ConfigurationError
+
 
 
 class BotSetup(commands.Bot):
@@ -85,3 +104,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
