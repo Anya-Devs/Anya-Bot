@@ -22,13 +22,15 @@ class PackageInstaller:
             'scikit-learn',
             'matplotlib',
             'seaborn',
-            'imagehash'
+            'imagehash',
+            'scipy'
         ]
 
     def install_packages(self):
+        print('Running install_packages :D')
         # Construct the pip install command
         command = ' && '.join([f'pip install {pkg}' for pkg in self.packages])
-
+        
         # Execute the command
         os.system(command)
 
@@ -60,3 +62,4 @@ if __name__ == "__main__":
     installer = PackageInstaller()
     installer.install_packages()
     load_environment_variables()
+
