@@ -430,13 +430,35 @@ class Ai(commands.Cog):
             similarity = cv2.compareHist(hist1, hist2, cv2.HISTCMP_INTERSECT)
             return similarity
         
+        # Function to find and return the largest contour bounding box
+        def find_largest_contour(image):
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            _, thresh = cv2.threshold(gray, 127, 255, 0)
+            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # Find the largest contour
+            if contours:
+                largest_contour = max(contours, key=cv2.contourArea)
+                x, y, w, h = cv2.boundingRect(largest_contour)
+                return x, y, w, h
+            else:
+                return 0, 0, image.shape[1], image.shape[0]  # Return full image if no contour found
+        
         # Resize images to the specified size
         img1_resized = cv2.resize(np.array(img1), size)
         img2_resized = cv2.resize(np.array(img2), size)
         
+        # Find ROI for img1 and img2
+        x1, y1, w1, h1 = find_largest_contour(img1_resized)
+        x2, y2, w2, h2 = find_largest_contour(img2_resized)
+        
+        # Crop images based on ROI
+        img1_cropped = img1_resized[y1:y1+h1, x1:x1+w1]
+        img2_cropped = img2_resized[y2:y2+h2, x2:x2+w2]
+        
         # Convert images to RGB (assuming they are BGR due to cv2)
-        img1_rgb = cv2.cvtColor(img1_resized, cv2.COLOR_BGR2RGB)
-        img2_rgb = cv2.cvtColor(img2_resized, cv2.COLOR_BGR2RGB)
+        img1_rgb = cv2.cvtColor(img1_cropped, cv2.COLOR_BGR2RGB)
+        img2_rgb = cv2.cvtColor(img2_cropped, cv2.COLOR_BGR2RGB)
         
         # Split images into sections
         height1, width1, _ = img1_rgb.shape
@@ -477,62 +499,76 @@ class Ai(commands.Cog):
                 section_similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
                 section_similarities.append(section_similarity)
 
-        # Additional types of sections
-        def calculate_additional_similarities(img1_rgb, img2_rgb):
-            additional_similarities = []
+        # Calculate additional similarities (horizontal, vertical, diagonal, central, corners)
+        additional_similarities = []
 
-            # Horizontal sections
-            for i in range(num_sections):
-                start_row1 = i * section_height
-                end_row1 = (i + 1) * section_height
-                start_row2 = i * (height2 // num_sections)
-                end_row2 = (i + 1) * (height2 // num_sections)
-                
-                hist_img1 = extract_histogram(img1_rgb, start_row1, end_row1, 0, width1)
-                hist_img2 = extract_histogram(img2_rgb, start_row2, end_row2, 0, width2)
-                similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
-                additional_similarities.append(similarity)
+        # Horizontal sections
+        for i in range(num_sections):
+            start_row1 = i * section_height
+            end_row1 = (i + 1) * section_height
+            start_row2 = i * (height2 // num_sections)
+            end_row2 = (i + 1) * (height2 // num_sections)
+            
+            hist_img1 = extract_histogram(img1_rgb, start_row1, end_row1, 0, width1)
+            hist_img2 = extract_histogram(img2_rgb, start_row2, end_row2, 0, width2)
+            similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
+            additional_similarities.append(similarity)
 
-            # Vertical sections
-            for j in range(num_sections):
-                start_col1 = j * section_width
-                end_col1 = (j + 1) * section_width
-                start_col2 = j * (width2 // num_sections)
-                end_col2 = (j + 1) * (width2 // num_sections)
-                
-                hist_img1 = extract_histogram(img1_rgb, 0, height1, start_col1, end_col1)
-                hist_img2 = extract_histogram(img2_rgb, 0, height2, start_col2, end_col2)
-                similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
-                additional_similarities.append(similarity)
+        # Vertical sections
+        for j in range(num_sections):
+            start_col1 = j * section_width
+            end_col1 = (j + 1) * section_width
+            start_col2 = j * (width2 // num_sections)
+            end_col2 = (j + 1) * (width2 // num_sections)
+            
+            hist_img1 = extract_histogram(img1_rgb, 0, height1, start_col1, end_col1)
+            hist_img2 = extract_histogram(img2_rgb, 0, height2, start_col2, end_col2)
+            similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
+            additional_similarities.append(similarity)
 
-            # Diagonal sections (top-left to bottom-right)
-            for k in range(num_sections):
-                start_row1 = k * section_height
-                end_row1 = (k + 1) * section_height
-                start_col1 = k * section_width
-                end_col1 = (k + 1) * section_width
-                
-                start_row2 = k * (height2 // num_sections)
-                end_row2 = (k + 1) * (height2 // num_sections)
-                start_col2 = k * (width2 // num_sections)
-                end_col2 = (k + 1) * (width2 // num_sections)
-                
-                hist_img1 = extract_histogram(img1_rgb, start_row1, end_row1, start_col1, end_col1)
-                hist_img2 = extract_histogram(img2_rgb, start_row2, end_row2, start_col2, end_col2)
-                similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
-                additional_similarities.append(similarity)
+        # Diagonal sections (top-left to bottom-right)
+        for k in range(num_sections):
+            start_row1 = k * section_height
+            end_row1 = (k + 1) * section_height
+            start_col1 = k * section_width
+            end_col1 = (k + 1) * section_width
+            
+            start_row2 = k * (height2 // num_sections)
+            end_row2 = (k + 1) * (height2 // num_sections)
+            start_col2 = k * (width2 // num_sections)
+            end_col2 = (k + 1) * (width2 // num_sections)
+            
+            hist_img1 = extract_histogram(img1_rgb, start_row1, end_row1, start_col1, end_col1)
+            hist_img2 = extract_histogram(img2_rgb, start_row2, end_row2, start_col2, end_col2)
+            similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
+            additional_similarities.append(similarity)
 
-            # Central section
-            central_section_size = (height1 // 2, width1 // 2)
-            central_hist_img1 = extract_histogram(img1_rgb, height1 // 4, 3 * height1 // 4, width1 // 4, 3 * width1 // 4)
-            central_hist_img2 = extract_histogram(img2_rgb, height2 // 4, 3 * height2 // 4, width2 // 4, 3 * width2 // 4)
-            central_similarity = calculate_color_histogram_similarity(central_hist_img1, central_hist_img2)
-            additional_similarities.append(central_similarity)
+        # Central section
+        central_hist_img1 = extract_histogram(img1_rgb, height1 // 4, 3 * height1 // 4, width1 // 4, 3 * width1 // 4)
+        central_hist_img2 = extract_histogram(img2_rgb, height2 // 4, 3 * height2 // 4, width2 // 4, 3 * width2 // 4)
+        central_similarity = calculate_color_histogram_similarity(central_hist_img1, central_hist_img2)
+        additional_similarities.append(central_similarity)
 
-            return additional_similarities
-        
-        # Calculate additional similarities and combine with section similarities
-        additional_similarities = calculate_additional_similarities(img1_rgb, img2_rgb)
+        # Corner sections
+        corner_sections = [
+            (0, section_height, 0, section_width),  # Top-left corner
+            (0, section_height, width1 - section_width, width1),  # Top-right corner
+            (height1 - section_height, height1, 0, section_width),  # Bottom-left corner
+            (height1 - section_height, height1, width1 - section_width, width1)  # Bottom-right corner
+        ]
+
+        for start_row1, end_row1, start_col1, end_col1 in corner_sections:
+            start_row2 = start_row1 * (height2 // height1)
+            end_row2 = end_row1 * (height2 // height1)
+            start_col2 = start_col1 * (width2 // width1)
+            end_col2 = end_col1 * (width2 // width1)
+            
+            hist_img1 = extract_histogram(img1_rgb, start_row1, end_row1, start_col1, end_col1)
+            hist_img2 = extract_histogram(img2_rgb, start_row2, end_row2, start_col2, end_col2)
+            similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
+            additional_similarities.append(similarity)
+
+        # Combine all similarities
         section_similarities.extend(additional_similarities)
         
         # Calculate overall similarity as the average of all section similarities
@@ -547,9 +583,6 @@ class Ai(commands.Cog):
      except Exception as e:
         logger.error(f"Error calculating similarity: {e}")
         return [0.0]  # Return default similarity in case of errors
-        
-        
-        
         
         
         
