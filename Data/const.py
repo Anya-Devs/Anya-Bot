@@ -25,6 +25,7 @@ class AnyaImages:
     look_radiant_anya = 'https://i.pinimg.com/236x/0b/cf/4b/0bcf4b9002db8cbb5f5d42855b5d460c.jpg'
     ping_thumbnail = 'https://i.pinimg.com/236x/5d/d7/d1/5dd7d1d91933d59b8f21732efba70368.jpg'
     help_thumbnail = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQggKtOcHg_2xDGNeqtciU_-7iZ19F3lFbV091fGKq7KtJI5MuOzLBEPg2rQRZ9ru-tDGY&usqp=CAU'
+    help_pokemon_thumbnail = 'https://pbs.twimg.com/media/FRaJipkWUAADmt-?format=jpg&name=4096x4096'
     quest_completed_anya = 'https://i.pinimg.com/236x/26/3b/90/263b90473c3651b4fc3d30b462152c0b.jpg'
     agree_to_terms_anya = 'https://i.pinimg.com/474x/09/47/bc/0947bc96fe6f6af4a9779d994c0a2df0.jpg'
     no_quest_anya = 'https://th.bing.com/th/id/OIP.iwQwh6xaDNpS2519HlwV8gHaKg?rs=1&pid=ImgDetMain' # 'https://i.pinimg.com/236x/38/b5/89/38b5893e071f60a9dbcc3074cbf70016.jpg' 
@@ -64,7 +65,7 @@ class EmbedFactory:
 class Help_Embed_Mapping:
     embed = {
             "title": "Help Command",
-            "description": "Need some help using certain commands? Take a look at the select options and choose the cog you need assistance with.",
+            "description": "Need some help using certain commands?\n-# Take a look at the select options and choose the cog you need assistance with.",
             "thumbnail_url": AnyaImages.help_thumbnail,
             "image_url": "https://static1.cbrimages.com/wordpress/wp-content/uploads/2022/11/Spy-x-family-ep-18-Loid-and-Anyas-test-grades.jpg"
     }
@@ -92,6 +93,13 @@ class Help_Select_Embed_Mapping:
             "thumbnail_url": AnyaImages.select_ai
         },
         
+        "pokemon": {
+            "title": "Pokemon",
+            "description": "Learn the fandom of pokemon and explore the information related to pokemon and its fandom.\n-# Long live Pokemon Fandom",
+            "color": discord.Color.red(),  # Customize color as needed
+            "thumbnail_url": AnyaImages.help_pokemon_thumbnail
+        },
+        
         "Cog2": {
             "title": "Title for Cog2",
             "description": "Description for Cog2",
@@ -102,9 +110,10 @@ class Help_Select_Embed_Mapping:
     }
 
     emojis = {
-        "system": "<a:anya:1258564276046790677>", # "<:system_icon:1238536111266201610>",
+        "system": "<:system:1261208067085959320>", # "<:system_icon:1238536111266201610>",
         "quest": "<:anyasus:1258563706518765669> ",
         "ai": '<:ai:1258206841737973842> ',
+        'pokemon': '<:Pokeball:1261208239891156992>',
         # Add more emoji mappings for other cogs as needed
     }
 
