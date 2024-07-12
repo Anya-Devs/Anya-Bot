@@ -20,105 +20,6 @@ from Imports.log_imports import *
 
 
 
-class Quest(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-        self.quest_data = Quest_Data(bot)
-        self.shop_file = 'Data/Quest/shop.json'
-
-    @commands.command(name='quest', aliases=['q'])
-    async def quest(self, ctx, test=None):
-        logger.debug("Quest command invoked.")
-        if test:
-            author = ctx.author
-            guild_id = str(ctx.guild.id)
-            content = await self.quest_data.generate_random_quest_content(self.bot, author, guild_id)
-            await ctx.send(str(content))
-            return
-
-        try:
-            user_id = str(ctx.author.id)
-            guild_id = str(ctx.guild.id)
-
-            user_exists = await self.quest_data.find_user_in_server(user_id, guild_id)
-            
-            if not user_exists:
-                prompt_embed = await Quest_Prompt.get_embed(self.bot)
-                await ctx.reply(embed=prompt_embed, view=Quest_Button(self.bot, ctx))
-                return
-
-            quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
-
-            if quests:
-                view = Quest_View(self.bot, quests, ctx)
-                embeds = await view.generate_embeds()
-                
-                if len(quests) > 0:  # Check if there are any embeds generated
-                    if len(quests) > 2:
-                        await ctx.reply(embeds=embeds, view=view)  # Send first 2 embeds
-                    else:
-                        await ctx.reply(embeds=embeds)  # Send all embeds
-
-            else:
-                no_quest_embed = await QuestEmbed.get_no_quest_embed()
-                await ctx.reply(embed=no_quest_embed)
-                
-        except Exception as e:
-            error_message = "An error occurred while fetching quests."
-            logger.error(f"{error_message}: {e}")
-            traceback.print_exc()
-            await error_custom_embed(self.bot, ctx, error_message, title="Quest Fetch Error")
-            
-    @commands.command(name='stars', aliases=['bal','points','balance'])
-    async def balance(self, ctx, method=None, amount: int = None, member: discord.Member = None):
-        user_id = str(ctx.author.id)
-        guild_id = str(ctx.guild.id)
-        if member is None:
-            member = ctx.author
-            
-        try:
-            # Check if the command includes the "add" flag
-            if method == "add":
-                # Check if the user has administrator permissions
-                if ctx.author.id == 1030285330739363880:
-                    await self.quest_data.add_balance(str(member.id), guild_id, amount)
-                    amount_with_commas = "{:,}".format(amount)  # Add commas to amount
-                    await ctx.send(f":white_check_mark: Successfully added {amount_with_commas} balance to {member.display_name}'s account.")
-                else:
-                    await ctx.send("You don't have permission to use this command to add balance to other users.")
-            else:
-                if member is None and amount is None:
-                    # Ensure the user has a balance
-                    await self.quest_data.initialize_balance(user_id, guild_id)
-
-                # Retrieve and display the user's balance
-                balance = await self.quest_data.get_balance(user_id, guild_id)
-                balance_with_commas = "{:,}".format(balance)  # Add commas to balance
-                await ctx.send(f"Your balance: {balance_with_commas} Stella Points")
-
-        except Exception as e:
-            # Log the error
-            logger.error(f"An error occurred in the balance command: {e}")
-            # Send a message to the user indicating an error occurred
-            await ctx.send("An error occurred while processing your request. Please try again later.")
-
-    @commands.command(name='shop')
-    async def shop(self, ctx):
-        try:
-            shop_data = self.read_shop_file(self.shop_file)
-            view = ShopView(self.bot, shop_data)
-            await view.start(ctx)
-
-        except Exception as e:
-            await ctx.send(f"An error occurred while processing the shop: {e}")
-
-
-
-    def read_shop_file(self, filename):
-        with open(filename, 'r', encoding='utf-8') as file:
-            shop_data = json.load(file)
-        
-        return shop_data
 
 class ShopView(discord.ui.View):
     def __init__(self, bot, shop_data):
@@ -221,8 +122,95 @@ class SpyToolSelect(discord.ui.Select):
         except Exception as e:
             await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
     
-    
-    
+class Quest(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.quest_data = Quest_Data(bot)
+        self.shop_file = 'Data/Quest/shop.json'
+
+    @commands.command(name='quest', aliases=['q'])
+    async def quest(self, ctx, test=None):
+        logger.debug("Quest command invoked.")
+        if test:
+            author = ctx.author
+            guild_id = str(ctx.guild.id)
+            content = await self.quest_data.generate_random_quest_content(self.bot, author, guild_id)
+            await ctx.send(str(content))
+            return
+
+        try:
+            user_id = str(ctx.author.id)
+            guild_id = str(ctx.guild.id)
+
+            user_exists = await self.quest_data.find_user_in_server(user_id, guild_id)
+            
+            if not user_exists:
+                prompt_embed = await Quest_Prompt.get_embed(self.bot)
+                await ctx.reply(embed=prompt_embed, view=Quest_Button(self.bot, ctx))
+                return
+
+            quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
+
+            if quests:
+                view = Quest_View(self.bot, quests, ctx)
+                messages = await view.generate_messages()
+                
+                if len(quests) > 0:
+                    if len(quests) > 3:
+                        await ctx.reply(content="\n\n".join(messages), view=view)
+                    else:
+                        await ctx.reply(content="\n\n".join(messages))
+
+            else:
+                no_quest_message = "You have no quests."
+                await ctx.reply(no_quest_message)
+                
+        except Exception as e:
+            error_message = "An error occurred while fetching quests."
+            logger.error(f"{error_message}: {e}")
+            traceback.print_exc()
+            await ctx.send(f"{error_message}")
+
+    @commands.command(name='stars', aliases=['bal','points','balance'])
+    async def balance(self, ctx, method=None, amount: int = None, member: discord.Member = None):
+        user_id = str(ctx.author.id)
+        guild_id = str(ctx.guild.id)
+        if member is None:
+            member = ctx.author
+            
+        try:
+            if method == "add":
+                if ctx.author.id == 1030285330739363880:
+                    await self.quest_data.add_balance(str(member.id), guild_id, amount)
+                    amount_with_commas = "{:,}".format(amount)
+                    await ctx.send(f":white_check_mark: Successfully added {amount_with_commas} balance to {member.display_name}'s account.")
+                else:
+                    await ctx.send("You don't have permission to use this command to add balance to other users.")
+            else:
+                if member is None and amount is None:
+                    await self.quest_data.initialize_balance(user_id, guild_id)
+                balance = await self.quest_data.get_balance(user_id, guild_id)
+                balance_with_commas = "{:,}".format(balance)
+                await ctx.send(f"Your balance: {balance_with_commas} Stella Points")
+
+        except Exception as e:
+            logger.error(f"An error occurred in the balance command: {e}")
+            await ctx.send("An error occurred while processing your request. Please try again later.")
+
+    @commands.command(name='shop')
+    async def shop(self, ctx):
+        try:
+            shop_data = self.read_shop_file(self.shop_file)
+            view = ShopView(self.bot, shop_data)
+            await view.start(ctx)
+
+        except Exception as e:
+            await ctx.send(f"An error occurred while processing the shop: {e}")
+
+    def read_shop_file(self, filename):
+        with open(filename, 'r', encoding='utf-8') as file:
+            shop_data = json.load(file)
+        return shop_data
     
 class Quest_View(View):
     def __init__(self, bot, quests, ctx, page=0, filtered_quests=None):
@@ -232,26 +220,21 @@ class Quest_View(View):
         self.filtered_quests = filtered_quests if filtered_quests is not None else quests
         self.ctx = ctx
         self.page = page
-        self.max_pages = min((len(self.filtered_quests) + 2) // 3, 2)  # Calculate max pages, with a maximum of 2 pages
+        self.max_pages = min((len(self.filtered_quests) + 2) // 3, 2)
 
-        # Add Quest_Select_Filter regardless of page
-        self.add_item(Quest_Select_Filter(bot, quests, ctx))  # Pass original quests list
-
-        # Add Quest_Select if page > 1
+        self.add_item(Quest_Select_Filter(bot, quests, ctx))
         if self.page < self.max_pages - 1:
             self.add_item(Quest_Select(bot, self.filtered_quests, ctx, self.max_pages))
-
-        # Add Previous and Next buttons based on page
         if self.page > 0:
             self.add_item(QuestButton("Previous", discord.ButtonStyle.primary, "previous", bot, self.filtered_quests, ctx, self.page))
         if self.page < self.max_pages - 1:
             self.add_item(QuestButton("Next", discord.ButtonStyle.primary, "next", bot, self.filtered_quests, ctx, self.page))
 
-    async def generate_embeds(self):
-        start_index = self.page * 2
-        end_index = start_index + 2
-        embeds = []
-        
+    async def generate_messages(self):
+        start_index = self.page * 3
+        end_index = start_index + 3
+        messages = []
+
         for quest in self.filtered_quests[start_index:end_index]:
             quest_id = quest['quest_id']
             progress = quest['progress']
@@ -275,26 +258,12 @@ class Quest_View(View):
             reward_emoji_id = 1247800150479339581
             reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
             
-            objective = f"{action.title()} - {method.title()}: {content}" 
+            objective = f"{action.title()} - {method.title()}: {content}"
+            message = f"**Quest {quest_id}**\n{objective}\n{progress_bar} {progress}/{times}\nLocation: {channel.mention}\nReward: {reward_emoji} `{reward} stp`"
+            messages.append(message)
 
+        return messages
 
-            embed = discord.Embed(title=f'Quest {quest_id}', color=primary_color())
-            embed.add_field(name=f' ', value=f'{objective}\n{progress_bar} {progress}/{times} ', inline=True)
-            embed.add_field(name="Location", value=channel.mention, inline=True)
-
-       
-            if reward:
-             embed.add_field(name="Reward", value=f"{reward_emoji} `{reward} stp`", inline=False)
-
-
-
-            embeds.append(embed)
-
-        return embeds
-        
-    
-
-    
 class Quest_Select(Select):
     def __init__(self, bot, quests, ctx, max_pages):
         options = [
@@ -311,13 +280,13 @@ class Quest_Select(Select):
         try:
             page_index = int(self.values[0])
             view = Quest_View(self.bot, self.quests, self.ctx, page=page_index, filtered_quests=self.quests)
-            embeds = await view.generate_embeds()
-            await interaction.response.edit_message(embeds=embeds, view=view)
+            messages = await view.generate_messages()
+            await interaction.response.edit_message(content="\n\n".join(messages), view=view)
         except Exception as e:
             error_message = "An error occurred while fetching quests."
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
-            await error_custom_embed(self.bot, self.ctx, error_message, title="Quest Fetch Error")
+            await ctx.send(f"{error_message}")
 
 class Quest_Select_Filter(Select):
     def __init__(self, bot, quests, ctx):
@@ -326,32 +295,28 @@ class Quest_Select_Filter(Select):
             discord.SelectOption(label=method.title(), value=method)
             for method in methods
         ]
-        options.insert(0, discord.SelectOption(label="All", value="all"))  # Add an option to show all quests
+        options.insert(0, discord.SelectOption(label="All", value="all"))
         super().__init__(placeholder="Filter...", options=options)
         self.bot = bot
         self.quests = quests
         self.ctx = ctx
 
     async def callback(self, interaction: discord.Interaction):
-     try:
-        selected_method = self.values[0]
-        if selected_method == "all":
-            print('All')
-            filtered_quests = None  # Set filtered_quests to None to indicate all quests
-        else:
-            filtered_quests = [quest for quest in self.quests if quest['method'] == selected_method]
+        try:
+            selected_method = self.values[0]
+            if selected_method == "all":
+                filtered_quests = None
+            else:
+                filtered_quests = [quest for quest in self.quests if quest['method'] == selected_method]
 
-        view = Quest_View(self.bot, self.quests, self.ctx, filtered_quests=filtered_quests)
-        embeds = await view.generate_embeds()
-        await interaction.response.edit_message(embeds=embeds, view=view)
-     except Exception as e:
-        error_message = "An error occurred while fetching quests."
-        logger.error(f"{error_message}: {e}")
-        traceback.print_exc()
-        await error_custom_embed(self.bot, self.ctx, error_message, title="Quest Fetch Error")
-
-        
-
+            view = Quest_View(self.bot, self.quests, self.ctx, filtered_quests=filtered_quests)
+            messages = await view.generate_messages()
+            await interaction.response.edit_message(content="\n\n".join(messages), view=view)
+        except Exception as e:
+            error_message = "An error occurred while fetching quests."
+            logger.error(f"{error_message}: {e}")
+            traceback.print_exc()
+            await ctx.send(f"{error_message}")
 
 class QuestButton(discord.ui.Button):
     def __init__(self, label, style, custom_id, bot, quests, ctx, page):
@@ -366,10 +331,9 @@ class QuestButton(discord.ui.Button):
             self.page -= 1
         elif self.custom_id == "next":
             self.page += 1
-        view = Quest_View(self.bot, self.quests, self.ctx, self.page)  # Change to Quest_View
-        embeds = await view.generate_embeds()  # Await the method call
-        await interaction.response.edit_message(embeds=embeds, view=view)
-
+        view = Quest_View(self.bot, self.quests, self.ctx, self.page)
+        messages = await view.generate_messages()
+        await interaction.response.edit_message(content="\n\n".join(messages), view=view)
 
 
             
