@@ -98,42 +98,46 @@ class MaterialsButton(discord.ui.View):
                  custom_id=name  # Use material_name as custom_id
                  )
                 self.add_item(material_button)  # Add each button to the view
+                material_button.callback = self.material_callback
               except Exception as e:
                    traceback.print_exc()  # Print traceback for detailed error feedback
+                    
+            
 
-            await button.response.send_message(embed=shop_embed, view=self, ephemeral=True)
+            await button.response.send_message(embed=shop_embed, view=self, ephemeral=True)  
+            
 
-            async def callback(self, interaction: discord.Interaction):
-             try:
-              material_name = interaction.data["custom_id"]
-              material = next((m for m in self.shop_data["Materials"] if m.get("name") == material_name), None)
             
-              if not material:
-                await interaction.followup.send("Material not found.", ephemeral=True)
-                return
+            async def material_callback(self, interaction):
+              try:
+               material_name = interaction.data["custom_id"]
+               material = next((m for m in self.shop_data["Materials"] if m.get("name") == material_name), None)
             
-              price = material.get("price", 0)
+               if not material:
+                   await interaction.followup.send("Material not found.", ephemeral=True)
+                   return
             
-              user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+               price = material.get("price", 0)
             
-              if user_balance >= price:
-                await self.quest_data.add_item_to_inventory(self.user_id, material_name, 1)
-                spent = -price
-                await self.quest_data.add_balance(self.user_id, self.guild_id, spent)
+               user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            
+               if user_balance >= price:
+                   await self.quest_data.add_item_to_inventory(self.user_id, material_name, 1)
+                   spent = -price
+                   await self.quest_data.add_balance(self.user_id, self.guild_id, spent)
                 
-                await interaction.followup.send(f"You have successfully purchased {material_name} for {price} points.", ephemeral=True)
-              else:
-                await interaction.followup.send(f"You do not have enough points to purchase {material_name}.", ephemeral=True)
-             except Exception as e:
-                   traceback.print_exc()  # Print traceback for detailed error feedback
-
-            
-           
+                   await interaction.followup.send(f"You have successfully purchased {material_name} for {price} points.", ephemeral=True)
+               else:
+                   await interaction.followup.send(f"You do not have enough points to purchase {material_name}.", ephemeral=True)
+        
+              except Exception as e:
+               traceback.print_exc()  # Print traceback for detailed error feedback
+               await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
+    
         except Exception as e:
             traceback.print_exc()  # Print traceback for detailed error feedback
-
             await button.response.send_message(f"An error occurred: {e}", ephemeral=True)
-
+            
     
     
 class SpyToolSelect(discord.ui.Select):
@@ -193,7 +197,7 @@ class SpyToolSelect(discord.ui.Select):
         else:
             indicator_emoji = "🟢"  # Green
 
-        return f"{self.materials_dict.get(material_name, '')} - {user_quantity}/{required_quantity} {indicator_emoji}"
+        return f"{indicator_emoji} : {self.materials_dict.get(material_name, '')} - {user_quantity}/{required_quantity}"
     
     
 
