@@ -25,12 +25,22 @@ class ShopView(discord.ui.View):
     def __init__(self, bot, shop_data):
         super().__init__()
         self.bot = bot
+        self.quest_data = Quest_Data(bot)
+
         self.shop_data = shop_data
         self.materials_dict = {material['name']: material['emoji'] for material in self.shop_data.get("Materials", [])}
 
     async def start(self, ctx):
      try:
-        shop_embed = await ShopEmbed.start_shop_embed(self.bot, ctx)
+        user_id = str(ctx.author.id)
+        guild_id = str(ctx.guild.id)
+
+        
+        balance = await self.quest_data.get_balance(user_id, guild_id) or 0
+        balance = "{:,}".format(balance)
+        
+        
+        shop_embed = await ShopEmbed.start_shop_embed(self.bot, ctx, balance)
         
         spy_tools = self.shop_data.get("Spy Tools", [])
         
