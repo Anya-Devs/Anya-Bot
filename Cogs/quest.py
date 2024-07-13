@@ -36,7 +36,7 @@ class ShopView(discord.ui.View):
         guild_id = str(ctx.guild.id)
 
         
-        balance = await self.quest_data.get_balance(user_id, guild_id) or 0
+        balance = await self.quest_data.get_balance(user_id, guild_id)
         balance = "{:,}".format(balance)
         
         
@@ -52,9 +52,9 @@ class ShopView(discord.ui.View):
             shop_embed.add_field(name=f"", value=f'{emoji} `{name}`', inline=True)
         """
         
-                
+
         # Create and add the select menu
-        select = SpyToolSelect(self.shop_data, self.materials_dict)
+        select = SpyToolSelect(self.shop_data, self.materials_dict, self.quest_data, user_id, guild_id)
         self.add_item(select)    
         # Send the initial embed with the select menu
         await ctx.send(embed=shop_embed, view=self)
@@ -72,9 +72,10 @@ class ShopView(discord.ui.View):
 
     
 class MaterialsButton(discord.ui.View):
-    def __init__(self, shop_data):
+    def __init__(self, shop_data, quest_data):
         super().__init__()  # Initialize the discord.ui.View class
         self.shop_data = shop_data
+        self.quest_data = quest_data
 
     @discord.ui.button(label='Materials', style=discord.ButtonStyle.secondary, custom_id='materials_button')
     async def materials_button(self, button: discord.ui.Button, interaction: discord.Interaction):
@@ -89,15 +90,47 @@ class MaterialsButton(discord.ui.View):
                 price = material.get("price", 0)
                 shop_embed.add_field(name=f"{emoji} {name}", value=f"**Price:** {price} points", inline=True)
             
-            await button.response.send_message(embed=shop_embed,ephemeral=True)
-
+            await button.response.send_message(embed=shop_embed, ephemeral=True)
+            # Create buttons for each material
+            for material in self.shop_data["Materials"]:
+             material_name = material.get("name", "Unknown Material")
+             emoji = material.get("emoji", "")
+             button = discord.ui.Button(
+                style=discord.ButtonStyle.green,
+                emoji=emoji,
+                custom_id=material_name  # Use material_name as custom_id
+             )
+             self.add_item(button)  # Add each button to the view
+            async def callback(self, interaction: discord.Interaction):
+              material_name = interaction.data["custom_id"]
+              material = next((m for m in self.shop_data["Materials"] if m.get("name") == material_name), None)
+            
+              if not material:
+                await interaction.followup.send("Material not found.", ephemeral=True)
+                return
+            
+              price = material.get("price", 0)
+            
+              user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            
+              if user_balance >= price:
+                await self.quest_data.add_item_to_inventory(self.user_id, material_name, 1)
+                spent = -price
+                await self.quest_data.add_balance(self.user_id, self.guild_id, spent)
+                
+                await interaction.response.send_message(f"You have successfully purchased {material_name} for {price} points.", ephemeral=True)
+              else:
+                await interaction.followup.send(f"You do not have enough points to purchase {material_name}.", ephemeral=True)
+        
+            
+           
         except Exception as e:
             await button.response.send_message(f"An error occurred: {e}", ephemeral=True)
 
     
     
 class SpyToolSelect(discord.ui.Select):
-    def __init__(self, shop_data, materials_dict):
+    def __init__(self, shop_data, materials_dict, quest_data, user_id, guild_id):
         spy_tools = shop_data.get("Spy Tools", [])
         options = [
             discord.SelectOption(label=f"{tool.get('emoji', '')} {tool.get('name', 'Unknown Item')}", value=tool.get('name', 'Unknown Item'))
@@ -106,6 +139,9 @@ class SpyToolSelect(discord.ui.Select):
         super().__init__(placeholder="Select a Spy Tool", options=options)
         self.shop_data = shop_data
         self.materials_dict = materials_dict
+        self.quest_data = quest_data  # Pass the user's quest data here
+        self.user_id = user_id
+        self.guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
         try:
@@ -118,20 +154,42 @@ class SpyToolSelect(discord.ui.Select):
             
             emoji = tool.get("emoji", "")
             description = tool.get("description", "No description available.")
-            materials_list = "\n".join([f"{self.materials_dict.get(item.get('material', ''), '')} - {item.get('quantity', 0)}" for item in tool.get("materials", [])])
+            materials_list = "\n".join([await self.format_materials(item) for item in tool.get("materials", [])])
 
             shop_embed = discord.Embed(title=f"{selected_tool_name}", description=f'{emoji} {description}', color=discord.Color.blurple())
             shop_embed.add_field(name="Materials", value=materials_list or "No materials needed", inline=False)
             
             # Create MaterialsButton view
-            materials_button_view = MaterialsButton(self.shop_data)
+            materials_button_view = MaterialsButton(self.shop_data, self.quest_data)
             
-            await interaction.response.send_message(embed=shop_embed, view=materials_button_view, ephemeral=True) # 
-            
+            await interaction.response.send_message(embed=shop_embed, view=materials_button_view, ephemeral=True)
         
         except Exception as e:
+            traceback.print_exc()  # Print traceback for detailed error feedback
             await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
     
+    async def get_user_inventory_count(self, material_name):
+        # Retrieve the user's inventory count for a given material from quest_data
+        material_count = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, material_name)
+
+        return material_count
+    
+    async def format_materials(self, item):
+        material_name = item.get('material', '')
+        required_quantity = item.get('quantity', 0)
+        user_quantity = await self.get_user_inventory_count(material_name) or 0
+
+        if user_quantity == 0:
+            indicator_emoji = "🔴"  # Red
+        elif user_quantity < required_quantity:
+            indicator_emoji = "🟡"  # Yellow
+        else:
+            indicator_emoji = "🟢"  # Green
+
+        return f"{self.materials_dict.get(material_name, '')} - {user_quantity}/{required_quantity} {indicator_emoji}"
+    
+    
+
 class Quest(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -437,6 +495,48 @@ class Quest_Data(commands.Cog):
             if value is None or value == "":
                 raise ValueError(f"{key} cannot be None or empty")
                 
+    async def get_user_inventory_count(self, guild_id: str, user_id: str, material_name: str) -> int:
+     try:
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+        
+        # Query to find the user's inventory entry
+        user_data = await server_collection.find_one(
+            {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
+            {f'members.{user_id}.inventory.{material_name}': 1}
+        )
+        
+        if user_data:
+            # Check if the material_name exists in the user's inventory
+            if 'inventory' in user_data['members'][user_id] and material_name in user_data['members'][user_id]['inventory']:
+                return user_data['members'][user_id]['inventory'].get(material_name, 0)
+            else:
+                # If the material_name does not exist, create a slot for it with default value 0
+                await server_collection.update_one(
+                    {'guild_id': guild_id},
+                    {'$set': {f'members.{user_id}.inventory.{material_name}': 0}},
+                    upsert=True
+                )
+                return 0
+        else:
+            return 0
+     except PyMongoError as e:
+        logger.error(f"Error occurred while getting user inventory count: {e}")
+        return 0
+    
+    async def add_item_to_inventory(self, guild_id: str, user_id: str, material_name: str, quantity: int) -> None:
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db['Servers']
+            await server_collection.update_one(
+                {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
+                {'$inc': {f'members.{user_id}.inventory.{material_name}': quantity}},
+                upsert=True
+            )
+        except PyMongoError as e:
+            logger.error(f"Error occurred while adding item to inventory: {e}")
+            raise e
+            
     async def remove_all_server_quests(self, guild_id: str) -> None:
      try:
         db = self.mongoConnect[self.DB_NAME]
