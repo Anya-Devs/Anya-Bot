@@ -190,11 +190,11 @@ class SpyToolSelect(discord.ui.Select):
         user_quantity = await self.get_user_inventory_count(material_name) or 0
 
         if user_quantity == 0:
-            indicator_emoji = "🔴"  # Red
+            indicator_emoji = "<:red:1261639413943762944> "  # Red
         elif user_quantity < required_quantity:
-            indicator_emoji = "🟡"  # Yellow
+            indicator_emoji = "<:yellow:1261639412253724774> "  # Yellow
         else:
-            indicator_emoji = "🟢"  # Green
+            indicator_emoji = "<:green:1261639410181476443> "  # Green
 
         return f"{indicator_emoji} : {self.materials_dict.get(material_name, '')} - {user_quantity}/{required_quantity}"
     
