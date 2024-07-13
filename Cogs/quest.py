@@ -70,12 +70,14 @@ class ShopView(discord.ui.View):
         print(traceback_msg)
         await interaction.response.send_message(error_message, ephemeral=True)
 
-    
+        
 class MaterialsButton(discord.ui.View):
-    def __init__(self, shop_data, quest_data):
+    def __init__(self, shop_data, quest_data, user_id , guild_id):
         super().__init__()  # Initialize the discord.ui.View class
         self.shop_data = shop_data
         self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
 
     @discord.ui.button(label='Materials', style=discord.ButtonStyle.secondary, custom_id='materials_button')
     async def materials_button(self, button: discord.ui.Button, interaction: discord.Interaction):
@@ -87,57 +89,54 @@ class MaterialsButton(discord.ui.View):
             materials = self.shop_data["Materials"][:10]  # Limit to first 10 materials
             
             for material in materials:
-              try:
-                name = material.get("name", "Unknown Material")
-                emoji = material.get("emoji", "")
-                price = material.get("price", 0)
-                shop_embed.add_field(name=f"{emoji} {name}", value=f"**Price:** {price} points", inline=True)
-                material_button = discord.ui.Button(
-                 style=discord.ButtonStyle.green,
-                 emoji=emoji,
-                 custom_id=name  # Use material_name as custom_id
-                 )
-                self.add_item(material_button)  # Add each button to the view
-                material_button.callback = self.material_callback
-              except Exception as e:
-                   traceback.print_exc()  # Print traceback for detailed error feedback
-                    
-            
+                try:
+                    name = material.get("name", "Unknown Material")
+                    emoji = material.get("emoji", "")
+                    price = material.get("price", 0)
+                    shop_embed.add_field(name=f"{emoji} {name}", value=f"**Price:** {price} points", inline=True)
+                    material_button = discord.ui.Button(
+                        style=discord.ButtonStyle.green,
+                        emoji=emoji,
+                        custom_id=name  # Use material_name as custom_id
+                    )
+                    self.add_item(material_button)  # Add each button to the view
+                    material_button.callback = self.material_callback  # Assign the callback function
+                except Exception as e:
+                    traceback.print_exc()  # Print traceback for detailed error feedback
 
-            await button.response.send_message(embed=shop_embed, view=self, ephemeral=True)  
-            
+            await button.response.send_message(embed=shop_embed, view=self, ephemeral=True)
 
-            
-            async def material_callback(self, interaction):
-              try:
-               material_name = interaction.data["custom_id"]
-               material = next((m for m in self.shop_data["Materials"] if m.get("name") == material_name), None)
-            
-               if not material:
-                   await interaction.followup.send("Material not found.", ephemeral=True)
-                   return
-            
-               price = material.get("price", 0)
-            
-               user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
-            
-               if user_balance >= price:
-                   await self.quest_data.add_item_to_inventory(self.user_id, material_name, 1)
-                   spent = -price
-                   await self.quest_data.add_balance(self.user_id, self.guild_id, spent)
-                
-                   await interaction.followup.send(f"You have successfully purchased {material_name} for {price} points.", ephemeral=True)
-               else:
-                   await interaction.followup.send(f"You do not have enough points to purchase {material_name}.", ephemeral=True)
-        
-              except Exception as e:
-               traceback.print_exc()  # Print traceback for detailed error feedback
-               await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
-    
         except Exception as e:
             traceback.print_exc()  # Print traceback for detailed error feedback
             await button.response.send_message(f"An error occurred: {e}", ephemeral=True)
+
+    async def material_callback(self, interaction: discord.Interaction):
+        try:
+            material_name = interaction.data["custom_id"]
+            material = next((m for m in self.shop_data["Materials"] if m.get("name") == material_name), None)
             
+            if not material:
+                await interaction.followup.send("Material not found.", ephemeral=True)
+                return
+            
+            price = material.get("price", 0)
+            
+            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            
+            if user_balance >= price:
+
+                await self.quest_data.add_item_to_inventory(self.guild_id, self.user_id, material_name, 1)
+                spent = -price
+                await self.quest_data.add_balance(self.user_id, self.guild_id, spent)
+                
+                await interaction.response.send_message(f"You have successfully purchased {material_name} for {price} points.", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"You do not have enough points to purchase {material_name}.", ephemeral=True)
+        
+        except Exception as e:
+            traceback.print_exc()  # Print traceback for detailed error feedback
+            await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
+           
     
     
 class SpyToolSelect(discord.ui.Select):
@@ -171,7 +170,7 @@ class SpyToolSelect(discord.ui.Select):
             shop_embed.add_field(name="Materials", value=materials_list or "No materials needed", inline=False)
             
             # Create MaterialsButton view
-            materials_button_view = MaterialsButton(self.shop_data, self.quest_data)
+            materials_button_view = MaterialsButton(self.shop_data, self.quest_data, self.user_id , self.guild_id)
             
             await interaction.response.send_message(embed=shop_embed, view=materials_button_view, ephemeral=True)
         
