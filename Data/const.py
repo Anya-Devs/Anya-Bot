@@ -65,7 +65,7 @@ class EmbedFactory:
 class Help_Embed_Mapping:
     embed = {
             "title": "Help Command",
-            "description": "Need some help using certain commands?\n-# Take a look at the select options and choose the cog you need assistance with.",
+            "description": "Need some help using certain commands?\n\n-# Take a look at the select options and choose the cog you need assistance with.",
             "thumbnail_url": AnyaImages.help_thumbnail,
             "image_url": "https://static1.cbrimages.com/wordpress/wp-content/uploads/2022/11/Spy-x-family-ep-18-Loid-and-Anyas-test-grades.jpg"
     }
@@ -331,9 +331,9 @@ class Quest_Completed_Embed:
 
 class ShopEmbed:
     @staticmethod
-    async def start_shop_embed(bot, ctx):
+    async def start_shop_embed(bot, ctx, balance):
         embed = discord.Embed(title='Spy Shop')
-        embed.description = '```py\nBalance: 0 ```'  # f"*Remember these tools might make or break relshinships, so please be careful.*"
+        embed.description = f'```py\nBalance: {balance}```'  # f"*Remember these tools might make or break relshinships, so please be careful.*"
         embed.set_footer(text=f"Use the {bot.user.name}'s option menu to acquire your spy tool.")
         embed.set_thumbnail(url=AnyaImages.start_shop_thumbnail)
         return embed
