@@ -86,7 +86,7 @@ class MaterialsButton(discord.ui.View):
 
             shop_embed = discord.Embed(title="Material Shop", color=discord.Color.blurple())
             
-            materials = self.shop_data["Materials"][:10]  # Limit to first 10 materials
+            materials = self.shop_data["Materials"][:15]  # Limit to first 10 materials
             
             for material in materials:
                 try:
