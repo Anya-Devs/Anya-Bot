@@ -35,6 +35,9 @@ class Pokemon(commands.Cog):
         self.bot = bot
         self.image_folder = 'Data/Images/pokemon_images'
         self.error_custom_embed = error_custom_embed
+        self.local_color_memory = []  # Binary local color comparator memory
+
+        
 
         
     @staticmethod
@@ -417,11 +420,10 @@ class Pokemon(commands.Cog):
     
     
     
-    async def calculate_similarity(self, img1, img2, size=(256, 256), num_sections=4):
+    async def calculate_similarity(self, img1, img2, size=(256, 256), radius_step=10, edge_limit=10):
      try:
         # Function to calculate color histogram similarity
         def calculate_color_histogram_similarity(hist1, hist2):
-            # Use histogram intersection for comparison
             similarity = cv2.compareHist(hist1, hist2, cv2.HISTCMP_INTERSECT)
             return similarity
         
@@ -430,158 +432,94 @@ class Pokemon(commands.Cog):
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             _, thresh = cv2.threshold(gray, 127, 255, 0)
             contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            # Find the largest contour
             if contours:
-                largest_contour = max(contours, key=cv2.contourArea)
-                x, y, w, h = cv2.boundingRect(largest_contour)
-                return x, y, w, h
+                largest_contour_idx = np.argmax([cv2.contourArea(cnt) for cnt in contours])
+                x, y, w, h = cv2.boundingRect(contours[largest_contour_idx])
+                return x, y, w, h, contours[largest_contour_idx]
             else:
-                return 0, 0, image.shape[1], image.shape[0]  # Return full image if no contour found
+                return 0, 0, image.shape[1], image.shape[0], None
         
         # Resize images to the specified size
         img1_resized = cv2.resize(np.array(img1), size)
         img2_resized = cv2.resize(np.array(img2), size)
         
-        # Find ROI for img1 and img2
-        x1, y1, w1, h1 = find_largest_contour(img1_resized)
-        x2, y2, w2, h2 = find_largest_contour(img2_resized)
+        # Find ROI for img1
+        x1, y1, w1, h1, largest_contour1 = find_largest_contour(img1_resized)
         
-        # Crop images based on ROI
-        img1_cropped = img1_resized[y1:y1+h1, x1:x1+w1]
-        img2_cropped = img2_resized[y2:y2+h2, x2:x2+w2]
+        if largest_contour1 is not None:
+            cv2.drawContours(img1_resized, [largest_contour1], -1, (0, 255, 0), 2)
+            padding_x = min(w1 // 2, img1_resized.shape[1] - w1)
+            padding_y = min(h1 // 2, img1_resized.shape[0] - h1)
+            img1_cropped = img1_resized[max(y1 - padding_y, 0):min(y1 + h1 + padding_y, img1_resized.shape[0]),
+                                        max(x1 - padding_x, 0):min(x1 + w1 + padding_x, img1_resized.shape[1])]
+        else:
+            img1_cropped = img1_resized
         
-        # Convert images to RGB (assuming they are BGR due to cv2)
+        # Find ROI for img2
+        x2, y2, w2, h2, largest_contour2 = find_largest_contour(img2_resized)
+        
+        img2_cropped = img2_resized[max(y2, 0):min(y2 + h2, img2_resized.shape[0]),
+                                    max(x2, 0):min(x2 + w2, img2_resized.shape[1])]
+        
+        # Convert cropped images to RGB
         img1_rgb = cv2.cvtColor(img1_cropped, cv2.COLOR_BGR2RGB)
         img2_rgb = cv2.cvtColor(img2_cropped, cv2.COLOR_BGR2RGB)
         
-        # Split images into sections
-        height1, width1, _ = img1_rgb.shape
-        height2, width2, _ = img2_rgb.shape
+        # Function to mask background
+        def mask_background(image, contour):
+            mask = np.zeros(image.shape[:2], np.uint8)
+            cv2.drawContours(mask, [contour], -1, 255, -1)
+            return cv2.bitwise_and(image, image, mask=mask)
         
-        section_height = height1 // num_sections
-        section_width = width1 // num_sections
+        if largest_contour1 is not None:
+            img1_rgb = mask_background(img1_rgb, largest_contour1)
         
-        # Initialize lists to store section similarities
-        section_similarities = []
+        if largest_contour2 is not None:
+            img2_rgb = mask_background(img2_rgb, largest_contour2)
         
-        # Function to extract histogram for a given section
-        def extract_histogram(image, start_row, end_row, start_col, end_col):
-            section = image[start_row:end_row, start_col:end_col, :]
-            hist = cv2.calcHist([section], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
-            cv2.normalize(hist, hist, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-            return hist
+        # Function to extract circular regions
+        def extract_circular_region(image, center, radius):
+            mask = np.zeros(image.shape[:2], np.uint8)
+            cv2.circle(mask, center, radius, 255, -1)
+            circular_region = cv2.bitwise_and(image, image, mask=mask)
+            return circular_region
         
-        # Iterate through sections
-        for i in range(num_sections):
-            for j in range(num_sections):
-                # Calculate section boundaries for both images
-                start_row1 = i * section_height
-                end_row1 = (i + 1) * section_height
-                start_col1 = j * section_width
-                end_col1 = (j + 1) * section_width
-                
-                start_row2 = i * (height2 // num_sections)
-                end_row2 = (i + 1) * (height2 // num_sections)
-                start_col2 = j * (width2 // num_sections)
-                end_col2 = (j + 1) * (width2 // num_sections)
-                
-                # Extract histograms for the sections
-                hist_img1 = extract_histogram(img1_rgb, start_row1, end_row1, start_col1, end_col1)
-                hist_img2 = extract_histogram(img2_rgb, start_row2, end_row2, start_col2, end_col2)
-                
-                # Calculate similarity between color histograms
-                section_similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
-                section_similarities.append(section_similarity)
+        # Calculate color histogram similarity for circular regions
+        def calculate_radial_similarity(image1, image2, max_radius, step, edge_limit):
+            height, width = image1.shape[:2]
+            center = (width // 2, height // 2)
+            similarities = []
 
-        # Calculate additional similarities (horizontal, vertical, diagonal, central, corners)
-        additional_similarities = []
+            for radius in range(step, max_radius - edge_limit, step):
+                circular_region1 = extract_circular_region(image1, center, radius)
+                circular_region2 = extract_circular_region(image2, center, radius)
+                hist1 = extract_dominant_color_histogram(circular_region1)
+                hist2 = extract_dominant_color_histogram(circular_region2)
+                similarity = calculate_color_histogram_similarity(hist1, hist2)
+                similarities.append(similarity)
 
-        # Horizontal sections
-        for i in range(num_sections):
-            start_row1 = i * section_height
-            end_row1 = (i + 1) * section_height
-            start_row2 = i * (height2 // num_sections)
-            end_row2 = (i + 1) * (height2 // num_sections)
-            
-            hist_img1 = extract_histogram(img1_rgb, start_row1, end_row1, 0, width1)
-            hist_img2 = extract_histogram(img2_rgb, start_row2, end_row2, 0, width2)
-            similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
-            additional_similarities.append(similarity)
-
-        # Vertical sections
-        for j in range(num_sections):
-            start_col1 = j * section_width
-            end_col1 = (j + 1) * section_width
-            start_col2 = j * (width2 // num_sections)
-            end_col2 = (j + 1) * (width2 // num_sections)
-            
-            hist_img1 = extract_histogram(img1_rgb, 0, height1, start_col1, end_col1)
-            hist_img2 = extract_histogram(img2_rgb, 0, height2, start_col2, end_col2)
-            similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
-            additional_similarities.append(similarity)
-
-        # Diagonal sections (top-left to bottom-right)
-        for k in range(num_sections):
-            start_row1 = k * section_height
-            end_row1 = (k + 1) * section_height
-            start_col1 = k * section_width
-            end_col1 = (k + 1) * section_width
-            
-            start_row2 = k * (height2 // num_sections)
-            end_row2 = (k + 1) * (height2 // num_sections)
-            start_col2 = k * (width2 // num_sections)
-            end_col2 = (k + 1) * (width2 // num_sections)
-            
-            hist_img1 = extract_histogram(img1_rgb, start_row1, end_row1, start_col1, end_col1)
-            hist_img2 = extract_histogram(img2_rgb, start_row2, end_row2, start_col2, end_col2)
-            similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
-            additional_similarities.append(similarity)
-
-        # Central section
-        central_hist_img1 = extract_histogram(img1_rgb, height1 // 4, 3 * height1 // 4, width1 // 4, 3 * width1 // 4)
-        central_hist_img2 = extract_histogram(img2_rgb, height2 // 4, 3 * height2 // 4, width2 // 4, 3 * width2 // 4)
-        central_similarity = calculate_color_histogram_similarity(central_hist_img1, central_hist_img2)
-        additional_similarities.append(central_similarity)
-
-        # Corner sections
-        corner_sections = [
-            (0, section_height, 0, section_width),  # Top-left corner
-            (0, section_height, width1 - section_width, width1),  # Top-right corner
-            (height1 - section_height, height1, 0, section_width),  # Bottom-left corner
-            (height1 - section_height, height1, width1 - section_width, width1)  # Bottom-right corner
-        ]
-
-        for start_row1, end_row1, start_col1, end_col1 in corner_sections:
-            start_row2 = start_row1 * (height2 // height1)
-            end_row2 = end_row1 * (height2 // height1)
-            start_col2 = start_col1 * (width2 // width1)
-            end_col2 = end_col1 * (width2 // width1)
-            
-            hist_img1 = extract_histogram(img1_rgb, start_row1, end_row1, start_col1, end_col1)
-            hist_img2 = extract_histogram(img2_rgb, start_row2, end_row2, start_col2, end_col2)
-            similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
-            additional_similarities.append(similarity)
-
-        # Combine all similarities
-        section_similarities.extend(additional_similarities)
+            return np.mean(similarities)
         
-        # Calculate overall similarity as the average of all section similarities
-        overall_similarity = np.mean(section_similarities)
+        max_radius = min(img1_rgb.shape[:2]) // 2
+        radial_similarity = calculate_radial_similarity(img1_rgb, img2_rgb, max_radius, radius_step, edge_limit)
         
-        # Round overall_similarity to 4 decimal places
-        rounded_similarity = round(overall_similarity, 4)
+        # Round similarity to 4 decimal places
+        rounded_similarity = round(radial_similarity, 4)
         
-        # Return overall similarity as a list (for consistency with previous implementation)
+        # Return similarity as a list (for consistency with previous implementation)
         return [rounded_similarity]
     
      except Exception as e:
-        logger.error(f"Error calculating similarity: {e}")
+        print(f"Error calculating similarity: {e}")
         return [0.0]  # Return default similarity in case of errors
-        
-        
-        
-        
+    
+    
+    
+    
+    
+    
+    
+    
     def ensure_correct_color_format(self, img):
      """
      Convert image to RGB format.
