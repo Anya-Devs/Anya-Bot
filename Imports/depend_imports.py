@@ -23,7 +23,8 @@ class PackageInstaller:
             'matplotlib',
             'seaborn',
             'imagehash',
-            'scipy'
+            'scipy',
+            'aiofiles'
         ]
 
     def install_packages(self):
