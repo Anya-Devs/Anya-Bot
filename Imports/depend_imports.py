@@ -24,7 +24,7 @@ class PackageInstaller:
             'seaborn',
             'imagehash',
             'scipy',
-            'aiofiles'
+            'psutil'
         ]
 
     def install_packages(self):

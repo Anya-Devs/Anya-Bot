@@ -8,7 +8,7 @@ from PIL import Image
 from openai import AsyncOpenAI  # Assuming AsyncOpenAI is the correct import from your module
 from Imports.discord_imports import *
 import platform
-import random
+import psutil
 
 # Constants
 class AnyaImages:
@@ -110,13 +110,12 @@ class Help_Select_Embed_Mapping:
     }
 
     emojis = {
-        "system": "<:system:1261208067085959320>", # "<:system_icon:1238536111266201610>",
-        "quest": "<:anyasus:1258563706518765669> ",
-        "ai": '<:ai:1258206841737973842> ',
-        'pokemon': '<:Pokeball:1261208239891156992>',
+        "system": ":system:", # ":system_icon:",
+        "quest": ":anyasus: ",
+        "ai": ':ai: ',
+        'pokemon': ':Pokeball:',
         # Add more emoji mappings for other cogs as needed
     }
-
 class TutorialMission:
     def __init__(self):
         self.steps = [
@@ -494,5 +493,37 @@ async def error_custom_embed(bot, ctx, e, title="Custom Error", thumbnail_url=An
     elif isinstance(ctx, discord.Interaction):
         await ctx.response.send_message(embed=error_embed)
 
-    
- 
+
+
+class Information_Embed:
+    @staticmethod
+    async def get_embed(bot_user: discord.User, bot):
+        try:
+            cpu_percent = psutil.cpu_percent(interval=1)
+            ram_percent = psutil.virtual_memory().percent
+            cpu_cores = psutil.cpu_count(logical=True)
+            cpu_text = f"{cpu_percent:.0f}% of {cpu_cores} cores"
+            total_ram_gb = psutil.virtual_memory().total / (1024 ** 3)  # Convert to GB
+            ram_text = f"{ram_percent:.0f}% of {total_ram_gb:.0f}GB ({total_ram_gb * ram_percent / 100:.0f}GB)"
+
+
+            about = discord.Embed(
+                title="Bot Information",
+                description=f"Assigns member's quests to encourage server activity.\n\n"
+                "[Support server](<https://discord.gg/5p5b7A7WRH>)\n"
+                "[Invite bot](<https://discord.com/oauth2/authorize?client_id=1234247716243112100&permissions=27482422508608&scope=bot>)\n",
+                color=discord.Color.blue()
+            )
+            owner = bot.get_user(1030285330739363880)
+            about.set_author(name="Senko", icon_url=owner.avatar.url)
+            about.set_thumbnail(url=bot_user.avatar.url)
+            about.add_field(name="Bot Owner", value="Senko", inline=True)
+            about.add_field(name="Bot Created At", value=bot_user.created_at.strftime("%Y-%m-%d %H:%M:%S"), inline=True)
+            about.add_field(name='Used languages', value="Python 3.11 | discord.py 2.3.2", inline=True)
+            about.add_field(name="Total guilds", value=f'{sum(guild.member_count for guild in bot.guilds)}', inline=True)
+            about.add_field(name='Users', value=f'{sum(guild.member_count for guild in bot.guilds)}', inline=True)
+            about.add_field(name='RAM usage', value=f"{ram_text}", inline=True)
+            about.add_field(name='CPU usage', value=f"{cpu_text}", inline=True)
+            return about
+        except Exception as e:
+            print(e)

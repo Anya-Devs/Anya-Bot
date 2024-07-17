@@ -9,15 +9,14 @@ import asyncio
 
 """
 
-""" 
-def run_package_installer():
-    try:
-        subprocess.check_call([sys.executable, "Imports/depend_imports.py"])
-    except subprocess.CalledProcessError as e:
-        print(f"An error occurred while running the package installer: {e}")
+
+# def run_package_installer():
+#     try:
+#         subprocess.check_call([sys.executable, "Imports/depend_imports.py"])
+#     except subprocess.CalledProcessError as e:
+#         print(f"An error occurred while running the package installer: {e}")
         
-run_package_installer()
-"""
+# run_package_installer()
 
 from Imports.depend_imports import *
 import Imports.depend_imports as depend_imports
