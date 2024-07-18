@@ -117,27 +117,7 @@ class Ai(commands.Cog):
         print(progress_template.format(progress_bar=progress_bar, percent=percent))
         await asyncio.sleep(step_time)
                         
-    async def vision(self, image_link: str, prompt: str = ' ') -> str:
-        try:
-            response = await self.openai_client.chat.completions.create(
-                model="gemini-pro-vision",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": image_link},
-                            },
-                        ],
-                    }
-                ],
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            return f"Ouch! Something went wrong! {e}"
-
+    
     @commands.command(name='imagine', description="Generate an image", aliases=['i'])
     async def imagine(self, ctx: commands.Context, *, prompt: str):
         try:
@@ -159,7 +139,7 @@ class Ai(commands.Cog):
 
                 
                 # Create embed
-                embed = discord.Embed(description=f'Requested by {ctx.author.display_name}\nPrompt:  {prompt}', color=primary_color())
+                embed = discord.Embed(description=f'Requested by {ctx.author.mention}\nPrompt:  {prompt}', color=primary_color())
                 embed.set_image(url="attachment://generated_image.png")
                 embed.set_footer(icon_url=self.bot.user.avatar.url, text=f'Thanks for using {self.bot.user.name} | Inspired by alphast101')
                 
@@ -172,8 +152,30 @@ class Ai(commands.Cog):
             
     @commands.command(name='vision', description="Generate a vision-based response", aliases=['v'])
     async def vision_command(self, ctx, image_url: str = None):
+        async def vision(image_link: str, prompt: str = ' ') -> str:
+         try:
+            response = await self.openai_client.chat.completions.create(
+                model="gemini-pro-vision",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": image_link},
+                            },
+                        ],
+                    }
+                ],
+            )
+            return response.choices[0].message.content
+         except Exception as e:
+            return f"Ouch! Something went wrong! {e}"
+
         try:
-            prompt = 'Describe [image] with clear explanation summary. Assume your audience is eager to learn but you may have limited prior knowledge on the topic.'
+            prompt = "Describe image with clear and detailed explanation. use opinions.Assume your audience is eager to learn but may have limited prior knowledge on the topic. Describe [image] in a childlike way, express opinions on the image. Speak like Anya Forger from Spy x Family because you are her."
+
             async with ctx.typing():
                 message = await ctx.reply('> **Please wait while I analyze the image...**')
                 
@@ -186,10 +188,10 @@ class Ai(commands.Cog):
                         if ref_message.attachments:
                             image_url = ref_message.attachments[0].url
                         else:
-                            await ctx.send("No image URL found in the referenced message. Please provide an image URL or attach an image to your message.")
+                            await message.edit(content="No image URL found in the referenced message. Please provide an image URL or attach an image to your message.")
                             return
                     else:
-                        await ctx.send("No image URL found. Please provide an image URL, attach an image to your message, or reply to a message with an image.")
+                        await message.edit(content="No image URL found. Please provide an image URL, attach an image to your message, or reply to a message with an image.")
                         return
 
 
@@ -199,13 +201,13 @@ class Ai(commands.Cog):
 
                 # Download the image and convert it to bytes
 
-                response = await self.vision(image_url, prompt)
-                embed = discord.Embed(description=f'**Response:**```{response}```', color=primary_color())
-                embed.set_image(url=image_url)
+                response = await vision(image_url, prompt)
+                embed = discord.Embed(description=f'Asked by {ctx.author.mention}\n\nVision - {response}', color=primary_color())
+                embed.set_thumbnail(url=image_url)
                 embed.set_footer(icon_url=self.bot.user.avatar, text=f'Thanks for using {self.bot.user.name} | Inspired by alphast101')
                 await message.edit(content='', embed=embed)
         except Exception as e:
-            await ctx.send(f"An error occurred: {e}")
+            await message.edit(content=f"An error occurred: {e}")
 
       
         
