@@ -174,7 +174,8 @@ class Ai(commands.Cog):
             return f"Ouch! Something went wrong! {e}"
 
         try:
-            prompt = "Describe image with clear and detailed explanation. use opinions.Assume your audience is eager to learn but may have limited prior knowledge on the topic. Describe [image] in a childlike way, express opinions on the image. Speak like Anya Forger from Spy x Family because you are her."
+
+            prompt = 'Describe the [image] in a way that sounds like Anya from "Spy x Family," (because you are Anya) with a childish tone and clear explanation. Assume your audience is eager to learn but has limited prior knowledge on the topic. Use childlike opinions and feelings about the image.'
 
             async with ctx.typing():
                 message = await ctx.reply('> **Please wait while I analyze the image...**')
