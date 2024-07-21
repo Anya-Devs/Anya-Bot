@@ -1,17 +1,24 @@
 import re
-from Cogs.quest import Quest_Data
-from datetime import datetime, timedelta
-from Imports.discord_imports import *
-from Imports.log_imports import *
-from Data.const import Quest_Progress, error_custom_embed, primary_color, QuestEmbed, Quest_Prompt, Quest_Completed_Embed
-import traceback
+import discord
+from discord.ext import commands, tasks
 from fuzzywuzzy import fuzz
+import logging
+from datetime import datetime, timedelta
+
+from Cogs.quest import Quest_Data
+from Data.const import Quest_Progress, error_custom_embed, primary_color, QuestEmbed, Quest_Prompt, Quest_Completed_Embed
+
+logger = logging.getLogger('Quest_Checker')
 
 class Quest_Checker(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.quest_data = Quest_Data(bot)
         logger.debug("Quest_Checker initialized")
+
+    async def cog_load(self):
+        # Start the background task in the async cog_load method
+        self.process_message_queue.start()
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -21,16 +28,13 @@ class Quest_Checker(commands.Cog):
         try:
             guild_id = str(message.guild.id)
             user_id = str(message.author.id)
-            # logger.debug(f"Message received in guild: {guild_id}, user: {user_id}")
 
             quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
-            # logger.debug(f"Found {len(quests)} quests for user: {user_id} in guild: {guild_id}")
 
             if not quests:
                 return
 
             for quest in quests:
-                # logger.debug(f"Checking quest: {quest['quest_id']} for user: {user_id} in guild: {guild_id}")
                 if quest['action'] == 'send':
                     if quest['channel_id'] == message.channel.id:
                         if quest['method'] == 'message':
@@ -38,9 +42,8 @@ class Quest_Checker(commands.Cog):
                         elif quest['method'] == 'emoji':
                             await self.handle_emoji_quest(quest, message, user_id, guild_id)
         except Exception as e:
-            # logger.error("An error occurred in on_message:")
-            # logger.error(e)
-            return
+            logger.error("An error occurred in on_message:")
+            logger.error(e)
 
     async def handle_message_quest(self, quest, message, user_id, guild_id):
         quest_content = quest['content']  # Quest content with {member}
@@ -60,36 +63,29 @@ class Quest_Checker(commands.Cog):
         # Use fuzzy matching to compare the quest content with the message content
         similarity_ratio = fuzz.ratio(normalized_message_content, normalized_quest_content)
 
-        # logger.debug(f"Similarity ratio between message and quest content: {similarity_ratio}")
-
-        # Check if the similarity ratio is above a certain threshold (e.g., 80)
+        # Check if the similarity ratio is above a certain threshold (e.g., 88)
         if similarity_ratio >= 88:
-            logger.debug("Similarity ratio is above threshold. Checking if a valid member is mentioned.")
             mentions = [member for member in message.mentions if member.id != message.author.id and not member.bot]
 
             if '{member}' in quest_content and not mentions:
-                logger.debug("No valid member mention found for a quest requiring member mention.")
                 return
 
             if '{member}' not in quest_content or (mentions and mentions[0].id != message.author.id and not mentions[0].bot):
                 # Update quest progress
                 quest['progress'] += 1
-                await message.add_reaction('🟡')
+                await message.add_reaction('<:anyasus:1244195699331960863>')
                 await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
 
             if quest['progress'] >= quest['times']:
-                logger.debug("Quest progress meets or exceeds required times. Completing quest.")
                 times = quest['times']
                 user = message.author
                 quest_id = quest['quest_id']
                 reward = quest['reward']
-                await message.add_reaction('🟢')
                 await self.complete_quest(guild_id, user_id, quest, times, user, quest_id, message, method='sent', reward=reward)
                 for _ in range(1):
                     await self.quest_data.add_new_quest(guild_id, message.author)
 
     async def handle_emoji_quest(self, quest, message, user_id, guild_id):
-        logger.debug(f"Checking emoji quest: {quest['quest_id']} for user: {user_id} in guild: {guild_id}")
         quest_emoji = quest['content']
 
         if isinstance(quest_emoji, int):
@@ -100,12 +96,10 @@ class Quest_Checker(commands.Cog):
         unicode_emojis = re.findall(r'[\U0001F600-\U0001F64F]', message.content)
 
         if quest_emoji in message_emoji_names or quest_emoji in unicode_emojis:
-            logger.debug("Message contains the quest emoji. Updating quest progress.")
             quest['progress'] += 1
             await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
 
             if quest['progress'] >= quest['times']:
-                logger.debug("Quest progress meets or exceeds required times. Completing quest.")
                 times = quest['times']
                 user = message.author
                 quest_id = quest['quest_id']
@@ -116,51 +110,43 @@ class Quest_Checker(commands.Cog):
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
-     if user.bot:
-        return
-
-     try:
-        message = reaction.message
-        guild_id = str(message.guild.id)
-        user_id = str(user.id)
-        print(f"Reaction added in guild: {guild_id}, user: {user_id}")
-
-        quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
-
-        # logger.debug(f"Found {len(quests)} quests for user: {user_id} in guild: {guild_id}")
-
-        if not quests:
+        if user.bot:
             return
 
-        for quest in quests:
-            logger.debug(f"Checking quest: {quest['quest_id']} for user: {user_id} in guild: {guild_id}")
-            if quest['action'] == 'send' and quest['method'] == 'reaction':
-                if quest['channel_id'] == message.channel.id:
-                    logger.debug(f"Quest {quest['quest_id']} is a reaction quest and matches channel: {message.channel.id}")
-                    quest_emoji = quest['content']
+        try:
+            message = reaction.message
+            guild_id = str(message.guild.id)
+            user_id = str(user.id)
 
-                    # Convert quest_emoji to string for comparison
-                    if isinstance(quest_emoji, int):
-                        quest_emoji = str(await self.bot.fetch_emoji(quest_emoji))  # Fetch emoji object
+            quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
 
-                    reaction_emoji = str(reaction.emoji)
+            if not quests:
+                return
 
-                    if quest_emoji == reaction_emoji:
-                        logger.debug(f"Reaction matches quest emoji: {reaction_emoji}. Updating quest progress.")
-                        quest['progress'] += 1
-                        await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
+            for quest in quests:
+                if quest['action'] == 'send' and quest['method'] == 'reaction':
+                    if quest['channel_id'] == message.channel.id:
+                        quest_emoji = quest['content']
+                        reaction_emoji = str(reaction.emoji)
 
-                        if quest['progress'] >= quest['times']:
-                            logger.debug("Quest progress meets or exceeds required times. Completing quest.")
-                            times = quest['times']
-                            quest_id = quest['quest_id']
-                            reward = quest['reward']
+                        if isinstance(quest_emoji, int):
+                            quest_emoji = str(discord.utils.get(self.bot.emojis, id=int(quest_emoji)))
 
-                            await self.complete_quest(guild_id, user_id, quest, times, user, quest_id, message, method='reacted with', reward=reward)
+                        if quest_emoji == reaction_emoji:
+                            quest['progress'] += 1
+                            await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
 
-     except Exception as e:
-        logger.error("An error occurred in on_reaction_add:")
-        logger.error(e)
+                            if quest['progress'] >= quest['times']:
+                                times = quest['times']
+                                user = message.author
+                                quest_id = quest['quest_id']
+                                reward = quest['reward']
+                                await self.complete_quest(guild_id, user_id, quest, times, user, quest_id, message, method='reaction', reward=reward)
+                                for _ in range(1):
+                                    await self.quest_data.add_new_quest(guild_id, user)
+        except Exception as e:
+            logger.error("An error occurred in on_reaction_add:")
+            logger.error(e)
 
     async def complete_quest(self, guild_id, user_id, quest, times, user_mention, quest_id, message, method=None, reward='N/A'):
         try:
@@ -196,5 +182,13 @@ class Quest_Checker(commands.Cog):
             logger.error(f"Error occurred while updating quest progress: {e}")
             traceback.print_exc()
 
-def setup(bot):
-    bot.add_cog(Quest_Checker(bot))
+
+    @tasks.loop(seconds=5)
+    async def process_message_queue(self):
+        await self.bot.wait_until_ready()
+        while not self.bot.is_closed():
+            # Perform necessary background tasks here
+            await asyncio.sleep(5)  # Example delay for demonstration
+
+async def setup(bot):
+    await bot.add_cog(Quest_Checker(bot))
