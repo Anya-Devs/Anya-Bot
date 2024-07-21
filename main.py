@@ -9,7 +9,7 @@ import asyncio
 
 """
 
-""" 
+"""
 def run_package_installer():
     try:
         subprocess.check_call([sys.executable, "Imports/depend_imports.py"])
@@ -33,8 +33,6 @@ load_dotenv()
 import pymongo  # Import database API
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import ConfigurationError
-
-
 
 class BotSetup(commands.Bot):
     def __init__(self):
@@ -61,10 +59,10 @@ class BotSetup(commands.Bot):
 
     async def setup(self):
         print("\n")
-        print(Fore.BLUE + "── Cogs/" + Style.RESET_ALL)
+        print(Fore.BLUE + "・ ── Cogs/" + Style.RESET_ALL)
         await self.import_cogs("Cogs")
         print("\n")
-        print(Fore.BLUE + "── Events/" + Style.RESET_ALL)
+        print(Fore.BLUE + "・ ── Events/" + Style.RESET_ALL)
         await self.import_cogs("Events")
 
         print("\n")
@@ -104,4 +102,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
