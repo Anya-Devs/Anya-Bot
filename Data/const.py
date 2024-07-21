@@ -4,11 +4,12 @@ import io
 import json
 import traceback
 from datetime import datetime
-from PIL import Image
+from PIL import Image 
 from openai import AsyncOpenAI  # Assuming AsyncOpenAI is the correct import from your module
 from Imports.discord_imports import *
 import platform
 import random
+import psutil
 
 # Constants
 class AnyaImages:
@@ -117,6 +118,8 @@ class Help_Select_Embed_Mapping:
         # Add more emoji mappings for other cogs as needed
     }
 
+    
+    
 class TutorialMission:
     def __init__(self):
         self.steps = [
@@ -289,46 +292,42 @@ class QuestEmbed:
             
 class Quest_Completed_Embed:
     @staticmethod
-    async def create_embed(bot, quest_content, channel_mention, times, user, quest_id, method=None, reward='N/A'):
+    async def create_embed(bot, quest_content, channel_mention, times, user, quest_id, method=None, reward='N/A', balance=None):
         # Define emoji ids
-        yay_emoji_id = 1243390639908065323
-        cheer_emoji_id = 1244432132265345064
-        user_emoji_id = 1243452373213646890
-        right_arrow_emoji_id = 1244102053043896353
         check_emoji_id = 1243403342722371645
         reward_emoji_id = 1247800150479339581
-        info_emoji_id = 1248834245401514095
-        details_emoji_id = 1249206024569622639
 
         # Get emojis
-        yay_emoji = discord.utils.get(bot.emojis, id=yay_emoji_id)
-        cheer_emoji = discord.utils.get(bot.emojis, id=cheer_emoji_id)
-        user_emoji = discord.utils.get(bot.emojis, id=user_emoji_id)
-        right_arrow_emoji = discord.utils.get(bot.emojis, id=right_arrow_emoji_id)
         check_emoji = discord.utils.get(bot.emojis, id=check_emoji_id)
         reward_emoji = discord.utils.get(bot.emojis, id=reward_emoji_id)
-        info_emoji = discord.utils.get(bot.emojis, id=info_emoji_id)
-        details_emoji = discord.utils.get(bot.emojis, id=details_emoji_id)
+        # Text art
+        amount = 'times' if times > 1 else 'time'
 
+        quest_completed = f'-# {check_emoji} {user.mention} : {method.title()} "{quest_content.replace("`", "")}", {times} {amount}'
+
+        reward_text = f'`{reward} stp`'
+        
         # Create embed
         embed = discord.Embed(
             timestamp=datetime.now(),
+            description = quest_completed,
             color=discord.Color.random()
         )
+
         
-        embed.add_field(name=f'{check_emoji} Completed', value=f'{cheer_emoji} {method} {quest_content.replace("`", "")} - {times}x' ,inline=True)
-        embed.add_field(name='',value='',inline=True)
-        embed.add_field(
-            name=f'{reward_emoji} Reward',
-            value=f'`{reward} stp`',
-            inline=True
-        )
+       
+
+        # embed.add_field(name=f'{check_emoji} Completed', value=f'**You {quest_completed}!**', inline=True)
+        
+        embed.add_field(name=f'Reward ', value=f'{reward_emoji} {reward_text}', inline=True)
+        embed.add_field(name=f'Balance', value=balance, inline=True)
+
         
         # Set thumbnail image
-        embed.set_thumbnail(url=user.avatar) #AnyaImages.quest_completed_anya)
-
+        embed.set_thumbnail(url=user.avatar)
         return embed
-
+    
+    
 class ShopEmbed:
     @staticmethod
     async def start_shop_embed(bot, ctx, balance):
@@ -443,8 +442,38 @@ class Emojis:
 
         # Return the emoji format
         return f"<:_:{new_emoji.id}>"
+    
 
+class Information_Embed:
+    @staticmethod
+    async def get_embed(bot_user: discord.User, bot):
+        try:
+            cpu_percent = psutil.cpu_percent(interval=1)
+            ram_percent = psutil.virtual_memory().percent
+            cpu_cores = psutil.cpu_count(logical=True)
+            cpu_text = f"{cpu_percent:.0f}% of {cpu_cores} cores"
+            total_ram_gb = psutil.virtual_memory().total / (1024 ** 3)  # Convert to GB
+            ram_text = f"{ram_percent:.0f}% of {total_ram_gb:.0f}GB ({total_ram_gb * ram_percent / 100:.0f}GB)"
+            owner = bot.get_user(1030285330739363880)
+            about = discord.Embed(
+                title="Bot Information",
+                description=(
+                    f"Assigns member's quests to encourage server activity.\n\n"
+                    f" Owner: {owner.mention}\n"
+                    f"- Created: {bot_user.created_at.strftime('%B %d, %Y')}\n\n"
+                    f"Internal:\n"
+                    f"- **CPU**: {cpu_text}\n- **RAM**: {ram_text}\n\n"
+                    "-# [Support server](https://discord.gg/5p5b7A7WRH)\n"
+                    "-# [Invite bot](https://discord.com/oauth2/authorize?client_id=1234247716243112100&permissions=27482422508608&scope=bot)"
 
+                ),
+                timestamp=datetime.now()
+            )
+            about.set_thumbnail(url=bot.user.avatar)
+            about.set_footer(text='About Myself')
+            return about
+        except Exception as e:
+            print(e)
     
 # Functions
 async def sdxl(prompt):
@@ -470,6 +499,22 @@ def primary_color(image_path='Data/Images/bot_icon.png'):
     return discord.Color.from_rgb(dominant_color[0], dominant_color[1], dominant_color[2])
 
 # Async Functions
+def generate_invite_link(bot, missing_perms):
+  permissions = discord.Permissions()
+  text_permissions = [
+    'send_messages', 'send_tts_messages', 'embed_links', 'attach_files', 
+    'read_message_history', 'mention_everyone', 'use_external_emojis', 
+    'add_reactions', 'manage_messages'
+  ]
+   
+  for perm in text_permissions:
+    setattr(permissions, perm, True)
+   
+  # return discord.utils.oauth_url(bot.user.id, permissions=permissions)
+  return 'https://discord.com/oauth2/authorize?client_id=1234247716243112100&permissions=1689934340028480&integration_type=0&scope=bot'
+
+
+
 async def error_custom_embed(bot, ctx, e, title="Custom Error", thumbnail_url=AnyaImages.question_anya):
     error_embed = discord.Embed(
         description=f'```bash\n{e}```',
@@ -488,11 +533,21 @@ async def error_custom_embed(bot, ctx, e, title="Custom Error", thumbnail_url=An
     error_embed.set_footer(text='Error Found')
     error_embed.set_thumbnail(url=thumbnail_url)
     
-    # Check if messageable is a Context (ctx) object or Interaction object and send message accordingly
-    if isinstance(ctx, commands.Context):
-        await ctx.reply(embed=error_embed)
-    elif isinstance(ctx, discord.Interaction):
-        await ctx.response.send_message(embed=error_embed)
+    try:
+        # Check if messageable is a Context (ctx) object or Interaction object and send message accordingly
+        if isinstance(ctx, commands.Context):
+            await ctx.reply(embed=error_embed)
+        elif isinstance(ctx, discord.Interaction):
+            await ctx.response.send_message(embed=error_embed)
+    except discord.errors.Forbidden:
+        missing_perms = ['embed_links']  # Add any other permissions the bot might be missing
+        invite_link = generate_invite_link(bot, ctx, missing_perms)
+        error_message = f"I don't have the necessary permissions to send an embed.[Fix Permission]({invite_link})."
+        
+        if isinstance(ctx, commands.Context):
+            await ctx.reply(error_message)
+        elif isinstance(ctx, discord.Interaction):
+            await ctx.response.send_message(error_message)
 
     
  
