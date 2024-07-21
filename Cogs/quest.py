@@ -13,7 +13,7 @@ import motor.motor_asyncio
 from pymongo.errors import PyMongoError
 
 # Project-Specific Imports
-from Data.const import Quest_Progress, error_custom_embed, primary_color, ShopEmbed,QuestEmbed, Quest_Prompt, Quest_Completed_Embed, AnyaImages
+from Data.const import Quest_Progress, error_custom_embed, primary_color, ShopEmbed,QuestEmbed, Quest_Prompt, Quest_Completed_Embed, AnyaImages, TutorialMission
 from Imports.discord_imports import *
 from Imports.log_imports import *
 
@@ -21,185 +21,7 @@ from Imports.log_imports import *
 
 
 
-class ShopView(discord.ui.View):
-    def __init__(self, bot, shop_data):
-        super().__init__()
-        self.bot = bot
-        self.quest_data = Quest_Data(bot)
-
-        self.shop_data = shop_data
-        self.materials_dict = {material['name']: material['emoji'] for material in self.shop_data.get("Materials", [])}
-
-    async def start(self, ctx):
-     try:
-        user_id = str(ctx.author.id)
-        guild_id = str(ctx.guild.id)
-
-        
-        balance = await self.quest_data.get_balance(user_id, guild_id)
-        balance = "{:,}".format(balance)
-        
-        
-        shop_embed = await ShopEmbed.start_shop_embed(self.bot, ctx, balance)
-        
-        spy_tools = self.shop_data.get("Spy Tools", [])
-        
-        """
-         # Adding spy tools to the embed without descriptions or materials
-         for tool in spy_tools:
-            name = tool.get("name", "Unknown Item")
-            emoji = tool.get("emoji", "")
-            shop_embed.add_field(name=f"", value=f'{emoji} `{name}`', inline=True)
-        """
-        
-
-        # Create and add the select menu
-        select = SpyToolSelect(self.shop_data, self.materials_dict, self.quest_data, user_id, guild_id)
-        self.add_item(select)    
-        # Send the initial embed with the select menu
-        await ctx.send(embed=shop_embed, view=self)
-       
-
-     except Exception as e:
-        await self.handle_error(ctx, e)   
-        
-       
-    async def handle_error(self, interaction, exception):
-        traceback_msg = ''.join(traceback.format_exception(type(exception), exception, exception.__traceback__))
-        error_message = f"An error occurred: {exception}\n\n```{traceback_msg}```"
-        print(traceback_msg)
-        await interaction.response.send_message(error_message, ephemeral=True)
-
-        
-class MaterialsButton(discord.ui.View):
-    def __init__(self, shop_data, quest_data, user_id , guild_id):
-        super().__init__()  # Initialize the discord.ui.View class
-        self.shop_data = shop_data
-        self.quest_data = quest_data
-        self.user_id = user_id
-        self.guild_id = guild_id
-
-    @discord.ui.button(label='Materials', style=discord.ButtonStyle.secondary, custom_id='materials_button')
-    async def materials_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-        try:
-            self.clear_items()
-
-            shop_embed = discord.Embed(title="Material Shop", color=discord.Color.blurple())
-            
-            materials = self.shop_data["Materials"][:15]  # Limit to first 10 materials
-            
-            for material in materials:
-                try:
-                    name = material.get("name", "Unknown Material")
-                    emoji = material.get("emoji", "")
-                    price = material.get("price", 0)
-                    shop_embed.add_field(name=f"{emoji} {name}", value=f"**Price:** {price} points", inline=True)
-                    material_button = discord.ui.Button(
-                        style=discord.ButtonStyle.green,
-                        emoji=emoji,
-                        custom_id=name  # Use material_name as custom_id
-                    )
-                    self.add_item(material_button)  # Add each button to the view
-                    material_button.callback = self.material_callback  # Assign the callback function
-                except Exception as e:
-                    traceback.print_exc()  # Print traceback for detailed error feedback
-
-            await button.response.send_message(embed=shop_embed, view=self, ephemeral=True)
-
-        except Exception as e:
-            traceback.print_exc()  # Print traceback for detailed error feedback
-            await button.response.send_message(f"An error occurred: {e}", ephemeral=True)
-
-    async def material_callback(self, interaction: discord.Interaction):
-        try:
-            material_name = interaction.data["custom_id"]
-            material = next((m for m in self.shop_data["Materials"] if m.get("name") == material_name), None)
-            
-            if not material:
-                await interaction.followup.send("Material not found.", ephemeral=True)
-                return
-            
-            price = material.get("price", 0)
-            
-            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
-            
-            if user_balance >= price:
-
-                await self.quest_data.add_item_to_inventory(self.guild_id, self.user_id, material_name, 1)
-                spent = -price
-                await self.quest_data.add_balance(self.user_id, self.guild_id, spent)
-                
-                await interaction.response.send_message(f"You have successfully purchased {material_name} for {price} points.", ephemeral=True)
-            else:
-                await interaction.response.send_message(f"You do not have enough points to purchase {material_name}.", ephemeral=True)
-        
-        except Exception as e:
-            traceback.print_exc()  # Print traceback for detailed error feedback
-            await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
-           
     
-    
-class SpyToolSelect(discord.ui.Select):
-    def __init__(self, shop_data, materials_dict, quest_data, user_id, guild_id):
-        spy_tools = shop_data.get("Spy Tools", [])
-        options = [
-            discord.SelectOption(label=f"{tool.get('emoji', '')} {tool.get('name', 'Unknown Item')}", value=tool.get('name', 'Unknown Item'))
-            for tool in spy_tools
-        ]
-        super().__init__(placeholder="Select a Spy Tool", options=options)
-        self.shop_data = shop_data
-        self.materials_dict = materials_dict
-        self.quest_data = quest_data  # Pass the user's quest data here
-        self.user_id = user_id
-        self.guild_id = guild_id
-
-    async def callback(self, interaction: discord.Interaction):
-        try:
-            selected_tool_name = self.values[0]
-            tool = next((t for t in self.shop_data.get("Spy Tools", []) if t.get("name") == selected_tool_name), None)
-            
-            if not tool:
-                await interaction.response.send_message("Spy Tool not found.", ephemeral=True)
-                return
-            
-            emoji = tool.get("emoji", "")
-            description = tool.get("description", "No description available.")
-            materials_list = "\n".join([await self.format_materials(item) for item in tool.get("materials", [])])
-
-            shop_embed = discord.Embed(title=f"{selected_tool_name}", description=f'{emoji} {description}', color=discord.Color.blurple())
-            shop_embed.add_field(name="Materials", value=materials_list or "No materials needed", inline=False)
-            
-            # Create MaterialsButton view
-            materials_button_view = MaterialsButton(self.shop_data, self.quest_data, self.user_id , self.guild_id)
-            
-            await interaction.response.send_message(embed=shop_embed, view=materials_button_view, ephemeral=True)
-        
-        except Exception as e:
-            traceback.print_exc()  # Print traceback for detailed error feedback
-            await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
-    
-    async def get_user_inventory_count(self, material_name):
-        # Retrieve the user's inventory count for a given material from quest_data
-        material_count = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, material_name)
-
-        return material_count
-    
-    async def format_materials(self, item):
-        material_name = item.get('material', '')
-        required_quantity = item.get('quantity', 0)
-        user_quantity = await self.get_user_inventory_count(material_name) or 0
-
-        if user_quantity == 0:
-            indicator_emoji = "<:red:1261639413943762944> "  # Red
-        elif user_quantity < required_quantity:
-            indicator_emoji = "<:yellow:1261639412253724774> "  # Yellow
-        else:
-            indicator_emoji = "<:green:1261639410181476443> "  # Green
-
-        return f"{indicator_emoji} : {self.materials_dict.get(material_name, '')} - {user_quantity}/{required_quantity}"
-    
-    
-
 class Quest(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -207,14 +29,13 @@ class Quest(commands.Cog):
         self.shop_file = 'Data/Quest/shop.json'
 
     @commands.command(name='quest', aliases=['q'])
-    async def quest(self, ctx, test=None):
+    async def quest(self, ctx, args: str = None):
         logger.debug("Quest command invoked.")
-        if test:
-            author = ctx.author
-            guild_id = str(ctx.guild.id)
-            content = await self.quest_data.generate_random_quest_content(self.bot, author, guild_id)
-            await ctx.send(str(content))
-            return
+
+        if args == 'newbie':
+            logger.debug("Starting newbie tutorial.")
+            tutorial_mission = TutorialMission(self.bot)
+            await tutorial_mission.wait_for_user_action(ctx)
 
         try:
             user_id = str(ctx.author.id)
@@ -231,13 +52,16 @@ class Quest(commands.Cog):
 
             if quests:
                 view = Quest_View(self.bot, quests, ctx)
-                messages = await view.generate_messages()
-                
-                if len(quests) > 0:
+                embeds = await view.generate_messages()
+
+                # Send initial embed and view
+                if embeds:
                     if len(quests) > 3:
-                        await ctx.reply(content="\n\n".join(messages), view=view)
+                        # Multiple pages if there are more quests than fit on one page
+                        await ctx.reply(embed=embeds, view=view)
                     else:
-                        await ctx.reply(content="\n\n".join(messages))
+                        # Single embed if the number of quests fits on one page
+                        await ctx.reply(embed=embeds)
 
             else:
                 no_quest_message = "You have no quests."
@@ -249,7 +73,7 @@ class Quest(commands.Cog):
             traceback.print_exc()
             await ctx.send(f"{error_message}")
 
-    @commands.command(name='stars', aliases=['bal','points','balance'])
+    @commands.command(name='stars', aliases=['bal', 'points', 'balance'])
     async def balance(self, ctx, method=None, amount: int = None, member: discord.Member = None):
         user_id = str(ctx.author.id)
         guild_id = str(ctx.guild.id)
@@ -311,9 +135,12 @@ class Quest_View(View):
     async def generate_messages(self):
         start_index = self.page * 3
         end_index = start_index + 3
-        messages = []
+        quests_to_display = self.filtered_quests[start_index:end_index]
 
-        for quest in self.filtered_quests[start_index:end_index]:
+        # Create a single embed for the current page
+        embed = discord.Embed(title="Quests", color=primary_color())
+        
+        for quest in quests_to_display:
             quest_id = quest['quest_id']
             progress = quest['progress']
             times = quest['times']
@@ -323,25 +150,32 @@ class Quest_View(View):
             reward = quest['reward']
             channel = self.bot.get_channel(quest['channel_id'])
 
-            if re.match(r'^<:\w+:\d+>$', content):
-                emoji_id = int(re.findall(r'\d+', content)[0])
-                emoji = discord.utils.get(self.bot.emojis, id=emoji_id)
-                if emoji:
-                    content = str(emoji)
-            elif method == 'message':
-                content = f"`{content}`"
+            # Generate instructions based on method
+            if method == 'message':
+                instruction = f"Send a message containing: `{content.replace('{member}', self.ctx.author.mention)}`"
+            elif method == 'emoji':
+                instruction = f"Send an emoji: `{content}`"
+            elif method == 'reaction':
+                instruction = f"React to a message with the emoji: `{content}`"
+            else:
+                instruction = "Unknown method. Please refer to the quest details."
 
             progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
             
             reward_emoji_id = 1247800150479339581
             reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
             
-            objective = f"{action.title()} - {method.title()}: {content}"
-            message = f"**Quest {quest_id}**\n{objective}\n{progress_bar} {progress}/{times}\nLocation: {channel.mention}\nReward: {reward_emoji} `{reward} stp`"
-            messages.append(message)
+            embed.add_field(name=f"Quest {quest_id}", value=f"Instruction: {instruction}\nProgress: {progress_bar} {progress}/{times}\nLocation: {channel.mention}\nReward: {reward_emoji} `{reward} stp`", inline=False)
 
-        return messages
+        return embed
 
+    
+    
+    
+    
+    
+    
+    
 class Quest_Select(Select):
     def __init__(self, bot, quests, ctx, max_pages):
         options = [
@@ -451,7 +285,7 @@ class Quest_Button(discord.ui.View):
             if added:
                 embed = await QuestEmbed.get_agree_confirmation_embed(self.bot, button.user)
                 
-                await button.response.send_message("You have been added!", embed=embed, ephemeral=True)
+                await button.response.send_message(embed=embed)
                 await button.followup.delete_message(button.message.id)
 
                 button_user = button.user
@@ -466,7 +300,7 @@ class Quest_Button(discord.ui.View):
 
             else:
                 await button.response.send_message("You are already part of the game!", ephemeral=True)
-                await button.followup.edit_message(button.message.id,view=None)
+                await button.followup.edit_message(button.message.id, view=None)
         except Exception as e:
             error_message = "An error occurred while processing the accept button."
             logger.error(f"{error_message}: {e}")
@@ -1461,6 +1295,183 @@ class Quest_Slash(commands.Cog):
         await self.quest_data.handle_error(interaction, e, title="View All Server Quests")
 
 
+class ShopView(discord.ui.View):
+    def __init__(self, bot, shop_data):
+        super().__init__()
+        self.bot = bot
+        self.quest_data = Quest_Data(bot)
+
+        self.shop_data = shop_data
+        self.materials_dict = {material['name']: material['emoji'] for material in self.shop_data.get("Materials", [])}
+
+    async def start(self, ctx):
+     try:
+        user_id = str(ctx.author.id)
+        guild_id = str(ctx.guild.id)
+
+        
+        balance = await self.quest_data.get_balance(user_id, guild_id)
+        balance = "{:,}".format(balance)
+        
+        
+        shop_embed = await ShopEmbed.start_shop_embed(self.bot, ctx, balance)
+        
+        spy_tools = self.shop_data.get("Spy Tools", [])
+        
+        """
+         # Adding spy tools to the embed without descriptions or materials
+         for tool in spy_tools:
+            name = tool.get("name", "Unknown Item")
+            emoji = tool.get("emoji", "")
+            shop_embed.add_field(name=f"", value=f'{emoji} `{name}`', inline=True)
+        """
+        
+
+        # Create and add the select menu
+        select = SpyToolSelect(self.shop_data, self.materials_dict, self.quest_data, user_id, guild_id)
+        self.add_item(select)    
+        # Send the initial embed with the select menu
+        await ctx.send(embed=shop_embed, view=self)
+       
+
+     except Exception as e:
+        await self.handle_error(ctx, e)   
+        
+       
+    async def handle_error(self, interaction, exception):
+        traceback_msg = ''.join(traceback.format_exception(type(exception), exception, exception.__traceback__))
+        error_message = f"An error occurred: {exception}\n\n```{traceback_msg}```"
+        print(traceback_msg)
+        await interaction.response.send_message(error_message, ephemeral=True)
+
+        
+class MaterialsButton(discord.ui.View):
+    def __init__(self, shop_data, quest_data, user_id , guild_id):
+        super().__init__()  # Initialize the discord.ui.View class
+        self.shop_data = shop_data
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+
+    @discord.ui.button(label='Materials', style=discord.ButtonStyle.secondary, custom_id='materials_button')
+    async def materials_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+        try:
+            self.clear_items()
+
+            shop_embed = discord.Embed(title="Material Shop", color=discord.Color.blurple())
+            
+            materials = self.shop_data["Materials"][:15]  # Limit to first 10 materials
+            
+            for material in materials:
+                try:
+                    name = material.get("name", "Unknown Material")
+                    emoji = material.get("emoji", "")
+                    price = material.get("price", 0)
+                    shop_embed.add_field(name=f"{emoji} {name}", value=f"**Price:** {price} points", inline=True)
+                    material_button = discord.ui.Button(
+                        style=discord.ButtonStyle.green,
+                        emoji=emoji,
+                        custom_id=name  # Use material_name as custom_id
+                    )
+                    self.add_item(material_button)  # Add each button to the view
+                    material_button.callback = self.material_callback  # Assign the callback function
+                except Exception as e:
+                    traceback.print_exc()  # Print traceback for detailed error feedback
+
+            await button.response.send_message(embed=shop_embed, view=self, ephemeral=True)
+
+        except Exception as e:
+            traceback.print_exc()  # Print traceback for detailed error feedback
+            await button.response.send_message(f"An error occurred: {e}", ephemeral=True)
+
+    async def material_callback(self, interaction: discord.Interaction):
+        try:
+            material_name = interaction.data["custom_id"]
+            material = next((m for m in self.shop_data["Materials"] if m.get("name") == material_name), None)
+            
+            if not material:
+                await interaction.followup.send("Material not found.", ephemeral=True)
+                return
+            
+            price = material.get("price", 0)
+            
+            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            
+            if user_balance >= price:
+
+                await self.quest_data.add_item_to_inventory(self.guild_id, self.user_id, material_name, 1)
+                spent = -price
+                await self.quest_data.add_balance(self.user_id, self.guild_id, spent)
+                
+                await interaction.response.send_message(f"You have successfully purchased {material_name} for {price} points.", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"You do not have enough points to purchase {material_name}.", ephemeral=True)
+        
+        except Exception as e:
+            traceback.print_exc()  # Print traceback for detailed error feedback
+            await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
+           
+    
+    
+class SpyToolSelect(discord.ui.Select):
+    def __init__(self, shop_data, materials_dict, quest_data, user_id, guild_id):
+        spy_tools = shop_data.get("Spy Tools", [])
+        options = [
+            discord.SelectOption(label=f"{tool.get('emoji', '')} {tool.get('name', 'Unknown Item')}", value=tool.get('name', 'Unknown Item'))
+            for tool in spy_tools
+        ]
+        super().__init__(placeholder="Select a Spy Tool", options=options)
+        self.shop_data = shop_data
+        self.materials_dict = materials_dict
+        self.quest_data = quest_data  # Pass the user's quest data here
+        self.user_id = user_id
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            selected_tool_name = self.values[0]
+            tool = next((t for t in self.shop_data.get("Spy Tools", []) if t.get("name") == selected_tool_name), None)
+            
+            if not tool:
+                await interaction.response.send_message("Spy Tool not found.", ephemeral=True)
+                return
+            
+            emoji = tool.get("emoji", "")
+            description = tool.get("description", "No description available.")
+            materials_list = "\n".join([await self.format_materials(item) for item in tool.get("materials", [])])
+
+            shop_embed = discord.Embed(title=f"{selected_tool_name}", description=f'{emoji} {description}', color=discord.Color.blurple())
+            shop_embed.add_field(name="Materials", value=materials_list or "No materials needed", inline=False)
+            
+            # Create MaterialsButton view
+            materials_button_view = MaterialsButton(self.shop_data, self.quest_data, self.user_id , self.guild_id)
+            
+            await interaction.response.send_message(embed=shop_embed, view=materials_button_view, ephemeral=True)
+        
+        except Exception as e:
+            traceback.print_exc()  # Print traceback for detailed error feedback
+            await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
+    
+    async def get_user_inventory_count(self, material_name):
+        # Retrieve the user's inventory count for a given material from quest_data
+        material_count = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, material_name)
+
+        return material_count
+    
+    async def format_materials(self, item):
+        material_name = item.get('material', '')
+        required_quantity = item.get('quantity', 0)
+        user_quantity = await self.get_user_inventory_count(material_name) or 0
+
+        if user_quantity == 0:
+            indicator_emoji = "<:red:1261639413943762944> "  # Red
+        elif user_quantity < required_quantity:
+            indicator_emoji = "<:yellow:1261639412253724774> "  # Yellow
+        else:
+            indicator_emoji = "<:green:1261639410181476443> "  # Green
+
+        return f"{indicator_emoji} : {self.materials_dict.get(material_name, '')} - {user_quantity}/{required_quantity}"
+    
           
 def setup(bot):
     bot.add_cog(Quest_Data(bot))
