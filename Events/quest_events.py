@@ -138,7 +138,7 @@ class Quest_Checker(commands.Cog):
 
                             if quest['progress'] >= quest['times']:
                                 times = quest['times']
-                                user = message.author
+                                user = reaction.user
                                 quest_id = quest['quest_id']
                                 reward = quest['reward']
                                 await self.complete_quest(guild_id, user_id, quest, times, user, quest_id, message, method='reaction', reward=reward)
