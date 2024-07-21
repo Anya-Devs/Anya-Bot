@@ -138,7 +138,7 @@ class Quest_View(View):
         quests_to_display = self.filtered_quests[start_index:end_index]
 
         # Create a single embed for the current page
-        embed = discord.Embed(title="Quests", color=primary_color())
+        embed = discord.Embed(title="Quests", description="Here are the quests you need to complete. Each quest has a specific objective, progress, and reward. Click on the location link to navigate to the respective channel where the quest can be completed.", color=primary_color())
         
         for quest in quests_to_display:
             quest_id = quest['quest_id']
@@ -152,11 +152,11 @@ class Quest_View(View):
 
             # Generate instructions based on method
             if method == 'message':
-                instruction = f"Send a message containing: `{content.replace('{member}', self.ctx.author.mention)}`"
+                instruction = f"Send a message containing: `{content}`"
             elif method == 'emoji':
-                instruction = f"Send an emoji: `{content}`"
+                instruction = f"Send an emoji: {content}"
             elif method == 'reaction':
-                instruction = f"React to a message with the emoji: `{content}`"
+                instruction = f"React to a message with the emoji: {content}"
             else:
                 instruction = "Unknown method. Please refer to the quest details."
 
@@ -164,8 +164,9 @@ class Quest_View(View):
             
             reward_emoji_id = 1247800150479339581
             reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
+            channel = f'[Go here](https://discord.com/channels/{self.ctx.guild.id}/{channel.id})' if channel.id != self.ctx.channel.id else 'In this channel'
             
-            embed.add_field(name=f"Quest {quest_id}", value=f"Instruction: {instruction}\nProgress: {progress_bar} {progress}/{times}\nLocation: {channel.mention}\nReward: {reward_emoji} `{reward} stp`", inline=False)
+            embed.add_field(name=f"Quest {quest_id}", value=f"{channel} | {instruction}\n- `{progress}/{times}` {progress_bar}\nReward: {reward_emoji} `{reward} stp`\n", inline=False)
 
         return embed
 
