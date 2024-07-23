@@ -1333,7 +1333,7 @@ class Pokemon(commands.Cog):
 
     
      h_w = f"Height: {height:.2f} m\nWeight: {weight:.2f} kg"
-            
+     print('is_shiny: ',type)      
      self.bot.add_view(Pokebuttons(alt_names_str,species_name))
      
      await ctx.reply(embed=embed,view=Pokebuttons(alt_names_str,species_name,formatted_base_stats,type,wes,pokemon_type,base_stats,image_url,h_w,image_thumb,pokemon_dex_name,color,data,gender_differ,region, description,gender_info))
@@ -1533,29 +1533,36 @@ class Pokebuttons(discord.ui.View):
     async def display_evolution_chain(self, chain):
         embeds = []
         queue = [chain]
-    
+        final_forms = set()  # To keep track of Pokémon that are final forms
+
         while queue:
             current_chain = queue.pop(0)
             species_name = current_chain['species']['name'].title()
-            if 'evolves_to' in current_chain and current_chain['evolves_to']:
-                for evolution in current_chain['evolves_to']:
-                    details = evolution['evolution_details'][0]
-                    next_pokemon_name = evolution['species']['name'].title()
-                    method = await self.determine_evolution_method(species_name, details, next_pokemon_name)
+            
+            # Check if this is a final form
+            if not current_chain.get('evolves_to'):
+                final_forms.add(species_name)
+                continue
+            
+            for evolution in current_chain['evolves_to']:
+                details = evolution['evolution_details'][0]
+                next_pokemon_name = evolution['species']['name'].title()
+                method = await self.determine_evolution_method(species_name, details, next_pokemon_name)
                 
-                    if method:
-                        embed = await self.create_pokemon_embed(species_name, method, next_pokemon_name)
-                        embeds.append(embed)
+                if method:
+                    embed = await self.create_pokemon_embed(species_name, method, next_pokemon_name)
+                    embeds.append(embed)
                 
-                    # Add the next evolution stage to the queue
-                    queue.append(evolution)
-            else:
-                # If there are no further evolutions, show the final form
-                embed = await self.create_pokemon_embed(species_name, "is the final form", species_name)
+                # Add the next evolution stage to the queue
+                queue.append(evolution)
+        
+        # Handle final forms
+        if final_forms:
+            for final_form in final_forms:
+                embed = await self.create_pokemon_embed(final_form, "is the final form", final_form)
                 embeds.append(embed)
     
-        return embeds
-    
+        return embeds 
     async def determine_evolution_method(self, current_pokemon, evolution_details, next_pokemon):
         trigger = evolution_details.get('trigger', {}).get('name')
         item = evolution_details.get('item')
@@ -1591,11 +1598,23 @@ class Pokebuttons(discord.ui.View):
         return method
 
     async def create_pokemon_embed(self, current_pokemon, method, next_pokemon):
-        embed = discord.Embed()
-        sprite_url = f"https://pokemonshowdown.com/sprites/dex/{current_pokemon.lower()}.png"
-        embed.set_thumbnail(url=sprite_url)
+     embed = discord.Embed()
+    
+     if self.pokemon_type != "shiny":
+            sprite_url = f"https://pokemonshowdown.com/sprites/dex/{current_pokemon.lower()}.png"
+     else:
+            sprite_url = f"https://pokemonshowdown.com/sprites/dex-shiny/{current_pokemon.lower()}.png"
+            
+     embed.set_thumbnail(url=sprite_url)
+     
+     if current_pokemon == next_pokemon:
+        # If the Pokémon evolves into itself (final form)
+        embed.description = f"{current_pokemon} is the final form."
+     else:
+        # Normal evolution description
         embed.description = f"{current_pokemon} evolves into {next_pokemon} {method}"
-        return embed
+    
+     return embed
 
     @discord.ui.button(label="Stats", style=discord.ButtonStyle.gray, custom_id="Pokemon_Stats", row=1)
     async def s_and_w(self, button: discord.ui.Button, interaction: discord.Interaction):
