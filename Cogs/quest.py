@@ -193,8 +193,8 @@ class Quest_Select(Select):
         try:
             page_index = int(self.values[0])
             view = Quest_View(self.bot, self.quests, self.ctx, page=page_index, filtered_quests=self.quests)
-            messages = await view.generate_messages()
-            await interaction.response.edit_message(content="\n\n".join(messages), view=view)
+            embed = await view.generate_messages()
+            await interaction.response.edit_message(embed=embed, view=view)
         except Exception as e:
             error_message = "An error occurred while fetching quests."
             logger.error(f"{error_message}: {e}")
@@ -223,8 +223,8 @@ class Quest_Select_Filter(Select):
                 filtered_quests = [quest for quest in self.quests if quest['method'] == selected_method]
 
             view = Quest_View(self.bot, self.quests, self.ctx, filtered_quests=filtered_quests)
-            messages = await view.generate_messages()
-            await interaction.response.edit_message(content="\n\n".join(messages), view=view)
+            embed = await view.generate_messages()
+            await interaction.response.edit_message(embed=embed, view=view)
         except Exception as e:
             error_message = "An error occurred while fetching quests."
             logger.error(f"{error_message}: {e}")
@@ -245,8 +245,8 @@ class QuestButton(discord.ui.Button):
         elif self.custom_id == "next":
             self.page += 1
         view = Quest_View(self.bot, self.quests, self.ctx, self.page)
-        messages = await view.generate_messages()
-        await interaction.response.edit_message(content="\n\n".join(messages), view=view)
+        embed = await view.generate_messages()
+        await interaction.response.edit_message(embed=embed, view=view)
 
 
             
@@ -296,7 +296,7 @@ class Quest_Button(discord.ui.View):
                 
                 for _ in range(10):
                                 logger.debug("Adding new quest")
-                                await self.quest_data.add_new_quest(guild_id, button_user)
+                                await self.quest_data.add_new_quest(guild_id, button_user,chance=100)
 
 
             else:
@@ -758,7 +758,7 @@ class Quest_Data(commands.Cog):
      logger.debug(f"Selected emoji: {emoji}")
      return str(emoji)
     
-    async def get_most_active_channel(self, guild_id, threshold=5, message_limit=100):
+    async def get_most_active_channel(self, guild_id, threshold=5, message_limit=100, fallback_channel_id=None):
      try:
         logger.debug('Entering get_most_active_channel function')
         guild = self.bot.get_guild(int(guild_id))
@@ -793,17 +793,37 @@ class Quest_Data(commands.Cog):
                 else:
                     most_active_channel_id = sorted_channels[0][0]  # Get the ID of the most active channel
                     logger.debug(f"Selected the most active channel: {most_active_channel_id}")
-                return most_active_channel_id
             else:
-                logger.debug('No active channels found')
-                return None  # No active channels found
+                # Use fallback channel ID if no active channels are found
+                if fallback_channel_id:
+                    logger.debug(f"No active channels found, using fallback channel: {fallback_channel_id}")
+                    most_active_channel_id = fallback_channel_id
+                else:
+                    # If no fallback is provided, select a random channel from the guild
+                    logger.debug("No active channels found and no fallback channel provided, selecting a random channel")
+                    most_active_channel_id = random.choice([channel.id for channel in guild.text_channels])
+                    logger.debug(f"Randomly selected a channel from the guild: {most_active_channel_id}")
+
+            return most_active_channel_id
         else:
             logger.debug(f"Guild not found: {guild_id}")
-            return None
+            if fallback_channel_id:
+                logger.debug(f"Using fallback channel: {fallback_channel_id}")
+                return fallback_channel_id
+            else:
+                # If no fallback is provided, select a random channel from the guild
+                logger.debug("Guild not found and no fallback channel provided, selecting a random channel")
+                guild = self.bot.get_guild(int(guild_id))
+                if guild:
+                    return random.choice([channel.id for channel in guild.text_channels])
+                else:
+                    logger.error("Guild still not found after fallback attempt")
+                    return None
      except Exception as e:
         logger.error(f"Error occurred while getting the most active channel: {e}")
         traceback.print_exc()
-        return None
+        # Return a fallback channel ID if provided
+        return fallback_channel_id if fallback_channel_id else random.choice([channel.id for channel in guild.text_channels] if guild else [])
 
     async def insert_quest_existing_path(self, guild_id: str, user_id: str, quest_data: dict, interaction=None):
      try:
@@ -1345,45 +1365,70 @@ class ShopView(discord.ui.View):
         print(traceback_msg)
         await interaction.response.send_message(error_message, ephemeral=True)
 
-        
 class MaterialsButton(discord.ui.View):
-    def __init__(self, shop_data, quest_data, user_id , guild_id):
-        super().__init__()  # Initialize the discord.ui.View class
+    def __init__(self, shop_data, quest_data, user_id, guild_id):
+        super().__init__(timeout=None)  # Initialize the discord.ui.View class
         self.shop_data = shop_data
         self.quest_data = quest_data
         self.user_id = user_id
         self.guild_id = guild_id
+        self.page = 0
+        self.items_per_page = 5
+        self.max_pages = (len(shop_data["Materials"]) - 1) // self.items_per_page + 1
+        self.update_view()
+
+    def update_view(self):
+        self.clear_items()
+        start_index = self.page * self.items_per_page
+        end_index = start_index + self.items_per_page
+        materials = self.shop_data["Materials"][start_index:end_index]
+
+        for material in materials:
+            try:
+                name = material.get("name", "Unknown Material")
+                emoji = material.get("emoji", "")
+                material_count = self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, name)  # Get the user's material count
+                material_button = discord.ui.Button(
+                    style=discord.ButtonStyle.green,
+                    emoji=emoji,
+                    label=f'{material_count}',
+                    custom_id=name  # Use material_name as custom_id
+                )
+                material_button.callback = self.material_callback  # Assign the callback function
+                self.add_item(material_button)  # Add each button to the view
+            except Exception as e:
+                traceback.print_exc()  # Print traceback for detailed error feedback
+
+        # Add navigation buttons
+        if self.page > 0:
+            prev_button = discord.ui.Button(label='Previous', style=discord.ButtonStyle.secondary, custom_id='prev_page')
+            prev_button.callback = self.prev_page_callback
+            self.add_item(prev_button)
+        
+        if self.page < self.max_pages - 1:
+            next_button = discord.ui.Button(label='Next', style=discord.ButtonStyle.secondary, custom_id='next_page')
+            next_button.callback = self.next_page_callback
+            self.add_item(next_button)
+
+    async def prev_page_callback(self, interaction: discord.Interaction):
+        self.page -= 1
+        self.update_view()
+        await interaction.response.edit_message(view=self)
+
+    async def next_page_callback(self, interaction: discord.Interaction):
+        self.page += 1
+        self.update_view()
+        await interaction.response.edit_message(view=self)
 
     @discord.ui.button(label='Materials', style=discord.ButtonStyle.secondary, custom_id='materials_button')
     async def materials_button(self, button: discord.ui.Button, interaction: discord.Interaction):
         try:
-            self.clear_items()
-
+            self.update_view()
             shop_embed = discord.Embed(title="Material Shop", color=discord.Color.blurple())
-            
-            materials = self.shop_data["Materials"][:15]  # Limit to first 10 materials
-            
-            for material in materials:
-                try:
-                    name = material.get("name", "Unknown Material")
-                    emoji = material.get("emoji", "")
-                    price = material.get("price", 0)
-                    shop_embed.add_field(name=f"{emoji} {name}", value=f"**Price:** {price} points", inline=True)
-                    material_button = discord.ui.Button(
-                        style=discord.ButtonStyle.green,
-                        emoji=emoji,
-                        custom_id=name  # Use material_name as custom_id
-                    )
-                    self.add_item(material_button)  # Add each button to the view
-                    material_button.callback = self.material_callback  # Assign the callback function
-                except Exception as e:
-                    traceback.print_exc()  # Print traceback for detailed error feedback
-
-            await button.response.send_message(embed=shop_embed, view=self, ephemeral=True)
-
+            await interaction.response.send_message(embed=shop_embed, view=self, ephemeral=True)
         except Exception as e:
             traceback.print_exc()  # Print traceback for detailed error feedback
-            await button.response.send_message(f"An error occurred: {e}", ephemeral=True)
+            await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
 
     async def material_callback(self, interaction: discord.Interaction):
         try:
@@ -1395,25 +1440,27 @@ class MaterialsButton(discord.ui.View):
                 return
             
             price = material.get("price", 0)
-            
             user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
             
             if user_balance >= price:
-
                 await self.quest_data.add_item_to_inventory(self.guild_id, self.user_id, material_name, 1)
                 spent = -price
                 await self.quest_data.add_balance(self.user_id, self.guild_id, spent)
+                material_count = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, material_name)
                 
-                await interaction.response.send_message(f"You have successfully purchased {material_name} for {price} points.", ephemeral=True)
+                # Update the button label with the new count
+                for item in self.children:
+                    if isinstance(item, discord.ui.Button) and item.custom_id == material_name:
+                        item.label = str(material_count)
+                
+                await interaction.response.edit_message(view=self)
             else:
                 await interaction.response.send_message(f"You do not have enough points to purchase {material_name}.", ephemeral=True)
         
         except Exception as e:
             traceback.print_exc()  # Print traceback for detailed error feedback
             await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
-           
-    
-    
+
 class SpyToolSelect(discord.ui.Select):
     def __init__(self, shop_data, materials_dict, quest_data, user_id, guild_id):
         spy_tools = shop_data.get("Spy Tools", [])
