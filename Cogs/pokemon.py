@@ -732,7 +732,14 @@ class Pokemon(commands.Cog):
 
         
      async def find_pokemon_description(pokemon_name):
-      with open('Data/pokemon/pokemon_descriptions.txt', 'r') as file:
+      POKEMON_DIR = "Data/pokemon"
+      os.makedirs(POKEMON_DIR, exist_ok=True)
+      POKEMON_DESCRIPTION_FILE = os.path.join(POKEMON_DIR, "pokemon_descriptions.txt")
+
+      if not os.path.exists(POKEMON_DESCRIPTION_FILE):
+            with open(POKEMON_DESCRIPTION_FILE, 'w') as file:
+                file.write("")  # Creating an empty text file          
+      with open(POKEMON_DESCRIPTION_FILE, 'r') as file:
         pokemon_name = pokemon_name.lower()
         print(pokemon_name)
         for line in file:
@@ -1286,7 +1293,8 @@ class Pokemon(commands.Cog):
   
      appearance = f"Height: {height:.2f} m\nWeight: {weight:.2f} kg\t\t" if gender is not None and gender != "♂ 50% - ♀ 50%" else f"Height: {height:.2f} m\nWeight: {weight:.2f} kg"
 
-    
+     gender_info = None
+
      if image_thumb:
 
         embed.set_footer(icon_url=image_thumb,text=appearance)
@@ -1324,8 +1332,10 @@ class Pokemon(commands.Cog):
            
 
     
-     h_w = f"Height: {height:.2f} m\nWeight: {weight:.2f} kg"     
+     h_w = f"Height: {height:.2f} m\nWeight: {weight:.2f} kg"
+            
      self.bot.add_view(Pokebuttons(alt_names_str,species_name))
+     
      await ctx.reply(embed=embed,view=Pokebuttons(alt_names_str,species_name,formatted_base_stats,type,wes,pokemon_type,base_stats,image_url,h_w,image_thumb,pokemon_dex_name,color,data,gender_differ,region, description,gender_info))
     
 
@@ -1357,12 +1367,13 @@ class Pokebuttons(discord.ui.View):
         self.description = description
         self.gender_info = gender_info
         
+        
         # Add PokeSelect to the view
         pokemon_forms = self.get_pokemon_forms()
         
         if pokemon_forms and len(pokemon_forms) > 1:
             self.add_item(PokeSelect(pokemon_forms, self.image_url, self.alt_names_str, self.region, self.description,self.pokemon_shiny,self.gender_info))
-    
+        
     
         
         
@@ -1473,72 +1484,120 @@ class Pokebuttons(discord.ui.View):
 
     
 
-    @discord.ui.button(label="Evovles", style=discord.ButtonStyle.gray, custom_id="Pokemon_Evolutions_Button")
-    async def blurple_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-        print(self.pokemon_name)
-        await self.show_evolutions(button)
-        await button.response.defer()
-
-    async def show_evolutions(self, interaction: discord.ui.Button):
+    @discord.ui.button(label="Evolves", style=discord.ButtonStyle.gray, custom_id="Pokemon_Evolutions_Button",row=1)
+    async def show_evolutions_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+        # Fetch and display evolution chain when button is clicked
         try:
-            # Fetch Pokémon evolution chain and display it
-            await self.get_and_display_evolution_chain(interaction)
+            await self.show_evolutions(button)
         except requests.exceptions.RequestException as e:
-            return await interaction.response.send_message(f"Error fetching Pokémon evolution chain: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"Error fetching Pokémon evolution chain: {str(e)}", ephemeral=True)
 
-    async def get_and_display_evolution_chain(self, interaction: discord.Interaction):
+    async def show_evolutions(self, interaction: discord.Interaction):
         try:
-            # Fetching the Pokemon evolution chain data
-            evolution_chain_data = self.get_pokemon_evolution_chain(self.pokemon_name)
-            
-            # Displaying the evolution chain
-            embeds = []
-            await self.display_evolution_chain(evolution_chain_data, embeds, interaction)
+            # Fetch Pokémon evolution chain data
+            evolution_chain_data = await self.get_pokemon_evolution_chain(self.pokemon_name)
+
+            if not evolution_chain_data:
+                await interaction.response.send_message(f"No evolution chain found for {self.pokemon_name.title()}.", ephemeral=True)
+                # Disable the button if no evolution chain found
+                self.disabled = True
+                await interaction.message.edit(view=self.view)
+                return
+
+            # Display the evolution chain
+            embeds = await self.display_evolution_chain(evolution_chain_data)
             await interaction.response.send_message(embeds=embeds, ephemeral=True)
-        except requests.exceptions.RequestException as e:
-            raise e
+        except Exception as e:
+            await interaction.response.send_message(f"Error fetching Pokémon evolution chain: {str(e)}", ephemeral=True)
 
-    def get_pokemon_evolution_chain(self, pokemon_name):
-        # Fetching the Pokemon species data
-        species_url = f"https://pokeapi.co/api/v2/pokemon-species/{pokemon_name.lower()}/"
-        species_response = requests.get(species_url)
+    async def get_pokemon_evolution_chain(self, pokemon_name):
+        async with aiohttp.ClientSession() as session:
+            species_url = f"https://pokeapi.co/api/v2/pokemon-species/{pokemon_name.lower()}/"
+            async with session.get(species_url) as response:
+                if response.status != 200:
+                    raise Exception(f"Error fetching species data for {pokemon_name}")
+
+                species_data = await response.json()
+                evolution_chain_url = species_data.get('evolution_chain', {}).get('url')
+                
+                if not evolution_chain_url:
+                    raise Exception(f"No evolution chain found for {pokemon_name}")
+
+            async with session.get(evolution_chain_url) as response:
+                if response.status != 200:
+                    raise Exception(f"Error fetching evolution chain data for {pokemon_name}")
+
+                evolution_chain_data = await response.json()
+                return evolution_chain_data.get('chain')
         
-        if species_response.status_code != 200:
-            raise requests.exceptions.RequestException(f"Error: Unable to fetch data for {pokemon_name}")
+    async def display_evolution_chain(self, chain):
+        embeds = []
+        queue = [chain]
+    
+        while queue:
+            current_chain = queue.pop(0)
+            species_name = current_chain['species']['name'].title()
+            if 'evolves_to' in current_chain and current_chain['evolves_to']:
+                for evolution in current_chain['evolves_to']:
+                    details = evolution['evolution_details'][0]
+                    next_pokemon_name = evolution['species']['name'].title()
+                    method = await self.determine_evolution_method(species_name, details, next_pokemon_name)
+                
+                    if method:
+                        embed = await self.create_pokemon_embed(species_name, method, next_pokemon_name)
+                        embeds.append(embed)
+                
+                    # Add the next evolution stage to the queue
+                    queue.append(evolution)
+            else:
+                # If there are no further evolutions, show the final form
+                embed = await self.create_pokemon_embed(species_name, "is the final form", species_name)
+                embeds.append(embed)
+    
+        return embeds
+    
+    async def determine_evolution_method(self, current_pokemon, evolution_details, next_pokemon):
+        trigger = evolution_details.get('trigger', {}).get('name')
+        item = evolution_details.get('item')
+        known_move_type = evolution_details.get('known_move_type')
+        time_of_day = evolution_details.get('time_of_day')
+        min_level = evolution_details.get('min_level')
+        min_happiness = evolution_details.get('min_happiness')
+        method = ""
 
-        species_data = species_response.json()
-        evolution_chain_url = species_data['evolution_chain']['url']
+        if trigger == 'level-up':
+            # Handle leveling up with specific conditions
+            if known_move_type:
+                method += f"when leveled up while knowing a {known_move_type['name'].replace('-', ' ').title()} move"
+            else:
+                method = f"when leveled up"
+                if time_of_day:
+                    method += f" at {time_of_day.title()} time"
+                if min_level:
+                    method += f" starting from level {min_level}"
+                if min_happiness:
+                    method += " while holding a Friendship Bracelet"
+        elif trigger == 'use-item':
+            # Handle evolution using a specific item
+            if item:
+                method = f"using a {item['name'].replace('-', ' ').title()}"
+        elif trigger == 'trade':
+            # Handle trade evolution with or without an item
+            if item:
+                method = f"when traded holding a {item['name'].replace('-', ' ').title()}"
+            else:
+                method = f"when traded"
 
-        # Fetching the evolution chain data
-        evolution_chain_response = requests.get(evolution_chain_url)
+        return method
 
-        if evolution_chain_response.status_code != 200:
-            raise requests.exceptions.RequestException(f"Error: Unable to fetch evolution chain data for {pokemon_name}")
+    async def create_pokemon_embed(self, current_pokemon, method, next_pokemon):
+        embed = discord.Embed()
+        sprite_url = f"https://pokemonshowdown.com/sprites/dex/{current_pokemon.lower()}.png"
+        embed.set_thumbnail(url=sprite_url)
+        embed.description = f"{current_pokemon} evolves into {next_pokemon} {method}"
+        return embed
 
-        evolution_chain_data = evolution_chain_response.json()
-        return evolution_chain_data['chain']
-
-    async def display_evolution_chain(self, chain, embeds, interaction: discord.ui.Button, level=0):
-        # Displaying the current Pokemon in the evolution chain
-        pokemon_name = chain['species']['name']
-        
-        if self.pokemon_shiny == "shiny":
-            evolution_image_url = f"https://pokemonshowdown.com/sprites/dex-shiny/{pokemon_name}.png"
-        else:
-            evolution_image_url = f"https://pokemonshowdown.com/sprites/dex/{pokemon_name}.png"
-
-        # Create an embed for the current evolution
-        embed = discord.Embed(color=self.color)
-        embed.set_thumbnail(url=evolution_image_url)
-        embed.set_footer(text=pokemon_name.capitalize())
-        embeds.append(embed)
-
-        # Displaying the next evolution(s) recursively
-        if 'evolves_to' in chain and chain['evolves_to']:
-            for evolution in chain['evolves_to']:
-                await self.display_evolution_chain(evolution, embeds, interaction, level + 1)
-
-    @discord.ui.button(label="Stats", style=discord.ButtonStyle.gray, custom_id="Pokemon_Stats")
+    @discord.ui.button(label="Stats", style=discord.ButtonStyle.gray, custom_id="Pokemon_Stats", row=1)
     async def s_and_w(self, button: discord.ui.Button, interaction: discord.Interaction):
         embed=discord.Embed(color=self.color)
         embed.add_field(name="Base Stats", value=f"```py\n{self.base_stats}```", inline=False)
@@ -1749,18 +1808,20 @@ class Strength_weakness(discord.ui.View):
 
     @discord.ui.button(label="S/W", style=discord.ButtonStyle.gray, custom_id="Pokemon_S_and_W_Button")
     async def strengths_and_weaknesses(self, button: discord.ui.Button, interaction: discord.Interaction):
-    try:
-     embed = discord.Embed(color=self.color)
-     embed.add_field(name=" ", value=self.strength_weakness_text, inline=False)
+     try:
+      embed = discord.Embed(color=self.color)
+      embed.add_field(name=" ", value=self.strength_weakness_text, inline=False)
 
-     if self.image_thumb is None:
+      if self.footer is None:
         embed.set_footer(text=self.footer_text)
-     else:
+      else:
         embed.set_footer(icon_url=self.footer, text=self.footer_text)
-     embed.set_thumbnail(url=self.thumbnail_url)
+      embed.set_thumbnail(url=self.thumbnail_url)
     
-     await button.response.send_message(embed=embed, ephemeral=True)
-    except Exception as e:
+      await button.response.send_message(embed=embed, ephemeral=True)
+     except Exception as e:
+        await button.response.send_message(e, ephemeral=True)
+
         print(e)
         return
     
