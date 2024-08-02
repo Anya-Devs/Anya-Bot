@@ -37,11 +37,11 @@ class Select(discord.ui.Select):
             color = self.primary_color
             emoji = Help_Select_Embed_Mapping.emojis.get(cog_name.lower())
             self.cog_embed = discord.Embed(
-                title=cog_name.replace('_', ' '),
-                description=f'{emoji} {Help_Select_Embed_Mapping.embeds[cog_name.lower()]["description"] or ''}',
+                title=f'{cog_name.replace('_', ' ')}',
+                description=f'{Help_Select_Embed_Mapping.embeds[cog_name.lower()]["description"] or ""}',
                 color=color
             )
-
+           
             file = None
             if 'ai' in Help_Select_Embed_Mapping.embeds and cog_name.lower() == 'ai':
                 file_path = 'Data/Images/Help_Thumbnails/ai.png'
@@ -58,9 +58,14 @@ class Select(discord.ui.Select):
                 cog_commands = [cmd for cmd in cog.get_commands() if not cmd.hidden]
                 if cog_commands:
                     for cmd in cog_commands:
+                        # Fetching command arguments
+                        cmd_args = [f"<{param.name}>" for param in cmd.clean_params.values()]
+                        args_str = " ".join(cmd_args)
+                        command_info = f"{emoji} : {cmd.name} {args_str}"
+                        
                         self.cog_embed.add_field(
                             name='',
-                            value=f"`{cmd.name}`",
+                            value=command_info,
                             inline=True
                         )
                 else:
@@ -79,7 +84,7 @@ class Select(discord.ui.Select):
             traceback_str = traceback.format_exc()
             print(traceback_str)
             logger.debug(f"An error occurred: {traceback_str}")
-            pass       
+            pass
         
         
         
