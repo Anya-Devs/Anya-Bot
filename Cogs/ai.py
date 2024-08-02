@@ -34,128 +34,163 @@ class Ai(commands.Cog):
         self.bot = bot
         self.api_key = os.getenv("api_key")
 
+        if not self.api_key:
+            raise ValueError("API key is not set in environment variables.")
+
         self.openai_client =  AsyncOpenAI(api_key = 'ng-YgkaT8abn2sWaqZRUmVPzs07BdtrE', base_url = "https://api.naga.ac/v1")
         
-        self.api_key = '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'
         self.huggingface_url = 'https://api-inference.huggingface.co/models/ehristoforu/dalle-3-xl-v2'
-        
+        self.api_key = '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'
+     
+        self.options = VisionModelOptions('Data/Ai/vision_model.txt')
         self.error_custom_embed = error_custom_embed
 
-    async def update_progress_bar(self, message, total_steps, interval=0.5):
-     progress_template = "Generating image: {progress_bar} {percent}%"
-     step_time = 0.1  # Adjust this based on estimated processing time per step
-     current_percent = 0
-    
-     for step in range(total_steps + 1):
-        progress_bar = '█' * step + '▒' * (total_steps - step)
-        percent = int((step / total_steps) * 100)
-        
-        if percent > current_percent:
-            current_percent = percent
-            await message.edit(content=progress_template.format(progress_bar=progress_bar, percent=percent))
-        
-        await asyncio.sleep(step_time)
+        # Load vision model from file or set default if file does not exist
+        self.vision_model = self.load_vision_model('Data/Ai/vision_model.txt')
 
-     await message.edit(content=progress_template.format(progress_bar='█' * total_steps, percent=100))
+    def load_vision_model(self, file_path: str) -> str:
+        """
+        Load vision model identifier from a file or create the file with the default model if it does not exist.
+        """
+        path = Path(file_path)
+        default_model = 'gpt-4-turbo'  # Default model
+
+        try:
+            if path.exists():
+                with open(file_path, 'r') as file:
+                    model_id = file.read().strip()
+                    if model_id in self.options.models:
+                        return model_id
+
+            # If file doesn't exist or model is invalid, create the file with the default model
+            self.save_vision_model(file_path, default_model)
+            return default_model
+
+        except IOError as e:
+            print(f"Error loading vision model: {e}")
+            # Fallback to default model in case of any file operation error
+            return default_model
+
+    def save_vision_model(self, file_path: str, model_id: str):
+        """
+        Save vision model identifier to a file.
+        """
+        if model_id not in self.options.models:
+            raise ValueError(f"Invalid model ID: {model_id}")
+
+        try:
+            with open(file_path, 'w') as file:
+                file.write(model_id)
+        except IOError as e:
+            print(f"Error saving vision model: {e}")
             
-    async def generate_image(self, prompt: str, progress_callback=None) -> str:
-     headers = {
-        "Authorization": f"Bearer {self.api_key}"
-     }
-     payload = {
-        "inputs": prompt,
-        "options": {
-            "wait_for_model": True
+    @commands.command(name='vision_model', aliases=['vm'], description="Change the vision model identifier or show the current model")
+    async def set_vision_model(self, ctx: commands.Context, model_id: str = None):
+        """Command to change the vision model and update the text file. Show current model if no ID is provided."""
+        file_path = 'Data/Ai/vision_model.txt'
+        vision_options = VisionModelOptions(file_path)
+
+        if model_id:
+            if model_id.isdigit():
+                # Handle user selection by number
+                index = int(model_id) - 1
+                if 0 <= index < len(vision_options.models):
+                    selected_model = vision_options.models[index]
+                    vision_options.save_model(selected_model)
+                    self.vision_model = selected_model
+                    await ctx.send(f"Vision model updated to: {selected_model}")
+                else:
+                    await ctx.send("Invalid number. Please choose a valid number from the list.")
+            else:
+                # Update vision model by model ID
+                if vision_options.is_valid_model(model_id):
+                    vision_options.save_model(model_id)
+                    self.vision_model = model_id
+                    await ctx.send(f"Vision model updated to: {model_id}")
+                else:
+                    await ctx.send("Invalid model ID. Please provide a valid model ID.")
+        else:
+            # Show current vision model
+            current_model = self.vision_model
+            model_list_message = vision_options.get_model_message()
+            await ctx.send(f"Current vision model: {current_model}\n\n```{model_list_message}```")
+
+            def check(msg):
+                return msg.author == ctx.author and msg.channel == ctx.channel and msg.content.isdigit()
+
+            try:
+                response = await self.bot.wait_for('message', timeout=60.0, check=check)
+                model_number = int(response.content) - 1
+                if 0 <= model_number < len(vision_options.models):
+                    selected_model = vision_options.models[model_number]
+                    vision_options.save_model(selected_model)
+                    self.vision_model = selected_model
+                    await ctx.send(f"Vision model updated to: {selected_model}")
+                else:
+                    await ctx.send("Invalid number. Please choose a valid number from the list.")
+            except asyncio.TimeoutError:
+                await ctx.send("You took too long to respond. Please try the command again.")
+            except ValueError:
+                await ctx.send("Invalid input. Please respond with a number.")
+    async def generate_image(self, prompt: str) -> str:
+        headers = {
+            "Authorization": f"Bearer {self.api_key}"
         }
-     }
+        payload = {
+            "inputs": prompt + " <lora:dalle-3-xl-lora-v2:0.8>",
+            "options": {
+                "wait_for_model": True
+            }
+        }
 
-     max_retries = 5
-     backoff_factor = 2
-     # Create the directory if it doesn't exist
-     output_dir = Path("Data/Image/Ai")
-     output_dir.mkdir(parents=True, exist_ok=True)
+        max_retries = 5
+        backoff_factor = 2
+        output_dir = Path("Data/Image/Ai")
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-     # Adjust total_steps based on estimated processing time
-     total_steps = 10  # Adjust as needed
-     step_time = 1.0  # Adjust based on estimated processing time per step
-
-     for attempt in range(max_retries):
-        async with aiohttp.ClientSession() as session:
-            async with session.post(self.huggingface_url, headers=headers, json=payload) as response:
-                if response.status == 200:
-                    image_bytes = await response.read()  # Get image bytes
-                    
-                    # Save image bytes to file
-                    output_path = output_dir / "generated_image.png"
-                    with open(output_path, "wb") as image_file:
-                        image_file.write(image_bytes)
-                    
-                    # Update progress if callback is provided
-                    if progress_callback:
-                        await progress_callback(total_steps, step_time)
-                    
-                    return str(output_path)  # Return the file path
-                elif response.status == 500:
-                    error_message = await response.text()
-                    if "CUDA out of memory" in error_message:
-                        # Wait before retrying
-                        if attempt < max_retries - 1:
-                            wait_time = backoff_factor ** attempt
-                            await asyncio.sleep(wait_time)
+        for attempt in range(max_retries):
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.huggingface_url, headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        image_bytes = await response.read()
+                        output_path = output_dir / "generated_image.png"
+                        with open(output_path, "wb") as image_file:
+                            image_file.write(image_bytes)
+                        return str(output_path)
+                    elif response.status == 500:
+                        error_message = await response.text()
+                        if "CUDA out of memory" in error_message:
+                            if attempt < max_retries - 1:
+                                wait_time = backoff_factor ** attempt
+                                await asyncio.sleep(wait_time)
+                            else:
+                                raise Exception(f"Failed to generate image: {response.status} - {error_message}")
                         else:
                             raise Exception(f"Failed to generate image: {response.status} - {error_message}")
                     else:
-                        raise Exception(f"Failed to generate image: {response.status} - {error_message}")
-                else:
-                    raise Exception(f"Failed to generate image: {response.status} - {await response.text()}")
-    
-    async def progress_callback(total_steps, step_time):
-     progress_template = "Generating image: {progress_bar} {percent}%"
-     for step in range(total_steps + 1):
-        progress_bar = '█' * step + '▒' * (total_steps - step)
-        percent = int((step / total_steps) * 100)
-        print(progress_template.format(progress_bar=progress_bar, percent=percent))
-        await asyncio.sleep(step_time)
-                        
-    
+                        raise Exception(f"Failed to generate image: {response.status} - {await response.text()}")
+
     @commands.command(name='imagine', description="Generate an image", aliases=['i'])
     async def imagine(self, ctx: commands.Context, *, prompt: str):
         try:
             async with ctx.typing():
-                # Send initial message with progress bar
-                message = await ctx.reply('> **Please wait while I generate your prompt...**\nGenerating image: ▒▒▒▒▒▒▒▒▒▒ 0%')
-
-                # Create a coroutine to update the progress bar
-                progress_task = asyncio.create_task(self.update_progress_bar(message, total_steps=10, interval=1))
-                
-                # Generate image with progress callback
-                image_path = await self.generate_image(prompt, progress_callback=lambda step, total: progress_task)
-                
-                # Cancel the progress bar update task when done
-                progress_task.cancel()
-                
-                # Create discord.File
+                message = await ctx.reply('> **Please wait while I generate your prompt...**')
+                image_path = await self.generate_image(prompt)
                 image_file = discord.File(image_path, filename="generated_image.png")
-
-                
-                # Create embed
-                embed = discord.Embed(description=f'Requested by {ctx.author.mention}\nPrompt:  {prompt}', color=primary_color())
+                embed = discord.Embed(description=f'Prompt: {prompt}', color=primary_color())
                 embed.set_image(url="attachment://generated_image.png")
-                embed.set_footer(icon_url=self.bot.user.avatar.url, text=f'Thanks for using {self.bot.user.name} | Inspired by alphast101')
-                
-                # Update message
-                await message.edit(content='', embed=embed, attachments=[image_file])
-
+                embed.set_footer(icon_url=ctx.author.avatar, text=f'Requested by {ctx.author}')
+                await message.delete()
+                await ctx.reply(embed=embed, file=image_file)
         except Exception as e:
             await ctx.send(f"An error occurred: {e}")
-            
-            
+
     @commands.command(name='vision', description="Generate a vision-based response", aliases=['v'])
     async def vision_command(self, ctx, image_url: str = None):
-        async def vision(image_link: str, prompt: str = ' ') -> str:
-         try:
+         async def vision(image_link: str, prompt: str = ' ') -> str:
+          try:
             response = await self.openai_client.chat.completions.create(
-                model="gemini-pro-vision",
+                model=self.vision_model,
                 messages=[
                     {
                         "role": "user",
@@ -170,46 +205,123 @@ class Ai(commands.Cog):
                 ],
             )
             return response.choices[0].message.content
-         except Exception as e:
+          except Exception as e:
             return f"Ouch! Something went wrong! {e}"
 
-        try:
+         try:
 
-            prompt = 'Describe the [image] in a way that sounds like Anya from "Spy x Family," (because you are Anya) with a childish tone and clear explanation. Assume your audience is eager to learn but has limited prior knowledge on the topic. Use childlike opinions and feelings about the image.'
+          prompt = ('You are Anya Forger from spy x family. Describe the image, making sure you use perfect grammar but use phrases of Anya Forgers vocabulary, when describing but be summizing but in Anyas personality of expression. Speak organized and concise.')
+          async with ctx.typing():
+            message = await ctx.reply('> **Please wait while I analyze the image...**')
 
-            async with ctx.typing():
-                message = await ctx.reply('> **Please wait while I analyze the image...**')
-                
-                # Check for image URL in command arguments or attachments
-                if not image_url:
-                    if ctx.message.attachments:
-                        image_url = ctx.message.attachments[0].url
-                    elif ctx.message.reference:
-                        ref_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-                        if ref_message.attachments:
-                            image_url = ref_message.attachments[0].url
-                        else:
-                            await message.edit(content="No image URL found in the referenced message. Please provide an image URL or attach an image to your message.")
-                            return
+            if not image_url:
+                if ctx.message.attachments:
+                    image_url = ctx.message.attachments[0].url
+                elif ctx.message.reference:
+                    ref_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+                    if ref_message.attachments:
+                        image_url = ref_message.attachments[0].url
+                    elif ref_message.embeds:
+                        # Extract image URL from the embed's thumbnail or image
+                        embed = ref_message.embeds[0]
+                        if embed.thumbnail and embed.thumbnail.url:
+                            image_url = embed.thumbnail.url
+                        elif embed.image and embed.image.url:
+                            image_url = embed.image.url
                     else:
-                        await message.edit(content="No image URL found. Please provide an image URL, attach an image to your message, or reply to a message with an image.")
+                        await message.edit(content="No image URL found in the referenced message. Please provide an image URL or attach an image to your message.")
                         return
+                elif ctx.message.embeds:
+                    # Extract image URL from the embed's thumbnail or image
+                    embed = ctx.message.embeds[0]
+                    if embed.thumbnail and embed.thumbnail.url:
+                        image_url = embed.thumbnail.url
+                    elif embed.image and embed.image.url:
+                        image_url = embed.image.url
+                else:
+                    await message.edit(content="No image URL found. Please provide an image URL, attach an image to your message, or reply to a message with an image.")
+                    return
 
+            logger.info(f"Image URL: {image_url}")
+            logger.info(f"Prompt: {prompt}")
 
-                # Log the image URL and prompt for debugging
-                logger.info(f"Image URL: {image_url}")
-                logger.info(f"Prompt: {prompt}")
+            response = await vision(image_url, prompt)
+            embed = discord.Embed(description=f'Asked by {ctx.author.mention}\n\nVision - {response}', color=primary_color())
+            embed.set_thumbnail(url=image_url)
+            embed.set_footer(icon_url=self.bot.user.avatar, text=f'Thanks for using {self.bot.user.name} | Model: {self.vision_model} | Inspired by alphast101')
+            await message.delete()
+            await ctx.reply(embed=embed)
+         except Exception as e:
+          await message.edit(content=f"An error occurred: {e}")
 
-                # Download the image and convert it to bytes
+            
+            
+            
 
-                response = await vision(image_url, prompt)
-                embed = discord.Embed(description=f'Asked by {ctx.author.mention}\n\nVision - {response}', color=primary_color())
-                embed.set_thumbnail(url=image_url)
-                embed.set_footer(icon_url=self.bot.user.avatar, text=f'Thanks for using {self.bot.user.name} | Inspired by alphast101')
-                await message.edit(content='', embed=embed)
-        except Exception as e:
-            await message.edit(content=f"An error occurred: {e}")
+class VisionModelOptions:
+    """Class to manage vision model options."""
 
+    def __init__(self, file_path: str):
+        self.file_path = file_path
+        self.models: List[str] = [
+            'gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gpt-4o',
+            'gpt-4o-2024-05-13', 'gpt-4o-mini', 'gpt-4o-mini-2024-07-18',
+            'gpt-4-turbo', 'gpt-4-turbo-2024-04-09', 'gpt-4-turbo-preview',
+            'gpt-4-0125-preview', 'gpt-4-1106-preview', 'gpt-4', 'gpt-4-0613',
+            'llama-3-70b-instruct', 'llama-3-8b-instruct', 'mixtral-8x22b-instruct',
+            'command-r-plus', 'command-r', 'codestral', 'codestral-2405',
+            'mistral-large', 'mistral-large-2402', 'mistral-next', 'mistral-small',
+            'mistral-small-2402', 'gpt-3.5-turbo', 'gpt-3.5-turbo-0125',
+            'gpt-3.5-turbo-1106', 'claude-3.5-sonnet', 'claude-3.5-sonnet-20240620',
+            'claude-3-opus', 'claude-3-opus-20240229', 'claude-3-sonnet',
+            'claude-3-sonnet-20240229', 'claude-3-haiku', 'claude-3-haiku-20240307',
+            'claude-2.1', 'claude-instant', 'gemini-pro', 'gemini-pro-vision',
+            'llama-2-70b-chat', 'llama-2-13b-chat', 'llama-2-7b-chat',
+            'mistral-7b-instruct', 'mixtral-8x7b-instruct', 'stable-diffusion-3-large'
+        ]
+        self.current_model = self.load_model()
+
+    def load_model(self) -> str:
+        """Load the current vision model identifier from a file."""
+        if Path(self.file_path).exists():
+            with open(self.file_path, 'r') as file:
+                model_id = file.read().strip()
+                if model_id in self.models:
+                    return model_id
+        return self.models[0]  # Default to the first model in the list if file not found or invalid
+
+    def save_model(self, model_id: str):
+        """Save the vision model identifier to a file."""
+        if model_id in self.models:
+            with open(self.file_path, 'w') as file:
+                file.write(model_id)
+            self.current_model = model_id
+        else:
+            raise ValueError(f"Invalid model ID: {model_id}")
+
+    def get_model_list(self) -> List[str]:
+        """Return the list of available vision models."""
+        return self.models
+
+    def is_valid_model(self, model_id: str) -> bool:
+        """Check if the provided model ID is valid."""
+        return model_id in self.models
+
+    def get_model_embed(self) -> discord.Embed:
+        """Generate an embed displaying the list of models with their positions."""
+        embed = discord.Embed(title="Select Vision Model", description="Choose a vision model by replying with the number corresponding to the model.", color=0x00ff00)
+        for i, model in enumerate(self.models):
+            embed.add_field(name=f"{i + 1}. {model}", value='\u200b', inline=False)
+        return embed       
+    
+    def get_model_message(self) -> str:
+        """Generate a message displaying the list of models with their positions."""
+        message = "Select Vision Model:\n"
+        for i, model in enumerate(self.models):
+            message += f"{i + 1}. {model}\n"
+        message += "Reply with the number corresponding to the model."
+        return message
+            
       
         
 def setup(bot):
