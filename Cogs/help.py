@@ -11,7 +11,6 @@ from io import BytesIO
 from Data.const import primary_color, error_custom_embed, Help_Select_Embed_Mapping, Help_Embed_Mapping  # Import primary_color function and error_custom_embed from Data.const
 from Imports.log_imports import logger  # Import logger from Imports.log_imports
 
-
 class Select(discord.ui.Select):
     def __init__(self, cog_commands, bot, primary_color):
         options = [
@@ -37,7 +36,7 @@ class Select(discord.ui.Select):
             color = self.primary_color
             emoji = Help_Select_Embed_Mapping.emojis.get(cog_name.lower())
             self.cog_embed = discord.Embed(
-                title=f'{cog_name.replace('_', ' ')}',
+                title=f'{emoji} {cog_name.replace("_", " ")}',
                 description=f'{Help_Select_Embed_Mapping.embeds[cog_name.lower()]["description"] or ""}',
                 color=color
             )
@@ -58,10 +57,13 @@ class Select(discord.ui.Select):
                 cog_commands = [cmd for cmd in cog.get_commands() if not cmd.hidden]
                 if cog_commands:
                     for cmd in cog_commands:
-                        # Fetching command arguments
-                        cmd_args = [f"<{param.name}>" for param in cmd.clean_params.values()]
+                        # Fetching command arguments and determining if optional
+                        cmd_args = [
+                            f"[{param.name}]" if param.default is not param.empty else f"<{param.name}>"
+                            for param in cmd.clean_params.values()
+                        ]
                         args_str = " ".join(cmd_args)
-                        command_info = f"{emoji} : {cmd.name} {args_str}"
+                        command_info = f"`...{cmd.name} {args_str}`"
                         
                         self.cog_embed.add_field(
                             name='',
@@ -85,7 +87,7 @@ class Select(discord.ui.Select):
             print(traceback_str)
             logger.debug(f"An error occurred: {traceback_str}")
             pass
-        
+       
         
         
 class HelpMenu(discord.ui.View):
