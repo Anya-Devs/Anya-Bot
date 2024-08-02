@@ -6,6 +6,7 @@ import random
 import numpy as np
 from PIL import Image, ImageChops
 from io import BytesIO
+import pickle
 
 import aiohttp
 import requests
@@ -284,6 +285,21 @@ class Pokemon(commands.Cog):
             if not os.path.exists(self.image_folder):
                 os.makedirs(self.image_folder)
 
+            # Load Pokémon descriptors
+            pickle_file = os.path.join(self.image_folder, "pokemon_descriptors.pkl")
+            if not os.path.exists(pickle_file) or os.path.getsize(pickle_file) == 0:
+                # Initialize an empty dictionary if the file doesn't exist or is empty
+                pokemon_descriptors = {}
+                async with aiofiles.open(pickle_file, 'wb') as f:
+                    await f.write(pickle.dumps(pokemon_descriptors))
+            else:
+                async with aiofiles.open(pickle_file, 'rb') as f:
+                    try:
+                        pokemon_descriptors = pickle.loads(await f.read())
+                    except EOFError:
+                        logger.error("Pickle file is empty or corrupted.")
+                        pokemon_descriptors = {}
+
             pokemon_files = [f for f in await aiofiles.os.listdir(self.image_folder) if os.path.isfile(os.path.join(self.image_folder, f))]
             logger.debug(f"Number of Pokémon images found: {len(pokemon_files)}")
 
@@ -421,26 +437,33 @@ class Pokemon(commands.Cog):
      except Exception as e:
         error_message = "An error occurred while predicting Pokémon."
         logger.error(f"{error_message}: {e}")
-        traceback.print_exc()
         await self.error_custom_embed(self.bot, ctx, error_message, title="Pokemon Prediction Error")
-        return None, 0
+        traceback.print_exc()
+    
+    
+    
+    
     
     async def calculate_similarity(self, img1, img2, size=(256, 256), num_sections=8, bins_per_channel=32):
      try:
-        # Function to calculate color histogram similarity
+        # Function to calculate color histogram similarity with a playful twist
         def calculate_color_histogram_similarity(hist1, hist2):
+            # Introduce some randomness to make the matching playful
+            random_factor = np.random.uniform(0.8, 1.2)  # Randomness factor
             similarity = cv2.compareHist(hist1, hist2, cv2.HISTCMP_INTERSECT)
-            return similarity
+            return similarity * random_factor
 
-        # Function to calculate skeleton similarity
+        # Function to calculate skeleton similarity with playful adjustments
         def calculate_skeleton_similarity(img1, img2):
             # Convert images to grayscale
             gray1 = cv2.cvtColor(img1, cv2.COLOR_RGB2GRAY)
             gray2 = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY)
 
-            # Use Canny edge detector to find edges
-            edges1 = cv2.Canny(gray1, 100, 200)
-            edges2 = cv2.Canny(gray2, 100, 200)
+            # Use Canny edge detector to find edges with random thresholds
+            low_threshold = np.random.randint(50, 150)
+            high_threshold = np.random.randint(150, 250)
+            edges1 = cv2.Canny(gray1, low_threshold, high_threshold)
+            edges2 = cv2.Canny(gray2, low_threshold, high_threshold)
 
             # Find contours in the edges
             contours1, _ = cv2.findContours(edges1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -449,11 +472,12 @@ class Pokemon(commands.Cog):
             # Draw contours on a blank image for comparison
             contour_img1 = np.zeros_like(gray1)
             contour_img2 = np.zeros_like(gray2)
-            cv2.drawContours(contour_img1, contours1, -1, (255), 1)
-            cv2.drawContours(contour_img2, contours2, -1, (255), 1)
+            cv2.drawContours(contour_img1, contours1, -1, 255, 1)
+            cv2.drawContours(contour_img2, contours2, -1, 255, 1)
 
-            # Calculate structural similarity
-            skeleton_similarity = np.sum(contour_img1 == contour_img2) / contour_img1.size
+            # Calculate structural similarity with some playful noise
+            noise = np.random.normal(0, 0.05, contour_img1.shape)  # Add random noise
+            skeleton_similarity = np.sum(np.abs(contour_img1 - contour_img2 + noise)) / contour_img1.size
             return skeleton_similarity
 
         # Resize images
@@ -464,44 +488,35 @@ class Pokemon(commands.Cog):
         img1_rgb = cv2.cvtColor(img1_resized, cv2.COLOR_BGR2RGB)
         img2_rgb = cv2.cvtColor(img2_resized, cv2.COLOR_BGR2RGB)
 
-        # Split images into sections
-        height1, width1, _ = img1_rgb.shape
-        height2, width2, _ = img2_rgb.shape
-
-        section_height1 = height1 // num_sections
-        section_width1 = width1 // num_sections
-        section_height2 = height2 // num_sections
-        section_width2 = width2 // num_sections
-
-        # Initialize a list to store section similarities
+        # Initialize lists to store section similarities
         section_similarities = []
         skeleton_similarities = []
+
+        # Calculate section dimensions
+        height, width, _ = img1_rgb.shape
+        section_height = height // num_sections
+        section_width = width // num_sections
 
         # Iterate through sections
         for i in range(num_sections):
             for j in range(num_sections):
-                # Calculate section boundaries for both images
-                start_row1 = i * section_height1
-                end_row1 = (i + 1) * section_height1
-                start_col1 = j * section_width1
-                end_col1 = (j + 1) * section_width1
-
-                start_row2 = i * section_height2
-                end_row2 = (i + 1) * section_height2
-                start_col2 = j * section_width2
-                end_col2 = (j + 1) * section_width2
+                # Calculate section boundaries
+                start_row = i * section_height
+                end_row = (i + 1) * section_height
+                start_col = j * section_width
+                end_col = (j + 1) * section_width
 
                 # Extract sections from both images
-                section_img1 = img1_rgb[start_row1:end_row1, start_col1:end_col1, :]
-                section_img2 = img2_rgb[start_row2:end_row2, start_col2:end_col2, :]
+                section_img1 = img1_rgb[start_row:end_row, start_col:end_col]
+                section_img2 = img2_rgb[start_row:end_row, start_col:end_col]
 
                 # Calculate color histograms for the sections
-                hist_img1 = cv2.calcHist([section_img1], [0, 1, 2], None, 
-                                          [bins_per_channel, bins_per_channel, bins_per_channel], 
-                                          [0, 256, 0, 256, 0, 256])
-                hist_img2 = cv2.calcHist([section_img2], [0, 1, 2], None, 
-                                          [bins_per_channel, bins_per_channel, bins_per_channel], 
-                                          [0, 256, 0, 256, 0, 256])
+                hist_img1 = cv2.calcHist([section_img1], [0, 1, 2], None,
+                                         [bins_per_channel, bins_per_channel, bins_per_channel],
+                                         [0, 256, 0, 256, 0, 256])
+                hist_img2 = cv2.calcHist([section_img2], [0, 1, 2], None,
+                                         [bins_per_channel, bins_per_channel, bins_per_channel],
+                                         [0, 256, 0, 256, 0, 256])
 
                 # Normalize histograms
                 cv2.normalize(hist_img1, hist_img1, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
@@ -515,7 +530,7 @@ class Pokemon(commands.Cog):
                 skeleton_similarity = calculate_skeleton_similarity(section_img1, section_img2)
                 skeleton_similarities.append(skeleton_similarity)
 
-        # Calculate overall similarity as the average of section similarities
+        # Calculate overall similarity
         overall_color_similarity = np.mean(section_similarities)
         overall_skeleton_similarity = np.mean(skeleton_similarities)
 
@@ -523,13 +538,13 @@ class Pokemon(commands.Cog):
         rounded_color_similarity = round(overall_color_similarity, 4)
         rounded_skeleton_similarity = round(overall_skeleton_similarity, 4)
 
-        # Return overall similarity as a list (for consistency with previous implementation)
+        # Return overall similarity
         return [rounded_color_similarity, rounded_skeleton_similarity]
 
      except Exception as e:
         print(f"Error calculating similarity: {e}")
         return [0.0, 0.0]  # Return default similarity in case of errors
-
+    
     
     def ensure_correct_color_format(self, img):
      """
@@ -1599,12 +1614,11 @@ class Pokebuttons(discord.ui.View):
 
     async def create_pokemon_embed(self, current_pokemon, method, next_pokemon):
      embed = discord.Embed()
-    
-     if self.pokemon_type != "shiny":
-            sprite_url = f"https://pokemonshowdown.com/sprites/dex/{current_pokemon.lower()}.png"
-     else:
+     sprite_url = f"https://pokemonshowdown.com/sprites/dex/{current_pokemon.lower()}.png"
+     print("create_pokemon_embed: ",self.pokemon_type)
+     if self.pokemon_shiny:
             sprite_url = f"https://pokemonshowdown.com/sprites/dex-shiny/{current_pokemon.lower()}.png"
-            
+    
      embed.set_thumbnail(url=sprite_url)
      
      if current_pokemon == next_pokemon:
@@ -1643,7 +1657,7 @@ class Pokebuttons(discord.ui.View):
         await button.response.send_message(embed=embed, view=Strength_weakness(color, strength_weakness, thumbnail, footer, footer_text, pokemon_data), ephemeral=True)    
         
 
-        
+
 
 class PokeSelect(discord.ui.Select):
     def __init__(self, pokemon_forms, default_image_url,alt_names, region, description, pokemon_shiny,gender):
@@ -1815,6 +1829,12 @@ class PokeSelect(discord.ui.Select):
 
         await super().callback(interaction)
 
+        
+        
+        
+        
+        
+        
 class Strength_weakness(discord.ui.View):
     def __init__(self, color=None, strength_weakness_text=None, thumbnail_url=None, footer=None, footer_text = None, pokemon_data=None):
         super().__init__()
