@@ -1,9 +1,12 @@
 # Imports
 import os
 import io
+import re
 import json
+import aiohttp
+import asyncio
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from PIL import Image 
 from openai import AsyncOpenAI  # Assuming AsyncOpenAI is the correct import from your module
 from Imports.discord_imports import *
@@ -16,8 +19,6 @@ class AnyaImages:
     shocked_anya = "https://img-03.stickers.cloud/packs/20d46227-dcb0-4583-8d66-ee78d4743129/webp/a65e28be-a5fd-4654-8e7d-736dbd809df2.webp"
     awake_anya = 'https://media.tenor.com/9kLYJilshNMAAAAe/spy-x-family-anya.png'
     question_anya = 'https://i.pinimg.com/236x/b7/23/1f/b7231fbf87eee22b6d1f35f83e9a80bd.jpg'
-    select_quest = 'https://i.pinimg.com/474x/d9/af/95/d9af956f06d0de95689e2094f753aa2f.jpg' 
-    select_ai = None
     start_shop_thumbnail = 'https://i.pinimg.com/564x/fd/1d/49/fd1d49d255ca18236a27a38b8710681b.jpg'
     ping_banner_anya = 'https://i.pinimg.com/564x/db/98/ff/db98ffc40d53378a9999528b69d66d00.jpg'
     ping_image = 'https://i.pinimg.com/564x/25/da/ee/25daee24ea5fb98b5590d542d2879708.jpg'
@@ -25,13 +26,21 @@ class AnyaImages:
     new_mission_anya = 'https://i.pinimg.com/236x/b5/90/49/b590497e5e776909274ba40b040bba8c.jpg'
     look_radiant_anya = 'https://i.pinimg.com/236x/0b/cf/4b/0bcf4b9002db8cbb5f5d42855b5d460c.jpg'
     ping_thumbnail = 'https://i.pinimg.com/236x/5d/d7/d1/5dd7d1d91933d59b8f21732efba70368.jpg'
-    help_thumbnail = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQggKtOcHg_2xDGNeqtciU_-7iZ19F3lFbV091fGKq7KtJI5MuOzLBEPg2rQRZ9ru-tDGY&usqp=CAU'
+    help_thumbnail = 'https://i.pinimg.com/564x/66/e2/30/66e230cef815623da1b8227cba074853.jpg'
+    help_ai_thumbnail = None # Because its local
+    help_system_thumbnail = "https://i.pinimg.com/564x/f4/38/ef/f438ef92875df915c8d019780a76a346.jpg"
+    help_quest_thumbnail = 'https://i.pinimg.com/474x/d9/af/95/d9af956f06d0de95689e2094f753aa2f.jpg' 
     help_pokemon_thumbnail = 'https://pbs.twimg.com/media/FRaJipkWUAADmt-?format=jpg&name=4096x4096'
+    help_anime_thumbnail = 'https://i.pinimg.com/564x/2b/d0/0e/2bd00e086802fdd7bd27f2fdad3ec4fe.jpg'
+    help_information_thumbnail = 'https://i.pinimg.com/474x/ae/95/91/ae9591cf2700cedc2ca63c2b5eb85990.jpg'
     quest_completed_anya = 'https://i.pinimg.com/236x/26/3b/90/263b90473c3651b4fc3d30b462152c0b.jpg'
+    
     agree_to_terms_anya = 'https://i.pinimg.com/474x/09/47/bc/0947bc96fe6f6af4a9779d994c0a2df0.jpg'
     no_quest_anya = 'https://th.bing.com/th/id/OIP.iwQwh6xaDNpS2519HlwV8gHaKg?rs=1&pid=ImgDetMain' # 'https://i.pinimg.com/236x/38/b5/89/38b5893e071f60a9dbcc3074cbf70016.jpg' 
     show_quest_anya = 'https://i.pinimg.com/236x/23/2f/62/232f626bc0ec7a845198149fdc38e311.jpg'
     comfirmation_image_url = 'https://media.tenor.com/mWAIV_rO9FUAAAAe/happy-anime-girl-happy-anime.png'
+    system_image =  "https://i.pinimg.com/564x/f4/38/ef/f438ef92875df915c8d019780a76a346.jpg"
+
 
 # Embed Avatar
 class EmbedFactory:
@@ -66,9 +75,9 @@ class EmbedFactory:
 class Help_Embed_Mapping:
     embed = {
             "title": "Help Command",
-            "description": "Need some help using certain commands?\n\n-# Take a look at the select options and choose the cog you need assistance with.",
+            "description": "Q: Need some help using certain commands?\nA: Take a look at the select options and choose the cog you need assistance with.",
             "thumbnail_url": AnyaImages.help_thumbnail,
-            "image_url": "https://static1.cbrimages.com/wordpress/wp-content/uploads/2022/11/Spy-x-family-ep-18-Loid-and-Anyas-test-grades.jpg"
+            "image_url": AnyaImages.system_image
     }
     
 class Help_Select_Embed_Mapping:
@@ -78,28 +87,44 @@ class Help_Select_Embed_Mapping:
             "title": "System",
             "description": "View the status of the bot, including information about its current performance, system resources usage, and configuration settings.",
             "color": discord.Color.red(),  # Customize color as needed
-            "thumbnail_url": "https://i.pinimg.com/564x/f4/38/ef/f438ef92875df915c8d019780a76a346.jpg",
+            "thumbnail_url": AnyaImages.help_system_thumbnail,
             "image_url": "https://i.pinimg.com/564x/f4/38/ef/f438ef92875df915c8d019780a76a346.jpg"
         },
         "quest": {
             "title": "Quest",
             "description": 'Participate in activities within your server, staying active with simple quests.',
             "color": None,  # Customize color as needed
-            "thumbnail_url": AnyaImages.select_quest
+            "thumbnail_url": AnyaImages.help_quest_thumbnail
         },
         "ai": {
             "title": "AI",
             "description": "Interact with advanced artificial intelligence functionalities, capable of handling various tasks including natural language processing, image recognition, and more.",
             "color": discord.Color.green(),  # Customize color as needed
-            "thumbnail_url": AnyaImages.select_ai
+            "thumbnail_url": AnyaImages.help_ai_thumbnail
         },
         
         "pokemon": {
             "title": "Pokemon",
-            "description": "Learn the fandom of pokemon and explore the information related to pokemon and its fandom.\n-# Long live Pokemon Fandom",
+            "description": "Uncover and investigate Pokémon by exploring comprehensive details and sharing your insights with others.",
             "color": discord.Color.red(),  # Customize color as needed
             "thumbnail_url": AnyaImages.help_pokemon_thumbnail
         },
+        
+        'anime': {
+            'title': 'Anime',
+            'description': 'Waku waku! Anya offers a taste of anime of weeb content for all who seek it. Get information about your favorite anime or play around and be show off some manga.',
+            'color': None,
+            'thumbnail_url': AnyaImages.help_anime_thumbnail
+        },
+        
+        'information': {
+            'title': 'Information',
+            'description': 'Gather the status of a member in the Discord server and stay informed to avoid looking silly. Anya can assist you with information such as server links, member details, word definitions, and more.',
+            'color': None,
+            'thumbnail_url': AnyaImages.help_information_thumbnail
+        },
+        
+        
         
         "Cog2": {
             "title": "Title for Cog2",
@@ -115,33 +140,187 @@ class Help_Select_Embed_Mapping:
         "quest": "<:anyasus:1258563706518765669> ",
         "ai": '<:ai:1258206841737973842> ',
         'pokemon': '<:Pokeball:1261208239891156992>',
+        'anime': '<a:anime:1268976774021124166>',
+        'information': '<:help_info:1268971820988764272>',
         # Add more emoji mappings for other cogs as needed
     }
-
-    
     
 class TutorialMission:
-    def __init__(self):
+    def __init__(self, bot):
+        self.bot = bot
+        self.color = primary_color()  # Assuming primary_color() is defined somewhere to get the color
         self.steps = [
             {
                 'action': 'send',
                 'method': 'message',
-                'content': 'Hello',
-                'description': 'Welcome to the tutorial mission! Your first task is to say "Hello" in the server chat.',
-                'times': 1
+                'content': 'Hello {member}',
+                'channel': None,
+                'times': 1,
+                'description': 'Welcome to the tutorial mission! Your first task is to send a message saying "Hello" in the current channel.',
             },
             {
-                'action': 'react',
-                'method': 'reaction',
+                'action': 'send',
+                'method': 'emoji',
                 'content': '👍',
-                'description': 'React to this message with a thumbs up emoji.',
-                'times': 1
+                'channel': None,
+                'times': 1,
+                'description': 'Your next task is to send an emoji "👍" in the current channel.',
             },
             {
-                'description': 'Welcome them and tell them they have a new quest.'
-            }
-        ]    
-    
+                'action': 'send',
+                'method': 'reaction',
+                'content': '😍',
+                'channel': None,
+                'times': 1,
+                'description': 'Finally, react to a message with the emoji "😍" in the current channel.',
+            },
+        ]
+        self.current_step_index = 0  # Track the current step
+        self.current_message = None  # Track the current step message
+
+    async def check_completion(self, message, user, step, ctx):
+        """Check if the user has completed the current tutorial mission step."""
+        if step['channel'] == str(message.channel.id):
+            if step['method'] == 'message':
+                # Replace {member} with actual mention
+                member_id_pattern = r'<@!?(\d+)>'
+                message_content = message.content
+                member_ids = re.findall(member_id_pattern, message_content)
+                for member_id in member_ids:
+                    message_content = message_content.replace(f'<@{member_id}>', f'<@{member_id}>')  # Ensure mentions are properly formatted
+
+                quest_content_replaced = step['content'].replace('{member}', f'<@{member_ids[0]}>' if member_ids else '{member}')  # Replace {member} with a placeholder for mention
+
+                if quest_content_replaced in message_content:
+                    await self.handle_completion(user, step, ctx)
+
+            elif step['method'] == 'emoji':
+                # Extract custom emoji IDs
+                message_emojis = re.findall(r'<:[\w~]+:(\d+)>', message.content)
+                message_emoji_names = [str(discord.utils.get(self.bot.emojis, id=int(emoji_id))) for emoji_id in message_emojis]
+
+                # Extract Unicode emojis
+                unicode_emojis = re.findall(r'[\U0001F600-\U0001F64F]', message.content)
+
+                if step['content'] in message_emoji_names or step['content'] in unicode_emojis:
+                    await self.handle_completion(user, step, ctx)
+
+            elif step['method'] == 'reaction':
+                # Check if the reaction matches the required emoji
+                if str(message.reaction.emoji) == step['content']:
+                    await self.handle_completion(user, step, ctx)
+
+    async def handle_completion(self, user, step, ctx):
+        """Handle the completion of a tutorial mission step and provide feedback."""
+        feedback_message = f"Congratulations {user.mention}! You have completed: {step['description']}"
+        channel = ctx.channel
+
+        # Send feedback about the completed step
+        await channel.send(feedback_message)
+
+        # Attempt to delete the current step message if it exists
+        if self.current_message:
+            try:
+                await self.current_message.delete()
+            except discord.NotFound:
+                # Log error or handle it if needed
+                
+                return
+                pass
+
+        # Move to the next step
+        self.current_step_index += 1
+
+        # Proceed to the next step if there are more steps
+        if self.current_step_index < len(self.steps):
+            await self.wait_for_user_action(ctx)
+        else:
+            # Notify the user when all steps are completed
+            await ctx.send(f"Congratulations {user.mention}! You have completed all tutorial steps.")
+
+    async def wait_for_user_action(self, ctx):
+        """Wait for the user's action to complete the tutorial mission steps."""
+        step_index = self.current_step_index
+        if step_index >= len(self.steps):
+            return
+
+        step = self.steps[step_index]
+        embed = discord.Embed(
+            title=f"Tutorial Step: {step_index + 1}",
+            description=step['description'],
+            color=self.color
+        )
+
+        # Customize the embed based on the step
+        if step['method'] == 'message':
+            embed.add_field(name='Instruction', value=f"Send a message containing: `{step['content'].replace('{member}', ctx.author.mention)}`")
+        elif step['method'] == 'emoji':
+            embed.add_field(name='Instruction', value=f"Send an emoji: `{step['content']}`")
+        elif step['method'] == 'reaction':
+            embed.add_field(name='Instruction', value=f"React to a message with the emoji: `{step['content']}`")
+
+        # Send the embed message
+        if self.current_message:
+            try:
+                await self.current_message.delete()
+            except discord.NotFound:
+                # Log error or handle it if needed
+                pass
+        self.current_message = await ctx.reply(embed=embed)
+
+        # Set the channel for this step dynamically
+        self.steps[step_index]['channel'] = str(ctx.channel.id)
+
+        def check_message(message):
+            return message.author == ctx.author and message.channel == ctx.channel
+        
+        def check_reaction(reaction, user):
+            return str(reaction.emoji) == step['content'] and user == ctx.author and reaction.message.channel == ctx.channel
+
+        while True:
+            try:
+                if step['method'] == 'message':
+                    # Wait for a message from the user
+                    user_message = await self.bot.wait_for('message', timeout=60.0, check=check_message)
+                    
+                    # Check for cancel command
+                    if user_message.content.lower() == 'c':
+                        await ctx.send("Tutorial canceled.")
+                        if self.current_message:
+                            try:
+                                await self.current_message.delete()
+                            except discord.NotFound:
+                                # Log error or handle it if needed
+                                pass
+                        return
+                    
+                    await self.check_completion(user_message, ctx.author, step, ctx)
+                    break  # Exit the loop to proceed to the next step
+
+                elif step['method'] == 'emoji':
+                    # Wait for a message from the user containing the emoji
+                    user_message = await self.bot.wait_for('message', timeout=60.0, check=check_message)
+                    await self.check_completion(user_message, ctx.author, step, ctx)
+                    break  # Exit the loop to proceed to the next step
+
+                elif step['method'] == 'reaction':
+                    # Wait for a reaction from the user
+                    reaction, user = await self.bot.wait_for('reaction_add', timeout=60.0, check=check_reaction)
+                    await self.check_completion(reaction.message, ctx.author, step, ctx)
+                    break  # Exit the loop to proceed to the next step
+
+            except asyncio.TimeoutError:
+                await ctx.send("Time's up! You didn't complete the task in time.")
+                if self.current_message:
+                    try:
+                        await self.current_message.delete()
+                    except discord.NotFound:
+                        # Log error or handle it if needed
+                        pass
+                return  # Exit the loop but allow other commands and interactions to continue        
+            
+            
+            
 QUEST_PROMPT_EMBED = {
     "title": None,
     "color": discord.Color.yellow(), # You can specify a color in hex format if needed
@@ -189,7 +368,7 @@ class Quest_Progress:
     @staticmethod
     async def generate_progress_bar(progress, bot):
         bar = ""
-        for i in range(10):
+        for i in range(6):
             front_emoji = discord.utils.get(bot.emojis, id=Quest_Progress.Progress_Bar_MAPPING["front_full" if progress >= (i + 1) * 0.1 else "front_empty"]) or ":_:"
             mid_emoji = discord.utils.get(bot.emojis, id=Quest_Progress.Progress_Bar_MAPPING["mid_full" if progress >= (i + 1) * 0.1 else "mid_empty"]) or ":_:"
             bar += f"{front_emoji}{mid_emoji}" if i == 0 else f"{mid_emoji}"
@@ -446,7 +625,12 @@ class Emojis:
 
 class Information_Embed:
     @staticmethod
-    async def get_embed(bot_user: discord.User, bot):
+    async def get_bot_embed(bot_user: discord.User, bot):
+        
+        def timestamp_gen(timestamp: int) -> str:
+           dt = datetime.utcfromtimestamp(timestamp).replace(tzinfo=timezone.utc)
+           return f'<t:{int(dt.timestamp())}:R>'
+
         try:
             cpu_percent = psutil.cpu_percent(interval=1)
             ram_percent = psutil.virtual_memory().percent
@@ -454,26 +638,148 @@ class Information_Embed:
             cpu_text = f"{cpu_percent:.0f}% of {cpu_cores} cores"
             total_ram_gb = psutil.virtual_memory().total / (1024 ** 3)  # Convert to GB
             ram_text = f"{ram_percent:.0f}% of {total_ram_gb:.0f}GB ({total_ram_gb * ram_percent / 100:.0f}GB)"
+            total_guilds = len(bot.guilds)
+            total_users = sum(guild.member_count for guild in bot.guilds)
+            created_timestamp = int(bot_user.created_at.timestamp())
+            created_relative = timestamp_gen(created_timestamp)
+
             owner = bot.get_user(1030285330739363880)
             about = discord.Embed(
                 title="Bot Information",
-                description=(
-                    f"Assigns member's quests to encourage server activity.\n\n"
-                    f" Owner: {owner.mention}\n"
-                    f"- Created: {bot_user.created_at.strftime('%B %d, %Y')}\n\n"
-                    f"Internal:\n"
+                description= (
+                    f"Assigns member's quests to encourage server activity. Has other commands for those who don't wanna do server quest, Anya has alittle in store for everyone.\n\n"
+                    
+                    
+                    
+                    f"🌐 Global:\n"
+                    f'- Servers: {total_guilds}\n- Members: {total_users}\n\n'
+                    f"❤️ Internal:\n"
                     f"- **CPU**: {cpu_text}\n- **RAM**: {ram_text}\n\n"
                     "-# [Support server](https://discord.gg/5p5b7A7WRH)\n"
-                    "-# [Invite bot](https://discord.com/oauth2/authorize?client_id=1234247716243112100&permissions=27482422508608&scope=bot)"
-
+                    "-# [Invite bot](https://discord.com/oauth2/authorize?client_id=1234247716243112100&permissions=27482422508608&scope=bot)\n\n"
+                    f"-# Developed by {owner} {created_relative}\n"
                 ),
                 timestamp=datetime.now()
             )
             about.set_thumbnail(url=bot.user.avatar)
+            banner_url = await Information_Embed.get_user_banner_url(bot, bot.user)
+            about.set_image(url=banner_url)
+            
             about.set_footer(text='About Myself')
             return about
         except Exception as e:
             print(e)
+
+    @staticmethod
+    async def get_member_embed(bot, member):
+        def timestamp_gen(timestamp: int) -> str:
+            dt = datetime.utcfromtimestamp(timestamp).replace(tzinfo=timezone.utc)
+            return f'<t:{int(dt.timestamp())}:R>'
+        
+        created_at_utc = member.created_at.replace(tzinfo=timezone.utc)
+        joined_at_utc = member.joined_at.replace(tzinfo=timezone.utc)
+        
+        formatted_created_timestamp = timestamp_gen(created_at_utc.timestamp())
+        formatted_joined_timestamp = timestamp_gen(joined_at_utc.timestamp())
+        
+        perms_categories = {
+            "Admin": ["administrator", "manage_guild", "manage_channels", "kick_members", "ban_members"],
+            "Moderator": ["kick_members", "ban_members", "manage_messages"],
+            "Member": ["send_messages", "read_messages"]
+        }
+
+        category = None
+        for perm, value in member.guild_permissions:
+            if category is not None:
+                break
+            if value:
+                for role_category, perms in perms_categories.items():
+                    if perm in perms:
+                        category = role_category
+                        break
+
+        type_is = "🤖" if member.bot else "👤"
+        category_text = category if category else "Member"
+
+        description = (
+            f"*username*: `{member}`\n*nickname*: `{member.nick if member.nick else 'No nickname'}`\n*id*: `{member.id}`\n\n"
+            f"-# **Created**: {formatted_created_timestamp}\n"
+            f"-# **Joined**: {formatted_joined_timestamp}\n\n"
+            f"-# **Status**: {member.status}\n"
+            f"-# **Roles**: {' '.join([role.name for role in member.roles if role.name != '@everyone'])}\n\n"
+
+
+        )
+        
+        footer = f"Acknowledge: {type_is} {category_text}"
+
+        embed = discord.Embed(
+            title=f"{member.display_name}",
+            description=description,
+            color=member.color,
+            timestamp=datetime.now()
+        )
+
+        banner_url = await Information_Embed.get_user_banner_url(bot, member)
+        if banner_url:
+            embed.set_image(url=banner_url)
+
+        embed.set_thumbnail(url=member.avatar.url)
+        
+        embed.set_footer(text=footer)
+
+
+        return embed
+
+    @staticmethod
+    async def get_guild_embed(guild):
+        embed = discord.Embed(
+            title=f"Information for {guild.name}",
+            color=discord.Color.blue(),
+            timestamp=datetime.now()
+        )
+
+        embed.add_field(name="ID", value=f"{guild.id}", inline=False)
+        embed.add_field(name="Owner", value=f"{guild.owner}", inline=False)
+        embed.add_field(name="Member Count", value=f"{guild.member_count}", inline=False)
+        embed.add_field(name="Created ", value=f"{guild.created_at.strftime('%b %d, %Y')}", inline=False)
+
+        embed.set_thumbnail(url=guild.icon.url if guild.icon else discord.Embed.Empty)
+
+        return embed
+
+    @staticmethod
+    async def get_invite_embed(invite):
+        embed = discord.Embed(
+            title=f"Invite Information",
+            color=discord.Color.green(),
+            timestamp=datetime.now()
+        )
+
+        embed.add_field(name="Invite Code", value=f"{invite.code}", inline=False)
+        embed.add_field(name="Guild", value=f"{invite.guild.name}", inline=False)
+        embed.add_field(name="Channel", value=f"{invite.channel.name}", inline=False)
+        embed.add_field(name="Inviter", value=f"{invite.inviter}", inline=False)
+        embed.add_field(name="Uses", value=f"{invite.uses}", inline=False)
+        embed.add_field(name="Max Uses", value=f"{invite.max_uses}" if invite.max_uses else "Unlimited", inline=False)
+        embed.add_field(name="Expires At", value=f"{invite.expires_at.strftime('%b %d, %Y %H:%M:%S')}" if invite.expires_at else "Never", inline=False)
+
+        embed.set_thumbnail(url=invite.guild.icon.url if invite.guild.icon else discord.Embed.Empty)
+
+        return embed
+
+    @staticmethod
+    async def get_user_banner_url(bot,user):
+        req = await bot.http.request(discord.http.Route("GET", "/users/{uid}", uid=user.id))
+        banner_id = req.get("banner")
+        if banner_id:
+            image_size = '?size=1024'
+            animated = banner_id.startswith('a_')
+            file_extension = 'gif' if animated else 'png'
+            image_base_url = 'https://cdn.discordapp.com/'
+            banners_endpoint = f'banners/{user.id}/{banner_id}.{file_extension}'
+            return f'{image_base_url}{banners_endpoint}{image_size}'
+        return None
     
 # Functions
 async def sdxl(prompt):
