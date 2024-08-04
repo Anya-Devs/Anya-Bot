@@ -63,12 +63,12 @@ class Select(discord.ui.Select):
                             for param in cmd.clean_params.values()
                         ]
                         args_str = " ".join(cmd_args)
-                        command_info = f"`...{cmd.name} {args_str}`"
+                        command_info = f"`...{cmd.name}`"
                         
                         self.cog_embed.add_field(
                             name='',
                             value=command_info,
-                            inline=True
+                            inline=False
                         )
                 else:
                     logger.info(f"No visible commands found for cog: {cog_name}")
