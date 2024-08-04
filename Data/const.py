@@ -655,9 +655,10 @@ class Information_Embed:
                     f'- Servers: {total_guilds}\n- Members: {total_users}\n\n'
                     f"❤️ Internal:\n"
                     f"- **CPU**: {cpu_text}\n- **RAM**: {ram_text}\n\n"
+                    f":clock: Creation:\n"
+                    f"- **Developer**: {owner}\n- **When?**: {created_relative}\n\n"
                     "-# [Support server](https://discord.gg/5p5b7A7WRH)\n"
                     "-# [Invite bot](https://discord.com/oauth2/authorize?client_id=1234247716243112100&permissions=27482422508608&scope=bot)\n\n"
-                    f"-# Developed by {owner} {created_relative}\n"
                 ),
                 timestamp=datetime.now()
             )
@@ -702,14 +703,16 @@ class Information_Embed:
         category_text = category if category else "Member"
 
         description = (
-            f"*username*: `{member}`\n*nickname*: `{member.nick if member.nick else 'No nickname'}`\n*id*: `{member.id}`\n\n"
+            f"-# **Username**: {member}\n"
+            f"-# **Nickname**: {member.nick if member.nick else 'No nickname'}\n"
+            f"-# **ID**: {member.id}\n\n"
             f"-# **Created**: {formatted_created_timestamp}\n"
             f"-# **Joined**: {formatted_joined_timestamp}\n\n"
             f"-# **Status**: {member.status}\n"
-            f"-# **Roles**: {' '.join([role.name for role in member.roles if role.name != '@everyone'])}\n\n"
-
-
+            f"-# **Roles**: {', '.join([f'{role.mention} (admin)' if role.permissions.administrator else f'{role.mention} (moderator)' if role.permissions.kick_members or role.permissions.ban_members else f'{role.mention} (baby moderator)' if role.permissions.manage_messages else role.mention for role in sorted(member.roles, key=lambda r: (r.permissions.administrator, r.permissions.kick_members or r.permissions.ban_members, r.permissions.manage_messages), reverse=True) if role.name != '@everyone']) or 'No roles'}\n\n"
         )
+
+
         
         footer = f"Acknowledge: {type_is} {category_text}"
 
