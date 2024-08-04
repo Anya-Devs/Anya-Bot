@@ -701,15 +701,23 @@ class Information_Embed:
 
         type_is = "🤖" if member.bot else "👤"
         category_text = category if category else "Member"
+        
+        # Get the bot owner's information
+        bot_owner_mention = ''
+        if member.bot:
+            owner_id = await Information_Embed.get_bot_owner_id((bot, member.id)
+            if owner_id:
+                bot_owner_mention = f'\n-# **Bot Owner**: <@{bot.owner_id}>'
 
         description = (
             f"-# **Username**: {member}\n"
             f"-# **Nickname**: {member.nick if member.nick else 'No nickname'}\n"
             f"-# **ID**: {member.id}\n\n"
+            f"-# **Status**: {member.status}\n"
             f"-# **Created**: {formatted_created_timestamp}\n"
             f"-# **Joined**: {formatted_joined_timestamp}\n\n"
-            f"-# **Status**: {member.status}\n"
             f"-# **Roles**: {', '.join([f'{role.mention} (admin)' if role.permissions.administrator else f'{role.mention} (moderator)' if role.permissions.kick_members or role.permissions.ban_members else f'{role.mention} (baby moderator)' if role.permissions.manage_messages else role.mention for role in sorted(member.roles, key=lambda r: (r.permissions.administrator, r.permissions.kick_members or r.permissions.ban_members, r.permissions.manage_messages), reverse=True) if role.name != '@everyone']) or 'No roles'}\n\n"
+            f"{bot_owner_mention}"
         )
 
 
@@ -733,6 +741,21 @@ class Information_Embed:
 
 
         return embed
+    
+    @staticmethod
+    async def get_bot_owner_id(bot, bot_id):
+        # Fetch bot user information
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f'https://discord.com/api/v10/users/{bot_id}', headers={
+                'Authorization': f'Bot {bot.token}'
+            }) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    # The owner ID is stored in the 'id' field
+                    return data.get('id')
+                else:
+                    print(f"Failed to fetch bot owner. Status code: {response.status}")
+                    return None
 
     @staticmethod
     async def get_guild_embed(guild):
