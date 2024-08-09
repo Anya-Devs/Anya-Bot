@@ -1,7 +1,7 @@
 # Import necessary modules
 import os
 import traceback
-
+import json
 import discord
 from discord.ext import commands
 
@@ -19,14 +19,47 @@ class Select(discord.ui.Select):
         ]
         if not options:
             options = [discord.SelectOption(label="No Categories Available", value="none")]
-        super().__init__(placeholder="Select a Category", max_values=1, min_values=1, options=options)
+        super().__init__(placeholder="📚 Select a Category", max_values=1, min_values=1, options=options)
         self.cog_commands = cog_commands
         self.bot = bot
         self.page = 0  # Track the current page
         self.primary_color = primary_color
+        self.command_mapping_file = 'Data/Help/command_map.json'
+
+    def _ensure_file_exists(self):
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(self.command_mapping_file), exist_ok=True)
+        # Ensure the file exists
+        if not os.path.exists(self.command_mapping_file):
+            with open(self.command_mapping_file, 'w') as f:
+                json.dump({}, f, indent=4)
+
+    def _load_command_mapping(self):
+        self._ensure_file_exists()
+        with open(self.command_mapping_file, 'r') as f:
+            return json.load(f)
+
+    def _save_command_mapping(self, mapping):
+        with open(self.command_mapping_file, 'w') as f:
+            json.dump(mapping, f, indent=4)
+
+    def _update_command_mapping(self):
+        mapping = self._load_command_mapping()
+        for cog_name in self.cog_commands.keys():
+            if cog_name not in mapping:
+                mapping[cog_name] = {}
+            cog = self.bot.get_cog(cog_name)
+            if cog:
+                cog_commands = [cmd for cmd in cog.get_commands() if not cmd.hidden]
+                for cmd in cog_commands:
+                    if cmd.name not in mapping[cog_name]:
+                        mapping[cog_name][cmd.name] = "Description to fill out"
+        self._save_command_mapping(mapping)
 
     async def callback(self, interaction: discord.Interaction):
         try:
+            self._update_command_mapping()
+
             cog_name = self.values[0]
             if cog_name == "none":
                 await interaction.response.send_message("No categories available.", ephemeral=True)
@@ -35,37 +68,40 @@ class Select(discord.ui.Select):
             cog_info = self.cog_commands.get(cog_name)
             color = self.primary_color
             emoji = Help_Select_Embed_Mapping.emojis.get(cog_name.lower())
-            self.cog_embed = discord.Embed(
-                title=f'{emoji} {cog_name.replace("_", " ")}',
+            
+            self.cog_embed1 = discord.Embed(
+                title = f'Category - {emoji} {cog_name.replace("_", " ")}',
                 description=f'{Help_Select_Embed_Mapping.embeds[cog_name.lower()]["description"] or ""}',
                 color=color
             )
-           
+            self.cog_embed2 = discord.Embed(description=f'## {emoji} {cog_name.replace("_", " ")}', color=color)
+
+            
             file = None
             if 'ai' in Help_Select_Embed_Mapping.embeds and cog_name.lower() == 'ai':
                 file_path = 'Data/Images/Help_Thumbnails/ai.png'
                 if os.path.exists(file_path):
                     file = discord.File(file_path, filename='thumbnail.png')
-                    self.cog_embed.set_thumbnail(url='attachment://thumbnail.png')
+                    self.cog_embed2.set_thumbnail(url='attachment://thumbnail.png')
                 else:
                     logger.error(f"Thumbnail file '{file_path}' not found.")
             else:
-                self.cog_embed.set_thumbnail(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["thumbnail_url"])
+                self.cog_embed2.set_thumbnail(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["thumbnail_url"])
 
             cog = self.bot.get_cog(cog_name)
             if cog:
                 cog_commands = [cmd for cmd in cog.get_commands() if not cmd.hidden]
                 if cog_commands:
+                    command_mapping = self._load_command_mapping().get(cog_name, {})
                     for cmd in cog_commands:
-                        # Fetching command arguments and determining if optional
                         cmd_args = [
                             f"[{param.name}]" if param.default is not param.empty else f"<{param.name}>"
                             for param in cmd.clean_params.values()
                         ]
                         args_str = " ".join(cmd_args)
-                        command_info = f"`...{cmd.name}`"
+                        command_info = f"`...{cmd.name}` - {command_mapping.get(cmd.name, 'No description available')}"
                         
-                        self.cog_embed.add_field(
+                        self.cog_embed2.add_field(
                             name='',
                             value=command_info,
                             inline=False
@@ -75,19 +111,17 @@ class Select(discord.ui.Select):
             else:
                 logger.info(f"Cog not found: {cog_name}")
 
-            # Respond to the interaction with the embed and the file
             if file:
-                await interaction.response.edit_message(embed=self.cog_embed, attachments=[file])
+                await interaction.response.edit_message(embed=self.cog_embed2 , attachments=[file])
             else:
-                await interaction.response.edit_message(embed=self.cog_embed, attachments=[])
+                await interaction.response.edit_message(embed=self.cog_embed2, attachments=[])
 
             logger.info("Message edited successfully.")
         except Exception as e:
             traceback_str = traceback.format_exc()
             print(traceback_str)
             logger.debug(f"An error occurred: {traceback_str}")
-            pass
-       
+            pass   
         
         
 class HelpMenu(discord.ui.View):
@@ -224,20 +258,38 @@ class Help(commands.Cog):
                         subcommands = {cmd.name: cmd.help for cmd in cog_object.get_commands() if not cmd.hidden}
                         if subcommands:
                             cog_commands[cog_name] = subcommands
+                
+                # Create the first embed
+                embed1 = discord.Embed(
+                    title=Help_Embed_Mapping.embed1["title"] or '',
+                    description=Help_Embed_Mapping.embed1["description"],
+                    color=primary_color_value
+                )
+                embed1.set_thumbnail(url=Help_Embed_Mapping.embed1["thumbnail_url"])
+                if Help_Embed_Mapping.embed1["image_url"]:
+                    embed1.set_image(url=Help_Embed_Mapping.embed1["image_url"])
+                
+                # Create the second embed
+                embed2 = discord.Embed(
+                    title=Help_Embed_Mapping.embed2["title"] or '',
+                    description=Help_Embed_Mapping.embed2["description"],
+                    color=primary_color_value
+                )
+                # embed2.set_thumbnail(url=Help_Embed_Mapping.embed2["thumbnail_url"])
+                if Help_Embed_Mapping.embed2["image_url"]:
+                    embed2.set_image(url=Help_Embed_Mapping.embed2["image_url"])
+                
+                # Set up the help menu
                 select_view = Select(cog_commands, self.bot, primary_color_value)
                 help_menu = HelpMenu(self.bot, primary_color_value, select_view)
-                embed = discord.Embed(title=Help_Embed_Mapping.embed["title"], description=Help_Embed_Mapping.embed["description"], color=primary_color_value)
-                embed.set_thumbnail(url=Help_Embed_Mapping.embed["thumbnail_url"])
                 
-               
-                await ctx.reply(embed=embed, view=help_menu)
+                await ctx.send(embed=embed1, view=help_menu)
                 await ctx.defer()
             except Exception as e:
                 # If there's an error sending the help menu, display an error message
                 logger.error(f"Error sending HelpMenu: {e}")
                 await ctx.reply(embed=await error_custom_embed(self.bot, ctx, e, title="HelpMenu"))
                 return
-
 
 def setup(bot):
     bot.add_cog(Help(bot))
