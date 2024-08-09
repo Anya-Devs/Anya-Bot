@@ -1,11 +1,14 @@
-
 class Pokemon(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.data_file = 'Data/pokemon_data.pkl'
+        self.pokemon_api_url = "https://pokeapi.co/api/v2/pokemon"
+        self.pokemon_info_url = "https://pokeapi.co/api/v2/pokemon/{}/"
         self.pokemon_data = {}
-        self.owner_id = 1030285330739363880  # Set bot owner ID
+        self.primary_color = primary_color
+        self.error_custom_embed = error_custom_embed
         self.temp_folder = 'temp'
+        self.owner_id =  None
         if not os.path.exists(self.temp_folder):
             os.makedirs(self.temp_folder)  # Ensure temp directory exists
 
@@ -64,16 +67,21 @@ class Pokemon(commands.Cog):
         return final_data
 
     async def fetch_pokemon_names(self):
-        url = 'https://pokeapi.co/api/v2/pokemon?limit=1000'
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return [pokemon['name'] for pokemon in data['results']]
-                else:
-                    logger.error("Failed to fetch Pokémon names. Status code: %d", response.status)
-                    return []
-
+        pokemon_names = []
+        url = self.pokemon_api_url
+        while url:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        for result in data["results"]:
+                            pokemon_names.append(result["name"])
+                        url = data.get("next")
+                    else:
+                        logger.error("Failed to fetch Pokémon names.")
+                        break
+        return pokemon_names
+    
     async def fetch_pokemon_image_url(self, pokemon_name):
         url = f'https://pokeapi.co/api/v2/pokemon/{pokemon_name}'
         async with aiohttp.ClientSession() as session:
@@ -186,7 +194,6 @@ class Pokemon(commands.Cog):
             logger.error("Failed to update Pokémon data for %s. Error: %s", correct_name, e)
 
             
-    @commands.command(name='predict')
     async def predict_pokemon_command(self, ctx, arg=None):
         image_url = None
         
@@ -209,4 +216,25 @@ class Pokemon(commands.Cog):
             await ctx.send("Please provide an image or a URL to an image.")
             logger.info("No image URL provided.")
             
-   
+    @commands.command(name='predict')
+    async def pokemon_command(self, ctx, action: str = None, *, arg: str = None):
+        if action == 'predict' or action == None:
+            await self.predict_pokemon_command(ctx, arg)
+        elif action == 'add':
+            await self.add_pokemon_command(ctx, arg)
+        elif action == 'all':
+            await self.download_all_images_command(ctx)
+        else:
+            embed = discord.Embed(
+                title=" ",
+                description="Use these commands to interact with Pokémon predictions and database:\n\n"
+                            "- **`pokemon predict <url:optional>`**: Predict Pokémon from an image.\n"
+                            "- **`pokemon add <pokemon_name>`**: Add a Pokémon to the database.\n"
+                            "- **`pokemon all`**: Download all Pokémon images. (in testing)\n\n"
+                            "> <:help:1245611726838169642>  Remember to replace `<url>` with a valid image `url (.png, .jpg)` and `<pokemon_name>` with the Pokémon's name.",
+                color=discord.Color.green()
+            )
+           
+            await ctx.reply(embed=embed)
+
+
