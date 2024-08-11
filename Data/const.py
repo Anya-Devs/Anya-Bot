@@ -20,13 +20,14 @@ class AnyaImages:
     awake_anya = 'https://media.tenor.com/9kLYJilshNMAAAAe/spy-x-family-anya.png'
     question_anya = 'https://i.pinimg.com/236x/b7/23/1f/b7231fbf87eee22b6d1f35f83e9a80bd.jpg'
     start_shop_thumbnail = 'https://i.pinimg.com/564x/fd/1d/49/fd1d49d255ca18236a27a38b8710681b.jpg'
+    start_shop_image = 'https://i.pinimg.com/564x/ed/1f/83/ed1f834eb245918964ca5507dbbc59bd.jpg'
     ping_banner_anya = 'https://i.pinimg.com/564x/db/98/ff/db98ffc40d53378a9999528b69d66d00.jpg'
     ping_image = 'https://i.pinimg.com/564x/25/da/ee/25daee24ea5fb98b5590d542d2879708.jpg'
     sleepy_anya = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR9y_MT3QHxXZVVzVlA94oFM8uIN0QH1fdw8Q6inySFmQ&s'
     new_mission_anya = 'https://i.pinimg.com/236x/b5/90/49/b590497e5e776909274ba40b040bba8c.jpg'
     look_radiant_anya = 'https://i.pinimg.com/236x/0b/cf/4b/0bcf4b9002db8cbb5f5d42855b5d460c.jpg'
     ping_thumbnail = 'https://i.pinimg.com/236x/5d/d7/d1/5dd7d1d91933d59b8f21732efba70368.jpg'
-    help_thumbnail = 'https://i.pinimg.com/564x/66/e2/30/66e230cef815623da1b8227cba074853.jpg'
+    help_thumbnail = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzvquP9P7dIi5DFyTmtenWQwDyAqOu98l_juVOo6ah5Q_8N5KqT3VAdZ8twJ7L2TexN7k&usqp=CAU'
     help_ai_thumbnail = None # Because its local
     help_system_thumbnail = "https://i.pinimg.com/564x/f4/38/ef/f438ef92875df915c8d019780a76a346.jpg"
     help_quest_thumbnail = 'https://i.pinimg.com/474x/d9/af/95/d9af956f06d0de95689e2094f753aa2f.jpg' 
@@ -72,13 +73,21 @@ class EmbedFactory:
         )
         return embed
 
+
 class Help_Embed_Mapping:
-    embed = {
-            "title": "Help Command",
-            "description": "Q: Need some help using certain commands?\nA: Take a look at the select options and choose the cog you need assistance with.",
-            "thumbnail_url": AnyaImages.help_thumbnail,
-            "image_url": AnyaImages.system_image
+    embed1 = {
+            "title": " ",
+            "description": "```Navigate through the selection options.```",
+            "thumbnail_url": None,
+            "image_url": None
     }
+    embed2 =  {
+            "title": " ",
+            "description": "**Prefix**: `...<cmd.name>` || <@1234247716243112100>\n**Support Server**: [Here](https://discord.gg/qdD4gu4v).",
+            "thumbnail_url": AnyaImages.help_thumbnail,
+            "image_url": None
+    }
+    
     
 class Help_Select_Embed_Mapping:
     embeds = {
@@ -499,7 +508,7 @@ class Quest_Completed_Embed:
         # embed.add_field(name=f'{check_emoji} Completed', value=f'**You {quest_completed}!**', inline=True)
         
         embed.add_field(name=f'Reward ', value=f'{reward_emoji} {reward_text}', inline=True)
-        embed.add_field(name=f'Balance', value=balance, inline=True)
+        embed.add_field(name=f'Stella Points:', value=balance, inline=True)
 
         
         # Set thumbnail image
@@ -510,10 +519,11 @@ class Quest_Completed_Embed:
 class ShopEmbed:
     @staticmethod
     async def start_shop_embed(bot, ctx, balance):
-        embed = discord.Embed(title='Spy Shop')
-        embed.description = f'```py\nBalance: {balance}```'  # f"*Remember these tools might make or break relshinships, so please be careful.*"
+        embed = discord.Embed(title='<:shop:1272249831120965753>    Spy Shop',color=primary_color())
+        embed.description = f'```py\nStella Points: {balance}```'  # f"*Remember these tools might make or break relshinships, so please be careful.*"
         embed.set_footer(text=f"Use the {bot.user.name}'s option menu to acquire your spy tool.")
-        embed.set_thumbnail(url=AnyaImages.start_shop_thumbnail)
+        embed.set_thumbnail(url=ctx.author.avatar)
+        embed.set_image(url=AnyaImages.start_shop_image)
         return embed
     
 class LogConstants:
@@ -647,6 +657,7 @@ class Information_Embed:
             about = discord.Embed(
                 title="Bot Information",
                 description= (
+                    
                     f"Assigns member's quests to encourage server activity. Has other commands for those who don't wanna do server quest, Anya has alittle in store for everyone.\n\n"
                     
                     
@@ -660,9 +671,10 @@ class Information_Embed:
                     "-# [Support server](https://discord.gg/5p5b7A7WRH)\n"
                     "-# [Invite bot](https://discord.com/oauth2/authorize?client_id=1234247716243112100&permissions=27482422508608&scope=bot)\n\n"
                 ),
-                timestamp=datetime.now()
+                timestamp=datetime.now(),
+                color=primary_color()
             )
-            about.set_thumbnail(url=bot.user.avatar)
+            about.set_thumbnail(url=owner.avatar)
             banner_url = await Information_Embed.get_user_banner_url(bot, bot.user)
             about.set_image(url=banner_url)
             
@@ -705,7 +717,7 @@ class Information_Embed:
         # Get the bot owner's information
         bot_owner_mention = ''
         if member.bot:
-            owner_id = await Information_Embed.get_bot_owner_id((bot, member.id)
+            owner_id = await Information_Embed.get_bot_owner_id(bot, member.id)
             if owner_id:
                 bot_owner_mention = f'\n-# **Bot Owner**: <@{bot.owner_id}>'
 
@@ -717,7 +729,7 @@ class Information_Embed:
             f"-# **Created**: {formatted_created_timestamp}\n"
             f"-# **Joined**: {formatted_joined_timestamp}\n\n"
             f"-# **Roles**: {', '.join([f'{role.mention} (admin)' if role.permissions.administrator else f'{role.mention} (moderator)' if role.permissions.kick_members or role.permissions.ban_members else f'{role.mention} (baby moderator)' if role.permissions.manage_messages else role.mention for role in sorted(member.roles, key=lambda r: (r.permissions.administrator, r.permissions.kick_members or r.permissions.ban_members, r.permissions.manage_messages), reverse=True) if role.name != '@everyone']) or 'No roles'}\n\n"
-            f"{bot_owner_mention}"
+            # f"{bot_owner_mention}"
         )
 
 
@@ -747,10 +759,11 @@ class Information_Embed:
         # Fetch bot user information
         async with aiohttp.ClientSession() as session:
             async with session.get(f'https://discord.com/api/v10/users/{bot_id}', headers={
-                'Authorization': f'Bot {bot.token}'
+                'Authorization': f'Bot {os.getenv('TOKEN')}'
             }) as response:
                 if response.status == 200:
                     data = await response.json()
+                    print(data)
                     # The owner ID is stored in the 'id' field
                     return data.get('id')
                 else:
