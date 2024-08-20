@@ -28,6 +28,10 @@ from skimage.metrics import structural_similarity as ssim
 
 
 
+
+
+
+
 import asyncio
 import aiohttp
 import aiofiles
@@ -323,264 +327,216 @@ class Pokemon(commands.Cog):
         await self.download_all_images()
         await ctx.send("Completed download of all Pokémon images.")
 
-    async def predict_pokemon(self, ctx, img, threshold=0.8, batch_size=50):
-     try:
-        logger.debug("Predicting Pokémon from provided image...")
-        async with ctx.typing():
-            if not os.path.exists(self.image_folder):
-                os.makedirs(self.image_folder)
+    async def predict_pokemon(self, ctx, img, threshold=0.8, batch_size=50, max_concurrency=5):
+         try:
+            logger.debug("Predicting Pokémon from provided image...")
+            async with ctx.typing():
+                if not os.path.exists(self.image_folder):
+                    os.makedirs(self.image_folder)
 
-            # Load Pokémon descriptors
-            pickle_file = os.path.join(self.image_folder, "pokemon_descriptors.pkl")
-            if not os.path.exists(pickle_file) or os.path.getsize(pickle_file) == 0:
-                # Initialize an empty dictionary if the file doesn't exist or is empty
-                pokemon_descriptors = {}
-                async with aiofiles.open(pickle_file, 'wb') as f:
-                    await f.write(pickle.dumps(pokemon_descriptors))
-            else:
-                async with aiofiles.open(pickle_file, 'rb') as f:
-                    try:
-                        pokemon_descriptors = pickle.loads(await f.read())
-                    except EOFError:
-                        logger.error("Pickle file is empty or corrupted.")
-                        pokemon_descriptors = {}
-
-            pokemon_files = [f for f in await aiofiles.os.listdir(self.image_folder) if os.path.isfile(os.path.join(self.image_folder, f))]
-            logger.debug(f"Number of Pokémon images found: {len(pokemon_files)}")
-
-            matches_list = []
-            best_match = None
-            highest_score = (float('-inf'), float('-inf'), '')  # Initialize with very low similarity score and empty name
-
-            # Convert image to numpy array and ensure correct color format
-            img_np = np.array(img)
-            img_np = self.ensure_correct_color_format(img_np)
-            if img_np.dtype != np.uint8:
-                img_np = img_np.astype(np.uint8)
-
-            # Convert image to grayscale for contour detection
-            gray_img = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
-            blurred_img = cv2.GaussianBlur(gray_img, (5, 5), 0)
-            edged_img = cv2.Canny(blurred_img, 50, 150)
-            dilated_img = cv2.dilate(edged_img, None, iterations=2)
-            contours, _ = cv2.findContours(dilated_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-            largest_contour_idx = -1
-            largest_contour_area = 0
-
-            for idx, contour in enumerate(contours):
-                contour_area = cv2.contourArea(contour)
-                if contour_area > largest_contour_area:
-                    largest_contour_idx = idx
-                    largest_contour_area = contour_area
-
-            if largest_contour_idx != -1:
-                x, y, w, h = cv2.boundingRect(contours[largest_contour_idx])
-                cv2.rectangle(img_np, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
-                padding_x = min(w // 2, img_np.shape[1] - w)
-                padding_y = min(h // 2, img_np.shape[0] - h)
-
-                roi = img_np[max(y - padding_y, 0):min(y + h + padding_y, img_np.shape[0]),
-                             max(x - padding_x, 0):min(x + w + padding_x, img_np.shape[1])]
-
-                orb = cv2.ORB_create()
-                kp1, des1 = orb.detectAndCompute(roi, None)
-
-                async def process_pokemon_file(pokemon_file):
-                    nonlocal best_match, highest_score
-                    pokemon_name, _ = os.path.splitext(pokemon_file)
-                    stored_img_path = os.path.join(self.image_folder, pokemon_file)
-
-                    if not os.path.isfile(stored_img_path):
-                        logger.warning(f"Not a file: {stored_img_path}")
-                        return
-
-                    try:
-                        async with aiofiles.open(stored_img_path, mode='rb') as f:
-                            stored_img_bytes = await f.read()
-                        stored_img_array = np.frombuffer(stored_img_bytes, dtype=np.uint8)
-                        stored_img = cv2.imdecode(stored_img_array, cv2.IMREAD_UNCHANGED)
-                        stored_img = self.ensure_correct_color_format(stored_img)
-                        stored_img_gray = cv2.cvtColor(stored_img, cv2.COLOR_RGB2GRAY)
-
-                        kp2, des2 = orb.detectAndCompute(stored_img_gray, None)
-                        bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-                        matches = bf.match(des1, des2)
-                        matches = sorted(matches, key=lambda x: x.distance)
-
-                        similarity_score = len(matches) / len(kp1) if kp1 else 0
-                        contour_similarity = await self.calculate_similarity(roi, stored_img)
-
-                        combined_similarity = (similarity_score + contour_similarity[0]) / 2
-
-                        if combined_similarity > highest_score[0]:
-                            highest_score = (combined_similarity, len(matches), pokemon_name)
-                            best_match = pokemon_name
-
-                        logger.debug(f"Comparing {pokemon_name} with combined similarity score: {combined_similarity:.2f}")
-                        matches_list.append((pokemon_name, combined_similarity))
-
-                    except Exception as e:
-                        logger.warning(f"Unable to process image: {stored_img_path}. Error: {e}")
-
-                # Process images in batches to manage memory usage
-                for i in range(0, len(pokemon_files), batch_size):
-                    batch_files = pokemon_files[i:i + batch_size]
-                    await asyncio.gather(*[process_pokemon_file(pokemon_file) for pokemon_file in batch_files])
-
-                if best_match:
-                    matched_img_path = os.path.join(self.image_folder, best_match + ".png")
-                    async with aiofiles.open(matched_img_path, mode='rb') as f:
-                        matched_img_bytes = await f.read()
-                    matched_img_array = np.frombuffer(matched_img_bytes, dtype=np.uint8)
-                    matched_img = cv2.imdecode(matched_img_array, cv2.IMREAD_UNCHANGED)
-                    matched_img = self.ensure_correct_color_format(matched_img)
-                    resized_matched_img = cv2.resize(matched_img, (roi.shape[1], roi.shape[0]))
-
-                    roi_path = f'{self.image_folder}/detection/roi.png'
-                    matched_img_path = f'{self.image_folder}/detection/matched_img.png'
-                    combined_img_path = f'{self.image_folder}/detection/combined_comparison.png'
-                    detected_objects_path = f'{self.image_folder}/detection/detected_objects.png'
-
-                    os.makedirs(os.path.dirname(roi_path), exist_ok=True)
-
-                    await aiofiles.os.makedirs(os.path.dirname(roi_path), exist_ok=True)
-
-                    cv2.imwrite(roi_path, roi)
-                    cv2.imwrite(matched_img_path, resized_matched_img)
-                    combined_img = np.hstack((roi, resized_matched_img))
-                    cv2.imwrite(combined_img_path, combined_img)
-
-                    # Send images in embed
-                    embed = discord.Embed(title="Best Match", description=f"The best match found is {best_match}")
-
-                    # Attach the images
-                    embed.set_image(url=f"attachment://combined_comparison.png")
-                    embed.set_thumbnail(url=f"attachment://roi.png")
-
-                    await ctx.send(file=discord.File(combined_img_path, filename="combined_comparison.png"), embed=embed)
-
-            
-                if highest_score[0] > threshold:
-                    logger.info(f"Best match: {best_match} with score {highest_score[0]:.2f}")
-                    await ctx.send(f"Best match: {best_match} with score {highest_score[0]:.2f}")
+                # Load Pokémon descriptors
+                pickle_file = os.path.join(self.image_folder, "pokemon_descriptors.pkl")
+                if not os.path.exists(pickle_file) or os.path.getsize(pickle_file) == 0:
+                    pokemon_descriptors = {}
+                    async with aiofiles.open(pickle_file, 'wb') as f:
+                        await f.write(pickle.dumps(pokemon_descriptors))
                 else:
-                    logger.info("No good match found")
-                    await ctx.send("No good match found")
+                    async with aiofiles.open(pickle_file, 'rb') as f:
+                        try:
+                            pokemon_descriptors = pickle.loads(await f.read())
+                        except EOFError:
+                            logger.error("Pickle file is empty or corrupted.")
+                            pokemon_descriptors = {}
 
-                return best_match, highest_score[0]
+                pokemon_files = [f for f in await aiofiles.os.listdir(self.image_folder) if os.path.isfile(os.path.join(self.image_folder, f))]
+                logger.debug(f"Number of Pokémon images found: {len(pokemon_files)}")
 
-     except Exception as e:
-        error_message = "An error occurred while predicting Pokémon."
-        logger.error(f"{error_message}: {e}")
-        await self.error_custom_embed(self.bot, ctx, error_message, title="Pokémon Prediction Error")
-        traceback.print_exc()
+                matches_list = []
+                best_match = None
+                highest_score = (float('-inf'), float('-inf'), '')  # Initialize with very low similarity score and empty name
+
+                # Convert image to numpy array and ensure correct color format
+                img_np = np.array(img)
+                img_np = self.ensure_correct_color_format(img_np)
+                if img_np.dtype != np.uint8:
+                    img_np = img_np.astype(np.uint8)
+
+                # Convert image to grayscale for contour detection
+                gray_img = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+                blurred_img = cv2.GaussianBlur(gray_img, (5, 5), 0)
+                edged_img = cv2.Canny(blurred_img, 50, 150)
+                dilated_img = cv2.dilate(edged_img, None, iterations=2)
+                contours, _ = cv2.findContours(dilated_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+                largest_contour_idx = -1
+                largest_contour_area = 0
+
+                for idx, contour in enumerate(contours):
+                    contour_area = cv2.contourArea(contour)
+                    if contour_area > largest_contour_area:
+                        largest_contour_idx = idx
+                        largest_contour_area = contour_area
+
+                if largest_contour_idx != -1:
+                    x, y, w, h = cv2.boundingRect(contours[largest_contour_idx])
+                    cv2.rectangle(img_np, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+                    padding_x = min(w // 2, img_np.shape[1] - w)
+                    padding_y = min(h // 2, img_np.shape[0] - h)
+
+                    roi = img_np[max(y - padding_y, 0):min(y + h + padding_y, img_np.shape[0]),
+                                 max(x - padding_x, 0):min(x + w + padding_x, img_np.shape[1])]
+
+                    orb = cv2.ORB_create()
+                    kp1, des1 = orb.detectAndCompute(roi, None)
+
+                    semaphore = asyncio.Semaphore(max_concurrency)
+
+                    async def process_pokemon_file(pokemon_file):
+                        nonlocal best_match, highest_score
+                        async with semaphore:
+                            pokemon_name, _ = os.path.splitext(pokemon_file)
+                            stored_img_path = os.path.join(self.image_folder, pokemon_file)
+
+                            if not os.path.isfile(stored_img_path):
+                                logger.warning(f"Not a file: {stored_img_path}")
+                                return
+
+                            try:
+                                async with aiofiles.open(stored_img_path, mode='rb') as f:
+                                    stored_img_bytes = await f.read()
+                                stored_img_array = np.frombuffer(stored_img_bytes, dtype=np.uint8)
+                                stored_img = cv2.imdecode(stored_img_array, cv2.IMREAD_UNCHANGED)
+                                stored_img = self.ensure_correct_color_format(stored_img)
+                                stored_img_gray = cv2.cvtColor(stored_img, cv2.COLOR_RGB2GRAY)
+
+                                kp2, des2 = orb.detectAndCompute(stored_img_gray, None)
+                                bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+                                matches = bf.match(des1, des2)
+                                matches = sorted(matches, key=lambda x: x.distance)
+
+                                similarity_score = len(matches) / len(kp1) if kp1 else 0
+                                contour_similarity = await self.calculate_similarity(roi, stored_img)
+
+                                combined_similarity = (similarity_score + contour_similarity[0]) / 2
+
+                                if combined_similarity > highest_score[0]:
+                                    highest_score = (combined_similarity, len(matches), pokemon_name)
+                                    best_match = pokemon_name
+
+                                logger.debug(f"Comparing {pokemon_name} with combined similarity score: {combined_similarity:.2f}")
+                                matches_list.append((pokemon_name, combined_similarity))
+
+                            except Exception as e:
+                                logger.warning(f"Unable to process image: {stored_img_path}. Error: {e}")
+
+                    # Process images in batches to manage memory usage
+                    for i in range(0, len(pokemon_files), batch_size):
+                        batch_files = pokemon_files[i:i + batch_size]
+                        await asyncio.gather(*[process_pokemon_file(pokemon_file) for pokemon_file in batch_files])
+
+                    if best_match:
+                        matched_img_path = os.path.join(self.image_folder, best_match + ".png")
+                        async with aiofiles.open(matched_img_path, mode='rb') as f:
+                            matched_img_bytes = await f.read()
+                        matched_img_array = np.frombuffer(matched_img_bytes, dtype=np.uint8)
+                        matched_img = cv2.imdecode(matched_img_array, cv2.IMREAD_UNCHANGED)
+                        matched_img = self.ensure_correct_color_format(matched_img)
+                        resized_matched_img = cv2.resize(matched_img, (roi.shape[1], roi.shape[0]))
+
+                        roi_path = f'{self.image_folder}/detection/roi.png'
+                        matched_img_path = f'{self.image_folder}/detection/matched_img.png'
+                        combined_img_path = f'{self.image_folder}/detection/combined_comparison.png'
+                        detected_objects_path = f'{self.image_folder}/detection/detected_objects.png'
+
+                        await aiofiles.os.makedirs(os.path.dirname(roi_path), exist_ok=True)
+
+                        cv2.imwrite(roi_path, roi)
+                        cv2.imwrite(matched_img_path, resized_matched_img)
+                        combined_img = np.hstack((roi, resized_matched_img))
+                        cv2.imwrite(combined_img_path, combined_img)
+
+                        # Send images in embed
+                        embed = discord.Embed(title="Best Match", description=f"The best match found is {best_match}")
+
+                        # Attach the images
+                        embed.set_image(url=f"attachment://combined_comparison.png")
+                        embed.set_thumbnail(url=f"attachment://roi.png")
+
+                        await ctx.send(file=discord.File(combined_img_path, filename="combined_comparison.png"), embed=embed)
+
+                    if highest_score[0] > threshold:
+                        logger.info(f"Best match: {best_match} with score {highest_score[0]:.2f}")
+                        await ctx.send(f"Best match: {best_match} with score {highest_score[0]:.2f}")
+                    else:
+                        logger.info("No good match found")
+                        await ctx.send("No good match found")
+
+                    return best_match, highest_score[0]
+
+         except Exception as e:
+            error_message = "An error occurred while predicting Pokémon."
+            logger.error(f"{error_message}: {e}")
+            await self.error_custom_embed(self.bot, ctx, error_message, title="Pokémon Prediction Error")
+            traceback.print_exc()
     
     
     
-    
-    async def calculate_similarity(self, img1, img2, size=(256, 256), num_sections=8, bins_per_channel=32):
+    async def calculate_similarity(self, img1, img2, size=(256, 256), num_sections=9, bins_per_channel=64):
      try:
-        # Function to calculate color histogram similarity with a playful twist
+        # Function to calculate color histogram similarity
         def calculate_color_histogram_similarity(hist1, hist2):
-            # Introduce some randomness to make the matching playful
-            random_factor = np.random.uniform(0.8, 1.2)  # Randomness factor
-            similarity = cv2.compareHist(hist1, hist2, cv2.HISTCMP_INTERSECT)
-            return similarity * random_factor
+            return cv2.compareHist(hist1, hist2, cv2.HISTCMP_INTERSECT)
 
-        # Function to calculate skeleton similarity with playful adjustments
-        def calculate_skeleton_similarity(img1, img2):
+        # Function to calculate edge similarity using Canny and contours
+        def calculate_edge_similarity(img1, img2):
             # Convert images to grayscale
             gray1 = cv2.cvtColor(img1, cv2.COLOR_RGB2GRAY)
             gray2 = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY)
 
-            # Use Canny edge detector to find edges with random thresholds
-            low_threshold = np.random.randint(50, 150)
-            high_threshold = np.random.randint(150, 250)
-            edges1 = cv2.Canny(gray1, low_threshold, high_threshold)
-            edges2 = cv2.Canny(gray2, low_threshold, high_threshold)
+            # Use Canny edge detector to find edges with consistent thresholds
+            edges1 = cv2.Canny(gray1, 100, 200)
+            edges2 = cv2.Canny(gray2, 100, 200)
 
             # Find contours in the edges
             contours1, _ = cv2.findContours(edges1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             contours2, _ = cv2.findContours(edges2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            # Draw contours on a blank image for comparison
+            # Draw contours on a blank image
             contour_img1 = np.zeros_like(gray1)
             contour_img2 = np.zeros_like(gray2)
-            cv2.drawContours(contour_img1, contours1, -1, 255, 1)
-            cv2.drawContours(contour_img2, contours2, -1, 255, 1)
+            cv2.drawContours(contour_img1, contours1, -1, (255, 255, 255), thickness=cv2.FILLED)
+            cv2.drawContours(contour_img2, contours2, -1, (255, 255, 255), thickness=cv2.FILLED)
 
-            # Calculate structural similarity with some playful noise
-            noise = np.random.normal(0, 0.05, contour_img1.shape)  # Add random noise
-            skeleton_similarity = np.sum(np.abs(contour_img1 - contour_img2 + noise)) / contour_img1.size
-            return skeleton_similarity
+            # Resize the contour images to the same size for comparison
+            contour_img1 = cv2.resize(contour_img1, size)
+            contour_img2 = cv2.resize(contour_img2, size)
+
+            # Compute the similarity using skimage's structural similarity (SSIM)
+            edge_similarity, _ = ssim(contour_img1, contour_img2, full=True)
+
+            return edge_similarity
 
         # Resize images
         img1_resized = cv2.resize(img1, size)
         img2_resized = cv2.resize(img2, size)
 
-        # Convert images to RGB (assuming they are BGR due to cv2)
-        img1_rgb = cv2.cvtColor(img1_resized, cv2.COLOR_BGR2RGB)
-        img2_rgb = cv2.cvtColor(img2_resized, cv2.COLOR_BGR2RGB)
+        # Calculate color histogram similarity
+        hist1 = cv2.calcHist([img1_resized], [0, 1, 2], None, [bins_per_channel] * 3, [0, 256] * 3)
+        hist2 = cv2.calcHist([img2_resized], [0, 1, 2], None, [bins_per_channel] * 3, [0, 256] * 3)
 
-        # Initialize lists to store section similarities
-        section_similarities = []
-        skeleton_similarities = []
+        hist_similarity = calculate_color_histogram_similarity(hist1, hist2)
 
-        # Calculate section dimensions
-        height, width, _ = img1_rgb.shape
-        section_height = height // num_sections
-        section_width = width // num_sections
+        # Calculate edge similarity
+        edge_similarity = calculate_edge_similarity(img1_resized, img2_resized)
 
-        # Iterate through sections
-        for i in range(num_sections):
-            for j in range(num_sections):
-                # Calculate section boundaries
-                start_row = i * section_height
-                end_row = (i + 1) * section_height
-                start_col = j * section_width
-                end_col = (j + 1) * section_width
-
-                # Extract sections from both images
-                section_img1 = img1_rgb[start_row:end_row, start_col:end_col]
-                section_img2 = img2_rgb[start_row:end_row, start_col:end_col]
-
-                # Calculate color histograms for the sections
-                hist_img1 = cv2.calcHist([section_img1], [0, 1, 2], None,
-                                         [bins_per_channel, bins_per_channel, bins_per_channel],
-                                         [0, 256, 0, 256, 0, 256])
-                hist_img2 = cv2.calcHist([section_img2], [0, 1, 2], None,
-                                         [bins_per_channel, bins_per_channel, bins_per_channel],
-                                         [0, 256, 0, 256, 0, 256])
-
-                # Normalize histograms
-                cv2.normalize(hist_img1, hist_img1, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-                cv2.normalize(hist_img2, hist_img2, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-
-                # Calculate similarity between color histograms
-                section_similarity = calculate_color_histogram_similarity(hist_img1, hist_img2)
-                section_similarities.append(section_similarity)
-
-                # Calculate skeleton similarity for the sections
-                skeleton_similarity = calculate_skeleton_similarity(section_img1, section_img2)
-                skeleton_similarities.append(skeleton_similarity)
-
-        # Calculate overall similarity
-        overall_color_similarity = np.mean(section_similarities)
-        overall_skeleton_similarity = np.mean(skeleton_similarities)
-
-        # Round overall similarity to 4 decimal places
-        rounded_color_similarity = round(overall_color_similarity, 4)
-        rounded_skeleton_similarity = round(overall_skeleton_similarity, 4)
-
-        # Return overall similarity
-        return [rounded_color_similarity, rounded_skeleton_similarity]
+        return hist_similarity, edge_similarity
 
      except Exception as e:
-        print(f"Error calculating similarity: {e}")
-        return [0.0, 0.0]  # Return default similarity in case of errors
-    
+        error_message = "An error occurred while calculating image similarity."
+        logger.error(f"{error_message}: {e}")
+        await self.error_custom_embed(self.bot, ctx, error_message, title="Image Similarity Error")
+        traceback.print_exc()
     
     def ensure_correct_color_format(self, img):
      """
