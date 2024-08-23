@@ -14,18 +14,17 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
 
-
 class PokemonPredictor:
     def __init__(self, predict_folder="predict", dataset_folder="dataset"):
-        # Reduce the number of features in ORB to 190 for faster computation
+        # Initialize ORB with a reasonable number of features
         self.orb = cv2.ORB_create(nfeatures=170)
 
-        # Further reduce the checks in FLANN for quicker matching
+        # Configure FLANN with parameters for faster matching
         index_params = dict(algorithm=6, table_number=6, key_size=10, multi_probe_level=1)
-        search_params = dict(checks=10, max_neighbors=10)
+        search_params = dict(checks=10)
         self.flann = cv2.FlannBasedMatcher(index_params, search_params)
 
-        # Increase the thread pool for better parallelism
+        # Thread pool executor for parallel processing
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
         self.cache = {}
@@ -51,36 +50,70 @@ class PokemonPredictor:
     def _process_image(self, image_path):
         img = cv2.imread(image_path)
         if img is not None:
-            keypoints, descriptors = self.orb.detectAndCompute(img, None)
-            return keypoints, descriptors
-
-    def _match_image(self, desB, cache_item):
-        filename, (kpA, desA) = cache_item
-        if desA is not None and desB is not None:
-            matches = self.flann.knnMatch(desA, desB, k=2)
-            matches = [m for m in matches if len(m) == 2 and m[0].distance < 0.7 * m[1].distance]
-            good_matches = [m for m, n in matches if m.distance < 0.45 * n.distance]
-            if good_matches:
-                accuracy = len(good_matches) / len(desA) * 1000
-                return filename, len(good_matches), accuracy
+            gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
+            return img, keypoints, descriptors
         return None
+
+    def _match_image(self, kpB, desB, cache_item):
+        filename, (imgA, kpA, desA) = cache_item
+        if desA is not None and desB is not None:
+            # ORB feature matching
+            matches = self.flann.knnMatch(desA, desB, k=2)
+            good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.75 * m[1].distance]
+
+            if len(good_matches) > 4:
+                # Extract location of good matches
+                src_pts = np.float32([kpA[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+                dst_pts = np.float32([kpB[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+
+                # Calculate homography
+                M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+
+                if M is not None:
+                    h, w = imgA.shape[:2]
+                    pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
+                    dst = cv2.perspectiveTransform(pts, M)
+
+                    if self._is_valid_match(dst):
+                        accuracy = len(good_matches) / len(desA) * 100
+                        return filename, len(good_matches), accuracy
+        return None
+
+    def _is_valid_match(self, dst):
+        # Check if the found polygon is convex and large enough to be considered a valid match
+        return cv2.isContourConvex(dst) and cv2.contourArea(dst) > 100
 
     def predict_pokemon(self, img):
         start_time = time.time()
-        _, desB = self.orb.detectAndCompute(img, None)
+        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        kpB, desB = self.orb.detectAndCompute(gray_img, None)
 
-        futures = [self.executor.submit(self._match_image, desB, item) for item in self.cache.items()]
+        futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
         best_match = max((future.result() for future in concurrent.futures.as_completed(futures)), key=lambda x: x[1] if x else 0, default=None)
 
         elapsed_time = round(time.time() - start_time, 2)
         if best_match:
             predicted_pokemon = best_match[0].split(".png")[0].split("_flipped")[0]
             accuracy = round(best_match[2], 2)
-            return f"{predicted_pokemon} ({elapsed_time} sec): {accuracy}%", elapsed_time
+            return f"```<@716390085896962058> {predicted_pokemon.title()}```\n⏱️ {elapsed_time}s\n🎯 {accuracy}%", elapsed_time
+
         return "No Pokémon detected", elapsed_time
 
     def _clear_console(self):
         os.system("cls" if os.name == "nt" else "clear")
+
+
+
+
+
+
+
+
+
+
+
+
 
 class PokemonBot(commands.Cog):
     def __init__(self, bot):
