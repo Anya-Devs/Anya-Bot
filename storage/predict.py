@@ -96,7 +96,8 @@ class PokemonPredictor:
         if best_match:
             predicted_pokemon = best_match[0].split(".png")[0].split("_flipped")[0]
             accuracy = round(best_match[2], 2)
-            return f"```<@716390085896962058> {predicted_pokemon.title()}```\n⏱️ {elapsed_time}s\n🎯 {accuracy}%", elapsed_time
+            return (f"{predicted_pokemon.title()}\t\t⏱️ {elapsed_time}s\t🎯 {accuracy}%\n{'-'*40}", elapsed_time)
+
 
         return "No Pokémon detected", elapsed_time
 
