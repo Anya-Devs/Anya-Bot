@@ -26,7 +26,7 @@ class PokemonPredictor:
         self.flann = cv2.FlannBasedMatcher(index_params, search_params)
 
         # Increase the thread pool for better parallelism
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=16)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
         self.cache = {}
         self.load_dataset(dataset_folder)
@@ -61,7 +61,7 @@ class PokemonPredictor:
             matches = [m for m in matches if len(m) == 2 and m[0].distance < 0.7 * m[1].distance]
             good_matches = [m for m, n in matches if m.distance < 0.45 * n.distance]
             if good_matches:
-                accuracy = len(good_matches) / len(desA) * 100
+                accuracy = len(good_matches) / len(desA) * 1000
                 return filename, len(good_matches), accuracy
         return None
 
@@ -81,8 +81,6 @@ class PokemonPredictor:
 
     def _clear_console(self):
         os.system("cls" if os.name == "nt" else "clear")
-
-
 
 class PokemonBot(commands.Cog):
     def __init__(self, bot):
