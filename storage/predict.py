@@ -42,7 +42,7 @@ class PokemonPredictor:
         self.flann = cv2.FlannBasedMatcher(index_params, search_params)
 
         # Thread pool executor for parallel processing
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)  # Increased number of workers for speed
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
         self.cache = {}
         self.load_dataset(dataset_folder)
@@ -63,8 +63,15 @@ class PokemonPredictor:
 
             for filename, result in zip(batch_paths, results):
                 if result:
-                    # Save only keypoints and descriptors in cache
+                    # Save original keypoints and descriptors in cache
                     self.cache[os.path.basename(filename)] = result
+
+                    # Process flipped image and save it to the cache
+                    flipped_img = cv2.flip(cv2.imread(filename), 1)  # Flip horizontally
+                    flipped_gray_img = cv2.cvtColor(flipped_img, cv2.COLOR_BGR2GRAY)
+                    flipped_keypoints, flipped_descriptors = self.orb.detectAndCompute(flipped_gray_img, None)
+                    flipped_filename = f"{os.path.basename(filename)}_flipped"
+                    self.cache[flipped_filename] = (flipped_keypoints, flipped_descriptors)
 
             print(f"Processed batch {i//batch_size + 1} of {total_images//batch_size + 1}")
 
@@ -131,8 +138,6 @@ class PokemonPredictor:
 
     def _clear_console(self):
         os.system("cls" if os.name == "nt" else "clear")
-
-
 
 
 
