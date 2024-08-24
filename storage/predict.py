@@ -15,7 +15,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
 
 class PokemonPredictor:
-    def __init__(self, predict_folder="predict", dataset_folder="dataset"):
+    def __init__(self, predict_folder="predict", dataset_folder="Data/Images/pokemon_images"):
         # Initialize ORB with a reasonable number of features
         self.orb = cv2.ORB_create(nfeatures=170)
 
@@ -25,12 +25,12 @@ class PokemonPredictor:
         self.flann = cv2.FlannBasedMatcher(index_params, search_params)
 
         # Thread pool executor for parallel processing
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)  # Increased number of workers for speed
 
         self.cache = {}
         self.load_dataset(dataset_folder)
 
-    def load_dataset(self, dataset_folder):
+    def load_dataset(self, dataset_folder, batch_size=10):
         self._clear_console()
         print("Loading Images...")
         start_time = time.time()
@@ -38,25 +38,36 @@ class PokemonPredictor:
         # Faster directory traversal using os.scandir
         image_paths = [entry.path for entry in os.scandir(dataset_folder) if entry.is_file()]
 
-        results = list(self.executor.map(self._process_image, image_paths))
-        for filename, result in zip(os.scandir(dataset_folder), results):
-            if result:
-                self.cache[filename.name] = result
+        # Process images in batches to save memory
+        total_images = len(image_paths)
+        for i in range(0, total_images, batch_size):
+            batch_paths = image_paths[i:i+batch_size]
+            results = list(self.executor.map(self._process_image, batch_paths))
+
+            for filename, result in zip(batch_paths, results):
+                if result:
+                    # Save only keypoints and descriptors in cache
+                    self.cache[os.path.basename(filename)] = result
+
+            print(f"Processed batch {i//batch_size + 1} of {total_images//batch_size + 1}")
 
         self._clear_console()
         elapsed_time = round(time.time() - start_time, 2)
         print(f"Successfully loaded all images.\nTime Taken: {elapsed_time} sec")
 
     def _process_image(self, image_path):
-        img = cv2.imread(image_path)
-        if img is not None:
-            gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
-            return img, keypoints, descriptors
+        try:
+            img = cv2.imread(image_path)
+            if img is not None:
+                gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
+                return keypoints, descriptors
+        except Exception as e:
+            print(f"Error processing image {image_path}: {e}")
         return None
 
     def _match_image(self, kpB, desB, cache_item):
-        filename, (imgA, kpA, desA) = cache_item
+        filename, (kpA, desA) = cache_item
         if desA is not None and desB is not None:
             # ORB feature matching
             matches = self.flann.knnMatch(desA, desB, k=2)
@@ -71,7 +82,8 @@ class PokemonPredictor:
                 M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
 
                 if M is not None:
-                    h, w = imgA.shape[:2]
+                    # Assuming the bounding box size for validation
+                    h, w = 50, 50  # Example dimensions, adjust based on your dataset
                     pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
                     dst = cv2.perspectiveTransform(pts, M)
 
@@ -98,11 +110,13 @@ class PokemonPredictor:
             accuracy = round(best_match[2], 2)
             return (f"{predicted_pokemon.title()}\t\t⏱️ {elapsed_time}s\t🎯 {accuracy}%\n{'-'*40}", elapsed_time)
 
-
         return "No Pokémon detected", elapsed_time
 
     def _clear_console(self):
         os.system("cls" if os.name == "nt" else "clear")
+
+
+
 
 
 
