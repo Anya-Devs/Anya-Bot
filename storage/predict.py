@@ -32,17 +32,17 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 
 class PokemonPredictor:
-    def __init__(self, predict_folder="predict", dataset_folder="Data/Images/pokemon_images"):
+    def __init__(self, predict_folder="predict", dataset_folder="Data/pokemon/pokemon_images"):
         # Initialize ORB with a reasonable number of features
         self.orb = cv2.ORB_create(nfeatures=170)
 
         # Configure FLANN with parameters for faster matching
         index_params = dict(algorithm=6, table_number=6, key_size=10, multi_probe_level=1)
-        search_params = dict(checks=10)
+        search_params = dict(checks=1)
         self.flann = cv2.FlannBasedMatcher(index_params, search_params)
 
         # Thread pool executor for parallel processing
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
         self.cache = {}
         self.load_dataset(dataset_folder)
@@ -121,28 +121,30 @@ class PokemonPredictor:
         return cv2.isContourConvex(dst) and cv2.contourArea(dst) > 100
 
     def predict_pokemon(self, img):
-        start_time = time.time()
-        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        kpB, desB = self.orb.detectAndCompute(gray_img, None)
+     start_time = time.time()
 
-        futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
-        best_match = max((future.result() for future in concurrent.futures.as_completed(futures)), key=lambda x: x[1] if x else 0, default=None)
+     # Convert to grayscale only once
+     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+     kpB, desB = self.orb.detectAndCompute(gray_img, None)
 
-        elapsed_time = round(time.time() - start_time, 2)
-        if best_match:
-            predicted_pokemon = best_match[0].split(".png")[0].split("_flipped")[0]
-            accuracy = round(best_match[2], 2)
-            return (f"{predicted_pokemon.title()}\t\t⏱️ {elapsed_time}s\t🎯 {accuracy}%\n{'-'*40}", elapsed_time)
+     # Use a list comprehension to collect results
+     futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
+     results = [future.result() for future in concurrent.futures.as_completed(futures)]
 
-        return "No Pokémon detected", elapsed_time
+     # Find the best match
+     best_match = max(results, key=lambda x: x[1] if x else 0, default=None)
+
+     elapsed_time = round(time.time() - start_time, 2)
+     if best_match:
+        # Process the result to extract predicted Pokémon and accuracy
+        predicted_pokemon = best_match[0].split("_flipped")[0].replace(".png", "")
+        accuracy = round(best_match[2], 2)
+        return f"{predicted_pokemon.title()}:\t{accuracy}%\t\t (`{elapsed_time}'s`)", elapsed_time
+
+     return "No Pokémon detected", elapsed_time
 
     def _clear_console(self):
         os.system("cls" if os.name == "nt" else "clear")
-
-
-
-
-
 
 
 
