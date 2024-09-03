@@ -152,11 +152,11 @@ class Quest_View(View):
 
             # Generate instructions based on method
             if method == 'message':
-                instruction = f"Send a message containing: `{content}`"
+                instruction = f"Send: {content}"
             elif method == 'emoji':
-                instruction = f"Send an emoji: {content}"
+                instruction = f"Send emoji: {content}"
             elif method == 'reaction':
-                instruction = f"React to a message with the emoji: {content}"
+                instruction = f"react with: {content}"
             else:
                 instruction = "Unknown method. Please refer to the quest details."
 
@@ -166,7 +166,19 @@ class Quest_View(View):
             reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
             channel = f'[Go here](https://discord.com/channels/{self.ctx.guild.id}/{channel.id})' if channel.id != self.ctx.channel.id else 'In this channel'
             
-            embed.add_field(name=f"Quest {quest_id}", value=f"{channel} | {instruction}\n- `{progress}/{times}` {progress_bar}\nReward: {reward_emoji} `{reward} stp`\n", inline=False)
+            embed.add_field(
+                name="",  # Step 1: Field name
+                value=(
+                    f"Quest {quest_id} | {progress_bar} `{progress}/{times}`\n"  # Step 2: Progress information
+                    f"**{channel}** | **{instruction}**\n"  # Steps 3 & 4: Channel link and instructions
+                    f"Reward: `{reward} stp` {reward_emoji}"  # Step 5: Reward information
+                ),
+                inline=False
+            ) 
+            
+            
+
+            # embed.set_thumbnail(url=self.ctx.author.avatar)
 
         return embed
 
@@ -296,7 +308,7 @@ class Quest_Button(discord.ui.View):
                 
                 for _ in range(10):
                                 logger.debug("Adding new quest")
-                                await self.quest_data.add_new_quest(guild_id, button_user,chance=100)
+                                await self.quest_data.add_new_quest(guild_id, button_user, chance=100)
 
 
             else:
@@ -1388,12 +1400,12 @@ class MaterialsButton(discord.ui.View):
                 traceback.print_exc()
 
         if self.page > 0:
-            prev_button = discord.ui.Button(label='Previous', style=discord.ButtonStyle.secondary, custom_id='prev_page')
+            prev_button = discord.ui.Button(emoji='⬅️', style=discord.ButtonStyle.secondary, custom_id='prev_page') # label='Previous'
             prev_button.callback = self.prev_page_callback
             self.add_item(prev_button)
 
         if self.page < self.max_pages - 1:
-            next_button = discord.ui.Button(label='Next', style=discord.ButtonStyle.secondary, custom_id='next_page')
+            next_button = discord.ui.Button(emoji='➡️', style=discord.ButtonStyle.secondary, custom_id='next_page') # label='Next'
             next_button.callback = self.next_page_callback
             self.add_item(next_button)
 
@@ -1409,9 +1421,14 @@ class MaterialsButton(discord.ui.View):
         emoji = tool.get("emoji", "")
         description = tool.get("description", "No description available.")
         materials_list = "\n".join([await self.format_materials(item) for item in tool.get("materials", [])])
+        user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
 
-        shop_embed = discord.Embed(title=f"{tool_name}", description=f'{emoji} {description}', color=discord.Color.blurple())
+        shop_embed = discord.Embed(title=f"{tool_name}", description=f'{emoji} {description}', color=primary_color())
         shop_embed.add_field(name="Materials", value=materials_list or "No materials needed", inline=False)
+        user_balance = "{:,}".format(user_balance)            
+        shop_embed.set_footer(text=f"Stella Points: {user_balance}")
+
+        
 
         await self.update_view()
         await interaction.response.edit_message(embed=shop_embed, view=self)
@@ -1508,9 +1525,13 @@ class SpyToolSelect(discord.ui.Select):
             initial_embed = discord.Embed(
                 title=f"{selected_tool_name}",
                 description=f'{emoji} {description}',
-                color=discord.Color.blurple()
+                color=primary_color()
             )
             initial_embed.add_field(name="Materials", value=materials_list or "No materials needed", inline=False)
+            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            user_balance = "{:,}".format(user_balance)            
+            initial_embed.set_footer(text=f"Stella Points: {user_balance}")
+
 
             # Create MaterialsButton view
             materials_button_view = MaterialsButton(self.shop_data, self.quest_data, self.user_id, self.guild_id, original_embed=initial_embed)
