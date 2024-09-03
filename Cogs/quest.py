@@ -170,8 +170,9 @@ class Quest_View(View):
                 name="",  # Step 1: Field name
                 value=(
                     f"Quest {quest_id} | {progress_bar} `{progress}/{times}`\n"  # Step 2: Progress information
-                    f"**{channel}** | **{instruction}**\n"  # Steps 3 & 4: Channel link and instructions
-                    f"Reward: `{reward} stp` {reward_emoji}"  # Step 5: Reward information
+                    f"**{channel}** | **{instruction}**\t | {reward_emoji} `{reward} stp`"  # Step 5: Reward information
+                    f"\n\n"  # Steps 3 & 4: Channel link and instructions
+
                 ),
                 inline=False
             ) 
@@ -1400,12 +1401,12 @@ class MaterialsButton(discord.ui.View):
                 traceback.print_exc()
 
         if self.page > 0:
-            prev_button = discord.ui.Button(emoji='⬅️', style=discord.ButtonStyle.secondary, custom_id='prev_page') # label='Previous'
+            prev_button = discord.ui.Button(emoji='⬅️', style=discord.ButtonStyle.primary, custom_id='prev_page') # label='Previous'
             prev_button.callback = self.prev_page_callback
             self.add_item(prev_button)
 
         if self.page < self.max_pages - 1:
-            next_button = discord.ui.Button(emoji='➡️', style=discord.ButtonStyle.secondary, custom_id='next_page') # label='Next'
+            next_button = discord.ui.Button(emoji='➡️', style=discord.ButtonStyle.primary, custom_id='next_page') # label='Next'
             next_button.callback = self.next_page_callback
             self.add_item(next_button)
 
