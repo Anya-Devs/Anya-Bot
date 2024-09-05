@@ -145,7 +145,7 @@ class HelpMenu(discord.ui.View):
 
 
 class ImageGenerator:
-    def __init__(self, bot, avatar_url, background_url, font_path='Data/bubbles.ttf'):
+    def __init__(self, bot, ctx, avatar_url, background_url, font_path='Data/bubbles.ttf'):
         self.bot = bot
         self.avatar_url = avatar_url
         self.background_url = background_url
@@ -154,6 +154,7 @@ class ImageGenerator:
         self.background = self.load_image_from_url(self.background_url)
         self.avatar_size = (100, 100)  # Adjust as needed
         self.command_mapping_file = 'Data/Help/command_map.json'
+        self.ctx = ctx
 
     def load_image_from_url(self, url):
         """Load an image from a URL."""
@@ -203,11 +204,14 @@ class ImageGenerator:
                         mapping[cog_name][cmd.name] = "Description to fill out"
         self._save_command_mapping(mapping)
 
-
     def create_slideshow(self, output_path='slideshow.gif'):
         """Create a slideshow GIF with command details on individual frames."""
         frames = []
         command_mapping = self._load_command_mapping()
+
+        # Get status text with user and command
+        status_text = f"{self.ctx.author}, what would you like assistance with?"
+        prefix_text = "prefix: ...<command>"
 
         # Loop through each cog and its commands
         for cog_name, commands in command_mapping.items():
@@ -229,16 +233,25 @@ class ImageGenerator:
 
                 # Text area width and position (beside the avatar)
                 text_area_width = frame.width - self.avatar_size[0] - 100
-                text = f"...{cmd_name}"
-                font_size = self.get_max_font_size(text, text_area_width) - 20
+                text = f"{self.ctx.author}, what would you like assistance with?\nCommand: ...{cmd_name}"
+                font_size = self.get_max_font_size(text, text_area_width) 
                 font = ImageFont.truetype(self.font_path, font_size)
 
-                # Calculate text size and position
+                # Create a shader behind the text
                 draw = ImageDraw.Draw(frame)
                 text_bbox = draw.textbbox((0, 0), text, font=font)
                 text_width = text_bbox[2] - text_bbox[0]
                 text_height = text_bbox[3] - text_bbox[1]
-                text_position = (avatar_position[0] + self.avatar_size[0] + 30, (frame.height - text_height) // 2)  # 20 pixels padding between avatar and text
+                text_shader_width = text_width + 40  # Extra padding for visibility
+                text_shader_height = text_height + 20
+                text_shader_position = (avatar_position[0] + self.avatar_size[0] + 10 - 20, (frame.height - text_shader_height) // 2 - 10)  # Adjust for padding
+
+                # Create shader layer for text background
+                text_shader = Image.new('RGBA', (text_shader_width, text_shader_height), (0, 0, 0, 150))  # Black with semi-transparency
+                frame.paste(text_shader, text_shader_position, text_shader)
+
+                # Calculate text size and position
+                text_position = (avatar_position[0] + self.avatar_size[0] + 30, (frame.height - text_height) // 2)  # 30 pixels padding between avatar and text
 
                 # Paste the avatar onto the background with shader
                 mask = self.avatar.split()[3]  # Ensuring the alpha mask is used
@@ -253,9 +266,7 @@ class ImageGenerator:
         # Save the animated GIF
         frames[0].save(output_path, save_all=True, append_images=frames[1:], loop=0, duration=1000)  # 1000ms per frame
 
-        return output_path
-    
-    
+        return output_path    
     
     
     
@@ -369,7 +380,7 @@ class Help(commands.Cog):
                 self._update_command_mapping()
 
                 # Create the image slideshow
-                image_generator = ImageGenerator(self.bot, avatar_url=bot_avatar_url, background_url='https://i.pinimg.com/originals/5a/35/1a/5a351aa5067e01fa2e00db8b4191c999.gif')
+                image_generator = ImageGenerator(self.bot, ctx, avatar_url=bot_avatar_url, background_url='https://i.pinimg.com/originals/5a/35/1a/5a351aa5067e01fa2e00db8b4191c999.gif')
                 image_file =  image_generator.create_slideshow()
 
                 # Create the select view and help menu
