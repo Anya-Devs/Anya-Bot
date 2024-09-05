@@ -144,8 +144,6 @@ class HelpMenu(discord.ui.View):
         # Send only the embed without the button
 
 
-        
-        
 class ImageGenerator:
     def __init__(self, bot, avatar_url, background_url, font_path='Data/bubbles.ttf'):
         self.bot = bot
@@ -158,11 +156,13 @@ class ImageGenerator:
         self.command_mapping_file = 'Data/Help/command_map.json'
 
     def load_image_from_url(self, url):
+        """Load an image from a URL."""
         response = requests.get(url)
         img = Image.open(BytesIO(response.content))
         return img
 
     def get_max_font_size(self, text, max_width, min_size=10, max_size=100):
+        """Determine the maximum font size that fits the text within the specified width."""
         for size in range(max_size, min_size - 1, -1):
             font = ImageFont.truetype(self.font_path, size)
             text_bbox = ImageDraw.Draw(Image.new('RGBA', (1, 1))).textbbox((0, 0), text, font=font)
@@ -172,23 +172,27 @@ class ImageGenerator:
         return min_size
 
     def _ensure_file_exists(self):
+        """Ensure the command mapping file exists."""
         os.makedirs(os.path.dirname(self.command_mapping_file), exist_ok=True)
         if not os.path.exists(self.command_mapping_file):
             with open(self.command_mapping_file, 'w') as f:
                 json.dump({}, f, indent=4)
 
     def _load_command_mapping(self):
+        """Load the command mappings from a JSON file."""
         self._ensure_file_exists()
         with open(self.command_mapping_file, 'r') as f:
             return json.load(f)
 
     def _save_command_mapping(self, mapping):
+        """Save the command mappings to a JSON file."""
         with open(self.command_mapping_file, 'w') as f:
             json.dump(mapping, f, indent=4)
 
     def _update_command_mapping(self):
+        """Update the command mappings with any new commands from the bot."""
         mapping = self._load_command_mapping()
-        for cog_name in self.cog_commands.keys():
+        for cog_name in self.bot.cogs.keys():
             if cog_name not in mapping:
                 mapping[cog_name] = {}
             cog = self.bot.get_cog(cog_name)
@@ -199,74 +203,65 @@ class ImageGenerator:
                         mapping[cog_name][cmd.name] = "Description to fill out"
         self._save_command_mapping(mapping)
 
+
     def create_slideshow(self, output_path='slideshow.gif'):
+        """Create a slideshow GIF with command details on individual frames."""
         frames = []
         command_mapping = self._load_command_mapping()
 
-        # Check if background is an animated GIF
-        background_is_gif = self.background_url.lower().endswith('.gif')
-        background_frames = []
-
-        if background_is_gif:
-            for frame in ImageSequence.Iterator(self.background):
-                if frame.mode != 'RGBA':
-                    frame = frame.convert('RGBA')
-                background_frames.append(frame.copy())
-        else:
-            background_frames.append(self.background)
-
-        # Create one frame per command with individual text
+        # Loop through each cog and its commands
         for cog_name, commands in command_mapping.items():
             for cmd_name, cmd_desc in commands.items():
-                for bg_frame in background_frames:
-                    frame = bg_frame.copy()
-                    
-                    # Create a translucent black shader layer
-                    shader_layer = Image.new('RGBA', frame.size, (0, 0, 0, 0))
-                    shader_draw = ImageDraw.Draw(shader_layer)
-                    shader_color = (0, 0, 0, 100)  # Translucent black
-                    shader_draw.rectangle([(0, 0), (frame.width, frame.height)], fill=shader_color)
-                    frame = Image.alpha_composite(frame, shader_layer)
+                # Prepare a new frame for each command
+                frame = self.background.copy()
+                if frame.mode != 'RGBA':
+                    frame = frame.convert('RGBA')
 
-                    # Position of the avatar (left of the text)
-                    avatar_position = (50, (frame.height - self.avatar_size[1]) // 2)
+                # Create a translucent black shader layer
+                shader_layer = Image.new('RGBA', frame.size, (0, 0, 0, 0))
+                shader_draw = ImageDraw.Draw(shader_layer)
+                shader_color = (0, 0, 0, 100)  # Translucent black
+                shader_draw.rectangle([(0, 0), (frame.width, frame.height)], fill=shader_color)
+                frame = Image.alpha_composite(frame, shader_layer)
 
-                    # Get the maximum font size that fits the text
-                    text_area_width = frame.width - self.avatar_size[0] - 70
-                    text = f"...{cmd_name}"
-                    font_size = self.get_max_font_size(text, text_area_width)
-                    font = ImageFont.truetype(self.font_path, font_size)
+                # Position of the avatar (left of the text)
+                avatar_position = (50, (frame.height - self.avatar_size[1]) // 2)
 
-                    # Calculate text size and position
-                    draw = ImageDraw.Draw(frame)
-                    text_bbox = draw.textbbox((0, 0), text, font=font)
-                    text_height = text_bbox[3] - text_bbox[1]
-                    text_position = (avatar_position[0] + self.avatar_size[0] + 20, (frame.height - text_height) // 2)
+                # Text area width and position (beside the avatar)
+                text_area_width = frame.width - self.avatar_size[0] - 100
+                text = f"...{cmd_name}"
+                font_size = self.get_max_font_size(text, text_area_width) - 20
+                font = ImageFont.truetype(self.font_path, font_size)
 
-                    # Paste the avatar onto the background
-                    mask = self.avatar.split()[3]
-                    frame.paste(self.avatar, avatar_position, mask)
+                # Calculate text size and position
+                draw = ImageDraw.Draw(frame)
+                text_bbox = draw.textbbox((0, 0), text, font=font)
+                text_width = text_bbox[2] - text_bbox[0]
+                text_height = text_bbox[3] - text_bbox[1]
+                text_position = (avatar_position[0] + self.avatar_size[0] + 30, (frame.height - text_height) // 2)  # 20 pixels padding between avatar and text
 
-                    # Add styled text
-                    text_color = (255, 255, 255)  # White color
-                    draw.text(text_position, text, font=font, fill=text_color)
+                # Paste the avatar onto the background with shader
+                mask = self.avatar.split()[3]  # Ensuring the alpha mask is used
+                frame.paste(self.avatar, avatar_position, mask)
 
-                    # Add a border around the text for better visibility
-                    border_width = 2
-                    border_color = (0, 0, 0)  # Black border
-                    draw.text((text_position[0] - border_width, text_position[1] - border_width), text, font=font, fill=border_color)
-                    draw.text((text_position[0] + border_width, text_position[1] - border_width), text, font=font, fill=border_color)
-                    draw.text((text_position[0] - border_width, text_position[1] + border_width), text, font=font, fill=border_color)
-                    draw.text((text_position[0] + border_width, text_position[1] + border_width), text, font=font, fill=border_color)
+                # Add styled text on top of the shader
+                draw.text(text_position, text, font=font, fill=(255, 255, 255))  # White color for text
 
-                    frames.append(frame.copy())  # Add the frame to the slideshow
+                # Append the frame to the slideshow
+                frames.append(frame.copy())
 
         # Save the animated GIF
         frames[0].save(output_path, save_all=True, append_images=frames[1:], loop=0, duration=1000)  # 1000ms per frame
 
         return output_path
     
-        
+    
+    
+    
+    
+    
+    
+    
 class Help(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
