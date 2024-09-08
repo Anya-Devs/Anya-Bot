@@ -1,18 +1,15 @@
-# Import necessary modules
+# Standard Library Imports
 import os
 import traceback
 import json
+import io
 
 import cv2
 import numpy as np
 import aiohttp
 import requests
-import json
-import os
 from io import BytesIO
-
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
-
 
 from Imports.discord_imports import * 
 from Data.const import primary_color, error_custom_embed, Help_Select_Embed_Mapping, Help_Embed_Mapping, banner_url
@@ -142,6 +139,8 @@ class HelpMenu(discord.ui.View):
         cog_commands = {}  # Dictionary to store commands for each cog
         self.add_item(select_view)
         # Send only the embed without the button
+
+
 
 
 class ImageGenerator:
@@ -336,6 +335,7 @@ class Help(commands.Cog):
             cog_commands = {}
             command_mapping = self._load_command_mapping()
 
+            # Get the bot's avatar and primary color
             bot_avatar_url = str(self.bot.user.avatar.with_size(128))
             async with aiohttp.ClientSession() as session:
                 async with session.get(bot_avatar_url) as resp:
@@ -345,8 +345,7 @@ class Help(commands.Cog):
             avatar_image = Image.open(BytesIO(data))
             temp_image_dir = 'Data/Images'
             temp_image_path = os.path.join(temp_image_dir, 'bot_icon.png')
-            if not os.path.exists(temp_image_dir):
-                os.makedirs(temp_image_dir)
+            os.makedirs(temp_image_dir, exist_ok=True)
             avatar_image.save(temp_image_path)
             primary_color_value = primary_color(temp_image_path)
         except Exception as e:
@@ -354,10 +353,10 @@ class Help(commands.Cog):
             await ctx.reply(embed=await error_custom_embed(self.bot, ctx, e, title="Primary Color"))
             return
 
-        if command_name is not None:
+        if command_name:
             command = self.bot.get_command(command_name)
-            if command is not None:
-                command_string = f"{command.qualified_name}  {command.signature.replace('[', '<').replace(']', '>').replace('=None', '')}"
+            if command:
+                command_string = f"{command.qualified_name} {command.signature.replace('[', '<').replace(']', '>').replace('=None', '')}"
                 usage = f"{ctx.prefix}{command_string}"
                 help_embed = discord.Embed(
                     title=command.qualified_name,
@@ -380,19 +379,44 @@ class Help(commands.Cog):
                 self._update_command_mapping()
 
                 # Create the image slideshow
-                image_generator = ImageGenerator(self.bot, ctx, avatar_url=bot_avatar_url, background_url='https://i.pinimg.com/originals/5a/35/1a/5a351aa5067e01fa2e00db8b4191c999.gif')
-                image_file =  image_generator.create_slideshow()
+                image_generator = ImageGenerator(
+                    bot=self.bot,
+                    ctx=ctx,
+                    avatar_url=bot_avatar_url,
+                    background_url='https://i.pinimg.com/originals/5a/35/1a/5a351aa5067e01fa2e00db8b4191c999.gif'
+                )
+                image_file_path = 'Data/Help/slideshow.gif'
+                image_generator.create_slideshow(output_path=image_file_path)
 
-                # Create the select view and help menu
-                select_view = Select(self.cog_commands, self.bot, primary_color_value)
-                help_menu = HelpMenu(self.bot, primary_color_value, select_view)
+                # Upload the GIF file to Discord
+                with open(image_file_path, 'rb') as file:
+                    help_embed = discord.Embed(
+                        title=f"{ctx.me.display_name} Help",
+                        color=primary_color_value,
+                        description=(
+                            f"Use `{ctx.prefix}help <command>` to get more information about a specific command.\n\n"
+                            f"-# For more help, visit the [support server](https://discord.gg/9QTMkjsteF)."
+                        )
+                    )
+                    
+                    select_view = Select(self.cog_commands, self.bot, primary_color_value)
+                    options = HelpMenu(self.bot, primary_color_value, select_view)
 
-                await ctx.send(file=discord.File(image_file, 'help_slideshow.gif'), view=help_menu)
-                await ctx.defer()
+                    help_embed.set_image(url='attachment://help_slideshow.gif')
+                    await ctx.send(embed=help_embed, file=discord.File(file, 'help_slideshow.gif'), view=options, reference=ctx.message, allowed_mentions=discord.AllowedMentions.none())
+
+                # Ensure file cleanup if necessary
+                if os.path.exists(image_file_path):
+                    os.remove(image_file_path)
+
             except Exception as e:
                 logger.error(f"Error sending HelpMenu: {e}")
                 await ctx.reply(embed=await error_custom_embed(self.bot, ctx, e, title="Help"))
                 return
+
+            
+            
+            
             
             
 def setup(bot):
