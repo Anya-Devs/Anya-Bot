@@ -12,8 +12,10 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
 
 from Imports.discord_imports import * 
-from Data.const import primary_color, error_custom_embed, Help_Select_Embed_Mapping, Help_Embed_Mapping, banner_url
+from Data.const import primary_color, error_custom_embed, Help_Select_Embed_Mapping, Help_Embed_Mapping, banner_url, get_banner_color
 from Imports.log_imports import logger
+
+
 
 class Select(discord.ui.Select):
     def __init__(self, cog_commands, bot, primary_color):
@@ -144,13 +146,14 @@ class HelpMenu(discord.ui.View):
 
 
 class ImageGenerator:
-    def __init__(self, bot, ctx, avatar_url, background_url, font_path='Data/bubbles.ttf'):
+    def __init__(self, bot, ctx, avatar_url, background_url, check_gif, font_path='Data/bubbles.ttf'):
         self.bot = bot
         self.avatar_url = avatar_url
         self.background_url = background_url
+        self.check_gif = check_gif
         self.font_path = font_path
         self.avatar = self.load_image_from_url(self.avatar_url)
-        self.background = self.load_image_from_url(self.background_url)
+        self.background = self._load_background()
         self.avatar_size = (100, 100)  # Adjust as needed
         self.command_mapping_file = 'Data/Help/command_map.json'
         self.ctx = ctx
@@ -160,6 +163,16 @@ class ImageGenerator:
         response = requests.get(url)
         img = Image.open(BytesIO(response.content))
         return img
+
+    def _load_background(self):
+        """Load background image or create a solid color background."""
+        if self.check_gif:
+            # If check_gif is True, background_url is an image URL
+            return self.load_image_from_url(self.background_url)
+        else:
+            # If check_gif is False, background_url is a color
+            color = self.background_url  # Assuming it's a hex color code like '#FFFFFF'
+            return Image.new('RGBA', (800, 600), color)  # Adjust size as needed
 
     def get_max_font_size(self, text, max_width, min_size=10, max_size=100):
         """Determine the maximum font size that fits the text within the specified width."""
@@ -265,9 +278,7 @@ class ImageGenerator:
         # Save the animated GIF
         frames[0].save(output_path, save_all=True, append_images=frames[1:], loop=0, duration=1000)  # 1000ms per frame
 
-        return output_path    
-    
-    
+        return output_path
     
     
     
@@ -336,7 +347,7 @@ class Help(commands.Cog):
             command_mapping = self._load_command_mapping()
 
             # Get the bot's avatar and primary color
-            bot_avatar_url = str(self.bot.user.avatar.with_size(128))
+            user_avatar_url = str(ctx.author.avatar.with_size(128))
             async with aiohttp.ClientSession() as session:
                 async with session.get(bot_avatar_url) as resp:
                     if resp.status != 200:
@@ -377,13 +388,26 @@ class Help(commands.Cog):
 
                 self.cog_commands = cog_commands
                 self._update_command_mapping()
+                
+                approved_banner_gif = await banner_url(self.bot, ctx.author)
+                
+                if get_banner_gif:
+                  background_url =  approved_banner_gif
+                  check_gif = True
+                else: 
+                   
+                   background_url = await get_banner_color(self.bot, ctx.author)
+                   check_gif = False
+
+
 
                 # Create the image slideshow
                 image_generator = ImageGenerator(
                     bot=self.bot,
                     ctx=ctx,
-                    avatar_url=bot_avatar_url,
-                    background_url='https://i.pinimg.com/originals/5a/35/1a/5a351aa5067e01fa2e00db8b4191c999.gif'
+                    avatar_url=user_avatar_url,
+                    background_url=background_url
+                    check_gif=check_gif
                 )
                 image_file_path = 'Data/Help/slideshow.gif'
                 image_generator.create_slideshow(output_path=image_file_path)
@@ -401,6 +425,9 @@ class Help(commands.Cog):
                     
                     select_view = Select(self.cog_commands, self.bot, primary_color_value)
                     options = HelpMenu(self.bot, primary_color_value, select_view)
+                    
+                    
+ 
 
                     help_embed.set_image(url='attachment://help_slideshow.gif')
                     await ctx.send(embed=help_embed, file=discord.File(file, 'help_slideshow.gif'), view=options, reference=ctx.message, allowed_mentions=discord.AllowedMentions.none())
