@@ -146,10 +146,10 @@ class HelpMenu(discord.ui.View):
 
 
 class ImageGenerator:
-    def __init__(self, bot, ctx, avatar_url, background_url, check_gif, font_path='Data/bubbles.ttf'):
+    def __init__(self, bot, ctx, avatar_url, background, check_gif, font_path='Data/bubbles.ttf'):
         self.bot = bot
         self.avatar_url = avatar_url
-        self.background_url = background_url
+        self.background = background
         self.check_gif = check_gif
         self.font_path = font_path
         self.avatar = self.load_image_from_url(self.avatar_url)
@@ -171,7 +171,7 @@ class ImageGenerator:
             return self.load_image_from_url(self.background_url)
         else:
             # If check_gif is False, background_url is a color
-            color = self.background_url  # Assuming it's a hex color code like '#FFFFFF'
+            color = self.background  # Assuming it's a hex color code like '#FFFFFF'
             return Image.new('RGBA', (800, 600), color)  # Adjust size as needed
 
     def get_max_font_size(self, text, max_width, min_size=10, max_size=100):
@@ -349,7 +349,7 @@ class Help(commands.Cog):
             # Get the bot's avatar and primary color
             user_avatar_url = str(ctx.author.avatar.with_size(128))
             async with aiohttp.ClientSession() as session:
-                async with session.get(bot_avatar_url) as resp:
+                async with session.get(user_avatar_url) as resp:
                     if resp.status != 200:
                         return await ctx.reply('Failed to get bot avatar.')
                     data = await resp.read()
@@ -389,14 +389,16 @@ class Help(commands.Cog):
                 self.cog_commands = cog_commands
                 self._update_command_mapping()
                 
-                approved_banner_gif = await banner_url(self.bot, ctx.author)
+                approved_banner = await banner_url(self.bot, ctx.author)
                 
-                if get_banner_gif:
-                  background_url =  approved_banner_gif
+                if approved_banner:
+                    
+                  background =  approved_banner
                   check_gif = True
+                    
                 else: 
-                   
-                   background_url = await get_banner_color(self.bot, ctx.author)
+                  
+                   background = await get_banner_color(self.bot, ctx.author)
                    check_gif = False
 
 
@@ -406,7 +408,7 @@ class Help(commands.Cog):
                     bot=self.bot,
                     ctx=ctx,
                     avatar_url=user_avatar_url,
-                    background_url=background_url
+                    background=background,
                     check_gif=check_gif
                 )
                 image_file_path = 'Data/Help/slideshow.gif'
