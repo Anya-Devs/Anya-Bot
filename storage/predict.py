@@ -2,60 +2,90 @@ import concurrent.futures
 import threading
 import json
 import time
+import sys
 import cv2
+import gc
 import os
 import io
 import pickle
 import random
 import aiohttp
 import requests
+import sqlite3
 import numpy as np
 from PIL import Image, ImageChops
-from discord.ext import commands
+import psutil
+import multiprocessing
+from functools import lru_cache
+
 import logging
 from urllib.request import urlopen, urlretrieve
+
+from concurrent import *
+
+from concurrent.futures import *
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
 
 from sklearn.cluster import KMeans
 from scipy.spatial import distance
 from skimage.feature import match_template
 from skimage.metrics import structural_similarity as ssim
+from sklearn.neighbors import KDTree
+
+from collections import OrderedDict
+
+
+
+from typing import List, Tuple
+
 
 from Imports.discord_imports import *
 from Imports.log_imports import logger
 from Data.const import error_custom_embed, sdxl, primary_color
 
+import hashlib
+
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
 
 
-
-
+import os
+import pickle
+import cv2
+import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 
 class PokemonPredictor:
-    def __init__(self, predict_folder="predict", dataset_folder="Data/pokemon/pokemon_images"):
-        # Initialize ORB with a reasonable number of features
+    def __init__(self, predict_folder="predict", dataset_folder="Data/pokemon/pokemon_images", json_file="pokemon_data.json"):
         self.orb = cv2.ORB_create(nfeatures=170)
 
-        # Configure FLANN with parameters for faster matching
         index_params = dict(algorithm=6, table_number=6, key_size=10, multi_probe_level=1)
         search_params = dict(checks=1)
         self.flann = cv2.FlannBasedMatcher(index_params, search_params)
 
-        # Thread pool executor for parallel processing
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
         self.cache = {}
+        self.json_file = json_file
+        self.json_cache = self._load_json_data()
         self.load_dataset(dataset_folder)
+
+    def _load_json_data(self):
+        if os.path.exists(self.json_file):
+            with open(self.json_file, 'r') as file:
+                return json.load(file)
+        return {}
 
     def load_dataset(self, dataset_folder, batch_size=10):
         self._clear_console()
         print("Loading Images...")
         start_time = time.time()
 
-        # Faster directory traversal using os.scandir
         image_paths = [entry.path for entry in os.scandir(dataset_folder) if entry.is_file()]
 
-        # Process images in batches to save memory
         total_images = len(image_paths)
         for i in range(0, total_images, batch_size):
             batch_paths = image_paths[i:i+batch_size]
@@ -63,15 +93,13 @@ class PokemonPredictor:
 
             for filename, result in zip(batch_paths, results):
                 if result:
-                    # Save original keypoints and descriptors in cache
                     self.cache[os.path.basename(filename)] = result
 
-                    # Process flipped image and save it to the cache
-                    flipped_img = cv2.flip(cv2.imread(filename), 1)  # Flip horizontally
+                    flipped_img = cv2.flip(cv2.imread(filename), 1)
                     flipped_gray_img = cv2.cvtColor(flipped_img, cv2.COLOR_BGR2GRAY)
                     flipped_keypoints, flipped_descriptors = self.orb.detectAndCompute(flipped_gray_img, None)
                     flipped_filename = f"{os.path.basename(filename)}_flipped"
-                    self.cache[flipped_filename] = (flipped_keypoints, flipped_descriptors)
+                    self.cache[flipped_filename] = (self._keypoints_to_data(flipped_keypoints), flipped_descriptors.tolist() if flipped_descriptors is not None else None)
 
             print(f"Processed batch {i//batch_size + 1} of {total_images//batch_size + 1}")
 
@@ -85,79 +113,100 @@ class PokemonPredictor:
             if img is not None:
                 gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
-                return keypoints, descriptors
+                kp_data = self._keypoints_to_data(keypoints)
+                return kp_data, descriptors.tolist() if descriptors is not None else None
         except Exception as e:
             print(f"Error processing image {image_path}: {e}")
         return None
 
+    def _keypoints_to_data(self, keypoints):
+        return [(kp.pt[0], kp.pt[1], kp.size, kp.angle) for kp in keypoints]
+
+    def _data_to_keypoints(self, kp_data):
+        return [cv2.KeyPoint(x, y, size, angle) for (x, y, size, angle) in kp_data]
+
     def _match_image(self, kpB, desB, cache_item):
-        filename, (kpA, desA) = cache_item
-        if desA is not None and desB is not None:
-            # ORB feature matching
-            matches = self.flann.knnMatch(desA, desB, k=2)
-            good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.75 * m[1].distance]
+        filename, (kpA_data, desA) = cache_item
+        kpA = self._data_to_keypoints(kpA_data)
 
-            if len(good_matches) > 4:
-                # Extract location of good matches
-                src_pts = np.float32([kpA[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-                dst_pts = np.float32([kpB[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        desA = np.array(desA, dtype=np.uint8) if desA is not None else None
+        desB = np.array(desB, dtype=np.uint8) if desB is not None else None
 
-                # Calculate homography
-                M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+        if desA is None or desB is None:
+            return None
 
-                if M is not None:
-                    # Assuming the bounding box size for validation
-                    h, w = 50, 50  # Example dimensions, adjust based on your dataset
-                    pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
-                    dst = cv2.perspectiveTransform(pts, M)
+        matches = self.flann.knnMatch(desA, desB, k=2)
+        good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.75 * m[1].distance]
 
-                    if self._is_valid_match(dst):
-                        accuracy = len(good_matches) / len(desA) * 100
-                        return filename, len(good_matches), accuracy
+        if len(good_matches) > 4:
+            src_pts = np.float32([kpA[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+            dst_pts = np.float32([kpB[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+
+            M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+
+            if M is not None:
+                h, w = 50, 50
+                pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
+                dst = cv2.perspectiveTransform(pts, M)
+
+                if self._is_valid_match(dst):
+                    accuracy = len(good_matches) / len(desA) * 100
+                    return filename, len(good_matches), accuracy
         return None
 
     def _is_valid_match(self, dst):
-        # Check if the found polygon is convex and large enough to be considered a valid match
         return cv2.isContourConvex(dst) and cv2.contourArea(dst) > 100
 
+    def _generate_image_id(self, img):
+        """
+        Generate a unique ID for the image based on its content.
+        """
+        img_hash = hashlib.md5(img.data.tobytes()).hexdigest()
+        return img_hash
+
     def predict_pokemon(self, img):
-     start_time = time.time()
+        start_time = time.time()
 
-     # Convert to grayscale only once
-     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-     kpB, desB = self.orb.detectAndCompute(gray_img, None)
+        img_id = self._generate_image_id(img)
 
-     # Use a list comprehension to collect results
-     futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
-     results = [future.result() for future in concurrent.futures.as_completed(futures)]
+        # Check if the result is in the JSON cache
+        if img_id in self.json_cache:
+            predicted_pokemon = self.json_cache[img_id]
+            return f"{predicted_pokemon.title()}: Already Predicted", time.time() - start_time
 
-     # Find the best match
-     best_match = max(results, key=lambda x: x[1] if x else 0, default=None)
+        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        kpB, desB = self.orb.detectAndCompute(gray_img, None)
 
-     elapsed_time = round(time.time() - start_time, 2)
-     if best_match:
-        # Process the result to extract predicted Pokémon and accuracy
-        predicted_pokemon = best_match[0].split("_flipped")[0].replace(".png", "")
-        accuracy = round(best_match[2], 2)
-        return f"{predicted_pokemon.title()}:\t{accuracy}%\t\t (`{elapsed_time}'s`)", elapsed_time
+        futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
+        results = [future.result() for future in concurrent.futures.as_completed(futures)]
 
-     return "No Pokémon detected", elapsed_time
+        best_match = max(results, key=lambda x: x[1] if x else 0, default=None)
+        elapsed_time = round(time.time() - start_time, 2)
+
+        if best_match:
+            predicted_pokemon = best_match[0].split("_flipped")[0].replace(".png", "")
+            accuracy = round(best_match[2], 2)
+
+            # Update JSON file with new prediction
+            self.json_cache[img_id] = predicted_pokemon
+            with open(self.json_file, 'w') as file:
+                json.dump(self.json_cache, file, indent=4)
+
+            return f"{predicted_pokemon.title()}:\t{accuracy}%\t\t (`{elapsed_time}'s`)", elapsed_time
+
+        return "No Pokémon detected", elapsed_time
 
     def _clear_console(self):
         os.system("cls" if os.name == "nt" else "clear")
-
-
-
-
-
-
-
-
-
+        
+        
+        
+        
+        
 class Pokemon(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.author_id = 716390085896962058
+        self.author_id = 1234247716243112100
         self.predictor = PokemonPredictor()
         self.primary_color = primary_color
         self.error_custom_embed = error_custom_embed
@@ -283,9 +332,9 @@ class Pokemon(commands.Cog):
                         await ctx.reply(f"Failed to download image. Status code: {response.status}", mention_author=False)
         else:
             await ctx.send("No image found to predict.")
-
-    @commands.Cog.listener()
-    async def on_message(self, message):
+    """
+     @commands.Cog.listener()
+     async def on_message(self, message):
         if message.author.id == self.author_id and message.embeds:
             embed = message.embeds[0]
             if embed.description and 'Guess the pokémon' in embed.description:
@@ -302,6 +351,7 @@ class Pokemon(commands.Cog):
                             await message.channel.send(prediction, reference=message)
                         else:
                             await message.channel.send(f"Failed to download image. Status code: {response.status}", reference=message)
+    """
     
     @commands.command(help="Displays Pokemon dex information.", aliases=['pokdex', 'dex','d','p'])
     async def pokemon(self, ctx, *, args=None, form=None):   
