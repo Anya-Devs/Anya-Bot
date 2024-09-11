@@ -26,13 +26,7 @@ import hnswlib
 import ijson
 import imagehash
 from PIL import Image, ImageChops
-from joblib import Parallel, delayed
-from skimage.feature import match_template
-from sklearn.neighbors import NearestNeighbors
-from skimage.metrics import structural_similarity as ssim
-from sklearn.cluster import KMeans
-from sklearn.neighbors import KDTree
-from scipy.spatial import distance
+
 
 # Concurrent and multiprocessing imports
 from concurrent import *
@@ -46,12 +40,6 @@ from discord.ext import tasks
 from Imports.log_imports import logger
 from Data.const import error_custom_embed, sdxl, primary_color
 
-# Typing imports
-from typing import List, Tuple
-
-# Queue imports
-import queue
-from queue import PriorityQueue
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
@@ -59,206 +47,119 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 
 class PokemonPredictor:
-    def __init__(self, predict_folder="predict", dataset_folder="Data/pokemon/pokemon_images", best_match="Data/pokemon/best_match/", pickle_file="Data/pokemon/features.pkl"):
+    def __init__(self, predict_folder="predict", dataset_folder="Data/pokemon/pokemon_images"):
+        # Initialize ORB with a reasonable number of features
         self.orb = cv2.ORB_create(nfeatures=170)
-        
+
+        # Configure FLANN with parameters for faster matching
         index_params = dict(algorithm=6, table_number=6, key_size=10, multi_probe_level=1)
         search_params = dict(checks=1)
         self.flann = cv2.FlannBasedMatcher(index_params, search_params)
-        
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+        # Thread pool executor for parallel processing
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=12)
+
         self.cache = {}
-        self.best_match = best_match
-        self.pickle_file = pickle_file
-        
-        # Ensure the best_match directory exists
-        if not os.path.exists(self.best_match):
-            os.makedirs(self.best_match)
-        
-        # Load dataset and any existing best match images
         self.load_dataset(dataset_folder)
-        self.load_best_match_images()
-        self._improve_algorithm()
-    
+
     def load_dataset(self, dataset_folder, batch_size=10):
         self._clear_console()
         print("Loading Images...")
         start_time = time.time()
-        
+
+        # Faster directory traversal using os.scandir
         image_paths = [entry.path for entry in os.scandir(dataset_folder) if entry.is_file()]
-        
+
+        # Process images in batches to save memory
         total_images = len(image_paths)
         for i in range(0, total_images, batch_size):
             batch_paths = image_paths[i:i+batch_size]
             results = list(self.executor.map(self._process_image, batch_paths))
-            
+
             for filename, result in zip(batch_paths, results):
                 if result:
+                    # Save original keypoints and descriptors in cache
                     self.cache[os.path.basename(filename)] = result
-                    
-                    flipped_img = cv2.flip(cv2.imread(filename), 1)
+
+                    # Process flipped image and save it to the cache
+                    flipped_img = cv2.flip(cv2.imread(filename), 1)  # Flip horizontally
                     flipped_gray_img = cv2.cvtColor(flipped_img, cv2.COLOR_BGR2GRAY)
                     flipped_keypoints, flipped_descriptors = self.orb.detectAndCompute(flipped_gray_img, None)
                     flipped_filename = f"{os.path.basename(filename)}_flipped"
-                    self.cache[flipped_filename] = (self._keypoints_to_data(flipped_keypoints), flipped_descriptors.tolist() if flipped_descriptors is not None else None)
+                    self.cache[flipped_filename] = (flipped_keypoints, flipped_descriptors)
             
             print(f"Processed batch {i//batch_size + 1} of {total_images//batch_size + 1}")
-        
+
         self._clear_console()
         elapsed_time = round(time.time() - start_time, 2)
         print(f"Successfully loaded all images.\nTime Taken: {elapsed_time} sec")
-    
-    def load_best_match_images(self):
-        """
-        Load images from the best_match folder into the cache.
-        """
-        if not os.path.exists(self.best_match):
-            os.makedirs(self.best_match)
-        
-        print("Loading Best Match Images...")
-        for entry in os.scandir(self.best_match):
-            if entry.is_file() and entry.name.endswith('.png'):
-                image_path = entry.path
-                img = cv2.imread(image_path)
-                if img is not None:
-                    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                    keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
-                    kp_data = self._keypoints_to_data(keypoints)
-                    self.cache[entry.name] = (kp_data, descriptors.tolist() if descriptors is not None else None)
-    
+
     def _process_image(self, image_path):
         try:
             img = cv2.imread(image_path)
             if img is not None:
                 gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
-                kp_data = self._keypoints_to_data(keypoints)
-                return kp_data, descriptors.tolist() if descriptors is not None else None
+                return keypoints, descriptors
         except Exception as e:
             print(f"Error processing image {image_path}: {e}")
         return None
-    
-    def _keypoints_to_data(self, keypoints):
-        return [(kp.pt[0], kp.pt[1], kp.size, kp.angle) for kp in keypoints]
-    
-    def _data_to_keypoints(self, kp_data):
-        return [cv2.KeyPoint(x, y, size, angle) for (x, y, size, angle) in kp_data]
-    
-    def _match_image(self, kpB, desB, cache_item, img):
-        filename, (kpA_data, desA) = cache_item
-        kpA = self._data_to_keypoints(kpA_data)
-        
-        desA = np.array(desA, dtype=np.uint8) if desA is not None else None
-        desB = np.array(desB, dtype=np.uint8) if desB is not None else None
-        
-        if desA is None or desB is None:
-            return None
-        
-        matches = self.flann.knnMatch(desA, desB, k=2)
-        good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.75 * m[1].distance]
-        
-        if len(good_matches) > 4:
-            src_pts = np.float32([kpA[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-            dst_pts = np.float32([kpB[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-            
-            M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-            
-            if M is not None:
-                h, w = img.shape[:2]
-                pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
-                dst = cv2.perspectiveTransform(pts, M)
-                
-                if self._is_valid_match(dst):
-                    accuracy = len(good_matches) / len(desA) * 100
-                    return filename, len(good_matches), accuracy
+
+    def _match_image(self, kpB, desB, cache_item):
+        filename, (kpA, desA) = cache_item
+        if desA is not None and desB is not None:
+            # ORB feature matching
+            matches = self.flann.knnMatch(desA, desB, k=2)
+            good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.75 * m[1].distance]
+
+            if len(good_matches) > 4:
+                # Extract location of good matches
+                src_pts = np.float32([kpA[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+                dst_pts = np.float32([kpB[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+
+                # Calculate homography
+                M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+
+                if M is not None:
+                    # Assuming the bounding box size for validation
+                    h, w = 50, 50  # Example dimensions, adjust based on your dataset
+                    pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
+                    dst = cv2.perspectiveTransform(pts, M)
+
+                    if self._is_valid_match(dst):
+                        accuracy = len(good_matches) / len(desA) * 100
+                        return filename, len(good_matches), accuracy
         return None
-    
+
     def _is_valid_match(self, dst):
+        # Check if the found polygon is convex and large enough to be considered a valid match
         return cv2.isContourConvex(dst) and cv2.contourArea(dst) > 100
-    
-    def _save_best_match_image(self, image_path):
-        img = cv2.imread(image_path)
-        if img is not None:
-            filename = os.path.basename(image_path)
-            new_path = os.path.join(self.best_match, filename)
-            try:
-                cv2.imwrite(new_path, img)
-                print(f"Saved best match image to {new_path}")
-            except Exception as e:
-                print(f"Failed to save image to {new_path}: {e}")
-    
+
     def predict_pokemon(self, img):
-        start_time = time.time()
-        
-        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        kpB, desB = self.orb.detectAndCompute(gray_img, None)
-        
-        # Check if image already exists in best match folder
-        best_match_files = os.listdir(self.best_match) if os.path.exists(self.best_match) else []
-        best_match_filenames = [os.path.splitext(f)[0] for f in best_match_files]
-        
-        best_match = None
-        for filename in self.cache:
-            base_filename = os.path.splitext(filename)[0]
-            if base_filename in best_match_filenames:
-                # Compare images to confirm
-                match_result = self._match_image(kpB, desB, (base_filename + '.png', self.cache[base_filename + '.png']), img)
-                if match_result and match_result[2] < 90:
-                    best_match = (base_filename, None, 100)
-                    break
-        
-        if not best_match:
-            # No exact match found, proceed to scan pokemon_images
-            futures = [self.executor.submit(self._match_image, kpB, desB, item, img) for item in self.cache.items()]
-            results = [future.result() for future in concurrent.futures.as_completed(futures)]
-            
-            best_match = max(results, key=lambda x: x[2] if x else 0, default=None)
-            elapsed_time = round(time.time() - start_time, 2)
-            
-            if best_match:
-                if best_match[2] >= 25 and best_match[2] < 80:
-                    # Save if match is between 25% and 80%
-                    predicted_pokemon = best_match[0].split("_flipped")[0].replace(".png", "")
-                    self._save_best_match_image(os.path.join("Data/pokemon/pokemon_images", best_match[0]))
-                    return f"{predicted_pokemon.title()}:\t{round(best_match[2], 2)}%\t\t ({elapsed_time}s)", elapsed_time
-                
-                # Call _improve_algorithm to try to improve the accuracy
-                self._improve_algorithm()
-                
-                if best_match[2] < 25:
-                    predicted_pokemon = best_match[0].split("_flipped")[0].replace(".png", "")
-                    return f"{predicted_pokemon.title()}:\t{round(best_match[2], 2)}%\t\t ({elapsed_time}s)", elapsed_time
-            
-            return "No match found", elapsed_time
-        else:
-            predicted_pokemon = best_match[0]
-            elapsed_time = round(time.time() - start_time, 2)
-            return f"{predicted_pokemon.title()}:\t{best_match[2]}\t\t ({elapsed_time}s)", elapsed_time
-    
-    def _improve_algorithm(self):
-        """
-        Update the cache with additional features from pickle file.
-        """
-        try:
-            with open(self.pickle_file, 'rb') as f:
-                features = pickle.load(f)
-                for filename, (kp_data, des) in features.items():
-                    if filename not in self.cache:
-                        self.cache[filename] = (kp_data, des)
-                        print(f"Added improved features from pickle file: {filename}")
-        except FileNotFoundError:
-            print(f"Pickle file {self.pickle_file} not found.")
-        except Exception as e:
-            print(f"Error while loading pickle file: {e}")
-    
+     start_time = time.time()
+
+     # Convert to grayscale only once
+     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+     kpB, desB = self.orb.detectAndCompute(gray_img, None)
+
+     # Use a list comprehension to collect results
+     futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
+     results = [future.result() for future in concurrent.futures.as_completed(futures)]
+
+     # Find the best match
+     best_match = max(results, key=lambda x: x[1] if x else 0, default=None)
+
+     elapsed_time = round(time.time() - start_time, 2)
+     if best_match:
+        # Process the result to extract predicted Pokémon and accuracy
+        predicted_pokemon = best_match[0].split("_flipped")[0].replace(".png", "")
+        accuracy = round(best_match[2], 2)
+        return f"{predicted_pokemon.title()}:\t{accuracy}%\nPong:\t{elapsed_time}'s", elapsed_time
+
+     return "No Pokémon detected", elapsed_time
+
     def _clear_console(self):
-        """
-        Clear the console screen.
-        """
-        os.system('cls' if os.name == 'nt' else 'clear')
-
-
-
+        os.system("cls" if os.name == "nt" else "clear")
 
 
 
