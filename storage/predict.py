@@ -44,22 +44,21 @@ from Data.const import error_custom_embed, sdxl, primary_color
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
 
-
-
 class PokemonPredictor:
-    def __init__(self, predict_folder="predict", dataset_folder="Data/pokemon/pokemon_images"):
+    def __init__(self, dataset_folder="Data/pokemon/pokemon_images"):
         # Initialize ORB with a reasonable number of features
-        self.orb = cv2.ORB_create(nfeatures=170)
+        self.orb = cv2.ORB_create(nfeatures=175)
 
         # Configure FLANN with parameters for faster matching
-        index_params = dict(algorithm=6, table_number=6, key_size=10, multi_probe_level=1)
+        index_params = dict(algorithm=6, table_number=6, key_size=9, multi_probe_level=1)
         search_params = dict(checks=1)
         self.flann = cv2.FlannBasedMatcher(index_params, search_params)
 
         # Thread pool executor for parallel processing
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=12)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=25)
 
         self.cache = {}
+        self.hash_cache = {}
         self.load_dataset(dataset_folder)
 
     def load_dataset(self, dataset_folder, batch_size=10):
@@ -74,7 +73,7 @@ class PokemonPredictor:
         total_images = len(image_paths)
         for i in range(0, total_images, batch_size):
             batch_paths = image_paths[i:i+batch_size]
-            results = list(self.executor.map(self._process_image, batch_paths))
+            results = [self._process_image(path) for path in batch_paths]
 
             for filename, result in zip(batch_paths, results):
                 if result:
@@ -87,6 +86,13 @@ class PokemonPredictor:
                     flipped_keypoints, flipped_descriptors = self.orb.detectAndCompute(flipped_gray_img, None)
                     flipped_filename = f"{os.path.basename(filename)}_flipped"
                     self.cache[flipped_filename] = (flipped_keypoints, flipped_descriptors)
+
+                    # Compute and cache the image hash
+                    image = cv2.imread(filename)
+                    hash_value = self.dhash(image)
+                    self.hash_cache[os.path.basename(filename)] = hash_value
+                    flipped_hash_value = self.dhash(flipped_img)
+                    self.hash_cache[flipped_filename] = flipped_hash_value
             
             print(f"Processed batch {i//batch_size + 1} of {total_images//batch_size + 1}")
 
@@ -110,7 +116,7 @@ class PokemonPredictor:
         if desA is not None and desB is not None:
             # ORB feature matching
             matches = self.flann.knnMatch(desA, desB, k=2)
-            good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.75 * m[1].distance]
+            good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.77 * m[1].distance]
 
             if len(good_matches) > 4:
                 # Extract location of good matches
@@ -136,30 +142,44 @@ class PokemonPredictor:
         return cv2.isContourConvex(dst) and cv2.contourArea(dst) > 100
 
     def predict_pokemon(self, img):
-     start_time = time.time()
+        start_time = time.time()
 
-     # Convert to grayscale only once
-     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-     kpB, desB = self.orb.detectAndCompute(gray_img, None)
+        # Convert to grayscale only once
+        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        kpB, desB = self.orb.detectAndCompute(gray_img, None)
 
-     # Use a list comprehension to collect results
-     futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
-     results = [future.result() for future in concurrent.futures.as_completed(futures)]
+        # Compute hash of the input image
+        input_hash = self.dhash(img)
 
-     # Find the best match
-     best_match = max(results, key=lambda x: x[1] if x else 0, default=None)
+        # Use a list comprehension to collect results
+        futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
+        results = [future.result() for future in concurrent.futures.as_completed(futures)]
 
-     elapsed_time = round(time.time() - start_time, 2)
-     if best_match:
-        # Process the result to extract predicted Pokémon and accuracy
-        predicted_pokemon = best_match[0].split("_flipped")[0].replace(".png", "")
-        accuracy = round(best_match[2], 2)
-        return f"{predicted_pokemon.title()}:\t{accuracy}%\nPong:\t{elapsed_time}'s", elapsed_time
+        # Find the best match
+        best_match = max(results, key=lambda x: x[2] if x else 0, default=None)
 
-     return "No Pokémon detected", elapsed_time
+        elapsed_time = round(time.time() - start_time, 2)
+
+        if best_match:
+            # Process the result to extract predicted Pokémon and accuracy
+            predicted_pokemon = best_match[0].split("_flipped")[0].replace(".png", "")
+            accuracy = round(best_match[2], 2)
+            return f"{predicted_pokemon.title()} ({accuracy}%)\t\t\t{elapsed_time}'s", elapsed_time, predicted_pokemon            			
+        return "No Pokémon detected", elapsed_time, None
 
     def _clear_console(self):
         os.system("cls" if os.name == "nt" else "clear")
+
+    def dhash(self, image, hashSize=8):
+        # Convert the image to grayscale
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        # Resize the input image, adding a single column (width) so we can compute the horizontal gradient
+        resized = cv2.resize(gray, (hashSize + 1, hashSize))
+        # Compute the (relative) horizontal gradient between adjacent column pixels
+        diff = resized[:, 1:] > resized[:, :-1]
+        # Convert the difference image to a hash
+        return sum([2 ** i for (i, v) in enumerate(diff.flatten()) if v])
+
 
 
 
@@ -290,7 +310,7 @@ class Pokemon(commands.Cog):
                         img = np.array(img.convert('RGB'))  # Convert to numpy array
 
                         # Use the predictor to predict the Pokémon
-                        prediction, time_taken = self.predictor.predict_pokemon(img)
+                        prediction, time_taken, pokemon_name = self.predictor.predict_pokemon(img)
                         await ctx.reply(prediction, mention_author=False)
                     else:
                         await ctx.reply(f"Failed to download image. Status code: {response.status}", mention_author=False)
