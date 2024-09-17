@@ -47,117 +47,115 @@ from Data.const import error_custom_embed, sdxl, primary_color
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
 
+import cv2
+import numpy as np
+import os
+import json
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 class PokemonPredictor:
-    def __init__(self, dataset_folder="Data/pokemon/pokemon_images"):
+    def __init__(self, dataset_folder="Data/pokemon/pokemon_images", best_match_file="Data/pokemon/best_match.json"):
         self.orb = cv2.ORB_create(nfeatures=175)
-        index_params = dict(algorithm=6, table_number=6, key_size=9, multi_probe_level=1)
-        search_params = dict(checks=1)
-        self.flann = cv2.FlannBasedMatcher(index_params, search_params)
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=25)
+        self.flann = cv2.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=9, multi_probe_level=1),
+                                           dict(checks=1))
+        self.executor = ThreadPoolExecutor(max_workers=25)
         self.cache = {}
-        self.hash_cache = {}
+        self.best_match_file = best_match_file
+        self.best_matches = {}
         self.load_dataset(dataset_folder)
+        self.load_best_matches()
 
-    def load_dataset(self, dataset_folder, batch_size=10):
-        self._clear_console()
+    def load_dataset(self, dataset_folder):
         print("Loading Images...")
         start_time = time.time()
-        image_paths = [entry.path for entry in os.scandir(dataset_folder) if entry.is_file()]
-        total_images = len(image_paths)
-        for i in range(0, total_images, batch_size):
-            batch_paths = image_paths[i:i+batch_size]
-            results = [self._process_image(path) for path in batch_paths]
-
-            for filename, result in zip(batch_paths, results):
-                if result:
-                    self.cache[os.path.basename(filename)] = result
-                    flipped_img = cv2.flip(cv2.imread(filename), 1)
-                    flipped_gray_img = cv2.cvtColor(flipped_img, cv2.COLOR_BGR2GRAY)
-                    flipped_keypoints, flipped_descriptors = self.orb.detectAndCompute(flipped_gray_img, None)
-                    flipped_filename = f"{os.path.basename(filename)}_flipped"
-                    self.cache[flipped_filename] = (flipped_keypoints, flipped_descriptors)
-                    image = cv2.imread(filename)
-                    hash_value = self.dhash(image)
-                    self.hash_cache[os.path.basename(filename)] = hash_value
-                    flipped_hash_value = self.dhash(flipped_img)
-                    self.hash_cache[flipped_filename] = flipped_hash_value
-            
-            print(f"Processed batch {i//batch_size + 1} of {total_images//batch_size + 1}")
-
-        self._clear_console()
-        elapsed_time = round(time.time() - start_time, 2)
-        print(f"Successfully loaded all images.\nTime Taken: {elapsed_time} sec")
-
-    def _process_image(self, image_path):
-        try:
-            img = cv2.imread(image_path)
-            if img is not None:
-                gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
-                return keypoints, descriptors
-        except Exception as e:
-            print(f"Error processing image {image_path}: {e}")
-        return None
+        for filename in os.listdir(dataset_folder):
+            path = os.path.join(dataset_folder, filename)
+            if os.path.isfile(path):
+                img = cv2.imread(path)
+                if img is not None:
+                    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
+                    if descriptors is not None:
+                        self.cache[filename] = (keypoints, descriptors)
+                        # Process flipped images
+                        flipped_img = cv2.flip(img, 1)
+                        gray_flipped = cv2.cvtColor(flipped_img, cv2.COLOR_BGR2GRAY)
+                        keypoints_flipped, descriptors_flipped = self.orb.detectAndCompute(gray_flipped, None)
+                        if descriptors_flipped is not None:
+                            flipped_filename = filename.replace(".png", "_flipped.png")
+                            self.cache[flipped_filename] = (keypoints_flipped, descriptors_flipped)
+        
+        print(f"Images loaded in {time.time() - start_time:.2f} seconds")
 
     def _match_image(self, kpB, desB, cache_item):
         filename, (kpA, desA) = cache_item
         if desA is not None and desB is not None:
             matches = self.flann.knnMatch(desA, desB, k=2)
             good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.77 * m[1].distance]
-
             if len(good_matches) > 4:
-                src_pts = np.float32([kpA[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-                dst_pts = np.float32([kpB[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-                M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-
-                if M is not None:
-                    h, w = 50, 50  # Example dimensions, adjust based on your dataset
-                    pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
-                    dst = cv2.perspectiveTransform(pts, M)
-
-                    if self._is_valid_match(dst):
-                        accuracy = len(good_matches) / len(desA) * 100
-                        return filename, len(good_matches), accuracy
+                accuracy = len(good_matches) / len(desA) * 100
+                return filename, accuracy
         return None
 
-    def _is_valid_match(self, dst):
-        return cv2.isContourConvex(dst) and cv2.contourArea(dst) > 100
-
     def _find_image_inside_image(self, img, target_img):
-        if target_img is None:
-            return None
-
         target_h, target_w = target_img.shape[:2]
         img_h, img_w = img.shape[:2]
 
-        for y in range(0, img_h - target_h + 1, target_h):
-            for x in range(0, img_w - target_w + 1, target_w):
+        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray_target = cv2.cvtColor(target_img, cv2.COLOR_BGR2GRAY)
+        kp_target, des_target = self.orb.detectAndCompute(gray_target, None)
+        
+        if des_target is None:
+            return None
+        
+        for y in range(0, img_h - target_h + 1):
+            for x in range(0, img_w - target_w + 1):
                 grid_section = img[y:y+target_h, x:x+target_w]
-                if self._match_image_with_grid_section(grid_section, target_img):
-                    return (x, y, x+target_w, y+target_h)
+                kp_grid, des_grid = self.orb.detectAndCompute(cv2.cvtColor(grid_section, cv2.COLOR_BGR2GRAY), None)
+                
+                if des_grid is not None:
+                    matches = self.flann.knnMatch(des_target, des_grid, k=2)
+                    good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.77 * m[1].distance]
+                    if len(good_matches) > 4:
+                        return (x, y, x + target_w, y + target_h)
+        
         return None
 
-    def _match_image_with_grid_section(self, grid_section, target_img):
-        kp_grid, des_grid = self.orb.detectAndCompute(cv2.cvtColor(grid_section, cv2.COLOR_BGR2GRAY), None)
-        kp_target, des_target = self.orb.detectAndCompute(cv2.cvtColor(target_img, cv2.COLOR_BGR2GRAY), None)
+    def load_best_matches(self):
+        if os.path.exists(self.best_match_file):
+            with open(self.best_match_file, 'r') as file:
+                self.best_matches = json.load(file)
+        else:
+            self.best_matches = {}
 
-        if des_target is not None and des_grid is not None:
-            matches = self.flann.knnMatch(des_target, des_grid, k=2)
-            good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.77 * m[1].distance]
-            return len(good_matches) > 4
+    def save_best_matches(self):
+        with open(self.best_match_file, 'w') as file:
+            json.dump(self.best_matches, file)
 
-        return False
+    def scan_json_first(self, filename):
+        # Check if the filename or its flipped version is in the best match JSON
+        return self.best_matches.get(filename, None) or self.best_matches.get(filename.replace(".png", "_flipped.png"), None)
 
     def predict_pokemon(self, img):
+        best_match = None
         start_time = time.time()
         gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         kpB, desB = self.orb.detectAndCompute(gray_img, None)
 
-        futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
-        results = [future.result() for future in concurrent.futures.as_completed(futures)]
+   
+        # If no match found in JSON, perform a new scan
+        if best_match is None:
+            futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
+            results = [future.result() for future in futures]
+            best_match = max(results, key=lambda x: x[1] if x else 0, default=None)
 
-        best_match = max(results, key=lambda x: x[2] if x else 0, default=None)
+            # Update JSON with new best match if found
+            if best_match:
+                self.best_matches[best_match[0]] = best_match[1]
+                self.save_best_matches()
+
+        elapsed_time = round(time.time() - start_time, 2)
 
         if best_match:
             pokemon_img_path = os.path.join("Data/pokemon/pokemon_images", best_match[0])
@@ -172,26 +170,13 @@ class PokemonPredictor:
             else:
                 print(f"Warning: Could not load image for {pokemon_img_path}")
 
-        elapsed_time = round(time.time() - start_time, 2)
-
-        if best_match:
             predicted_pokemon = best_match[0].split("_flipped")[0].replace(".png", "")
-            accuracy = round(best_match[2], 2)
-            return f"{predicted_pokemon.title()}: {accuracy}%\t\t\t{elapsed_time}'s", elapsed_time, predicted_pokemon
+            accuracy = round(best_match[1], 2)
+            return f"{predicted_pokemon.title()}: {accuracy}%\t\t\t{elapsed_time}s", elapsed_time, predicted_pokemon
+        
         return "No Pokémon detected", elapsed_time, None
 
-    def _clear_console(self):
-        os.system("cls" if os.name == "nt" else "clear")
-
-    def dhash(self, image, hashSize=8):
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        resized = cv2.resize(gray, (hashSize + 1, hashSize))
-        diff = resized[:, 1:] > resized[:, :-1]
-        return sum([2 ** i for (i, v) in enumerate(diff.flatten()) if v])
-
-
-
-
+            
         
 class Pokemon(commands.Cog):
     def __init__(self, bot):
