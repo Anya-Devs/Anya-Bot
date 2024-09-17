@@ -1,5 +1,6 @@
 # Standard library imports
 import json
+import csv
 import time
 import os
 import sys
@@ -529,9 +530,20 @@ class Pokemon(commands.Cog):
         sentences = text.split('.')
         capitalized_sentences = '. '.join(sentence.strip().capitalize() for sentence in sentences if sentence.strip())
         return capitalized_sentences
+    
+     def get_pokemon_description(pokemon_id, file_path='Data/pokemon/pokemon_description.csv'):
+      with open(file_path, mode='r', encoding='utf-8') as csv_file:
+        reader = csv.DictReader(csv_file)
+        
+        for row in reader:
+            if row['id'] == str(pokemon_id):
+                return row['description']
+       
+      return "Pokémon ID not found"
+    
 
-     pokemon_description = await get_pokemon_info(data_species,name) or await find_pokemon_description(pokemon_name) or " "
-   
+     pokemon_description = get_pokemon_description(id)  # await get_pokemon_info(data_species,name) or await find_pokemon_description(pokemon_name) or " "
+     
      species_url = data['species']['url']
      species_data = requests.get(species_url).json()
      species_name = species_data['name']
@@ -899,14 +911,14 @@ class Pokemon(commands.Cog):
    
      if pokemon_description != " ":
         
-      embed = discord.Embed(title=f" #{id} — {species_name.title()}" if type != "shiny" else f" #{id} — ✨ {species_name.title()}" , description=f'\n{pokemon_description}.\n',color=color)  # Blue color
+      embed = discord.Embed(title=f" #{id} — {species_name.title()}" if type != "shiny" else f" #{id} — ✨ {species_name.title()}" , description=f'\n{pokemon_description}\n',color=color)  # Blue color
      else:
              embed = discord.Embed(title=f" #{id} — {species_name.title()}" if type != "shiny" else f" #{id} — ✨ {species_name.title()}", color=color)  
    
             
      pokemon_dex_name = f" #{id} — {species_name.title()}" if type != "shiny" else f" #{id} — ✨ {species_name.title()}"
      embed.set_image(url=image_url)  
-     description= f'\n{pokemon_description}.\n'if pokemon_description != " " else None
+     description= f'\n{pokemon_description}\n'if pokemon_description != " " else None
 
     
      # Information about the Pokémon itself
@@ -1418,10 +1430,8 @@ class PokeSelect(discord.ui.Select):
         self.default_image_url = default_image_url
         self.alt_names = alt_names
         self.region = region
-        self.description = description
         self.pokemon_type = pokemon_shiny
         self.gender = gender
-        
 
         self.flag_mapping = {
          "en": "🇬🇧", "fr": "🇫🇷", "es": "🇪🇸", "de": "🇩🇪", "it": "🇮🇹", "ja": "🇯🇵", "ko": "🇰🇷", "zh-Hans": "🇨🇳", "ru": "🇷🇺", "es-MX": "🇲🇽",
@@ -1437,7 +1447,24 @@ class PokeSelect(discord.ui.Select):
         # Retrieve the flag emoji for the given language code
         flag = self.flag_mapping.get(lang)
         return flag 
+    
+    def get_pokemon_description(self, pokemon_name, file_path='Data/pokemon/pokemon_description.csv'):
+     try:
+        with open(file_path, mode='r', encoding='utf-8') as csv_file:
+            reader = csv.DictReader(csv_file)
+            
+            for row in reader:
+                if row['slug'].lower() == pokemon_name.lower():
+                    return row['description']
         
+        return "Pokémon ID not found"
+     except FileNotFoundError:
+        return "File not found"
+     except PermissionError:
+        return "Permission denied"
+     except Exception as e:
+        return f"An error occurred: {e}"
+    
     def get_alternate_names(self, pokemon_name):
         alternate_names = []
 
@@ -1517,11 +1544,12 @@ class PokeSelect(discord.ui.Select):
             # Fetch additional data from the PokeAPI
             pokemon_data = requests.get(selected_form_url).json()
             if pokemon_data:
+                self.description = self.get_pokemon_description(pokemon_data['name'])
                 # Update the footer with height, weight, and gender information
                 height, weight = (float(int(pokemon_data['height'])) / 10, float(int(pokemon_data['weight'])) / 10)
                 footer_text = f"Height: {height:.2f} m\nWeight: {weight:.2f} kg" if self.gender == None else f"Height: {height:.2f} m\nWeight: {weight:.2f} kg\t\t" + self.gender              
                 embed.title = f"#{pokemon_data['id']} — {pokemon_data['name'].replace('-', ' ').title()}" if self.pokemon_type != 'shiny' else f"#{pokemon_data['id']} — ✨ {pokemon_data['name'].replace('-', ' ').title()}"
-                embed.description = "\n "
+                embed.description = self.description
                 print("Found image sprite: ",image_thumb)
                 embed.set_footer(icon_url=str(image_thumb),text=footer_text)
 
