@@ -50,17 +50,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 class PokemonPredictor:
     def __init__(self, dataset_folder="Data/pokemon/pokemon_images"):
-        # Initialize ORB with a reasonable number of features
         self.orb = cv2.ORB_create(nfeatures=175)
-
-        # Configure FLANN with parameters for faster matching
         index_params = dict(algorithm=6, table_number=6, key_size=9, multi_probe_level=1)
         search_params = dict(checks=1)
         self.flann = cv2.FlannBasedMatcher(index_params, search_params)
-
-        # Thread pool executor for parallel processing
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=25)
-
         self.cache = {}
         self.hash_cache = {}
         self.load_dataset(dataset_folder)
@@ -69,11 +63,7 @@ class PokemonPredictor:
         self._clear_console()
         print("Loading Images...")
         start_time = time.time()
-
-        # Faster directory traversal using os.scandir
         image_paths = [entry.path for entry in os.scandir(dataset_folder) if entry.is_file()]
-
-        # Process images in batches to save memory
         total_images = len(image_paths)
         for i in range(0, total_images, batch_size):
             batch_paths = image_paths[i:i+batch_size]
@@ -81,23 +71,18 @@ class PokemonPredictor:
 
             for filename, result in zip(batch_paths, results):
                 if result:
-                    # Save original keypoints and descriptors in cache
                     self.cache[os.path.basename(filename)] = result
-
-                    # Process flipped image and save it to the cache
-                    flipped_img = cv2.flip(cv2.imread(filename), 1)  # Flip horizontally
+                    flipped_img = cv2.flip(cv2.imread(filename), 1)
                     flipped_gray_img = cv2.cvtColor(flipped_img, cv2.COLOR_BGR2GRAY)
                     flipped_keypoints, flipped_descriptors = self.orb.detectAndCompute(flipped_gray_img, None)
                     flipped_filename = f"{os.path.basename(filename)}_flipped"
                     self.cache[flipped_filename] = (flipped_keypoints, flipped_descriptors)
-
-                    # Compute and cache the image hash
                     image = cv2.imread(filename)
                     hash_value = self.dhash(image)
                     self.hash_cache[os.path.basename(filename)] = hash_value
                     flipped_hash_value = self.dhash(flipped_img)
                     self.hash_cache[flipped_filename] = flipped_hash_value
-
+            
             print(f"Processed batch {i//batch_size + 1} of {total_images//batch_size + 1}")
 
         self._clear_console()
@@ -118,20 +103,15 @@ class PokemonPredictor:
     def _match_image(self, kpB, desB, cache_item):
         filename, (kpA, desA) = cache_item
         if desA is not None and desB is not None:
-            # ORB feature matching
             matches = self.flann.knnMatch(desA, desB, k=2)
             good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.77 * m[1].distance]
 
             if len(good_matches) > 4:
-                # Extract location of good matches
                 src_pts = np.float32([kpA[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
                 dst_pts = np.float32([kpB[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-
-                # Calculate homography
                 M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
 
                 if M is not None:
-                    # Assuming the bounding box size for validation
                     h, w = 50, 50  # Example dimensions, adjust based on your dataset
                     pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
                     dst = cv2.perspectiveTransform(pts, M)
@@ -142,61 +122,68 @@ class PokemonPredictor:
         return None
 
     def _is_valid_match(self, dst):
-        # Check if the found polygon is convex and large enough to be considered a valid match
         return cv2.isContourConvex(dst) and cv2.contourArea(dst) > 100
+
+    def _find_image_inside_image(self, img, target_img):
+        if target_img is None:
+            return None
+
+        target_h, target_w = target_img.shape[:2]
+        img_h, img_w = img.shape[:2]
+
+        for y in range(0, img_h - target_h + 1, target_h):
+            for x in range(0, img_w - target_w + 1, target_w):
+                grid_section = img[y:y+target_h, x:x+target_w]
+                if self._match_image_with_grid_section(grid_section, target_img):
+                    return (x, y, x+target_w, y+target_h)
+        return None
+
+    def _match_image_with_grid_section(self, grid_section, target_img):
+        kp_grid, des_grid = self.orb.detectAndCompute(cv2.cvtColor(grid_section, cv2.COLOR_BGR2GRAY), None)
+        kp_target, des_target = self.orb.detectAndCompute(cv2.cvtColor(target_img, cv2.COLOR_BGR2GRAY), None)
+
+        if des_target is not None and des_grid is not None:
+            matches = self.flann.knnMatch(des_target, des_grid, k=2)
+            good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.77 * m[1].distance]
+            return len(good_matches) > 4
+
+        return False
 
     def predict_pokemon(self, img):
         start_time = time.time()
-
-        # Convert to grayscale and compute keypoints and descriptors
         gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         kpB, desB = self.orb.detectAndCompute(gray_img, None)
 
-        # Compute hash of the input image
-        input_hash = self.dhash(img)
+        futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
+        results = [future.result() for future in concurrent.futures.as_completed(futures)]
 
-        # Check if the hash matches any in the cache
-        potential_matches = []
-        for filename, cached_hash in self.hash_cache.items():
-            if cached_hash == input_hash:
-                # If hashes match, add to potential matches
-                potential_matches.append(filename)
+        best_match = max(results, key=lambda x: x[2] if x else 0, default=None)
 
-        # If hash match is found, process the matches
-        if potential_matches:
-            results = []
-            for filename in potential_matches:
-                kpA, desA = self.cache.get(filename, (None, None))
-                if kpA is not None and desA is not None:
-                    result = self._match_image(kpB, desB, (filename, (kpA, desA)))
-                    if result:
-                        results.append(result)
+        if best_match:
+            pokemon_img_path = os.path.join("Data/pokemon/pokemon_images", best_match[0])
+            target_img = cv2.imread(pokemon_img_path)
 
-            # Find the best match based on accuracy
-            best_match = max(results, key=lambda x: x[2] if x else 0, default=None)
-        else:
-            # If no hash match, proceed with full matching process
-            futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
-            results = [future.result() for future in concurrent.futures.as_completed(futures)]
-            best_match = max(results, key=lambda x: x[2] if x else 0, default=None)
+            if target_img is not None:
+                rect = self._find_image_inside_image(img, target_img)
+                if rect:
+                    x1, y1, x2, y2 = rect
+                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    print(f"Detected Pokémon area: {rect}")
+            else:
+                print(f"Warning: Could not load image for {pokemon_img_path}")
 
         elapsed_time = round(time.time() - start_time, 2)
 
         if best_match:
             predicted_pokemon = best_match[0].split("_flipped")[0].replace(".png", "")
             accuracy = round(best_match[2], 2)
-            return f"{predicted_pokemon.title()} ({accuracy}%)\t\t\t{elapsed_time}'s", elapsed_time, predicted_pokemon
+            return f"{predicted_pokemon.title()}: {accuracy}%\t\t\t{elapsed_time}'s", elapsed_time, predicted_pokemon
         return "No Pokémon detected", elapsed_time, None
 
     def _clear_console(self):
         os.system("cls" if os.name == "nt" else "clear")
 
     def dhash(self, image, hashSize=8):
-        # Convert image to grayscale
-        if image.shape[2] == 4:  # Check if the image has an alpha channel
-            # Convert RGBA to RGB by ignoring the alpha channel
-            image = image[:, :, :3]
-        
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         resized = cv2.resize(gray, (hashSize + 1, hashSize))
         diff = resized[:, 1:] > resized[:, :-1]
