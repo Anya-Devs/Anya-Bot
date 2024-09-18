@@ -229,7 +229,7 @@ class Anime(commands.Cog):
             embed.add_field(
                 name="__Details__",
                 value=(
-                    f"**Nicknames:** `{', '.join(character.get('nicknames', ['None']))}`\n"
+                    f"**Nicknames:** `{', '.join(character.get('nicknames', []) or ['N/A'])}`\n"
                     f"**Favorites:** `{character.get('favorites', 'N/A')}`\n"
                     f"**MyAnimeList ID:** `{character.get('mal_id', 'N/A')}`"
                 ),
