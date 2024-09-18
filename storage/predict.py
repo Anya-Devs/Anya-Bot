@@ -6,12 +6,12 @@ import os
 import sys
 import gc
 import io
-import random
 import pickle
 import logging
 import hashlib
 import zlib
 import sqlite3
+import random
 import threading
 import multiprocessing
 from functools import lru_cache
@@ -54,152 +54,128 @@ import numpy as np
 
 class PokemonPredictor:
     def __init__(self, dataset_folder="Data/pokemon/pokemon_images", best_match_file="Data/pokemon/best_match.json"):
-        # Initialize ORB with a reasonable number of features
         self.orb = cv2.ORB_create(nfeatures=175)
-
-        # Configure FLANN with parameters for faster matching
-        index_params = dict(algorithm=6, table_number=6, key_size=9, multi_probe_level=1)
-        search_params = dict(checks=1)
-        self.flann = cv2.FlannBasedMatcher(index_params, search_params)
-
-        # Thread pool executor for parallel processing
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=25)
-
+        self.flann = cv2.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=9, multi_probe_level=1),
+                                           dict(checks=1))
+        self.executor = ThreadPoolExecutor(max_workers=25)
         self.cache = {}
-        self.hash_cache = {}
+        self.best_match_file = best_match_file
+        self.best_matches = {}
         self.load_dataset(dataset_folder)
+        self.load_best_matches()
 
-    def load_dataset(self, dataset_folder, batch_size=10):
-        self._clear_console()
+    def load_dataset(self, dataset_folder):
         print("Loading Images...")
         start_time = time.time()
-
-        # Faster directory traversal using os.scandir
-        image_paths = [entry.path for entry in os.scandir(dataset_folder) if entry.is_file()]
-
-        # Process images in batches to save memory
-        total_images = len(image_paths)
-        for i in range(0, total_images, batch_size):
-            batch_paths = image_paths[i:i+batch_size]
-            results = [self._process_image(path) for path in batch_paths]
-
-            for filename, result in zip(batch_paths, results):
-                if result:
-                    # Save original keypoints and descriptors in cache
-                    self.cache[os.path.basename(filename)] = result
-
-                    # Process flipped image and save it to the cache
-                    flipped_img = cv2.flip(cv2.imread(filename), 1)  # Flip horizontally
-                    flipped_gray_img = cv2.cvtColor(flipped_img, cv2.COLOR_BGR2GRAY)
-                    flipped_keypoints, flipped_descriptors = self.orb.detectAndCompute(flipped_gray_img, None)
-                    flipped_filename = f"{os.path.basename(filename)}_flipped"
-                    self.cache[flipped_filename] = (flipped_keypoints, flipped_descriptors)
-
-                    # Compute and cache the image hash
-                    image = cv2.imread(filename)
-                    hash_value = self.dhash(image)
-                    self.hash_cache[os.path.basename(filename)] = hash_value
-                    flipped_hash_value = self.dhash(flipped_img)
-                    self.hash_cache[flipped_filename] = flipped_hash_value
-            
-            print(f"Processed batch {i//batch_size + 1} of {total_images//batch_size + 1}")
-
-        self._clear_console()
-        elapsed_time = round(time.time() - start_time, 2)
-        print(f"Successfully loaded all images.\nTime Taken: {elapsed_time} sec")
-
-    def _process_image(self, image_path):
-        try:
-            img = cv2.imread(image_path)
-            if img is not None:
-                gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
-                return keypoints, descriptors
-        except Exception as e:
-            print(f"Error processing image {image_path}: {e}")
-        return None
+        for filename in os.listdir(dataset_folder):
+            path = os.path.join(dataset_folder, filename)
+            if os.path.isfile(path):
+                img = cv2.imread(path)
+                if img is not None:
+                    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
+                    if descriptors is not None:
+                        self.cache[filename] = (keypoints, descriptors)
+                        # Process flipped images
+                        flipped_img = cv2.flip(img, 1)
+                        gray_flipped = cv2.cvtColor(flipped_img, cv2.COLOR_BGR2GRAY)
+                        keypoints_flipped, descriptors_flipped = self.orb.detectAndCompute(gray_flipped, None)
+                        if descriptors_flipped is not None:
+                            flipped_filename = filename.replace(".png", "_flipped.png")
+                            self.cache[flipped_filename] = (keypoints_flipped, descriptors_flipped)
+        
+        print(f"Images loaded in {time.time() - start_time:.2f} seconds")
 
     def _match_image(self, kpB, desB, cache_item):
         filename, (kpA, desA) = cache_item
         if desA is not None and desB is not None:
-            # ORB feature matching
             matches = self.flann.knnMatch(desA, desB, k=2)
             good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.77 * m[1].distance]
-
             if len(good_matches) > 4:
-                # Extract location of good matches
-                src_pts = np.float32([kpA[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-                dst_pts = np.float32([kpB[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-
-                # Calculate homography
-                M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-
-                if M is not None:
-                    # Assuming the bounding box size for validation
-                    h, w = 50, 50  # Example dimensions, adjust based on your dataset
-                    pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
-                    dst = cv2.perspectiveTransform(pts, M)
-
-                    if self._is_valid_match(dst):
-                        accuracy = len(good_matches) / len(desA) * 100
-                        return filename, len(good_matches), accuracy, dst
+                accuracy = len(good_matches) / len(desA) * 100
+                return filename, accuracy
         return None
 
-    def _is_valid_match(self, dst):
-        # Check if the found polygon is convex and large enough to be considered a valid match
-        return cv2.isContourConvex(dst) and cv2.contourArea(dst) > 100
+    def _find_image_inside_image(self, img, target_img):
+        target_h, target_w = target_img.shape[:2]
+        img_h, img_w = img.shape[:2]
+
+        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray_target = cv2.cvtColor(target_img, cv2.COLOR_BGR2GRAY)
+        kp_target, des_target = self.orb.detectAndCompute(gray_target, None)
+        
+        if des_target is None:
+            return None
+        
+        for y in range(0, img_h - target_h + 1):
+            for x in range(0, img_w - target_w + 1):
+                grid_section = img[y:y+target_h, x:x+target_w]
+                kp_grid, des_grid = self.orb.detectAndCompute(cv2.cvtColor(grid_section, cv2.COLOR_BGR2GRAY), None)
+                
+                if des_grid is not None:
+                    matches = self.flann.knnMatch(des_target, des_grid, k=2)
+                    good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.77 * m[1].distance]
+                    if len(good_matches) > 4:
+                        return (x, y, x + target_w, y + target_h)
+        
+        return None
+
+    def load_best_matches(self):
+        if os.path.exists(self.best_match_file):
+            with open(self.best_match_file, 'r') as file:
+                self.best_matches = json.load(file)
+        else:
+            self.best_matches = {}
+
+    def save_best_matches(self):
+        with open(self.best_match_file, 'w') as file:
+            json.dump(self.best_matches, file)
+
+    def scan_json_first(self, filename):
+        # Check if the filename or its flipped version is in the best match JSON
+        return self.best_matches.get(filename, None) or self.best_matches.get(filename.replace(".png", "_flipped.png"), None)
 
     def predict_pokemon(self, img):
+        best_match = None
         start_time = time.time()
-
-        # Convert to grayscale only once
         gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         kpB, desB = self.orb.detectAndCompute(gray_img, None)
 
-        # Compute hash of the input image
-        input_hash = self.dhash(img)
+   
+        # If no match found in JSON, perform a new scan
+        if best_match is None:
+            futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
+            results = [future.result() for future in futures]
+            best_match = max(results, key=lambda x: x[1] if x else 0, default=None)
 
-        # Use a list comprehension to collect results
-        futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
-        results = [future.result() for future in concurrent.futures.as_completed(futures)]
-
-        # Find the best match
-        best_match = max(results, key=lambda x: x[2] if x else 0, default=None)
+            # Update JSON with new best match if found
+            if best_match:
+                self.best_matches[best_match[0]] = best_match[1]
+                self.save_best_matches()
 
         elapsed_time = round(time.time() - start_time, 2)
 
         if best_match:
-            # Draw detection box on the best match
-            detected_img = self._draw_detection_box(img, best_match[3])
-            os.makedirs("output", exist_ok=True)
-            cv2.imwrite("output/image.png", detected_img)
+            pokemon_img_path = os.path.join("Data/pokemon/pokemon_images", best_match[0])
+            target_img = cv2.imread(pokemon_img_path)
 
-            # Process the result to extract predicted Pokémon and accuracy
+            if target_img is not None:
+                rect = self._find_image_inside_image(img, target_img)
+                if rect:
+                    x1, y1, x2, y2 = rect
+                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    print(f"Detected Pokémon area: {rect}")
+            else:
+                print(f"Warning: Could not load image for {pokemon_img_path}")
+
             predicted_pokemon = best_match[0].split("_flipped")[0].replace(".png", "")
-            accuracy = round(best_match[2], 2)
-            return f"{predicted_pokemon.title()}: {accuracy}%\t\t\t{elapsed_time}s", elapsed_time, predicted_pokemon
+            accuracy = round(best_match[1], 2)
+            return f"{predicted_pokemon.title()}: {accuracy}%", elapsed_time
+        
+        return "No Pokémon detected", elapsed_time, None
 
-        return "No Pokémon detected", elapsed_time
 
-    def _draw_detection_box(self, img, dst_pts):
-        # Convert the coordinates to integers
-        dst_pts = np.int32(dst_pts).reshape(-1, 2)
-        # Draw the bounding box in blue
-        cv2.polylines(img, [dst_pts], isClosed=True, color=(255, 0, 0), thickness=2)
-        return img
 
-    def _clear_console(self):
-        os.system("cls" if os.name == "nt" else "clear")
-
-    def dhash(self, image, hashSize=8):
-        # Convert the image to grayscale
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        # Resize the input image, adding a single column (width) so we can compute the horizontal gradient
-        resized = cv2.resize(gray, (hashSize + 1, hashSize))
-        # Compute the (relative) horizontal gradient between adjacent column pixels
-        diff = resized[:, 1:] > resized[:, :-1]
-        # Convert the difference image to a hash
-        return sum([2 ** i for (i, v) in enumerate(diff.flatten()) if v])
 
 
 
@@ -212,7 +188,7 @@ class PokemonPredictor:
 class Pokemon(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.author_id = 1234247716243112100
+        self.author_id = 716390085896962058
         self.predictor = PokemonPredictor()
         self.primary_color = primary_color
         self.error_custom_embed = error_custom_embed
@@ -333,15 +309,15 @@ class Pokemon(commands.Cog):
                         img = np.array(img.convert('RGB'))  # Convert to numpy array
 
                         # Use the predictor to predict the Pokémon
-                        prediction, time_taken, pokemon_name = self.predictor.predict_pokemon(img)
+                        prediction, time_taken = self.predictor.predict_pokemon(img)
                         await ctx.reply(prediction, mention_author=False)
                     else:
                         await ctx.reply(f"Failed to download image. Status code: {response.status}", mention_author=False)
         else:
             await ctx.send("No image found to predict.")
-    """
-     @commands.Cog.listener()
-     async def on_message(self, message):
+    
+    @commands.Cog.listener()
+    async def on_message(self, message):
         if message.author.id == self.author_id and message.embeds:
             embed = message.embeds[0]
             if embed.description and 'Guess the pokémon' in embed.description:
@@ -358,7 +334,6 @@ class Pokemon(commands.Cog):
                             await message.channel.send(prediction, reference=message)
                         else:
                             await message.channel.send(f"Failed to download image. Status code: {response.status}", reference=message)
-    """
     
     @commands.command(help="Displays Pokemon dex information.", aliases=['pokdex', 'dex','d','p'])
     async def pokemon(self, ctx, *, args=None, form=None):   
@@ -679,38 +654,25 @@ class Pokemon(commands.Cog):
       else:
         return None
 
-            
-
-
-
-
-
-
-   
-     def get_pokemon_region(data_species,pokemon_name):
- 
-      if data_species:
-       try:
-        generation_url = data_species['generation']['url']
-
-        # Fetch information about the generation (region)
-        response_generation = requests.get(generation_url)
-
-        if response_generation.status_code == 200:
-            data_generation = response_generation.json()
-            region_name = data_generation['main_region']['name']
-            print("Region Name: ",region_name)
-            return region_name
-            
-        else:
+      
+    
+     def get_pokemon_region(pokemon_id, file_path='Data/pokemon/pokemon_description.csv'):
+        try:
+            with open(file_path, mode='r', encoding='utf-8') as csv_file:
+                reader = csv.DictReader(csv_file)
+                for row in reader:
+                    if row['id'] == str(pokemon_id):
+                        return row['region']
+        except FileNotFoundError:
             return None
-       except KeyError:
-        print(KeyError)
-        return None  # or handle the missing key case accordingly
-      else:
+        except PermissionError:
+            return None
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return None
         return None
-     
-     region = get_pokemon_region(data_species,name) or None
+    
+     region = get_pokemon_region(id) or None
 
      language_codes = ["ja", "ja", "ja", "en", "de", "fr"]
       # Define a mapping between language codes and flag emojis
@@ -1141,7 +1103,7 @@ class Pokemon(commands.Cog):
      print('is_shiny: ',type)      
      self.bot.add_view(Pokebuttons(alt_names_str,species_name))
      
-     await ctx.reply(embed=embed,view=Pokebuttons(alt_names_str,species_name,formatted_base_stats,type,wes,pokemon_type,base_stats,image_url,h_w,image_thumb,pokemon_dex_name,color,data,gender_differ,region, description,gender_info))
+     await ctx.reply(embed=embed,view=Pokebuttons(alt_names_str,species_name,formatted_base_stats,type,wes,pokemon_type,base_stats,image_url,h_w,image_thumb,pokemon_dex_name,color,data,gender_differ,region, description,gender_info), mention_author=False)
     
 
             
@@ -1177,9 +1139,9 @@ class Pokebuttons(discord.ui.View):
         pokemon_forms = self.get_pokemon_forms()
         
         if pokemon_forms and len(pokemon_forms) > 1:
-            self.add_item(PokeSelect(pokemon_forms, self.image_url, self.alt_names_str, self.region, self.description,self.pokemon_shiny,self.gender_info))
+            self.add_item(PokeSelect(pokemon_forms, self.image_url, self.alt_names_str, self.pokemon_shiny,self.gender_info))
         
-    
+
         
         
         # Assuming the file path to the Pokemon directory
@@ -1450,7 +1412,7 @@ class Pokebuttons(discord.ui.View):
 
 
 class PokeSelect(discord.ui.Select):
-    def __init__(self, pokemon_forms, default_image_url,alt_names, region, description, pokemon_shiny,gender):
+    def __init__(self, pokemon_forms, default_image_url, alt_names, pokemon_shiny, gender):
         options = []
         for index, form in enumerate(pokemon_forms):
             form_name = form['name']
@@ -1459,92 +1421,102 @@ class PokeSelect(discord.ui.Select):
         super().__init__(placeholder="Form", options=options, custom_id="Select_Pokemon_Form")
         self.default_image_url = default_image_url
         self.alt_names = alt_names
-        self.region = region
         self.pokemon_type = pokemon_shiny
         self.gender = gender
 
         self.flag_mapping = {
-         "en": "🇬🇧", "fr": "🇫🇷", "es": "🇪🇸", "de": "🇩🇪", "it": "🇮🇹", "ja": "🇯🇵", "ko": "🇰🇷", "zh-Hans": "🇨🇳", "ru": "🇷🇺", "es-MX": "🇲🇽",
-         "pt": "🇵🇹", "nl": "🇳🇱", "tr": "🇹🇷", "ar": "🇸🇦", "th": "🇹🇭", "vi": "🇻🇳", "pl": "🇵🇱", "sv": "🇸🇪", "da": "🇩🇰", "no": "🇳🇴",
-         "fi": "🇫🇮", "el": "🇬🇷", "id": "🇮🇩", "ms": "🇲🇾", "fil": "🇵🇭", "hu": "🇭🇺", "cs": "🇨🇿", "sk": "🇸🇰", "ro": "🇷🇴", "uk": "🇺🇦",
-         "hr": "🇭🇷", "bg": "🇧🇬", "et": "🇪🇪", "lv": "🇱🇻", "lt": "🇱🇹", "sl": "🇸🇮", "mt": "🇲🇹", "sq": "🇦🇱", "mk": "🇲🇰", "bs": "🇧🇦",
-         "sr": "🇷🇸", "cy": "🇨🇾", "ga": "🇮🇪", "gd": "🏴", "kw": "🇰🇾", "br": "🇧🇷", "af": "🇿🇦", "xh": "🇿🇦", "zu": "🇿🇦",
-         "tn": "🇿🇦", "st": "🇿🇦", "ss": "🇿🇦", "nr": "🇿🇦", "nso": "🇿🇦", "ts": "🇿🇦", "ve": "🇿🇦", "xog": "🇺🇬", "lg": "🇺🇬", "ak": "🇬🇭",
-         "tw": "🇬🇭", "bm": "🇧🇫", "my": "🇲🇲", "km": "🇰🇭", "lo": "🇱🇦", "am": "🇪🇹", "ti": "🇪🇹", "om": "🇪🇹", "so": "🇸🇴", "sw": "🇰🇪",
-         "rw": "🇷🇼", "yo": "🇳🇬", "ig": "🇳🇬", "ha": "🇳🇬", "bn": "🇧🇩", "pa": "🇮🇳", "gu": "🇮🇳", "or": "🇮🇳", "ta": "🇮🇳", "te": "🇮🇳",
-         "kn": "🇮🇳", "ml": "🇮🇳", "si": "🇱🇰", "ne": "🇳🇵", "dz": "🇧🇹", "ti": "🇪🇷", "be": "🇧🇾", "kk": "🇰🇿", "uz": "🇺🇿", "ky": "🇰🇬"}
+            "en": "🇬🇧", "fr": "🇫🇷", "es": "🇪🇸", "de": "🇩🇪", "it": "🇮🇹", "ja": "🇯🇵", "ko": "🇰🇷", "zh-Hans": "🇨🇳", "ru": "🇷🇺", "es-MX": "🇲🇽",
+            "pt": "🇵🇹", "nl": "🇳🇱", "tr": "🇹🇷", "ar": "🇸🇦", "th": "🇹🇭", "vi": "🇻🇳", "pl": "🇵🇱", "sv": "🇸🇪", "da": "🇩🇰", "no": "🇳🇴",
+            "fi": "🇫🇮", "el": "🇬🇷", "id": "🇮🇩", "ms": "🇲🇾", "fil": "🇵🇭", "hu": "🇭🇺", "cs": "🇨🇿", "sk": "🇸🇰", "ro": "🇷🇴", "uk": "🇺🇦",
+            "hr": "🇭🇷", "bg": "🇧🇬", "et": "🇪🇪", "lv": "🇱🇻", "lt": "🇱🇹", "sl": "🇸🇮", "mt": "🇲🇹", "sq": "🇦🇱", "mk": "🇲🇰", "bs": "🇧🇦",
+            "sr": "🇷🇸", "cy": "🇨🇾", "ga": "🇮🇪", "gd": "🏴", "kw": "🇰🇾", "br": "🇧🇷", "af": "🇿🇦", "xh": "🇿🇦", "zu": "🇿🇦",
+            "tn": "🇿🇦", "st": "🇿🇦", "ss": "🇿🇦", "nr": "🇿🇦", "nso": "🇿🇦", "ts": "🇿🇦", "ve": "🇿🇦", "xog": "🇺🇬", "lg": "🇺🇬", "ak": "🇬🇭",
+            "tw": "🇬🇭", "bm": "🇧🇫", "my": "🇲🇲", "km": "🇰🇭", "lo": "🇱🇦", "am": "🇪🇹", "ti": "🇪🇹", "om": "🇪🇹", "so": "🇸🇴", "sw": "🇰🇪",
+            "rw": "🇷🇼", "yo": "🇳🇬", "ig": "🇳🇬", "ha": "🇳🇬", "bn": "🇧🇩", "pa": "🇮🇳", "gu": "🇮🇳", "or": "🇮🇳", "ta": "🇮🇳", "te": "🇮🇳",
+            "kn": "🇮🇳", "ml": "🇮🇳", "si": "🇱🇰", "ne": "🇳🇵", "dz": "🇧🇹", "ti": "🇪🇷", "be": "🇧🇾", "kk": "🇰🇿", "uz": "🇺🇿", "ky": "🇰🇬"
+        }
+
+        self.region_mappings = {
+            "paldea": "<:Paldea:1212335178714980403>",
+            "sinnoh": "<:Sinnoh:1212335180459544607>",
+            "alola": "<:Alola:1212335185228472411>",
+            "kalos": "<:Kalos:1212335190656024608>",
+            "galar": "<:Galar:1212335192740470876>",
+            "pasio": "<:848495108667867139:1212335194628034560>",
+            "hoenn": "<:Hoenn:1212335197304004678>",
+            "unova": "<:Unova:1212335199095095306>",
+            "kanto": "<:Kanto:1212335202341363713>",
+            "johto": "<:Johto:1212335202341363713>"
+        }
+
     def get_flag(self, lang):
-        # Retrieve the flag emoji for the given language code
-        flag = self.flag_mapping.get(lang)
-        return flag 
-    
-    def get_pokemon_description(self, pokemon_name, file_path='Data/pokemon/pokemon_description.csv'):
-     try:
-        with open(file_path, mode='r', encoding='utf-8') as csv_file:
-            reader = csv.DictReader(csv_file)
-            
-            for row in reader:
-                if row['slug'].lower() == pokemon_name.lower():
-                    return row['description']
-        
+        return self.flag_mapping.get(lang)
+
+    def get_pokemon_description(self, pokemon_id, file_path='Data/pokemon/pokemon_description.csv'):
+        try:
+            with open(file_path, mode='r', encoding='utf-8') as csv_file:
+                reader = csv.DictReader(csv_file)
+                for row in reader:
+                    if row['id'] == str(pokemon_id):
+                        return row['description']
+        except FileNotFoundError:
+            return "File not found"
+        except PermissionError:
+            return "Permission denied"
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return f"An error occurred: {e}"
         return "Pokémon ID not found"
-     except FileNotFoundError:
-        return "File not found"
-     except PermissionError:
-        return "Permission denied"
-     except Exception as e:
-        return f"An error occurred: {e}"
-    
+
+    def get_pokemon_region(self, pokemon_id, file_path='Data/pokemon/pokemon_description.csv'):
+        try:
+            with open(file_path, mode='r', encoding='utf-8') as csv_file:
+                reader = csv.DictReader(csv_file)
+                for row in reader:
+                    if row['id'] == str(pokemon_id):
+                        return row['region']
+        except FileNotFoundError:
+            return None
+        except PermissionError:
+            return None
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return None
+        return None
+
     def get_alternate_names(self, pokemon_name):
         alternate_names = []
-
-        # Define the URL for the Pokemon form endpoint
         form_endpoint = f"https://pokeapi.co/api/v2/pokemon-form/{pokemon_name}"
-
         try:
-            # Fetch alternate names from the Pokemon form endpoint
             response = requests.get(form_endpoint)
-            response.raise_for_status()  # Raise an exception for any error status code
+            response.raise_for_status()
             data = response.json()
-
-            # Extract alternate names from the response data
             for name_data in data['names']:
                 lang = name_data['language']['name']
                 name = name_data['name']
                 flag = self.flag_mapping.get(lang)
                 if flag and name.lower() != lang.lower():
-                    alternate_names.append((name, lang))  # Append a tuple (name, lang)
-
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching alternate names from form endpoint: {e}")
-            
-            # If there's an error, try fetching from the species endpoint
+                    alternate_names.append((name, lang))
+        except requests.exceptions.RequestException:
             species_endpoint = f"https://pokeapi.co/api/v2/pokemon/{pokemon_name}"
             try:
                 response = requests.get(species_endpoint)
-                response.raise_for_status()  # Raise an exception for any error status code
+                response.raise_for_status()
                 data = response.json()
-
-                # Extract alternate names from the response data
                 for name_data in data['names']:
                     lang = name_data['language']['name']
                     name = name_data['name']
                     flag = self.flag_mapping.get(lang)
                     if flag and name.lower() != lang.lower():
-                         alternate_names.append((name, lang))  # Append a tuple (name, lang)
-
+                        alternate_names.append((name, lang))
             except requests.exceptions.RequestException as e:
-                print(f"Error fetching alternate names from species endpoint: {e}")
-
+                print(f"Error fetching alternate names: {e}")
         return alternate_names
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-
         selected_form_url = self.values[0]
-        print(f"Selected form URL: {selected_form_url}")
         response = requests.get(selected_form_url)
-        print(f"Response status code: {response.status_code}")
 
         if response.status_code == 200:
             data = response.json()
@@ -1552,92 +1524,72 @@ class PokeSelect(discord.ui.Select):
             if 'sprites' in data and 'other' in data['sprites']:
                 if 'official-artwork' in data['sprites']['other']:
                     if self.pokemon_type == 'shiny':
-                      official_artwork_url = data['sprites']['other']['official-artwork']['front_shiny']
-                      image_thumb = data['sprites']['versions']['generation-v']['black-white']['front_shiny']
-                      print("Image pixel pokemon sprite: ", image_thumb)
-
+                        official_artwork_url = data['sprites']['other']['official-artwork']['front_shiny']
+                        image_thumb = data['sprites']['versions']['generation-v']['black-white']['front_shiny']
                     else:
-                       official_artwork_url = data['sprites']['other']['official-artwork']['front_default']
-                       image_thumb = data['sprites']['versions']['generation-v']['black-white']['front_default']
-                       print("Image pixel pokemon sprite: ", image_thumb)
-                    print("Pokemon_Shiny: ", self.pokemon_type)
-          
+                        official_artwork_url = data['sprites']['other']['official-artwork']['front_default']
+                        image_thumb = data['sprites']['versions']['generation-v']['black-white']['front_default']
 
             embed = interaction.message.embeds[0]
             if official_artwork_url:
-                print(f"Setting official artwork URL: {official_artwork_url}")
                 embed.set_image(url=official_artwork_url)
             else:
-                print("Official artwork URL not found.")
                 embed.set_image(url=self.default_image_url)
 
-            # Fetch additional data from the PokeAPI
             pokemon_data = requests.get(selected_form_url).json()
             if pokemon_data:
-                self.description = self.get_pokemon_description(pokemon_data['name'])
-                # Update the footer with height, weight, and gender information
+                description = self.get_pokemon_description(pokemon_data['id'])
                 height, weight = (float(int(pokemon_data['height'])) / 10, float(int(pokemon_data['weight'])) / 10)
-                footer_text = f"Height: {height:.2f} m\nWeight: {weight:.2f} kg" if self.gender == None else f"Height: {height:.2f} m\nWeight: {weight:.2f} kg\t\t" + self.gender              
+                footer_text = f"Height: {height:.2f} m\nWeight: {weight:.2f} kg" if self.gender is None else f"Height: {height:.2f} m\nWeight: {weight:.2f} kg\t\t" + self.gender
                 embed.title = f"#{pokemon_data['id']} — {pokemon_data['name'].replace('-', ' ').title()}" if self.pokemon_type != 'shiny' else f"#{pokemon_data['id']} — ✨ {pokemon_data['name'].replace('-', ' ').title()}"
-                embed.description = self.description
-                print("Found image sprite: ",image_thumb)
-                embed.set_footer(icon_url=str(image_thumb),text=footer_text)
+                embed.description = description
+                if image_thumb: 
+                 embed.set_footer(icon_url=str(image_thumb), text=footer_text)
+                else:
+                 embed.set_footer(text=footer_text)
 
-                # Update the Names field with flag emoji and name
-                names_field = None
-                for field in embed.fields:
-                    if field.name == 'Names':
-                        names_field = field
-                        break
 
+                # Remove previous Names field if it exists
+                names_field = next((field for field in embed.fields if field.name == 'Names'), None)
+                if names_field:
+                    embed.remove_field(embed.fields.index(names_field))
+                
+                embed.clear_fields() # Clear Fields
+                
+                # Add Region field
+                pokemon_region = self.get_pokemon_region(pokemon_data['id'])
+                if pokemon_region and pokemon_region in self.region_mappings:
+                    region_emoji = self.region_mappings[pokemon_region]
+                    embed.add_field(name='Region', value=f"{region_emoji} {pokemon_region.title()}", inline=True)
+                    
+                # Add alternate names
                 if names_field:
                     alternate_names = self.get_alternate_names(pokemon_data['name'])
                     alt_names_info = {}
                     for name, lang in alternate_names:
-                        # Create a unique key for each name
                         key = name.lower()
-                        flag = self.flag_mapping.get(lang, None)  # Get the flag for the language, or None if not found
-
-                        # Check if the Pokemon name is the same as the language name, and skip it
+                        flag = self.flag_mapping.get(lang, None)
                         if name.lower() != lang.lower() and flag is not None:
-                            # Concatenate flag and name
                             name_with_flag = f"{flag} {name}"
-
-                            # Add to the dictionary, ensuring uniqueness based on the name
                             alt_names_info[key] = name_with_flag
-                
-                    # Sorting the dictionary by value length as the primary sorting criterion
+
                     sorted_names_by_length = dict(sorted(alt_names_info.items(), key=lambda item: len(item[1])))
 
-                    # If the length sorting doesn't work correctly, resort alphabetically by Pokemon name
                     if len(sorted_names_by_length) != len(alt_names_info):
                         sorted_names_by_name = dict(sorted(alt_names_info.items(), key=lambda item: item[1]))
                         name_list = sorted(list(sorted_names_by_name.values()))
                     else:
                         name_list = sorted(list(sorted_names_by_length.values()))
 
-                    # Join the results with newline characters
                     alt_names_str = "\n".join(name_list[:6])
-                    embed.clear_fields()
-                    if len(alt_names_str) < 1:
-                        print("Region ", self.region)
-                        embed.add_field(name="Region",value=self.region, inline=True)
-                        if self.description != None:
-                            print("Description ", self.description)
-                            embed.description = self.description
-                            
-                        else:
-                            embed.set_footer(icon_url=image_thumb,text=footer_text)
-                    else:
-                         embed.set_footer(icon_url=image_thumb,text=footer_text)
-                    embed.add_field(name="Names",value=alt_names_str if len(alt_names_str) > 1 else self.alt_names,inline=True)
-                    await interaction.message.edit(embed=embed)
+                    embed.add_field(name='Names', value=alt_names_str, inline=True)
 
-        await super().callback(interaction)
+                
 
-        
-        
-        
+            await interaction.message.edit(embed=embed)
+        else:
+            await interaction.response.send_message("Error fetching data for the selected form.", ephemeral=True)
+
         
         
         
