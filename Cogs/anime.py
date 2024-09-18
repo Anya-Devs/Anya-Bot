@@ -228,9 +228,11 @@ class Anime(commands.Cog):
 
             embed.add_field(
                 name="__Details__",
-                value=f"**Nicknames:** `{', '.join(character.get('nicknames', ['None']))}`\n" or ''
-                      f"**Favorites:** `{character.get('favorites', 'N/A')}`\n" or ''
-                      f"**MyAnimeList ID:** `{character.get('mal_id', 'N/A')}`", or ''
+                value=(
+                    f"**Nicknames:** `{', '.join(character.get('nicknames', ['None']))}`\n"
+                    f"**Favorites:** `{character.get('favorites', 'N/A')}`\n"
+                    f"**MyAnimeList ID:** `{character.get('mal_id', 'N/A')}`"
+                ),
                 inline=False
             )
             embed.description = character.get('about', "> <:anya_angy:1268976144548630608> Description not available")
