@@ -19,6 +19,7 @@ from urllib.request import urlopen, urlretrieve
 
 # Third-party library imports
 import cv2
+import cv2 as cv
 import numpy as np
 import aiohttp
 import requests
@@ -48,123 +49,177 @@ from Data.const import error_custom_embed, sdxl, primary_color
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
 
-
-import cv2
-import numpy as np
-
 class PokemonPredictor:
-    def __init__(self, dataset_folder="Data/pokemon/pokemon_images", best_match_file="Data/pokemon/best_match.json"):
-        self.orb = cv2.ORB_create(nfeatures=175)
-        self.flann = cv2.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=9, multi_probe_level=1),
+    def __init__(self, dataset_folder="Data/pokemon/pokemon_images", csv_file="Data/pokemon/dataset.csv"):
+        self.orb = cv.ORB_create(nfeatures=175)
+        self.flann = cv.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=12, multi_probe_level=1),
                                            dict(checks=1))
+        self.fast = cv.FastFeatureDetector_create()
         self.executor = ThreadPoolExecutor(max_workers=25)
         self.cache = {}
-        self.best_match_file = best_match_file
         self.best_matches = {}
-        self.load_dataset(dataset_folder)
-        self.load_best_matches()
+        self.csv_file = csv_file
+        self.dataset_folder = dataset_folder
 
-    def load_dataset(self, dataset_folder):
+        # Load dataset only once when code starts
+        self.load_dataset()
+
+    def load_dataset(self):
         print("Loading Images...")
+
+        if os.path.exists(self.csv_file):
+            print("Loading dataset from CSV file...")
+            self.load_from_csv()
+        else:
+            print("CSV file not found, loading images from dataset folder...")
+            self.load_from_images()
+
+    def load_from_csv(self):
         start_time = time.time()
-        for filename in os.listdir(dataset_folder):
-            path = os.path.join(dataset_folder, filename)
+        with open(self.csv_file, 'r') as file:
+            reader = csv.reader(file)
+            next(reader)
+            for row in reader:
+                filename, descriptors_str = row
+                descriptors = np.array(json.loads(descriptors_str), dtype=np.uint8)
+                self.cache[filename] = (None, descriptors)
+        print(f"Dataset loaded from CSV in {time.time() - start_time:.2f} seconds")
+
+    def load_from_images(self):
+        start_time = time.time()
+        with open(self.csv_file, 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Filename', 'Descriptors'])
+
+        for filename in os.listdir(self.dataset_folder):
+            path = os.path.join(self.dataset_folder, filename)
             if os.path.isfile(path):
-                img = cv2.imread(path)
+                img = cv.imread(path)
                 if img is not None:
-                    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
                     keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
                     if descriptors is not None:
                         self.cache[filename] = (keypoints, descriptors)
-                        # Process flipped images
-                        flipped_img = cv2.flip(img, 1)
-                        gray_flipped = cv2.cvtColor(flipped_img, cv2.COLOR_BGR2GRAY)
+                        with open(self.csv_file, 'a', newline='') as file:
+                            writer = csv.writer(file)
+                            writer.writerow([filename, descriptors.tolist()])
+
+                        flipped_img = cv.flip(img, 1)
+                        gray_flipped = cv.cvtColor(flipped_img, cv.COLOR_BGR2GRAY)
                         keypoints_flipped, descriptors_flipped = self.orb.detectAndCompute(gray_flipped, None)
                         if descriptors_flipped is not None:
                             flipped_filename = filename.replace(".png", "_flipped.png")
                             self.cache[flipped_filename] = (keypoints_flipped, descriptors_flipped)
+                            with open(self.csv_file, 'a', newline='') as file:
+                                writer = csv.writer(file)
+                                writer.writerow([flipped_filename, descriptors_flipped.tolist()])
         
         print(f"Images loaded in {time.time() - start_time:.2f} seconds")
 
     def _match_image(self, kpB, desB, cache_item):
         filename, (kpA, desA) = cache_item
-        if desA is not None and desB is not None:
-            matches = self.flann.knnMatch(desA, desB, k=2)
-            good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.77 * m[1].distance]
-            if len(good_matches) > 4:
-                accuracy = len(good_matches) / len(desA) * 100
-                return filename, accuracy
-        return None
-
-    def _find_image_inside_image(self, img, target_img):
-        target_h, target_w = target_img.shape[:2]
-        img_h, img_w = img.shape[:2]
-
-        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        gray_target = cv2.cvtColor(target_img, cv2.COLOR_BGR2GRAY)
-        kp_target, des_target = self.orb.detectAndCompute(gray_target, None)
-        
-        if des_target is None:
-            return None
-        
-        for y in range(0, img_h - target_h + 1):
-            for x in range(0, img_w - target_w + 1):
-                grid_section = img[y:y+target_h, x:x+target_w]
-                kp_grid, des_grid = self.orb.detectAndCompute(cv2.cvtColor(grid_section, cv2.COLOR_BGR2GRAY), None)
+        if desA is not None and desB is not None and len(desA) > 2 and len(desB) > 2:
+            try:
+                desA = desA.astype(np.uint8)
+                desB = desB.astype(np.uint8)
                 
-                if des_grid is not None:
-                    matches = self.flann.knnMatch(des_target, des_grid, k=2)
-                    good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.77 * m[1].distance]
-                    if len(good_matches) > 4:
-                        return (x, y, x + target_w, y + target_h)
-        
-        return None
+                print(f"desA type: {desA.dtype}, shape: {desA.shape}")
+                print(f"desB type: {desB.dtype}, shape: {desB.shape}")
 
-    def load_best_matches(self):
-        if os.path.exists(self.best_match_file):
-            with open(self.best_match_file, 'r') as file:
-                self.best_matches = json.load(file)
-        else:
-            self.best_matches = {}
+                matches = self.flann.knnMatch(desA, desB, k=2)
+                good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.9 * m[1].distance]
+                
+                if len(good_matches) > 1:
+                    accuracy = len(good_matches) / len(desA) * 100
+                    return filename, accuracy
+            except cv.error as e:
+                print(f"Error in feature matching: {e}")
+        return filename, 0
 
-    def save_best_matches(self):
-        with open(self.best_match_file, 'w') as file:
-            json.dump(self.best_matches, file)
+    def _find_image_inside_image(self, img, template):
+        assert img is not None, "Input image is None"
+        assert template is not None, "Template image is None"
 
-    def scan_json_first(self, filename):
-        # Check if the filename or its flipped version is in the best match JSON
-        return self.best_matches.get(filename, None) or self.best_matches.get(filename.replace(".png", "_flipped.png"), None)
+        img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+        template_gray = cv.cvtColor(template, cv.COLOR_BGR2GRAY)
+
+        w, h = template_gray.shape[::-1]
+        res = cv.matchTemplate(img_gray, template_gray, cv.TM_CCOEFF_NORMED)
+        threshold = 0.8
+        loc = np.where(res >= threshold)
+
+        boxes = []
+        for pt in zip(*loc[::-1]):
+            boxes.append((pt[0], pt[1], pt[0] + w, pt[1] + h))
+
+        boxes = self._merge_boxes(boxes)
+
+        return boxes
+
+    def _merge_boxes(self, boxes, overlap_threshold=0.5):
+        if not boxes:
+            return []
+
+        boxes = sorted(boxes, key=lambda b: b[0])
+        merged_boxes = []
+
+        for box in boxes:
+            x1, y1, x2, y2 = box
+            if not merged_boxes:
+                merged_boxes.append(box)
+                continue
+
+            last_box = merged_boxes[-1]
+            lx1, ly1, lx2, ly2 = last_box
+
+            ix1 = max(lx1, x1)
+            iy1 = max(ly1, y1)
+            ix2 = min(lx2, x2)
+            iy2 = min(ly2, y2)
+            iw = max(0, ix2 - ix1)
+            ih = max(0, iy2 - iy1)
+
+            inter_area = iw * ih
+            box_area = (x2 - x1) * (y2 - y1)
+            last_box_area = (lx2 - lx1) * (ly2 - ly1)
+            overlap_ratio = inter_area / float(box_area + last_box_area - inter_area)
+
+            if overlap_ratio > overlap_threshold:
+                merged_boxes[-1] = (min(lx1, x1), min(ly1, y1), max(lx2, x2), max(ly2, y2))
+            else:
+                merged_boxes.append(box)
+
+        return merged_boxes
 
     def predict_pokemon(self, img):
         best_match = None
         start_time = time.time()
-        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         kpB, desB = self.orb.detectAndCompute(gray_img, None)
 
-   
-        # If no match found in JSON, perform a new scan
+        if desB is not None:
+            desB = desB.astype(np.uint8)
+
         if best_match is None:
             futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
             results = [future.result() for future in futures]
             best_match = max(results, key=lambda x: x[1] if x else 0, default=None)
 
-            # Update JSON with new best match if found
-            if best_match:
-                self.best_matches[best_match[0]] = best_match[1]
-                self.save_best_matches()
-
         elapsed_time = round(time.time() - start_time, 2)
 
         if best_match:
-            pokemon_img_path = os.path.join("Data/pokemon/pokemon_images", best_match[0])
-            target_img = cv2.imread(pokemon_img_path)
+            pokemon_img_path = os.path.join(self.dataset_folder, best_match[0])
+            target_img = cv.imread(pokemon_img_path)
 
             if target_img is not None:
-                rect = self._find_image_inside_image(img, target_img)
-                if rect:
-                    x1, y1, x2, y2 = rect
-                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    print(f"Detected Pokémon area: {rect}")
+                detection_boxes = self._find_image_inside_image(img, target_img)
+                if detection_boxes:
+                    for box in detection_boxes:
+                        x1, y1, x2, y2 = box
+                        cv.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    print(f"Detected Pokémon areas: {detection_boxes}")
+                else:
+                    print(f"Warning: Pokémon not found in the detection boxes.")
             else:
                 print(f"Warning: Could not load image for {pokemon_img_path}")
 
@@ -172,13 +227,18 @@ class PokemonPredictor:
             accuracy = round(best_match[1], 2)
             return f"{predicted_pokemon.title()}: {accuracy}%", elapsed_time
         
-        return "No Pokémon detected", elapsed_time, None
+        return "No Pokémon detected", elapsed_time
 
-
-
-
-
-
+    def load_image_from_url(self, url):
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            image = np.asarray(bytearray(response.content), dtype=np.uint8)
+            img = cv.imdecode(image, cv.IMREAD_COLOR)
+            return img
+        except requests.RequestException as e:
+            print(f"Error fetching image from URL: {e}")
+            return None
 
 
 
