@@ -52,7 +52,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 class PokemonPredictor:
     def __init__(self, dataset_folder="Data/pokemon/pokemon_images", csv_file="Data/pokemon/dataset.csv"):
         self.orb = cv.ORB_create(nfeatures=175)
-        self.flann = cv.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=12, multi_probe_level=1),
+        self.flann = cv.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=9, multi_probe_level=1),
                                            dict(checks=1))
         self.fast = cv.FastFeatureDetector_create()
         self.executor = ThreadPoolExecutor(max_workers=25)
@@ -127,7 +127,7 @@ class PokemonPredictor:
                 print(f"desB type: {desB.dtype}, shape: {desB.shape}")
 
                 matches = self.flann.knnMatch(desA, desB, k=2)
-                good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.9 * m[1].distance]
+                good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.50 * m[1].distance]
                 
                 if len(good_matches) > 1:
                     accuracy = len(good_matches) / len(desA) * 100
