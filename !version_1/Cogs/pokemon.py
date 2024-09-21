@@ -1,261 +1,60 @@
-# Standard library imports
-import json
-import csv
-import time
 import os
-import sys
-import gc
 import io
-import pickle
-import logging
-import hashlib
-import zlib
-import sqlite3
-import random
-import threading
-import multiprocessing
-from functools import lru_cache
-from urllib.request import urlopen, urlretrieve
-
-# Third-party library imports
 import cv2
-import cv2 as cv
+import json
+import random
 import numpy as np
+from PIL import Image, ImageChops
+from io import BytesIO
+import pickle
+
 import aiohttp
 import requests
-import psutil
-import hnswlib
-import ijson
-import imagehash
-from PIL import Image, ImageChops
+import logging
+import traceback
 
-
-
-# Concurrent and multiprocessing imports
-from concurrent import *
-import concurrent.futures 
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from multiprocessing import Pool
-from sklearn.cluster import KMeans
-
-
-# Custom imports
 from Imports.discord_imports import *
-from discord.ext import tasks
 from Imports.log_imports import logger
 from Data.const import error_custom_embed, sdxl, primary_color
 
+from urllib.request import urlopen, urlretrieve
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
-
-class PokemonPredictor:
-    def __init__(self, dataset_folder="Data/pokemon/pokemon_images", csv_file="Data/pokemon/dataset.csv"):
-        self.orb = cv.ORB_create(nfeatures=175)
-        self.flann = cv.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=9, multi_probe_level=1),
-                                           dict(checks=1))
-        self.fast = cv.FastFeatureDetector_create()
-        self.executor = ThreadPoolExecutor(max_workers=25)
-        self.cache = {}
-        self.best_matches = {}
-        self.csv_file = csv_file
-        self.dataset_folder = dataset_folder
-
-        # Load dataset only once when code starts
-        self.load_dataset()
-
-    def load_dataset(self):
-        print("Loading Images...")
-
-        if os.path.exists(self.csv_file):
-            print("Loading dataset from CSV file...")
-            self.load_from_csv()
-        else:
-            print("CSV file not found, loading images from dataset folder...")
-            self.load_from_images()
-
-    def load_from_csv(self):
-        start_time = time.time()
-        with open(self.csv_file, 'r') as file:
-            reader = csv.reader(file)
-            next(reader)
-            for row in reader:
-                filename, descriptors_str = row
-                descriptors = np.array(json.loads(descriptors_str), dtype=np.uint8)
-                self.cache[filename] = (None, descriptors)
-        print(f"Dataset loaded from CSV in {time.time() - start_time:.2f} seconds")
-
-    def load_from_images(self):
-        start_time = time.time()
-        with open(self.csv_file, 'w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(['Filename', 'Descriptors'])
-
-        for filename in os.listdir(self.dataset_folder):
-            path = os.path.join(self.dataset_folder, filename)
-            if os.path.isfile(path):
-                img = cv.imread(path)
-                if img is not None:
-                    gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-                    keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
-                    if descriptors is not None:
-                        self.cache[filename] = (keypoints, descriptors)
-                        with open(self.csv_file, 'a', newline='') as file:
-                            writer = csv.writer(file)
-                            writer.writerow([filename, descriptors.tolist()])
-
-                        flipped_img = cv.flip(img, 1)
-                        gray_flipped = cv.cvtColor(flipped_img, cv.COLOR_BGR2GRAY)
-                        keypoints_flipped, descriptors_flipped = self.orb.detectAndCompute(gray_flipped, None)
-                        if descriptors_flipped is not None:
-                            flipped_filename = filename.replace(".png", "_flipped.png")
-                            self.cache[flipped_filename] = (keypoints_flipped, descriptors_flipped)
-                            with open(self.csv_file, 'a', newline='') as file:
-                                writer = csv.writer(file)
-                                writer.writerow([flipped_filename, descriptors_flipped.tolist()])
-        
-        print(f"Images loaded in {time.time() - start_time:.2f} seconds")
-
-    def _match_image(self, kpB, desB, cache_item):
-        filename, (kpA, desA) = cache_item
-        if desA is not None and desB is not None and len(desA) > 2 and len(desB) > 2:
-            try:
-                desA = desA.astype(np.uint8)
-                desB = desB.astype(np.uint8)
-                
-                print(f"desA type: {desA.dtype}, shape: {desA.shape}")
-                print(f"desB type: {desB.dtype}, shape: {desB.shape}")
-
-                matches = self.flann.knnMatch(desA, desB, k=2)
-                good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.50 * m[1].distance]
-                
-                if len(good_matches) > 1:
-                    accuracy = len(good_matches) / len(desA) * 100
-                    return filename, accuracy
-            except cv.error as e:
-                print(f"Error in feature matching: {e}")
-        return filename, 0
-
-    def _find_image_inside_image(self, img, template):
-        assert img is not None, "Input image is None"
-        assert template is not None, "Template image is None"
-
-        img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        template_gray = cv.cvtColor(template, cv.COLOR_BGR2GRAY)
-
-        w, h = template_gray.shape[::-1]
-        res = cv.matchTemplate(img_gray, template_gray, cv.TM_CCOEFF_NORMED)
-        threshold = 0.8
-        loc = np.where(res >= threshold)
-
-        boxes = []
-        for pt in zip(*loc[::-1]):
-            boxes.append((pt[0], pt[1], pt[0] + w, pt[1] + h))
-
-        boxes = self._merge_boxes(boxes)
-
-        return boxes
-
-    def _merge_boxes(self, boxes, overlap_threshold=0.5):
-        if not boxes:
-            return []
-
-        boxes = sorted(boxes, key=lambda b: b[0])
-        merged_boxes = []
-
-        for box in boxes:
-            x1, y1, x2, y2 = box
-            if not merged_boxes:
-                merged_boxes.append(box)
-                continue
-
-            last_box = merged_boxes[-1]
-            lx1, ly1, lx2, ly2 = last_box
-
-            ix1 = max(lx1, x1)
-            iy1 = max(ly1, y1)
-            ix2 = min(lx2, x2)
-            iy2 = min(ly2, y2)
-            iw = max(0, ix2 - ix1)
-            ih = max(0, iy2 - iy1)
-
-            inter_area = iw * ih
-            box_area = (x2 - x1) * (y2 - y1)
-            last_box_area = (lx2 - lx1) * (ly2 - ly1)
-            overlap_ratio = inter_area / float(box_area + last_box_area - inter_area)
-
-            if overlap_ratio > overlap_threshold:
-                merged_boxes[-1] = (min(lx1, x1), min(ly1, y1), max(lx2, x2), max(ly2, y2))
-            else:
-                merged_boxes.append(box)
-
-        return merged_boxes
-
-    def predict_pokemon(self, img):
-        best_match = None
-        start_time = time.time()
-        gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        kpB, desB = self.orb.detectAndCompute(gray_img, None)
-
-        if desB is not None:
-            desB = desB.astype(np.uint8)
-
-        if best_match is None:
-            futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
-            results = [future.result() for future in futures]
-            best_match = max(results, key=lambda x: x[1] if x else 0, default=None)
-
-        elapsed_time = round(time.time() - start_time, 2)
-
-        if best_match:
-            pokemon_img_path = os.path.join(self.dataset_folder, best_match[0])
-            target_img = cv.imread(pokemon_img_path)
-
-            if target_img is not None:
-                detection_boxes = self._find_image_inside_image(img, target_img)
-                if detection_boxes:
-                    for box in detection_boxes:
-                        x1, y1, x2, y2 = box
-                        cv.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    print(f"Detected Pokémon areas: {detection_boxes}")
-                else:
-                    print(f"Warning: Pokémon not found in the detection boxes.")
-            else:
-                print(f"Warning: Could not load image for {pokemon_img_path}")
-
-            predicted_pokemon = best_match[0].split("_flipped")[0].replace(".png", "")
-            accuracy = round(best_match[1], 2)
-            return f"{predicted_pokemon.title()}: {100 - accuracy}%", elapsed_time
-        
-        return "No Pokémon detected", elapsed_time
-
-    def load_image_from_url(self, url):
-        try:
-            response = requests.get(url)
-            response.raise_for_status()
-            image = np.asarray(bytearray(response.content), dtype=np.uint8)
-            img = cv.imdecode(image, cv.IMREAD_COLOR)
-            return img
-        except requests.RequestException as e:
-            print(f"Error fetching image from URL: {e}")
-            return None
+from sklearn.cluster import KMeans
+from scipy.spatial import distance
+from skimage.feature import match_template
+from skimage.metrics import structural_similarity as ssim
 
 
 
 
-            
-        
+
+
+
+
+
+import asyncio
+import aiohttp
+import aiofiles
+import aiofiles.os
+from concurrent.futures import ProcessPoolExecutor
+
+
+
+
+
 class Pokemon(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.author_id = 716390085896962058
-        self.predictor = PokemonPredictor()
+        self.image_folder = 'Data/Images/pokemon_images'
         self.primary_color = primary_color
         self.error_custom_embed = error_custom_embed
         self.local_color_memory = []  # Binary local color comparator memory
         self.pokemon_api_url = "https://pokeapi.co/api/v2/pokemon"
         self.pokemon_info_url = "https://pokeapi.co/api/v2/pokemon/{}/"
         
+
+        
+    
     async def fetch_all_pokemon_names(self):
         pokemon_names = []
         url = self.pokemon_api_url
@@ -342,16 +141,15 @@ class Pokemon(commands.Cog):
         with open(filename, 'wb') as f:
             f.write(response.read())
 
-    @commands.command(name='predict')
-    @commands.cooldown(1, 6, commands.BucketType.user)  # 1 use per 24 hours per user
-    async def predict(self, ctx, *, arg=None):
+    async def predict_pokemon_command(self, ctx, arg):
         image_url = None
-
+        
         if arg:
             image_url = arg
         elif ctx.message.attachments:
             image_url = ctx.message.attachments[0].url
         elif ctx.message.reference:
+            # Handle replying to a message with an image
             reference_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
             if reference_message.attachments:
                 image_url = reference_message.attachments[0].url
@@ -360,42 +158,422 @@ class Pokemon(commands.Cog):
                 if embed.image:
                     image_url = embed.image.url
 
-        if image_url:
+        await self.process_prediction(ctx, image_url)
+        
+    async def process_prediction(self, ctx, url):
+     if url:
+        # If URL is provided, start the prediction process directly
+        embed = discord.Embed(
+            title="Predicting Pokémon...",
+            description="Please wait while I predict the Pokémon based on the provided image.",
+            color=self.primary_color()  # Using the primary color function
+        )
+        embed.set_thumbnail(url=url)  # Set the URL as the thumbnail
+        progress_message = await ctx.send(embed=embed)
+
+        try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(image_url) as response:
+                async with session.get(url) as response:
                     if response.status == 200:
                         img_bytes = await response.read()
                         img = Image.open(io.BytesIO(img_bytes))
-                        img = np.array(img.convert('RGB'))  # Convert to numpy array
-
-                        # Use the predictor to predict the Pokémon
-                        prediction, time_taken = self.predictor.predict_pokemon(img)
-                        await ctx.reply(prediction, mention_author=False)
+                        img = img.resize((224, 224))
+                        img = np.array(img.convert('RGB'))
+                        logger.debug("Image received and processed from URL.")
                     else:
-                        await ctx.reply(f"Failed to download image. Status code: {response.status}", mention_author=False)
-        else:
-            await ctx.send("No image found to predict.")
-    
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        if message.author.id == self.author_id and message.embeds:
-            embed = message.embeds[0]
-            if embed.description and 'Guess the pokémon' in embed.description:
-                image_url = embed.image.url
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(image_url) as response:
-                        if response.status == 200:
-                            img_bytes = await response.read()
-                            img = Image.open(io.BytesIO(img_bytes))
-                            img = np.array(img.convert('RGB'))  # Convert to numpy array
+                        await ctx.send("Failed to download image from the provided URL.")
+                        logger.debug("Failed to download image from URL.")
+                        return
 
-                            # Use the predictor to predict the Pokémon
-                            prediction, time_taken = self.predictor.predict_pokemon(img)
-                            await message.channel.send(prediction, reference=message)
-                        else:
-                            await message.channel.send(f"Failed to download image. Status code: {response.status}", reference=message)
+            predicted_pokemon, confidence_score = await self.predict_pokemon(ctx, img)
+
+            if predicted_pokemon:
+                success_embed = discord.Embed(
+                    title="Prediction Result",
+                    description=f"The predicted Pokémon is: **{predicted_pokemon}** with a confidence score of **{confidence_score:.2%}**.",
+                    color=self.primary_color()  # Using the primary color function
+                )
+                success_embed.set_thumbnail(url=url)  # Set the URL as the thumbnail
+                await ctx.send(embed=success_embed)
+                logger.info(f"Prediction result sent: {predicted_pokemon} with score {confidence_score:.2%}")
+            else:
+                failure_embed = discord.Embed(
+                    title="Prediction Failed",
+                    description="Failed to predict the Pokémon. Please try again with a different image.",
+                    color=self.primary_color()  # Using the primary color function
+                )
+                failure_embed.set_thumbnail(url=url)  # Set the URL as the thumbnail
+                await ctx.send(embed=failure_embed)
+                logger.error("Prediction failed.")
+
+        except asyncio.TimeoutError:
+            await progress_message.delete()
+            await ctx.send(":hourglass: Time's up. Operation cancelled.", delete_after=5)
+            logger.info("Timeout occurred. Operation cancelled.")
+
+        except Exception as e:
+            traceback_string = traceback.format_exc()
+            logger.error(f"An error occurred during prediction: {e}\n{traceback_string}")
+            await ctx.send("An error occurred during prediction. Please try again later.")
     
-    @commands.command(help="Displays Pokemon dex information.", aliases=['pokdex', 'dex','d','p'])
+     else:
+        # If no URL is provided, ask the user to provide an image
+        embed = discord.Embed(
+            title="Predict Pokémon",
+            description="Please send an image of the Pokémon to predict or provide a URL to the image.\n\nType `c` to cancel.",
+            color=self.primary_color()  # Using the primary color function
+        )
+        progress_message = await ctx.send(embed=embed)
+
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel
+
+        try:
+            user_response = await self.bot.wait_for('message', timeout=120, check=check)
+
+            if user_response.content.lower() == 'c':
+                await ctx.send("Operation cancelled.")
+                logger.debug("User cancelled the operation.")
+                return
+
+            if user_response.attachments:
+                attachment = user_response.attachments[0]
+                if attachment.filename.endswith(('png', 'jpg', 'jpeg')):
+                    img_bytes = await attachment.read()
+                    img = Image.open(io.BytesIO(img_bytes))
+                    img = img.resize((224, 224))
+                    img = np.array(img.convert('RGB'))
+                    logger.debug("Image received and processed from attachment.")
+
+                    # Start the prediction process
+                    predicted_pokemon, confidence_score = await self.predict_pokemon(ctx, img)
+
+                    if predicted_pokemon:
+                        success_embed = discord.Embed(
+                            title="Prediction Result",
+                            description=f"The predicted Pokémon is: **{predicted_pokemon}** with a confidence score of **{confidence_score:.2%}**.",
+                            color=self.primary_color()  # Using the primary color function
+                        )
+                        await ctx.send(embed=success_embed)
+                        logger.info(f"Prediction result sent: {predicted_pokemon} with score {confidence_score:.2%}")
+                    else:
+                        failure_embed = discord.Embed(
+                            title="Prediction Failed",
+                            description="Failed to predict the Pokémon. Please try again with a different image.",
+                            color=self.primary_color()  # Using the primary color function
+                        )
+                        await ctx.send(embed=failure_embed)
+                        logger.error("Prediction failed.")
+
+                else:
+                    await ctx.send("Please attach a valid image file.")
+                    logger.debug("Invalid image file attached.")
+                    return
+            else:
+                await ctx.send("Please attach an image.")
+                logger.debug("No valid image provided.")
+                return
+
+        except asyncio.TimeoutError:
+            await progress_message.delete()
+            await ctx.send(":hourglass: Time's up. Operation cancelled.", delete_after=5)
+            logger.info("Timeout occurred. Operation cancelled.")
+
+        except Exception as e:
+            traceback_string = traceback.format_exc()
+            logger.error(f"An error occurred during prediction: {e}\n{traceback_string}")
+            await ctx.send("An error occurred during prediction. Please try again later.")
+
+    async def add_pokemon_command(self, ctx, pokemon_name: str):
+        logger.info(f"Attempting to add Pokémon: {pokemon_name}")
+        filename = f"{pokemon_name}.png"
+        filepath = os.path.join(self.image_folder, filename)
+
+        try:
+            # Ensure the image folder exists, create if it doesn't
+            if not os.path.exists(self.image_folder):
+                os.makedirs(self.image_folder)
+
+            if os.path.exists(filepath):
+                await ctx.send(f"The Pokémon {pokemon_name} already exists in the database.")
+                logger.debug(f"The Pokémon {pokemon_name} already exists in the database.")
+                return
+
+            official_artwork_url = await self.fetch_pokemon_info(pokemon_name)
+            logger.debug(f"Official artwork URL for {pokemon_name}: {official_artwork_url}")
+
+            if official_artwork_url:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(official_artwork_url) as response:
+                        if response.status == 200:
+                            image_data = await response.read()
+                            with open(filepath, 'wb') as f:
+                                f.write(image_data)
+                            await ctx.send(f"Added the Pokémon {pokemon_name} to the database.")
+                            logger.info(f"Added the Pokémon {pokemon_name} to the database.")
+                        else:
+                            await ctx.send("Failed to download the image.")
+                            logger.error("Failed to download the image.")
+            else:
+                await ctx.send(f"Failed to fetch information for the Pokémon {pokemon_name}.")
+                logger.error(f"Failed to fetch information for the Pokémon {pokemon_name}.")
+
+        except Exception as e:
+            await ctx.send("An error occurred while adding the Pokémon. Please try again later.")
+            logger.error(f"An error occurred while adding the Pokémon {pokemon_name}: {e}")
+
+    async def download_all_images_command(self, ctx):
+        await ctx.send("Starting download of all Pokémon images. This may take a while.")
+        await self.download_all_images()
+        await ctx.send("Completed download of all Pokémon images.")
+
+    async def predict_pokemon(self, ctx, img, threshold=0.8, batch_size=50, max_concurrency=5):
+         try:
+            logger.debug("Predicting Pokémon from provided image...")
+            async with ctx.typing():
+                if not os.path.exists(self.image_folder):
+                    os.makedirs(self.image_folder)
+
+                # Load Pokémon descriptors
+                pickle_file = os.path.join(self.image_folder, "pokemon_descriptors.pkl")
+                if not os.path.exists(pickle_file) or os.path.getsize(pickle_file) == 0:
+                    pokemon_descriptors = {}
+                    async with aiofiles.open(pickle_file, 'wb') as f:
+                        await f.write(pickle.dumps(pokemon_descriptors))
+                else:
+                    async with aiofiles.open(pickle_file, 'rb') as f:
+                        try:
+                            pokemon_descriptors = pickle.loads(await f.read())
+                        except EOFError:
+                            logger.error("Pickle file is empty or corrupted.")
+                            pokemon_descriptors = {}
+
+                pokemon_files = [f for f in await aiofiles.os.listdir(self.image_folder) if os.path.isfile(os.path.join(self.image_folder, f))]
+                logger.debug(f"Number of Pokémon images found: {len(pokemon_files)}")
+
+                matches_list = []
+                best_match = None
+                highest_score = (float('-inf'), float('-inf'), '')  # Initialize with very low similarity score and empty name
+
+                # Convert image to numpy array and ensure correct color format
+                img_np = np.array(img)
+                img_np = self.ensure_correct_color_format(img_np)
+                if img_np.dtype != np.uint8:
+                    img_np = img_np.astype(np.uint8)
+
+                # Convert image to grayscale for contour detection
+                gray_img = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+                blurred_img = cv2.GaussianBlur(gray_img, (5, 5), 0)
+                edged_img = cv2.Canny(blurred_img, 50, 150)
+                dilated_img = cv2.dilate(edged_img, None, iterations=2)
+                contours, _ = cv2.findContours(dilated_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+                largest_contour_idx = -1
+                largest_contour_area = 0
+
+                for idx, contour in enumerate(contours):
+                    contour_area = cv2.contourArea(contour)
+                    if contour_area > largest_contour_area:
+                        largest_contour_idx = idx
+                        largest_contour_area = contour_area
+
+                if largest_contour_idx != -1:
+                    x, y, w, h = cv2.boundingRect(contours[largest_contour_idx])
+                    cv2.rectangle(img_np, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+                    padding_x = min(w // 2, img_np.shape[1] - w)
+                    padding_y = min(h // 2, img_np.shape[0] - h)
+
+                    roi = img_np[max(y - padding_y, 0):min(y + h + padding_y, img_np.shape[0]),
+                                 max(x - padding_x, 0):min(x + w + padding_x, img_np.shape[1])]
+
+                    orb = cv2.ORB_create()
+                    kp1, des1 = orb.detectAndCompute(roi, None)
+
+                    semaphore = asyncio.Semaphore(max_concurrency)
+
+                    async def process_pokemon_file(pokemon_file):
+                        nonlocal best_match, highest_score
+                        async with semaphore:
+                            pokemon_name, _ = os.path.splitext(pokemon_file)
+                            stored_img_path = os.path.join(self.image_folder, pokemon_file)
+
+                            if not os.path.isfile(stored_img_path):
+                                logger.warning(f"Not a file: {stored_img_path}")
+                                return
+
+                            try:
+                                async with aiofiles.open(stored_img_path, mode='rb') as f:
+                                    stored_img_bytes = await f.read()
+                                stored_img_array = np.frombuffer(stored_img_bytes, dtype=np.uint8)
+                                stored_img = cv2.imdecode(stored_img_array, cv2.IMREAD_UNCHANGED)
+                                stored_img = self.ensure_correct_color_format(stored_img)
+                                stored_img_gray = cv2.cvtColor(stored_img, cv2.COLOR_RGB2GRAY)
+
+                                kp2, des2 = orb.detectAndCompute(stored_img_gray, None)
+                                bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+                                matches = bf.match(des1, des2)
+                                matches = sorted(matches, key=lambda x: x.distance)
+
+                                similarity_score = len(matches) / len(kp1) if kp1 else 0
+                                contour_similarity = await self.calculate_similarity(roi, stored_img)
+
+                                combined_similarity = (similarity_score + contour_similarity[0]) / 2
+
+                                if combined_similarity > highest_score[0]:
+                                    highest_score = (combined_similarity, len(matches), pokemon_name)
+                                    best_match = pokemon_name
+
+                                logger.debug(f"Comparing {pokemon_name} with combined similarity score: {combined_similarity:.2f}")
+                                matches_list.append((pokemon_name, combined_similarity))
+
+                            except Exception as e:
+                                logger.warning(f"Unable to process image: {stored_img_path}. Error: {e}")
+
+                    # Process images in batches to manage memory usage
+                    for i in range(0, len(pokemon_files), batch_size):
+                        batch_files = pokemon_files[i:i + batch_size]
+                        await asyncio.gather(*[process_pokemon_file(pokemon_file) for pokemon_file in batch_files])
+
+                    if best_match:
+                        matched_img_path = os.path.join(self.image_folder, best_match + ".png")
+                        async with aiofiles.open(matched_img_path, mode='rb') as f:
+                            matched_img_bytes = await f.read()
+                        matched_img_array = np.frombuffer(matched_img_bytes, dtype=np.uint8)
+                        matched_img = cv2.imdecode(matched_img_array, cv2.IMREAD_UNCHANGED)
+                        matched_img = self.ensure_correct_color_format(matched_img)
+                        resized_matched_img = cv2.resize(matched_img, (roi.shape[1], roi.shape[0]))
+
+                        roi_path = f'{self.image_folder}/detection/roi.png'
+                        matched_img_path = f'{self.image_folder}/detection/matched_img.png'
+                        combined_img_path = f'{self.image_folder}/detection/combined_comparison.png'
+                        detected_objects_path = f'{self.image_folder}/detection/detected_objects.png'
+
+                        await aiofiles.os.makedirs(os.path.dirname(roi_path), exist_ok=True)
+
+                        cv2.imwrite(roi_path, roi)
+                        cv2.imwrite(matched_img_path, resized_matched_img)
+                        combined_img = np.hstack((roi, resized_matched_img))
+                        cv2.imwrite(combined_img_path, combined_img)
+
+                        # Send images in embed
+                        embed = discord.Embed(title="Best Match", description=f"The best match found is {best_match}")
+
+                        # Attach the images
+                        embed.set_image(url=f"attachment://combined_comparison.png")
+                        embed.set_thumbnail(url=f"attachment://roi.png")
+
+                        await ctx.send(file=discord.File(combined_img_path, filename="combined_comparison.png"), embed=embed)
+
+                    if highest_score[0] > threshold:
+                        logger.info(f"Best match: {best_match} with score {highest_score[0]:.2f}")
+                        await ctx.send(f"Best match: {best_match} with score {highest_score[0]:.2f}")
+                    else:
+                        logger.info("No good match found")
+                        await ctx.send("No good match found")
+
+                    return best_match, highest_score[0]
+
+         except Exception as e:
+            error_message = "An error occurred while predicting Pokémon."
+            logger.error(f"{error_message}: {e}")
+            await self.error_custom_embed(self.bot, ctx, error_message, title="Pokémon Prediction Error")
+            traceback.print_exc()
+    
+    
+    
+    async def calculate_similarity(self, img1, img2, size=(256, 256), num_sections=9, bins_per_channel=64):
+     try:
+        # Function to calculate color histogram similarity
+        def calculate_color_histogram_similarity(hist1, hist2):
+            return cv2.compareHist(hist1, hist2, cv2.HISTCMP_INTERSECT)
+
+        # Function to calculate edge similarity using Canny and contours
+        def calculate_edge_similarity(img1, img2):
+            # Convert images to grayscale
+            gray1 = cv2.cvtColor(img1, cv2.COLOR_RGB2GRAY)
+            gray2 = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY)
+
+            # Use Canny edge detector to find edges with consistent thresholds
+            edges1 = cv2.Canny(gray1, 100, 200)
+            edges2 = cv2.Canny(gray2, 100, 200)
+
+            # Find contours in the edges
+            contours1, _ = cv2.findContours(edges1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            contours2, _ = cv2.findContours(edges2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            # Draw contours on a blank image
+            contour_img1 = np.zeros_like(gray1)
+            contour_img2 = np.zeros_like(gray2)
+            cv2.drawContours(contour_img1, contours1, -1, (255, 255, 255), thickness=cv2.FILLED)
+            cv2.drawContours(contour_img2, contours2, -1, (255, 255, 255), thickness=cv2.FILLED)
+
+            # Resize the contour images to the same size for comparison
+            contour_img1 = cv2.resize(contour_img1, size)
+            contour_img2 = cv2.resize(contour_img2, size)
+
+            # Compute the similarity using skimage's structural similarity (SSIM)
+            edge_similarity, _ = ssim(contour_img1, contour_img2, full=True)
+
+            return edge_similarity
+
+        # Resize images
+        img1_resized = cv2.resize(img1, size)
+        img2_resized = cv2.resize(img2, size)
+
+        # Calculate color histogram similarity
+        hist1 = cv2.calcHist([img1_resized], [0, 1, 2], None, [bins_per_channel] * 3, [0, 256] * 3)
+        hist2 = cv2.calcHist([img2_resized], [0, 1, 2], None, [bins_per_channel] * 3, [0, 256] * 3)
+
+        hist_similarity = calculate_color_histogram_similarity(hist1, hist2)
+
+        # Calculate edge similarity
+        edge_similarity = calculate_edge_similarity(img1_resized, img2_resized)
+
+        return hist_similarity, edge_similarity
+
+     except Exception as e:
+        error_message = "An error occurred while calculating image similarity."
+        logger.error(f"{error_message}: {e}")
+        await self.error_custom_embed(self.bot, ctx, error_message, title="Image Similarity Error")
+        traceback.print_exc()
+    
+    def ensure_correct_color_format(self, img):
+     """
+     Convert image to RGB format.
+     """
+     if img.shape[2] == 3:  # Check if the image has 3 color channels
+        return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+     elif img.shape[2] == 4:  # Check if the image has 4 color channels (with alpha)
+        return cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
+     return img
+
+    
+    @commands.command(name='predict', description="Predict Pokémon from image, add new Pokémon, or download all images", aliases=['p'])
+    async def pokemon_command(self, ctx, action: str = None, *, arg: str = None):
+        if action == 'predict' or action == None:
+            await self.predict_pokemon_command(ctx, arg)
+        elif action == 'add':
+            await self.add_pokemon_command(ctx, arg)
+        elif action == 'all':
+            await self.download_all_images_command(ctx)
+        else:
+            embed = discord.Embed(
+                title=" ",
+                description="Use these commands to interact with Pokémon predictions and database:\n\n"
+                            "- **`pokemon predict <url:optional>`**: Predict Pokémon from an image.\n"
+                            "- **`pokemon add <pokemon_name>`**: Add a Pokémon to the database.\n"
+                            "- **`pokemon all`**: Download all Pokémon images. (in testing)\n\n"
+                            "> <:help:1245611726838169642>  Remember to replace `<url>` with a valid image `url (.png, .jpg)` and `<pokemon_name>` with the Pokémon's name.",
+                color=discord.Color.green()
+            )
+           
+            await ctx.reply(embed=embed)
+       
+
+
+
+    @commands.command(help="Displays Pokemon dex information.", aliases=['pokdex', 'dex','d'])
     async def pokemon(self, ctx, *, args=None, form=None):   
      # Get the primary color of the bot's icon
      primary_color = self.primary_color()
@@ -595,20 +773,9 @@ class Pokemon(commands.Cog):
         sentences = text.split('.')
         capitalized_sentences = '. '.join(sentence.strip().capitalize() for sentence in sentences if sentence.strip())
         return capitalized_sentences
-    
-     def get_pokemon_description(pokemon_id, file_path='Data/pokemon/pokemon_description.csv'):
-      with open(file_path, mode='r', encoding='utf-8') as csv_file:
-        reader = csv.DictReader(csv_file)
-        
-        for row in reader:
-            if row['id'] == str(pokemon_id):
-                return row['description']
-       
-      return "Pokémon ID not found"
-    
 
-     pokemon_description = get_pokemon_description(id)  # await get_pokemon_info(data_species,name) or await find_pokemon_description(pokemon_name) or " "
-     
+     pokemon_description = await get_pokemon_info(data_species,name) or await find_pokemon_description(pokemon_name) or " "
+   
      species_url = data['species']['url']
      species_data = requests.get(species_url).json()
      species_name = species_data['name']
@@ -714,25 +881,38 @@ class Pokemon(commands.Cog):
       else:
         return None
 
-      
-    
-     def get_pokemon_region(pokemon_id, file_path='Data/pokemon/pokemon_description.csv'):
-        try:
-            with open(file_path, mode='r', encoding='utf-8') as csv_file:
-                reader = csv.DictReader(csv_file)
-                for row in reader:
-                    if row['id'] == str(pokemon_id):
-                        return row['region']
-        except FileNotFoundError:
+            
+
+
+
+
+
+
+   
+     def get_pokemon_region(data_species,pokemon_name):
+ 
+      if data_species:
+       try:
+        generation_url = data_species['generation']['url']
+
+        # Fetch information about the generation (region)
+        response_generation = requests.get(generation_url)
+
+        if response_generation.status_code == 200:
+            data_generation = response_generation.json()
+            region_name = data_generation['main_region']['name']
+            print("Region Name: ",region_name)
+            return region_name
+            
+        else:
             return None
-        except PermissionError:
-            return None
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return None
+       except KeyError:
+        print(KeyError)
+        return None  # or handle the missing key case accordingly
+      else:
         return None
-    
-     region = get_pokemon_region(id) or None
+     
+     region = get_pokemon_region(data_species,name) or None
 
      language_codes = ["ja", "ja", "ja", "en", "de", "fr"]
       # Define a mapping between language codes and flag emojis
@@ -963,14 +1143,14 @@ class Pokemon(commands.Cog):
    
      if pokemon_description != " ":
         
-      embed = discord.Embed(title=f" #{id} — {species_name.title()}" if type != "shiny" else f" #{id} — ✨ {species_name.title()}" , description=f'\n{pokemon_description}\n',color=color)  # Blue color
+      embed = discord.Embed(title=f" #{id} — {species_name.title()}" if type != "shiny" else f" #{id} — ✨ {species_name.title()}" , description=f'\n{pokemon_description}.\n',color=color)  # Blue color
      else:
              embed = discord.Embed(title=f" #{id} — {species_name.title()}" if type != "shiny" else f" #{id} — ✨ {species_name.title()}", color=color)  
    
             
      pokemon_dex_name = f" #{id} — {species_name.title()}" if type != "shiny" else f" #{id} — ✨ {species_name.title()}"
      embed.set_image(url=image_url)  
-     description= f'\n{pokemon_description}\n'if pokemon_description != " " else None
+     description= f'\n{pokemon_description}.\n'if pokemon_description != " " else None
 
     
      # Information about the Pokémon itself
@@ -1163,7 +1343,7 @@ class Pokemon(commands.Cog):
      print('is_shiny: ',type)      
      self.bot.add_view(Pokebuttons(alt_names_str,species_name))
      
-     await ctx.reply(embed=embed,view=Pokebuttons(alt_names_str,species_name,formatted_base_stats,type,wes,pokemon_type,base_stats,image_url,h_w,image_thumb,pokemon_dex_name,color,data,gender_differ,region, description,gender_info), mention_author=False)
+     await ctx.reply(embed=embed,view=Pokebuttons(alt_names_str,species_name,formatted_base_stats,type,wes,pokemon_type,base_stats,image_url,h_w,image_thumb,pokemon_dex_name,color,data,gender_differ,region, description,gender_info))
     
 
             
@@ -1199,9 +1379,9 @@ class Pokebuttons(discord.ui.View):
         pokemon_forms = self.get_pokemon_forms()
         
         if pokemon_forms and len(pokemon_forms) > 1:
-            self.add_item(PokeSelect(pokemon_forms, self.image_url, self.alt_names_str, self.pokemon_shiny,self.gender_info))
+            self.add_item(PokeSelect(pokemon_forms, self.image_url, self.alt_names_str, self.region, self.description,self.pokemon_shiny,self.gender_info))
         
-
+    
         
         
         # Assuming the file path to the Pokemon directory
@@ -1472,7 +1652,7 @@ class Pokebuttons(discord.ui.View):
 
 
 class PokeSelect(discord.ui.Select):
-    def __init__(self, pokemon_forms, default_image_url, alt_names, pokemon_shiny, gender):
+    def __init__(self, pokemon_forms, default_image_url,alt_names, region, description, pokemon_shiny,gender):
         options = []
         for index, form in enumerate(pokemon_forms):
             form_name = form['name']
@@ -1481,102 +1661,77 @@ class PokeSelect(discord.ui.Select):
         super().__init__(placeholder="Form", options=options, custom_id="Select_Pokemon_Form")
         self.default_image_url = default_image_url
         self.alt_names = alt_names
+        self.region = region
+        self.description = description
         self.pokemon_type = pokemon_shiny
         self.gender = gender
+        
 
         self.flag_mapping = {
-            "en": "🇬🇧", "fr": "🇫🇷", "es": "🇪🇸", "de": "🇩🇪", "it": "🇮🇹", "ja": "🇯🇵", "ko": "🇰🇷", "zh-Hans": "🇨🇳", "ru": "🇷🇺", "es-MX": "🇲🇽",
-            "pt": "🇵🇹", "nl": "🇳🇱", "tr": "🇹🇷", "ar": "🇸🇦", "th": "🇹🇭", "vi": "🇻🇳", "pl": "🇵🇱", "sv": "🇸🇪", "da": "🇩🇰", "no": "🇳🇴",
-            "fi": "🇫🇮", "el": "🇬🇷", "id": "🇮🇩", "ms": "🇲🇾", "fil": "🇵🇭", "hu": "🇭🇺", "cs": "🇨🇿", "sk": "🇸🇰", "ro": "🇷🇴", "uk": "🇺🇦",
-            "hr": "🇭🇷", "bg": "🇧🇬", "et": "🇪🇪", "lv": "🇱🇻", "lt": "🇱🇹", "sl": "🇸🇮", "mt": "🇲🇹", "sq": "🇦🇱", "mk": "🇲🇰", "bs": "🇧🇦",
-            "sr": "🇷🇸", "cy": "🇨🇾", "ga": "🇮🇪", "gd": "🏴", "kw": "🇰🇾", "br": "🇧🇷", "af": "🇿🇦", "xh": "🇿🇦", "zu": "🇿🇦",
-            "tn": "🇿🇦", "st": "🇿🇦", "ss": "🇿🇦", "nr": "🇿🇦", "nso": "🇿🇦", "ts": "🇿🇦", "ve": "🇿🇦", "xog": "🇺🇬", "lg": "🇺🇬", "ak": "🇬🇭",
-            "tw": "🇬🇭", "bm": "🇧🇫", "my": "🇲🇲", "km": "🇰🇭", "lo": "🇱🇦", "am": "🇪🇹", "ti": "🇪🇹", "om": "🇪🇹", "so": "🇸🇴", "sw": "🇰🇪",
-            "rw": "🇷🇼", "yo": "🇳🇬", "ig": "🇳🇬", "ha": "🇳🇬", "bn": "🇧🇩", "pa": "🇮🇳", "gu": "🇮🇳", "or": "🇮🇳", "ta": "🇮🇳", "te": "🇮🇳",
-            "kn": "🇮🇳", "ml": "🇮🇳", "si": "🇱🇰", "ne": "🇳🇵", "dz": "🇧🇹", "ti": "🇪🇷", "be": "🇧🇾", "kk": "🇰🇿", "uz": "🇺🇿", "ky": "🇰🇬"
-        }
-
-        self.region_mappings = {
-            "paldea": "<:Paldea:1212335178714980403>",
-            "sinnoh": "<:Sinnoh:1212335180459544607>",
-            "alola": "<:Alola:1212335185228472411>",
-            "kalos": "<:Kalos:1212335190656024608>",
-            "galar": "<:Galar:1212335192740470876>",
-            "pasio": "<:848495108667867139:1212335194628034560>",
-            "hoenn": "<:Hoenn:1212335197304004678>",
-            "unova": "<:Unova:1212335199095095306>",
-            "kanto": "<:Kanto:1212335202341363713>",
-            "johto": "<:Johto:1212335202341363713>"
-        }
-
+         "en": "🇬🇧", "fr": "🇫🇷", "es": "🇪🇸", "de": "🇩🇪", "it": "🇮🇹", "ja": "🇯🇵", "ko": "🇰🇷", "zh-Hans": "🇨🇳", "ru": "🇷🇺", "es-MX": "🇲🇽",
+         "pt": "🇵🇹", "nl": "🇳🇱", "tr": "🇹🇷", "ar": "🇸🇦", "th": "🇹🇭", "vi": "🇻🇳", "pl": "🇵🇱", "sv": "🇸🇪", "da": "🇩🇰", "no": "🇳🇴",
+         "fi": "🇫🇮", "el": "🇬🇷", "id": "🇮🇩", "ms": "🇲🇾", "fil": "🇵🇭", "hu": "🇭🇺", "cs": "🇨🇿", "sk": "🇸🇰", "ro": "🇷🇴", "uk": "🇺🇦",
+         "hr": "🇭🇷", "bg": "🇧🇬", "et": "🇪🇪", "lv": "🇱🇻", "lt": "🇱🇹", "sl": "🇸🇮", "mt": "🇲🇹", "sq": "🇦🇱", "mk": "🇲🇰", "bs": "🇧🇦",
+         "sr": "🇷🇸", "cy": "🇨🇾", "ga": "🇮🇪", "gd": "🏴", "kw": "🇰🇾", "br": "🇧🇷", "af": "🇿🇦", "xh": "🇿🇦", "zu": "🇿🇦",
+         "tn": "🇿🇦", "st": "🇿🇦", "ss": "🇿🇦", "nr": "🇿🇦", "nso": "🇿🇦", "ts": "🇿🇦", "ve": "🇿🇦", "xog": "🇺🇬", "lg": "🇺🇬", "ak": "🇬🇭",
+         "tw": "🇬🇭", "bm": "🇧🇫", "my": "🇲🇲", "km": "🇰🇭", "lo": "🇱🇦", "am": "🇪🇹", "ti": "🇪🇹", "om": "🇪🇹", "so": "🇸🇴", "sw": "🇰🇪",
+         "rw": "🇷🇼", "yo": "🇳🇬", "ig": "🇳🇬", "ha": "🇳🇬", "bn": "🇧🇩", "pa": "🇮🇳", "gu": "🇮🇳", "or": "🇮🇳", "ta": "🇮🇳", "te": "🇮🇳",
+         "kn": "🇮🇳", "ml": "🇮🇳", "si": "🇱🇰", "ne": "🇳🇵", "dz": "🇧🇹", "ti": "🇪🇷", "be": "🇧🇾", "kk": "🇰🇿", "uz": "🇺🇿", "ky": "🇰🇬"}
     def get_flag(self, lang):
-        return self.flag_mapping.get(lang)
-
-    def get_pokemon_description(self, pokemon_id, file_path='Data/pokemon/pokemon_description.csv'):
-        try:
-            with open(file_path, mode='r', encoding='utf-8') as csv_file:
-                reader = csv.DictReader(csv_file)
-                for row in reader:
-                    if row['id'] == str(pokemon_id):
-                        return row['description']
-        except FileNotFoundError:
-            return "File not found"
-        except PermissionError:
-            return "Permission denied"
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return f"An error occurred: {e}"
-        return "Pokémon ID not found"
-
-    def get_pokemon_region(self, pokemon_id, file_path='Data/pokemon/pokemon_description.csv'):
-        try:
-            with open(file_path, mode='r', encoding='utf-8') as csv_file:
-                reader = csv.DictReader(csv_file)
-                for row in reader:
-                    if row['id'] == str(pokemon_id):
-                        return row['region']
-        except FileNotFoundError:
-            return None
-        except PermissionError:
-            return None
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return None
-        return None
-
+        # Retrieve the flag emoji for the given language code
+        flag = self.flag_mapping.get(lang)
+        return flag 
+        
     def get_alternate_names(self, pokemon_name):
         alternate_names = []
+
+        # Define the URL for the Pokemon form endpoint
         form_endpoint = f"https://pokeapi.co/api/v2/pokemon-form/{pokemon_name}"
+
         try:
+            # Fetch alternate names from the Pokemon form endpoint
             response = requests.get(form_endpoint)
-            response.raise_for_status()
+            response.raise_for_status()  # Raise an exception for any error status code
             data = response.json()
+
+            # Extract alternate names from the response data
             for name_data in data['names']:
                 lang = name_data['language']['name']
                 name = name_data['name']
                 flag = self.flag_mapping.get(lang)
                 if flag and name.lower() != lang.lower():
-                    alternate_names.append((name, lang))
-        except requests.exceptions.RequestException:
+                    alternate_names.append((name, lang))  # Append a tuple (name, lang)
+
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching alternate names from form endpoint: {e}")
+            
+            # If there's an error, try fetching from the species endpoint
             species_endpoint = f"https://pokeapi.co/api/v2/pokemon/{pokemon_name}"
             try:
                 response = requests.get(species_endpoint)
-                response.raise_for_status()
+                response.raise_for_status()  # Raise an exception for any error status code
                 data = response.json()
+
+                # Extract alternate names from the response data
                 for name_data in data['names']:
                     lang = name_data['language']['name']
                     name = name_data['name']
                     flag = self.flag_mapping.get(lang)
                     if flag and name.lower() != lang.lower():
-                        alternate_names.append((name, lang))
+                         alternate_names.append((name, lang))  # Append a tuple (name, lang)
+
             except requests.exceptions.RequestException as e:
-                print(f"Error fetching alternate names: {e}")
+                print(f"Error fetching alternate names from species endpoint: {e}")
+
         return alternate_names
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
+
         selected_form_url = self.values[0]
+        print(f"Selected form URL: {selected_form_url}")
         response = requests.get(selected_form_url)
+        print(f"Response status code: {response.status_code}")
 
         if response.status_code == 200:
             data = response.json()
@@ -1584,72 +1739,91 @@ class PokeSelect(discord.ui.Select):
             if 'sprites' in data and 'other' in data['sprites']:
                 if 'official-artwork' in data['sprites']['other']:
                     if self.pokemon_type == 'shiny':
-                        official_artwork_url = data['sprites']['other']['official-artwork']['front_shiny']
-                        image_thumb = data['sprites']['versions']['generation-v']['black-white']['front_shiny']
+                      official_artwork_url = data['sprites']['other']['official-artwork']['front_shiny']
+                      image_thumb = data['sprites']['versions']['generation-v']['black-white']['front_shiny']
+                      print("Image pixel pokemon sprite: ", image_thumb)
+
                     else:
-                        official_artwork_url = data['sprites']['other']['official-artwork']['front_default']
-                        image_thumb = data['sprites']['versions']['generation-v']['black-white']['front_default']
+                       official_artwork_url = data['sprites']['other']['official-artwork']['front_default']
+                       image_thumb = data['sprites']['versions']['generation-v']['black-white']['front_default']
+                       print("Image pixel pokemon sprite: ", image_thumb)
+                    print("Pokemon_Shiny: ", self.pokemon_type)
+          
 
             embed = interaction.message.embeds[0]
             if official_artwork_url:
+                print(f"Setting official artwork URL: {official_artwork_url}")
                 embed.set_image(url=official_artwork_url)
             else:
+                print("Official artwork URL not found.")
                 embed.set_image(url=self.default_image_url)
 
+            # Fetch additional data from the PokeAPI
             pokemon_data = requests.get(selected_form_url).json()
             if pokemon_data:
-                description = self.get_pokemon_description(pokemon_data['id'])
+                # Update the footer with height, weight, and gender information
                 height, weight = (float(int(pokemon_data['height'])) / 10, float(int(pokemon_data['weight'])) / 10)
-                footer_text = f"Height: {height:.2f} m\nWeight: {weight:.2f} kg" if self.gender is None else f"Height: {height:.2f} m\nWeight: {weight:.2f} kg\t\t" + self.gender
+                footer_text = f"Height: {height:.2f} m\nWeight: {weight:.2f} kg" if self.gender == None else f"Height: {height:.2f} m\nWeight: {weight:.2f} kg\t\t" + self.gender              
                 embed.title = f"#{pokemon_data['id']} — {pokemon_data['name'].replace('-', ' ').title()}" if self.pokemon_type != 'shiny' else f"#{pokemon_data['id']} — ✨ {pokemon_data['name'].replace('-', ' ').title()}"
-                embed.description = description
-                if image_thumb: 
-                 embed.set_footer(icon_url=str(image_thumb), text=footer_text)
-                else:
-                 embed.set_footer(text=footer_text)
+                embed.description = "\n "
+                print("Found image sprite: ",image_thumb)
+                embed.set_footer(icon_url=str(image_thumb),text=footer_text)
 
+                # Update the Names field with flag emoji and name
+                names_field = None
+                for field in embed.fields:
+                    if field.name == 'Names':
+                        names_field = field
+                        break
 
-                # Remove previous Names field if it exists
-                names_field = next((field for field in embed.fields if field.name == 'Names'), None)
-                if names_field:
-                    embed.remove_field(embed.fields.index(names_field))
-                
-                embed.clear_fields() # Clear Fields
-                
-                # Add Region field
-                pokemon_region = self.get_pokemon_region(pokemon_data['id'])
-                if pokemon_region and pokemon_region in self.region_mappings:
-                    region_emoji = self.region_mappings[pokemon_region]
-                    embed.add_field(name='Region', value=f"{region_emoji} {pokemon_region.title()}", inline=True)
-                    
-                # Add alternate names
                 if names_field:
                     alternate_names = self.get_alternate_names(pokemon_data['name'])
                     alt_names_info = {}
                     for name, lang in alternate_names:
+                        # Create a unique key for each name
                         key = name.lower()
-                        flag = self.flag_mapping.get(lang, None)
-                        if name.lower() != lang.lower() and flag is not None:
-                            name_with_flag = f"{flag} {name}"
-                            alt_names_info[key] = name_with_flag
+                        flag = self.flag_mapping.get(lang, None)  # Get the flag for the language, or None if not found
 
+                        # Check if the Pokemon name is the same as the language name, and skip it
+                        if name.lower() != lang.lower() and flag is not None:
+                            # Concatenate flag and name
+                            name_with_flag = f"{flag} {name}"
+
+                            # Add to the dictionary, ensuring uniqueness based on the name
+                            alt_names_info[key] = name_with_flag
+                
+                    # Sorting the dictionary by value length as the primary sorting criterion
                     sorted_names_by_length = dict(sorted(alt_names_info.items(), key=lambda item: len(item[1])))
 
+                    # If the length sorting doesn't work correctly, resort alphabetically by Pokemon name
                     if len(sorted_names_by_length) != len(alt_names_info):
                         sorted_names_by_name = dict(sorted(alt_names_info.items(), key=lambda item: item[1]))
                         name_list = sorted(list(sorted_names_by_name.values()))
                     else:
                         name_list = sorted(list(sorted_names_by_length.values()))
 
+                    # Join the results with newline characters
                     alt_names_str = "\n".join(name_list[:6])
-                    embed.add_field(name='Names', value=alt_names_str, inline=True)
+                    embed.clear_fields()
+                    if len(alt_names_str) < 1:
+                        print("Region ", self.region)
+                        embed.add_field(name="Region",value=self.region, inline=True)
+                        if self.description != None:
+                            print("Description ", self.description)
+                            embed.description = self.description
+                            
+                        else:
+                            embed.set_footer(icon_url=image_thumb,text=footer_text)
+                    else:
+                         embed.set_footer(icon_url=image_thumb,text=footer_text)
+                    embed.add_field(name="Names",value=alt_names_str if len(alt_names_str) > 1 else self.alt_names,inline=True)
+                    await interaction.message.edit(embed=embed)
 
-                
+        await super().callback(interaction)
 
-            await interaction.message.edit(embed=embed)
-        else:
-            await interaction.response.send_message("Error fetching data for the selected form.", ephemeral=True)
-
+        
+        
+        
         
         
         
@@ -1735,6 +1909,6 @@ class Strength_weakness(discord.ui.View):
 
         return {}
 
-
+        
 def setup(bot):
     bot.add_cog(Pokemon(bot))

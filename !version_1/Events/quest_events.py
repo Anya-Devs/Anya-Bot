@@ -97,7 +97,6 @@ class Quest_Checker(commands.Cog):
 
         if quest_emoji in message_emoji_names or quest_emoji in unicode_emojis:
             quest['progress'] += 1
-            await message.add_reaction('<:anyasus:1244195699331960863>')
             await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
 
             if quest['progress'] >= quest['times']:
@@ -135,13 +134,11 @@ class Quest_Checker(commands.Cog):
 
                         if quest_emoji == reaction_emoji:
                             quest['progress'] += 1
-                            await message.add_reaction('<:anyasus:1244195699331960863>')
                             await self.update_quest_progress(guild_id, user_id, quest['quest_id'], quest['progress'])
-                            user = await self.bot.fetch_user(user_id)
 
                             if quest['progress'] >= quest['times']:
                                 times = quest['times']
-                                user = user
+                                user = reaction.user
                                 quest_id = quest['quest_id']
                                 reward = quest['reward']
                                 await self.complete_quest(guild_id, user_id, quest, times, user, quest_id, message, method='reaction', reward=reward)

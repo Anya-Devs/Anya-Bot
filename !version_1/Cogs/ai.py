@@ -41,12 +41,12 @@ class Ai(commands.Cog):
         
         self.huggingface_url = 'https://api-inference.huggingface.co/models/ehristoforu/dalle-3-xl-v2'
         self.api_key = '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'
-        self.vision_model_file = 'Data/commands/ai/vision_model.txt'
-        self.options = VisionModelOptions(self.vision_model_file)
+     
+        self.options = VisionModelOptions('Data/Ai/vision_model.txt')
         self.error_custom_embed = error_custom_embed
 
         # Load vision model from file or set default if file does not exist
-        self.vision_model = self.load_vision_model(self.vision_model_file)
+        self.vision_model = self.load_vision_model('Data/Ai/vision_model.txt')
 
     def load_vision_model(self, file_path: str) -> str:
         """
@@ -84,10 +84,10 @@ class Ai(commands.Cog):
         except IOError as e:
             print(f"Error saving vision model: {e}")
             
-    @commands.command(name='vision_model', aliases=['vm'], description="Change the vision model identifier or show the current model",hidden=True)
+    @commands.command(name='vision_model', aliases=['vm'], description="Change the vision model identifier or show the current model")
     async def set_vision_model(self, ctx: commands.Context, model_id: str = None):
         """Command to change the vision model and update the text file. Show current model if no ID is provided."""
-        file_path = self.vision_model_file
+        file_path = 'Data/Ai/vision_model.txt'
         vision_options = VisionModelOptions(file_path)
 
         if model_id:
@@ -132,33 +132,43 @@ class Ai(commands.Cog):
                 await ctx.send("You took too long to respond. Please try the command again.")
             except ValueError:
                 await ctx.send("Invalid input. Please respond with a number.")
-                
-                
     async def generate_image(self, prompt: str) -> str:
-     headers = {"Authorization": f"Bearer {self.api_key}"}
-     payload = {"inputs": prompt, "options": {"wait_for_model": True}}
+        headers = {
+            "Authorization": f"Bearer {self.api_key}"
+        }
+        payload = {
+            "inputs": prompt + " <lora:dalle-3-xl-lora-v2:0.8>",
+            "options": {
+                "wait_for_model": True
+            }
+        }
 
-     max_retries = 3
-     output_dir = Path("Data/commands/ai/images")
-     output_dir.mkdir(parents=True, exist_ok=True)
+        max_retries = 5
+        backoff_factor = 2
+        output_dir = Path("Data/Image/Ai")
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-     for attempt in range(max_retries):
-        async with aiohttp.ClientSession() as session:
-            async with session.post(self.huggingface_url, headers=headers, json=payload) as response:
-                if response.status == 200:
-                    image_bytes = await response.read()
-                    output_path = output_dir / f"generated_image_{attempt}.png"
-                    with open(output_path, "wb") as image_file:
-                        image_file.write(image_bytes)
-                    return str(output_path)
-                elif response.status == 500:
-                    error_message = await response.text()
-                    if "CUDA out of memory" in error_message and attempt < max_retries - 1:
-                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
+        for attempt in range(max_retries):
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.huggingface_url, headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        image_bytes = await response.read()
+                        output_path = output_dir / "generated_image.png"
+                        with open(output_path, "wb") as image_file:
+                            image_file.write(image_bytes)
+                        return str(output_path)
+                    elif response.status == 500:
+                        error_message = await response.text()
+                        if "CUDA out of memory" in error_message:
+                            if attempt < max_retries - 1:
+                                wait_time = backoff_factor ** attempt
+                                await asyncio.sleep(wait_time)
+                            else:
+                                raise Exception(f"Failed to generate image: {response.status} - {error_message}")
+                        else:
+                            raise Exception(f"Failed to generate image: {response.status} - {error_message}")
                     else:
-                        raise Exception(f"Failed to generate image: {response.status} - {error_message}")
-                else:
-                    raise Exception(f"Failed to generate image: {response.status} - {await response.text()}")
+                        raise Exception(f"Failed to generate image: {response.status} - {await response.text()}")
 
     @commands.command(name='imagine', description="Generate an image", aliases=['i'])
     async def imagine(self, ctx: commands.Context, *, prompt: str):
@@ -180,7 +190,7 @@ class Ai(commands.Cog):
          async def vision(image_link: str, prompt: str = ' ') -> str:
           try:
             response = await self.openai_client.chat.completions.create(
-                model= 'gemini-1.5-pro', #self.vision_model,
+                model=self.vision_model,
                 messages=[
                     {
                         "role": "user",
@@ -200,7 +210,7 @@ class Ai(commands.Cog):
 
          try:
 
-          prompt = ('Speak in childlike wonder and innocence, use alittle bit of childlike grammar like a 6 year old. Read the images mind like a telapath. Have the vocab and personality of Anya Forger form spy x family thus make her your persona. Be logical')
+          prompt = ('You are Anya Forger from spy x family. Describe the image, making sure you use perfect grammar but use phrases of Anya Forgers vocabulary, when describing but be summizing but in Anyas personality of expression. Speak organized and concise.')
           async with ctx.typing():
             message = await ctx.reply('> **Please wait while I analyze the image...**')
 
@@ -236,7 +246,7 @@ class Ai(commands.Cog):
             logger.info(f"Prompt: {prompt}")
 
             response = await vision(image_url, prompt)
-            embed = discord.Embed(description=f'-# Asked by {ctx.author.mention}\n\n**Vision** - {response}', color=primary_color())
+            embed = discord.Embed(description=f'Asked by {ctx.author.mention}\n\nVision - {response}', color=primary_color())
             embed.set_thumbnail(url=image_url)
             embed.set_footer(icon_url=self.bot.user.avatar, text=f'Thanks for using {self.bot.user.name} | Model: {self.vision_model} | Inspired by alphast101')
             await message.delete()
@@ -254,9 +264,6 @@ class VisionModelOptions:
     def __init__(self, file_path: str):
         self.file_path = file_path
         self.models: List[str] = [
-            'gemini-1.5-pro-exp',
-            'gemini-1.5-pro',
-            'gemini-1.5-pro-exp-0801',
             'gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gpt-4o',
             'gpt-4o-2024-05-13', 'gpt-4o-mini', 'gpt-4o-mini-2024-07-18',
             'gpt-4-turbo', 'gpt-4-turbo-2024-04-09', 'gpt-4-turbo-preview',

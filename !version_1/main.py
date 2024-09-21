@@ -3,21 +3,12 @@ import sys
 import subprocess
 import traceback
 import asyncio
-import requests
-
-
-os.system('pip install joblib')
-
-"""
- : pokemon images folder dl
- # import Data.images
-"""
-
 
 """
    : Run This if any installation problems occur
 
 """
+
 """
 def run_package_installer():
     try:
@@ -27,6 +18,7 @@ def run_package_installer():
         
 run_package_installer()
 """
+
 from Imports.depend_imports import *
 import Imports.depend_imports as depend_imports
 from Imports.discord_imports import *
@@ -42,10 +34,10 @@ import pymongo  # Import database API
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import ConfigurationError
 
-class BotSetup(commands.AutoShardedBot):
+class BotSetup(commands.Bot):
     def __init__(self):
         intents = discord.Intents.all()
-        super().__init__(command_prefix=commands.when_mentioned_or('...'), intents=intents, help_command=None, shard_count=3)
+        super().__init__(command_prefix=commands.when_mentioned_or('...'), intents=intents, help_command=None)
         self.mongoConnect = None  # Initialize the MongoDB connection attribute
 
     async def start_bot(self):
@@ -98,45 +90,15 @@ class BotSetup(commands.AutoShardedBot):
                                 await self.add_cog(obj(self))
                                 print(Fore.GREEN + f"│   │   └── {obj_name}" + Style.RESET_ALL)
 
-async def check_rate_limit():
-    url = "https://discord.com/api/v10/users/@me"  # Example endpoint to get the current user
-    headers = {
-        "Authorization": f"Bot {os.getenv('TOKEN')}"
-    }
-    response = requests.get(url, headers=headers)
-
-    if response.status_code == 200:
-        remaining_requests = int(response.headers.get("X-RateLimit-Remaining", 1))
-        rate_limit_reset_after = float(response.headers.get("X-RateLimit-Reset-After", 0))
-
-        if remaining_requests <= 0:
-            logger.error(f"Rate limit exceeded. Retry after {rate_limit_reset_after} seconds.")
-            print(f"Rate limit exceeded. Please wait for {rate_limit_reset_after} seconds before retrying.")
-            await asyncio.sleep(rate_limit_reset_after)
-    else:
-        logger.error(f"Failed to check rate limit. Status code: {response.status_code}")
-
 async def main():
     bot = BotSetup()
 
     try:
-        await check_rate_limit()  # Check rate limits before starting the bot
         await bot.start_bot()
-    except HTTPException as e:
-        if e.status == 429:
-            retry_after = int(e.response.headers.get("Retry-After", 0))
-            logger.error(f"Rate limit exceeded. Retry after {retry_after} seconds.")
-            print(f"Rate limit exceeded. Please wait for {retry_after} seconds before retrying.")
-            await asyncio.sleep(retry_after)
-        else:
-            traceback_string = traceback.format_exc()
-            logger.error(f"An error occurred: {e}\n{traceback_string}")
     except Exception as e:
         traceback_string = traceback.format_exc()
         logger.error(f"An error occurred: {e}\n{traceback_string}")
-    finally:
         await bot.close()
-
 
 if __name__ == "__main__":
     asyncio.run(main())

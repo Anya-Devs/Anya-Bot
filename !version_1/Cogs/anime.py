@@ -12,7 +12,7 @@ class Anime(commands.Cog):
     async def anime_search(self, ctx, *, query=None):
         if query is None:
             embed = discord.Embed(description=f"{ctx.author.display_name.title()}, can you try entering the `name` of the anime you're looking for?")
-            message = await ctx.reply(embed=embed, mention_author=False)
+            message = await ctx.reply(embed=embed)
 
             def check(m):
                 return m.author == ctx.author and m.channel == ctx.channel
@@ -63,7 +63,7 @@ class Anime(commands.Cog):
     async def character_search(self, ctx, *, query=None):
         if query is None:
             embed = discord.Embed(description=f"{ctx.author.display_name.title()}, can you try entering the `name` of the character you're looking for?")
-            message = await ctx.reply(embed=embed, mention_author=False)
+            message = await ctx.reply(embed=embed)
 
             def check(m):
                 return m.author == ctx.author and m.channel == ctx.channel
@@ -231,11 +231,12 @@ class Anime(commands.Cog):
                 value=(
                     f"**Nicknames:** `{', '.join(character.get('nicknames', []) or ['N/A'])}`\n"
                     f"**Favorites:** `{character.get('favorites', 'N/A')}`\n"
+                    f"**MyAnimeList ID:** `{character.get('mal_id', 'N/A')}`"
                 ),
                 inline=False
             )
             embed.description = character.get('about', "> <:anya_angy:1268976144548630608> Description not available")
-            embed.set_footer(text=f"ID: {character.get('mal_id', 'N/A')}\t\t\tPage {self.current_page + 1}/{self.max_pages + 1}")
+            embed.set_footer(text=f"Page {self.current_page + 1}/{self.max_pages + 1}")
 
             return embed
 

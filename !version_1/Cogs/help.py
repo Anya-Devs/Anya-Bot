@@ -104,11 +104,11 @@ class Select(discord.ui.Select):
                 file_path = 'Data/commands/help/set_image/ai.png'
                 if os.path.exists(file_path):
                     file = discord.File(file_path, filename='thumbnail.png')
-                    self.cog_embed2.set_thumbnail(url='attachment://thumbnail.png') #'attachment://thumbnail.png'
+                    self.cog_embed2.set_thumbnail(url=None) #'attachment://thumbnail.png'
                 else:
                     logger.error(f"Thumbnail file '{file_path}' not found.")
             else:
-                 self.cog_embed2.set_thumbnail(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["thumbnail_url"])
+                 self.cog_embed2.set_thumbnail(url=None) # Help_Select_Embed_Mapping.embeds[cog_name.lower()]["thumbnail_url"])
 
             # Attach the generated image
             if os.path.exists(image_path):
@@ -171,7 +171,6 @@ class Options_ImageGenerator:
         # Configurable values
         self.font_path_header = "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
         self.font_path_base = "Data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
-        self.character_path = "Data/commands/help/menu/initial/style/assets/character.png"
         self.background_path = "Data/commands/help/menu/initial/style/assets/background.png"
 
         # Font sizes
@@ -183,7 +182,7 @@ class Options_ImageGenerator:
         self.base_font_color = "black"
 
         # Character image scale
-        self.character_scale = 0.4
+        self.character_scale = 0.30
 
         # Text content
         self.cog_name = cog_name
@@ -213,17 +212,42 @@ class Options_ImageGenerator:
         """Load the fonts and images required for generating the image."""
         self.header_font = ImageFont.truetype(self.font_path_header, self.header_font_size)
         self.base_font = ImageFont.truetype(self.font_path_base, self.base_font_size)
-        self.character = Image.open(self.character_path).convert("RGBA")
+        self.character = self._download_emoji_image(self.cog_name)  # Download and resize emoji image
         self.background = Image.open(self.background_path).convert("RGBA")
 
-        # Resize character image
-        self._resize_character()
+    def _download_emoji_image(self, cog_name):
+        """Download the emoji image from Discord using the cog_name and resize it to match the character image dimensions."""
+        emoji = Help_Select_Embed_Mapping.emojis.get(cog_name.lower())
+        if not emoji:
+            raise ValueError(f"Emoji not found for cog: {cog_name}")
 
-    def _resize_character(self):
+        emoji_id = emoji.split(":")[2].rstrip(">").replace('>','')
+        character_url = f'https://cdn.discordapp.com/emojis/{int(emoji_id)}.png'
+        
+        # Fetch the emoji image
+        response = requests.get(character_url)
+        response.raise_for_status()  # Ensure we notice bad responses
+        emoji_img = Image.open(BytesIO(response.content)).convert("RGBA")
+        
+        # Load the original character image to get its dimensions
+        original_character_img = Image.open("Data/commands/help/menu/initial/style/assets/character.png").convert("RGBA")
+        original_width, original_height = original_character_img.size
+
+        # Resize the emoji image to match the dimensions of the original character image
+        emoji_img = emoji_img.resize((original_width, original_height))
+
+        # Apply the scale factor to the resized emoji image
+        emoji_img = self._resize_character(emoji_img)
+        
+        return emoji_img
+
+    def _resize_character(self, image):
         """Resize the character image to a percentage of its original size."""
-        new_width = round(self.character.width * self.character_scale)
-        new_height = round(self.character.height * self.character_scale)
-        self.character = self.character.resize((new_width, new_height))
+        original_width, original_height = image.size
+        new_width = round(original_width * self.character_scale)
+        new_height = round(original_height * self.character_scale)
+        resized_image = image.resize((new_width, new_height))
+        return resized_image
 
     def _apply_color_replacements(self):
         """Replace specific colors in the background image with colors from replacement images, solid colors, or transparency."""
@@ -249,7 +273,7 @@ class Options_ImageGenerator:
         self.background = Image.fromarray(bg_array, 'RGBA')
 
     def _wrap_text(self, text, max_width):
-        """Wrap text to fit within the specified width."""
+        """Wrap text to fit within the specified width."""        
         lines = []
         words = text.split()
         current_line = []
@@ -271,7 +295,7 @@ class Options_ImageGenerator:
         return '\n'.join(lines)
 
     def _draw_text(self, draw, text_x, text_y):
-        """Draw all text on the image."""
+        """Draw all text on the image."""        
         # Draw header text
         draw.text((text_x, text_y), self.header_text, font=self.header_font, fill=self.header_font_color)
         text_y += self.header_font.size + self.text_spacing
@@ -313,8 +337,7 @@ class Options_ImageGenerator:
         img_bytes = BytesIO()
         img.save(img_bytes, format='PNG')
         display(IPImage(img_bytes.getvalue()))
-
-
+        
         
         
         

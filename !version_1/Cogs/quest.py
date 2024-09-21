@@ -26,7 +26,7 @@ class Quest(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.quest_data = Quest_Data(bot)
-        self.shop_file = 'Data/commands/quest/shop.json'
+        self.shop_file = 'Data/Quest/shop.json'
 
     @commands.command(name='quest', aliases=['q'])
     async def quest(self, ctx, args: str = None):
@@ -93,12 +93,7 @@ class Quest(commands.Cog):
                     await self.quest_data.initialize_balance(user_id, guild_id)
                 balance = await self.quest_data.get_balance(user_id, guild_id)
                 balance_with_commas = "{:,}".format(balance)
-                
-                embed = discord.Embed(title=f"{ctx.author}'s Record", timestamp=datetime.now())
-                embed.set_thumbnail(url=ctx.author.avatar)
-                embed.add_field(name='Stella Points', value=balance_with_commas)
-                embed.set_footer(text='Did you know your you can also veiw your balane using ...shop', icon_url=self.bot.user.avatar)
-                await ctx.reply(embed=embed)
+                await ctx.send(f"Your balance: {balance_with_commas} Stella Points")
 
         except Exception as e:
             logger.error(f"An error occurred in the balance command: {e}")
@@ -175,7 +170,7 @@ class Quest_View(View):
                 name="",  # Step 1: Field name
                 value=(
                     f"Quest {quest_id} | {progress_bar} `{progress}/{times}`\n"  # Step 2: Progress information
-                    f"**{channel}** | **{instruction}**\t    | {reward_emoji} `{reward} stp`"  # Step 5: Reward information
+                    f"**{channel}** | **{instruction}**\t | {reward_emoji} `{reward} stp`"  # Step 5: Reward information
                     f"\n\n"  # Steps 3 & 4: Channel link and instructions
 
                 ),
@@ -342,7 +337,7 @@ class Quest_Data(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.DB_NAME = 'Quest'
-        self.quest_content_file = 'Data/commands/quest/quest_content.txt'
+        self.quest_content_file = 'Data/Quest/quest_content.txt'
 
         # Initialize MongoDB connection
         mongo_url = os.getenv('MONGO_URI')

@@ -9,7 +9,6 @@ class PackageInstaller:
             'discord.py',
             'colorama',
             'motor',
-            'httpx',
             'colorlog',
             'opencv-python-headless',
             'pillow',
@@ -24,10 +23,7 @@ class PackageInstaller:
             'matplotlib',
             'seaborn',
             'imagehash',
-            'scipy',
-            'tqdm',
-            'graphviz',
-            'aiofiles'
+            'scipy'
         ]
 
     def install_packages(self):
