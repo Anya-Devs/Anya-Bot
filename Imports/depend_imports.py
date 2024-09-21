@@ -35,7 +35,7 @@ class PackageInstaller:
         # Construct the pip install command
         command = ' && '.join([f'pip install {pkg}' for pkg in self.packages])
         
-        # Execute the command
+        # Run installations in single cmd
         os.system(command)
 
 def upgrade_pip():
