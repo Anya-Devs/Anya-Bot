@@ -61,8 +61,8 @@ def load_environment_variables():
     print("Loading environment variables from .env...")
 
 if __name__ == "__main__":
-    upgrade_pip()
-    installer = PackageInstaller()
-    installer.install_packages()
-    load_environment_variables()
+    upgrade_pip() # Update pip
+    installer = PackageInstaller() 
+    installer.install_packages() # Install requirements
+    load_environment_variables() # Set Envierment : Load
 
