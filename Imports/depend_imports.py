@@ -60,7 +60,6 @@ def load_environment_variables():
     load_dotenv()
     print("Loading environment variables from .env...")
 
-# Example usage:
 if __name__ == "__main__":
     upgrade_pip()
     installer = PackageInstaller()
