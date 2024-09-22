@@ -35,7 +35,7 @@ class PackageInstaller:
         # Construct the pip install command
         command = ' && '.join([f'pip install {pkg}' for pkg in self.packages])
         
-        # Execute the command
+        # Run installations in single cmd
         os.system(command)
 
 def upgrade_pip():
@@ -60,10 +60,9 @@ def load_environment_variables():
     load_dotenv()
     print("Loading environment variables from .env...")
 
-# Example usage:
 if __name__ == "__main__":
-    upgrade_pip()
-    installer = PackageInstaller()
-    installer.install_packages()
-    load_environment_variables()
+    upgrade_pip() # Update pip
+    installer = PackageInstaller() 
+    installer.install_packages() # Install requirements
+    load_environment_variables() # Set Envierment : Load
 
