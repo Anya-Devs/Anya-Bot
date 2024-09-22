@@ -1,0 +1,44 @@
+{
+    "Quest": {
+        "quest": " View server quest in order to complete them.",
+        "stars": " View how many stellas you have currently.",
+        "shop": "Buy a Spy Tool."
+    },
+    "Ai": {
+        "vision_model": "Get the current vision model.",
+        "imagine": "Generate an image based on a prompt.",
+        "vision": "Show Anya a image and get her response."
+    },
+    "Anime": {
+        "anime": "Get information about an anime.",
+        "character": "Description to fill out"
+    },
+    "System": {
+        "ping": "Check the bot's response time.",
+        "credit": "Description to fill out"
+    },
+    "Pokemon": {
+        "predict": "Predict Pok\u00e9mon details.",
+        "pokemon": "Get information about a Pok\u00e9mon."
+    },
+    "Information": {
+        "about": "Get details about users or bot."
+    },
+    "PokemonBot": {
+        "predict": "Description to fill out"
+    },
+    "Quest_Data": {},
+    "Quest_Slash": {},
+    "Help": {},
+    "Sync": {},
+    "FileSender": {},
+    "TestCog": {},
+    "AvatarChanger": {},
+    "Logs": {},
+    "Permission": {},
+    "Quest_Checker": {},
+    "Aesthetic": {
+        "embed": "Description to fill out",
+        "reload_aesthetic": "Description to fill out"
+    }
+}

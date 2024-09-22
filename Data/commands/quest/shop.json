@@ -1,0 +1,132 @@
+{
+    "Spy Tools": [
+        {
+            "name": "Portal Bear",
+            "emoji": "🐻",
+            "description": "When given to another user, this bear has a 60% chance of redirecting the target's messages into a random channel and blocking them from other channels for 1 hour.",
+            "materials": [
+                {"material": "Cotton", "quantity": 5},
+                {"material": "Pencil", "quantity": 2},
+                {"material": "Fabric", "quantity": 5},
+                {"material": "CPU", "quantity": 10}
+            ]
+        },
+        {
+            "name": "Echo Mirror",
+            "emoji": "🪞",
+            "description": "This mirror can create an echo effect on the target user's messages, making them repeat multiple times in the same channel for 30 minutes.",
+            "materials": [
+                {"material": "Glass", "quantity": 4},
+                {"material": "Silicon", "quantity": 3},
+                {"material": "Wire", "quantity": 5}
+            ]
+        },
+        {
+            "name": "Shadow Cloak",
+            "emoji": "🧥",
+            "description": "When used, this cloak allows the user to go invisible, hiding their presence and messages in all channels for 45 minutes.",
+            "materials": [
+                {"material": "Fabric", "quantity": 10},
+                {"material": "Thread", "quantity": 5},
+                {"material": "Circuit", "quantity": 2}
+            ]
+        },
+        {
+            "name": "Mute Muffler",
+            "emoji": "🔇",
+            "description": "This muffler silences the target user, preventing them from sending messages in all channels for 30 minutes.",
+            "materials": [
+                {"material": "Cloth", "quantity": 6},
+                {"material": "Soundproofing Material", "quantity": 4},
+                {"material": "Battery", "quantity": 3}
+            ]
+        },
+        {
+            "name": "Emote Jammer",
+            "emoji": "📵",
+            "description": "Disables the use of all emojis and reactions for the target user in all channels for 1 hour.",
+            "materials": [
+                {"material": "Plastic", "quantity": 8},
+                {"material": "Chip", "quantity": 4},
+                {"material": "Solder", "quantity": 6}
+            ]
+        }
+    ],
+    "Materials": [
+        {
+            "name": "Cotton",
+            "emoji": "👕",
+            "price": 15
+        },
+        {
+            "name": "Pencil",
+            "emoji": "📝",
+            "price": 5
+        },
+        {
+            "name": "Fabric",
+            "emoji": "🧵",
+            "price": 15
+        },
+        {
+            "name": "CPU",
+            "emoji": "💻",
+            "price": 90
+        },
+        {
+            "name": "Glass",
+            "emoji": "🪟",
+            "price": 60
+        },
+        {
+            "name": "Silicon",
+            "emoji": "💾",
+            "price": 10
+        },
+        {
+            "name": "Wire",
+            "emoji": "🔌",
+            "price": 5
+        },
+        {
+            "name": "Thread",
+            "emoji": "🧶",
+            "price": 15
+        },
+        {
+            "name": "Circuit",
+            "emoji": "🔋",
+            "price": 25
+        },
+        {
+            "name": "Cloth",
+            "emoji": "🧥",
+            "price": 10
+        },
+        {
+            "name": "Soundproofing Material",
+            "emoji": "🎧",
+            "price": 30
+        },
+        {
+            "name": "Battery",
+            "emoji": "🔋",
+            "price": 30
+        },
+        {
+            "name": "Plastic",
+            "emoji": "🧴",
+            "price": 20
+        },
+        {
+            "name": "Chip",
+            "emoji": "💽",
+            "price": 10
+        },
+        {
+            "name": "Solder",
+            "emoji": "⚒️",
+            "price": 25
+        }
+    ]
+}
