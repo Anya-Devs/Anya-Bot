@@ -3,9 +3,16 @@ import os
 import datetime
 import random
 import re
-from datetime import timedelta
+from datetime import timedelta, datetime
 import typing
 import traceback
+import asyncio
+import discord
+import random
+import logging
+from concurrent.futures import ThreadPoolExecutor
+
+
 
 # Third-Party Library Imports
 import json
@@ -58,14 +65,14 @@ class Quest(commands.Cog):
                 if embeds:
                     if len(quests) > 3:
                         # Multiple pages if there are more quests than fit on one page
-                        await ctx.reply(embed=embeds, view=view)
+                        await ctx.reply(embed=embeds, view=view, mention_author=False)
                     else:
                         # Single embed if the number of quests fits on one page
-                        await ctx.reply(embed=embeds)
+                        await ctx.reply(embed=embeds, mention_author=False)
 
             else:
                 no_quest_message = "You have no quests."
-                await ctx.reply(no_quest_message)
+                await ctx.reply(no_quest_message, mention_author=False)
                 
         except Exception as e:
             error_message = "An error occurred while fetching quests."
@@ -94,11 +101,13 @@ class Quest(commands.Cog):
                 balance = await self.quest_data.get_balance(user_id, guild_id)
                 balance_with_commas = "{:,}".format(balance)
                 
-                embed = discord.Embed(title=f"{ctx.author}'s Record", timestamp=datetime.now())
+                embed = discord.Embed(title="Stella", description=f"-# {ctx.author.mention}'s balance", timestamp=datetime.now())
                 embed.set_thumbnail(url=ctx.author.avatar)
-                embed.add_field(name='Stella Points', value=balance_with_commas)
-                embed.set_footer(text='Did you know your you can also veiw your balane using ...shop', icon_url=self.bot.user.avatar)
-                await ctx.reply(embed=embed)
+                embed.add_field(name='Stars', value=None, inline=True)
+                embed.add_field(name='Points', value=balance_with_commas, inline=True)
+                embed.add_field(name='Class Ranking', value=f'`#{None}`', inline=False)
+                embed.set_footer(icon_url=self.bot.user.avatar)
+                await ctx.reply(embed=embed, mention_author=False)
 
         except Exception as e:
             logger.error(f"An error occurred in the balance command: {e}")
@@ -119,6 +128,29 @@ class Quest(commands.Cog):
             shop_data = json.load(file)
         return shop_data
     
+    @commands.command(name='mytools')
+    async def my_tools(self, ctx):
+     user_id = str(ctx.author.id)
+     guild_id = str(ctx.guild.id)
+    
+     try:
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+        
+        user_data = await server_collection.find_one({'guild_id': guild_id, f'members.{user_id}': {'$exists': True}}, {'members': 1})
+        
+        if user_data:
+            inventory = user_data['members'][user_id].get('inventory', {})
+            tools_list = [f"{tool}: {quantity}" for tool, quantity in inventory.items() if quantity > 0]
+            
+            if tools_list:
+                await ctx.reply("Your tools:\n" + "```\n" + "\n".join(tools_list) + "\n```")
+            else:
+                await ctx.send("You have no tools in your inventory.")
+        else:
+            await ctx.send("User data not found.")
+     except Exception as e:
+        await ctx.send(f"An error occurred: {e}")
 class Quest_View(View):
     def __init__(self, bot, quests, ctx, page=0, filtered_quests=None):
         super().__init__(timeout=None)
@@ -780,69 +812,70 @@ class Quest_Data(commands.Cog):
      try:
         logger.debug('Entering get_most_active_channel function')
         guild = self.bot.get_guild(int(guild_id))
+        
         if guild:
             logger.debug(f"Guild found: {guild.name} (ID: {guild_id})")
             channel_activity = {}
-            for channel in guild.text_channels:
-                # Check if the channel is accessible to all members or to a role with a significant number of members
-                if channel.permissions_for(guild.default_role).send_messages:
-                    logger.debug(f"Processing channel: {channel.name} (ID: {channel.id})")
-                    # Count the number of messages and the number of members who have sent messages in the channel
-                    message_count = 0
-                    member_set = set()
-                    async for message in channel.history(limit=message_limit):
-                        message_count += 1
-                        if not message.author.bot:
-                            member_set.add(message.author.id)
-                    member_count = len(member_set)
-                    logger.debug(f"Message count for channel {channel.name} (ID: {channel.id}): {message_count}")
-                    logger.debug(f"Member count for channel {channel.name} (ID: {channel.id}): {member_count}")
-                    
-                    channel_activity[channel.id] = (message_count, member_count)
-            
-            # Sort channels by member count and then by message count
+
+            # Executor for concurrent task execution
+            with ThreadPoolExecutor() as executor:
+                loop = asyncio.get_event_loop()
+                
+                async def count_messages(channel):
+                    try:
+                        message_count = 0
+                        member_set = set()
+                        async for message in channel.history(limit=message_limit):
+                            message_count += 1
+                            if not message.author.bot:
+                                member_set.add(message.author.id)
+                        return channel.id, message_count, len(member_set)
+                    except Exception as e:
+                        logger.error(f"Error while processing channel {channel.name}: {e}")
+                        return None
+
+                # List of tasks for concurrent execution
+                tasks = [
+                    loop.run_in_executor(executor, count_messages, channel)
+                    for channel in guild.text_channels
+                    if channel.permissions_for(guild.default_role).send_messages
+                ]
+                
+                # Gather all results
+                results = await asyncio.gather(*tasks)
+
+                # Process the results
+                for result in results:
+                    if result:
+                        channel_id, message_count, member_count = result
+                        channel_activity[channel_id] = (message_count, member_count)
+                        logger.debug(f"Processed channel {channel_id}: {message_count} messages, {member_count} members")
+
+            # Sort channels by member count and message count
             sorted_channels = sorted(channel_activity.items(), key=lambda x: (x[1][1], x[1][0]), reverse=True)
             if sorted_channels:
                 logger.debug(f"Sorted channels by activity: {sorted_channels}")
                 if len(sorted_channels) > threshold:
-                    # Select a random channel from the top active channels
-                    most_active_channel_id = random.choice(sorted_channels[:threshold])[0]
-                    logger.debug(f"Randomly selected active channel from top {threshold}: {most_active_channel_id}")
+                    most_active_channel_id = random.choice([channel[0] for channel in sorted_channels[:threshold]])
                 else:
-                    most_active_channel_id = sorted_channels[0][0]  # Get the ID of the most active channel
-                    logger.debug(f"Selected the most active channel: {most_active_channel_id}")
+                    most_active_channel_id = sorted_channels[0][0]
+                logger.debug(f"Selected most active channel: {most_active_channel_id}")
             else:
-                # Use fallback channel ID if no active channels are found
-                if fallback_channel_id:
-                    logger.debug(f"No active channels found, using fallback channel: {fallback_channel_id}")
-                    most_active_channel_id = fallback_channel_id
-                else:
-                    # If no fallback is provided, select a random channel from the guild
-                    logger.debug("No active channels found and no fallback channel provided, selecting a random channel")
-                    most_active_channel_id = random.choice([channel.id for channel in guild.text_channels])
-                    logger.debug(f"Randomly selected a channel from the guild: {most_active_channel_id}")
+                # Handle fallback if no active channels found
+                most_active_channel_id = fallback_channel_id or random.choice([channel.id for channel in guild.text_channels])
+                logger.debug(f"No active channels found, using fallback: {most_active_channel_id}")
 
             return most_active_channel_id
         else:
             logger.debug(f"Guild not found: {guild_id}")
-            if fallback_channel_id:
-                logger.debug(f"Using fallback channel: {fallback_channel_id}")
-                return fallback_channel_id
-            else:
-                # If no fallback is provided, select a random channel from the guild
-                logger.debug("Guild not found and no fallback channel provided, selecting a random channel")
-                guild = self.bot.get_guild(int(guild_id))
-                if guild:
-                    return random.choice([channel.id for channel in guild.text_channels])
-                else:
-                    logger.error("Guild still not found after fallback attempt")
-                    return None
+            return fallback_channel_id or None
      except Exception as e:
         logger.error(f"Error occurred while getting the most active channel: {e}")
         traceback.print_exc()
-        # Return a fallback channel ID if provided
-        return fallback_channel_id if fallback_channel_id else random.choice([channel.id for channel in guild.text_channels] if guild else [])
-
+        return fallback_channel_id or None
+    
+    
+    
     async def insert_quest_existing_path(self, guild_id: str, user_id: str, quest_data: dict, interaction=None):
      try:
         await self.validate_input(**quest_data)
@@ -1382,9 +1415,22 @@ class MaterialsButton(discord.ui.View):
         self.original_embed = original_embed  # Store the original embed
         self.materials_dict = {material['name']: material['emoji'] for material in self.shop_data.get("Materials", [])}
 
-
     async def update_view(self):
-        self.clear_items()
+        self.clear_items()  # Clear all buttons
+
+        # Check if all materials are sufficient
+        material_checks = await asyncio.gather(*(self.check_material_indicator(material) for material in self.shop_data["Materials"]))
+
+        # Create the Buy button and check if it's enabled
+        if all(material_checks):
+            buy_button = discord.ui.Button(style=discord.ButtonStyle.blurple, label='Buy', custom_id='buy_button', row=0, disabled=False)
+            buy_button.callback = self.buy_tool_callback
+            self.add_item(buy_button)  # Add the Buy button at the top
+        else:
+            buy_button = discord.ui.Button(style=discord.ButtonStyle.grey, label='Buy', custom_id='buy_button', row=0, disabled=True)
+            self.add_item(buy_button)  # Add disabled Buy button
+
+        # Add the material buttons below the Buy button
         start_index = self.page * self.items_per_page
         end_index = start_index + self.items_per_page
         materials = self.shop_data["Materials"][start_index:end_index]
@@ -1398,25 +1444,26 @@ class MaterialsButton(discord.ui.View):
                     style=discord.ButtonStyle.green,
                     emoji=emoji,
                     label=f'{material_count}',
-                    custom_id=name
+                    custom_id=name,
+                    row=1
                 )
                 material_button.callback = self.material_callback
                 self.add_item(material_button)
             except Exception as e:
                 traceback.print_exc()
 
+        # Add pagination buttons at the bottom
         if self.page > 0:
-            prev_button = discord.ui.Button(emoji='⬅️', style=discord.ButtonStyle.primary, custom_id='prev_page') # label='Previous'
+            prev_button = discord.ui.Button(emoji='⬅️', style=discord.ButtonStyle.primary, custom_id='prev_page', row=2)
             prev_button.callback = self.prev_page_callback
             self.add_item(prev_button)
 
         if self.page < self.max_pages - 1:
-            next_button = discord.ui.Button(emoji='➡️', style=discord.ButtonStyle.primary, custom_id='next_page') # label='Next'
+            next_button = discord.ui.Button(emoji='➡️', style=discord.ButtonStyle.primary, custom_id='next_page', row=2)
             next_button.callback = self.next_page_callback
             self.add_item(next_button)
 
     async def refresh_embed(self, interaction: discord.Interaction):
-        # Create a new embed based on the current state
         tool_name = self.original_embed.title
         tool = next((t for t in self.shop_data.get("Spy Tools", []) if t.get("name") == tool_name), None)
 
@@ -1431,13 +1478,17 @@ class MaterialsButton(discord.ui.View):
 
         shop_embed = discord.Embed(title=f"{tool_name}", description=f'{emoji} {description}', color=primary_color())
         shop_embed.add_field(name="Materials", value=materials_list or "No materials needed", inline=False)
-        user_balance = "{:,}".format(user_balance)            
+        user_balance = "{:,}".format(user_balance)
         shop_embed.set_footer(text=f"Stella Points: {user_balance}")
-
-        
 
         await self.update_view()
         await interaction.response.edit_message(embed=shop_embed, view=self)
+
+    async def check_material_indicator(self, material):
+        material_name = material.get('name', '')
+        required_quantity = material.get('quantity', 0)
+        user_quantity = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, material_name) or 0
+        return user_quantity >= required_quantity
 
     async def material_callback(self, interaction: discord.Interaction):
         try:
@@ -1455,7 +1506,7 @@ class MaterialsButton(discord.ui.View):
                 await self.quest_data.add_item_to_inventory(self.guild_id, self.user_id, material_name, 1)
                 spent = -price
                 await self.quest_data.add_balance(self.user_id, self.guild_id, spent)
-                
+
                 # Refresh the embed with updated inventory
                 await self.refresh_embed(interaction)
             else:
@@ -1464,12 +1515,49 @@ class MaterialsButton(discord.ui.View):
         except Exception as e:
             traceback.print_exc()
             await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
-            
+
+    async def buy_tool_callback(self, interaction: discord.Interaction):
+        try:
+            tool_name = self.original_embed.title
+            tool = next((t for t in self.shop_data.get("Spy Tools", []) if t.get("name") == tool_name), None)
+
+            if not tool:
+                await interaction.response.send_message("Spy Tool not found.", ephemeral=True)
+                return
+
+            # Check if user has enough materials
+            for material in tool.get("materials", []):
+                material_name = material.get('material', '')
+                required_quantity = material.get('quantity', 0)
+                user_quantity = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, material_name) or 0
+
+                if user_quantity < required_quantity:
+                    await interaction.response.send_message(f"Not enough {material_name}.", ephemeral=True)
+                    return
+
+            # Deduct materials and add the tool to inventory
+            for material in tool.get("materials", []):
+                material_name = material.get('material', '')
+                required_quantity = material.get('quantity', 0)
+                await self.quest_data.add_item_to_inventory(self.guild_id, self.user_id, material_name, -required_quantity)
+
+            # Add tool to inventory
+            await self.quest_data.add_item_to_inventory(self.guild_id, self.user_id, tool_name, 1)
+
+            # Call update_view after buying
+            await self.update_view()
+
+            await interaction.response.send_message(f"{tool_name} purchased successfully!", ephemeral=True)
+
+        except Exception as e:
+            traceback.print_exc()
+            await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
+
     async def get_user_inventory_count(self, material_name):
         # Retrieve the user's inventory count for a given material from quest_data
         material_count = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, material_name)
         return material_count
-
+    
     async def format_materials(self, item):
         material_name = item.get('material', '')
         required_quantity = item.get('quantity', 0)
@@ -1483,8 +1571,7 @@ class MaterialsButton(discord.ui.View):
             indicator_emoji = "<:green:1261639410181476443> "  # Green
 
         return f"{indicator_emoji} : {self.materials_dict.get(material_name, '')} - {user_quantity}/{required_quantity}"
-        
-            
+
     async def prev_page_callback(self, interaction: discord.Interaction):
         if self.page > 0:
             self.page -= 1
@@ -1496,8 +1583,7 @@ class MaterialsButton(discord.ui.View):
             self.page += 1
             await self.update_view()
             await interaction.response.edit_message(view=self)
-  
-            
+
             
             
 class SpyToolSelect(discord.ui.Select):
