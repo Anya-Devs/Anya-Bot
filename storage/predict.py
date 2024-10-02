@@ -7,45 +7,63 @@ import requests
 import time
 
 class PokemonPredictor:
-    def __init__(self, dataset_folder='pokemon_images', output_folder='testing_output', dataset_file="_dataset.npy"):
+    def __init__(self, dataset_folder="Data/pokemon/pokemon_images", output_folder='Data/pokemon/pokemon_images/processed', dataset_file="Data/pokemon/dataset.npy"):
         self.orb = cv.ORB_create(nfeatures=175)
         self.flann = cv.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=9, multi_probe_level=1), 
                                           dict(checks=2))
         self.executor = ThreadPoolExecutor(max_workers=25)
         self.cache = {}
         self.output_folder = output_folder
-        os.makedirs(self.output_folder, exist_ok=True)
-        self.dataset_file = dataset_file
-        asyncio.run(self.load_dataset(dataset_folder))
-
-    async def load_dataset(self, dataset_folder):
+        os.makedirs(self.output_folder, exist_ok=True)  # Create output folder if it doesn't exist
+        self.dataset_file = dataset_file  # Change to use .npy
+        self.load_dataset(dataset_folder)
+        
+    def load_dataset(self, dataset_folder):
         if os.path.exists(self.dataset_file):
-            await self.load_from_npy(self.dataset_file)
+            self.load_from_npy(self.dataset_file)
         else:
-            await self.load_from_images(dataset_folder)
+            self.load_from_images(dataset_folder)
 
-    async def load_from_npy(self, dataset_file):
-        data = np.load(dataset_file, allow_pickle=True).item()
+    def load_from_npy(self, dataset_file):
+        data = np.load(dataset_file, allow_pickle=True).item()  # Load the .npy file
         for filename, (descriptors, bounding_box) in data.items():
             self.cache[filename] = (descriptors, bounding_box)
 
     async def load_from_images(self, dataset_folder):
-        tasks = [self.process_image(os.path.join(dataset_folder, filename), filename) 
-                 for filename in os.listdir(dataset_folder) 
-                 if filename.endswith('.png')]
+        tasks = []
+        for filename in os.listdir(dataset_folder):
+            path = os.path.join(dataset_folder, filename)
+            if os.path.isfile(path):
+                tasks.append(self.process_image(path, filename))
+
         await asyncio.gather(*tasks)
+
+        # Save the cache as .npy after processing
         np.save(self.dataset_file, self.cache)
 
     async def process_image(self, path, filename):
-        img = await self.executor.submit(cv.imread, path)
+        # Use ThreadPoolExecutor to process images concurrently
+        loop = asyncio.get_event_loop()
+        img = await asyncio.get_event_loop().run_in_executor(self.executor, cv.imread, path)
+        
         if img is not None:
-            compressed_img = self.compress_image(img)  # Compress the original image
-            keypoints, descriptors = await self.executor.submit(self.orb.detectAndCompute, 
-                                                               cv.cvtColor(compressed_img, cv.COLOR_BGR2GRAY), None)
+            keypoints, descriptors = await loop.run_in_executor(self.executor, self.orb.detectAndCompute, 
+                                                               cv.cvtColor(img, cv.COLOR_BGR2GRAY), None)
             if descriptors is not None:
-                bounding_box = self.calculate_bounding_box(keypoints)
+                bounding_box = await loop.run_in_executor(self.executor, self.calculate_bounding_box, keypoints)
                 self.cache[filename] = (descriptors.astype(np.uint8), bounding_box)
-                await self.executor.submit(self.save_image, compressed_img, filename)
+
+                await self.cache_flipped_image(img, filename, bounding_box)
+
+    async def cache_flipped_image(self, img, filename, bounding_box):
+        # Use ThreadPoolExecutor for flipping and processing the image
+        loop = asyncio.get_event_loop()
+        flipped_img = await loop.run_in_executor(self.executor, cv.flip, img, 1)
+        keypoints, descriptors = await loop.run_in_executor(self.executor, self.orb.detectAndCompute,
+                                                           cv.cvtColor(flipped_img, cv.COLOR_BGR2GRAY), None)
+        if descriptors is not None:
+            flipped_filename = filename.replace(".png", "_flipped.png")
+            self.cache[flipped_filename] = (descriptors.astype(np.uint8), bounding_box)
 
     def compress_image(self, img, quality=90):
         """Compress an image to reduce file size."""
@@ -86,11 +104,19 @@ class PokemonPredictor:
      max_accuracy = 0
 
      def evaluate_matches(filename, matches):
-        # Calculate good matches
-        good_matches = [m for m, n in matches if m.distance < 0.75 * n.distance]
-        accuracy = len(good_matches) / len(matches) * 100 if matches else 0
-        # Return the filename and accuracy for the best match
-        return (filename, accuracy)
+        if len(matches) < 2:
+            # If matches don't have at least two items, skip the calculation
+            return filename, 0
+
+        try:
+            # Calculate good matches
+            good_matches = [m for m, n in matches if m.distance < 0.75 * n.distance]
+            accuracy = len(good_matches) / len(matches) * 100 if matches else 0
+            # Return the filename and accuracy for the best match
+            return filename, accuracy
+        except Exception as e:
+            print(f"Error evaluating matches for {filename}: {e}")
+            return filename, 0
 
      with ThreadPoolExecutor() as executor:
         # Create a list of tasks for evaluating matches
@@ -108,7 +134,7 @@ class PokemonPredictor:
             except Exception as e:
                 print(f"Error processing matches: {e}")
 
-     return best_match
+     return best_match, max_accuracy
  
  
  
@@ -130,7 +156,7 @@ class PokemonPredictor:
             predicted_pokemon, accuracy = best_match
             predicted_name = predicted_pokemon.replace(".png", "")
             elapsed_time = time.time() - start_time
-            return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time
+            return f"{predicted_name.title().replace('_flipped','')}: {round(accuracy, 2)}%", elapsed_time
         
         return "No match found", time.time() - start_time
 
@@ -147,6 +173,11 @@ class PokemonPredictor:
         sorted_results = sorted(results, key=lambda x: x[1], reverse=True)  # Sort by accuracy
         return sorted_results
 
+
+
+    
+    
+    
 if __name__ == "__main__":
     predictor = PokemonPredictor()
 
