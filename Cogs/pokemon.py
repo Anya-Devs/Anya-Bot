@@ -13,8 +13,10 @@ import zlib
 import sqlite3
 import random
 import threading
+import asyncio
 import multiprocessing
 from functools import lru_cache
+from typing import List, Tuple, Optional
 from urllib.request import urlopen, urlretrieve
 
 # Third-party library imports
@@ -49,199 +51,200 @@ from Data.const import error_custom_embed, sdxl, primary_color
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
 
+
+
 class PokemonPredictor:
-    def __init__(self, dataset_folder="Data/pokemon/pokemon_images", csv_file="Data/pokemon/dataset.csv"):
+    def __init__(self, dataset_folder="Data/pokemon/pokemon_images", output_folder='Data/pokemon/pokemon_images/processed', dataset_file="Data/pokemon/dataset.npy"):
         self.orb = cv.ORB_create(nfeatures=175)
-        self.flann = cv.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=9, multi_probe_level=1),
-                                           dict(checks=1))
-        self.fast = cv.FastFeatureDetector_create()
+        self.flann = cv.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=9, multi_probe_level=1), 
+                                          dict(checks=2))
         self.executor = ThreadPoolExecutor(max_workers=25)
         self.cache = {}
-        self.best_matches = {}
-        self.csv_file = csv_file
-        self.dataset_folder = dataset_folder
-
-        # Load dataset only once when code starts
-        self.load_dataset()
-
-    def load_dataset(self):
-        print("Loading Images...")
-
-        if os.path.exists(self.csv_file):
-            print("Loading dataset from CSV file...")
-            self.load_from_csv()
-        else:
-            print("CSV file not found, loading images from dataset folder...")
-            self.load_from_images()
-
-    def load_from_csv(self):
-        start_time = time.time()
-        with open(self.csv_file, 'r') as file:
-            reader = csv.reader(file)
-            next(reader)
-            for row in reader:
-                filename, descriptors_str = row
-                descriptors = np.array(json.loads(descriptors_str), dtype=np.uint8)
-                self.cache[filename] = (None, descriptors)
-        print(f"Dataset loaded from CSV in {time.time() - start_time:.2f} seconds")
-
-    def load_from_images(self):
-        start_time = time.time()
-        with open(self.csv_file, 'w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(['Filename', 'Descriptors'])
-
-        for filename in os.listdir(self.dataset_folder):
-            path = os.path.join(self.dataset_folder, filename)
-            if os.path.isfile(path):
-                img = cv.imread(path)
-                if img is not None:
-                    gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-                    keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
-                    if descriptors is not None:
-                        self.cache[filename] = (keypoints, descriptors)
-                        with open(self.csv_file, 'a', newline='') as file:
-                            writer = csv.writer(file)
-                            writer.writerow([filename, descriptors.tolist()])
-
-                        flipped_img = cv.flip(img, 1)
-                        gray_flipped = cv.cvtColor(flipped_img, cv.COLOR_BGR2GRAY)
-                        keypoints_flipped, descriptors_flipped = self.orb.detectAndCompute(gray_flipped, None)
-                        if descriptors_flipped is not None:
-                            flipped_filename = filename.replace(".png", "_flipped.png")
-                            self.cache[flipped_filename] = (keypoints_flipped, descriptors_flipped)
-                            with open(self.csv_file, 'a', newline='') as file:
-                                writer = csv.writer(file)
-                                writer.writerow([flipped_filename, descriptors_flipped.tolist()])
+        self.output_folder = output_folder
+        os.makedirs(self.output_folder, exist_ok=True)  # Create output folder if it doesn't exist
+        self.dataset_file = dataset_file  # Change to use .npy
+        self.load_dataset(dataset_folder)
         
-        print(f"Images loaded in {time.time() - start_time:.2f} seconds")
+    def load_dataset(self, dataset_folder):
+        if os.path.exists(self.dataset_file):
+            self.load_from_npy(self.dataset_file)
+        else:
+            self.load_from_images(dataset_folder)
 
-    def _match_image(self, kpB, desB, cache_item):
-        filename, (kpA, desA) = cache_item
-        if desA is not None and desB is not None and len(desA) > 2 and len(desB) > 2:
+    def load_from_npy(self, dataset_file):
+        data = np.load(dataset_file, allow_pickle=True).item()  # Load the .npy file
+        for filename, (descriptors, bounding_box) in data.items():
+            self.cache[filename] = (descriptors, bounding_box)
+
+    async def load_from_images(self, dataset_folder):
+        tasks = []
+        for filename in os.listdir(dataset_folder):
+            path = os.path.join(dataset_folder, filename)
+            if os.path.isfile(path):
+                tasks.append(self.process_image(path, filename))
+
+        await asyncio.gather(*tasks)
+
+        # Save the cache as .npy after processing
+        np.save(self.dataset_file, self.cache)
+
+    async def process_image(self, path, filename):
+        # Use ThreadPoolExecutor to process images concurrently
+        loop = asyncio.get_event_loop()
+        img = await asyncio.get_event_loop().run_in_executor(self.executor, cv.imread, path)
+        
+        if img is not None:
+            keypoints, descriptors = await loop.run_in_executor(self.executor, self.orb.detectAndCompute, 
+                                                               cv.cvtColor(img, cv.COLOR_BGR2GRAY), None)
+            if descriptors is not None:
+                bounding_box = await loop.run_in_executor(self.executor, self.calculate_bounding_box, keypoints)
+                self.cache[filename] = (descriptors.astype(np.uint8), bounding_box)
+
+                await self.cache_flipped_image(img, filename, bounding_box)
+
+    async def cache_flipped_image(self, img, filename, bounding_box):
+        # Use ThreadPoolExecutor for flipping and processing the image
+        loop = asyncio.get_event_loop()
+        flipped_img = await loop.run_in_executor(self.executor, cv.flip, img, 1)
+        keypoints, descriptors = await loop.run_in_executor(self.executor, self.orb.detectAndCompute,
+                                                           cv.cvtColor(flipped_img, cv.COLOR_BGR2GRAY), None)
+        if descriptors is not None:
+            flipped_filename = filename.replace(".png", "_flipped.png")
+            self.cache[flipped_filename] = (descriptors.astype(np.uint8), bounding_box)
+
+    def compress_image(self, img, quality=90):
+        """Compress an image to reduce file size."""
+        encode_param = [int(cv.IMWRITE_JPEG_QUALITY), quality]
+        result, encimg = cv.imencode('.jpg', img, encode_param)
+        if result:
+            return cv.imdecode(encimg, 1)
+        return img
+
+    async def save_image(self, img, filename):
+        """Save the compressed image to the output folder."""
+        output_path = os.path.join(self.output_folder, filename)
+        cv.imwrite(output_path, img)
+
+    def calculate_bounding_box(self, keypoints):
+        points = np.array([kp.pt for kp in keypoints], dtype=np.int32)
+        return cv.boundingRect(points)
+
+    async def compute_roi_density(self, img):
+        gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+        density = cv.countNonZero(gray) / (gray.shape[0] * gray.shape[1])
+        return density
+
+    async def match(self, img, desB):
+     roi_density = await self.compute_roi_density(img)
+     if roi_density < 0.01:
+        return None
+    
+     futures = [self.executor.submit(self.flann.knnMatch, desB, desA, k=2) 
+               for _, (desA, _) in self.cache.items()]
+     results = [future.result() for future in futures]
+     best_match = self.process_knn_results(results)
+
+     return best_match
+
+    def process_knn_results(self, results):
+     best_match = None
+     max_accuracy = 0
+
+     def evaluate_matches(filename, matches):
+        if len(matches) < 2:
+            # If matches don't have at least two items, skip the calculation
+            return filename, 0
+
+        try:
+            # Calculate good matches
+            good_matches = [m for m, n in matches if m.distance < 0.75 * n.distance]
+            accuracy = len(good_matches) / len(matches) * 100 if matches else 0
+            # Return the filename and accuracy for the best match
+            return filename, accuracy
+        except Exception:
+            pass
+
+     with ThreadPoolExecutor() as executor:
+        # Create a list of tasks for evaluating matches
+        futures = {
+            executor.submit(evaluate_matches, filename, matches): filename
+            for filename, matches in zip(self.cache.keys(), results)
+        }
+
+        for future in as_completed(futures):
             try:
-                desA = desA.astype(np.uint8)
-                desB = desB.astype(np.uint8)
-                
-                print(f"desA type: {desA.dtype}, shape: {desA.shape}")
-                print(f"desB type: {desB.dtype}, shape: {desB.shape}")
-
-                matches = self.flann.knnMatch(desA, desB, k=2)
-                good_matches = [m[0] for m in matches if len(m) == 2 and m[0].distance < 0.50 * m[1].distance]
-                
-                if len(good_matches) > 1:
-                    accuracy = len(good_matches) / len(desA) * 100
-                    return filename, accuracy
-            except cv.error as e:
-                print(f"Error in feature matching: {e}")
-        return filename, 0
-
-    def _find_image_inside_image(self, img, template):
-        assert img is not None, "Input image is None"
-        assert template is not None, "Template image is None"
-
-        img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        template_gray = cv.cvtColor(template, cv.COLOR_BGR2GRAY)
-
-        w, h = template_gray.shape[::-1]
-        res = cv.matchTemplate(img_gray, template_gray, cv.TM_CCOEFF_NORMED)
-        threshold = 0.8
-        loc = np.where(res >= threshold)
-
-        boxes = []
-        for pt in zip(*loc[::-1]):
-            boxes.append((pt[0], pt[1], pt[0] + w, pt[1] + h))
-
-        boxes = self._merge_boxes(boxes)
-
-        return boxes
-
-    def _merge_boxes(self, boxes, overlap_threshold=0.5):
-        if not boxes:
-            return []
-
-        boxes = sorted(boxes, key=lambda b: b[0])
-        merged_boxes = []
-
-        for box in boxes:
-            x1, y1, x2, y2 = box
-            if not merged_boxes:
-                merged_boxes.append(box)
+                filename, accuracy = future.result()
+                if accuracy > max_accuracy:
+                    max_accuracy = accuracy
+                    best_match = (filename, accuracy)
+            except Exception:
                 continue
-
-            last_box = merged_boxes[-1]
-            lx1, ly1, lx2, ly2 = last_box
-
-            ix1 = max(lx1, x1)
-            iy1 = max(ly1, y1)
-            ix2 = min(lx2, x2)
-            iy2 = min(ly2, y2)
-            iw = max(0, ix2 - ix1)
-            ih = max(0, iy2 - iy1)
-
-            inter_area = iw * ih
-            box_area = (x2 - x1) * (y2 - y1)
-            last_box_area = (lx2 - lx1) * (ly2 - ly1)
-            overlap_ratio = inter_area / float(box_area + last_box_area - inter_area)
-
-            if overlap_ratio > overlap_threshold:
-                merged_boxes[-1] = (min(lx1, x1), min(ly1, y1), max(lx2, x2), max(ly2, y2))
-            else:
-                merged_boxes.append(box)
-
-        return merged_boxes
-
-    def predict_pokemon(self, img):
-        best_match = None
+                
+     return best_match
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+    async def predict_pokemon(self, img):
         start_time = time.time()
         gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         kpB, desB = self.orb.detectAndCompute(gray_img, None)
-
-        if desB is not None:
-            desB = desB.astype(np.uint8)
-
-        if best_match is None:
-            futures = [self.executor.submit(self._match_image, kpB, desB, item) for item in self.cache.items()]
-            results = [future.result() for future in futures]
-            best_match = max(results, key=lambda x: x[1] if x else 0, default=None)
-
-        elapsed_time = round(time.time() - start_time, 2)
+        best_match = await self.match(img, desB)
 
         if best_match:
-            pokemon_img_path = os.path.join(self.dataset_folder, best_match[0])
-            target_img = cv.imread(pokemon_img_path)
-
-            if target_img is not None:
-                detection_boxes = self._find_image_inside_image(img, target_img)
-                if detection_boxes:
-                    for box in detection_boxes:
-                        x1, y1, x2, y2 = box
-                        cv.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    print(f"Detected Pokémon areas: {detection_boxes}")
-                else:
-                    print(f"Warning: Pokémon not found in the detection boxes.")
-            else:
-                print(f"Warning: Could not load image for {pokemon_img_path}")
-
-            predicted_pokemon = best_match[0].split("_flipped")[0].replace(".png", "")
-            accuracy = round(best_match[1], 2)
-            return f"{predicted_pokemon.title()}: {100 - accuracy}%", elapsed_time
+            predicted_pokemon, accuracy = best_match
+            predicted_name = predicted_pokemon.replace(".png", "")
+            elapsed_time = time.time() - start_time
+            return f"{predicted_name.replace('_flipped','').title()}: {round(accuracy, 2)}%", elapsed_time
         
-        return "No Pokémon detected", elapsed_time
+        return "No match found", time.time() - start_time
 
     def load_image_from_url(self, url):
         try:
-            response = requests.get(url)
-            response.raise_for_status()
-            image = np.asarray(bytearray(response.content), dtype=np.uint8)
-            img = cv.imdecode(image, cv.IMREAD_COLOR)
-            return img
+            img = np.asarray(bytearray(requests.get(url).content), dtype=np.uint8)
+            return cv.imdecode(img, cv.IMREAD_COLOR)
         except requests.RequestException as e:
             print(f"Error fetching image from URL: {e}")
             return None
 
+    def fluster(self, results):
+        """Handles multiple predictions and sorts them based on accuracy."""
+        sorted_results = sorted(results, key=lambda x: x[1], reverse=True)  # Sort by accuracy
+        return sorted_results
 
 
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
             
         
@@ -369,7 +372,7 @@ class Pokemon(commands.Cog):
                         img = np.array(img.convert('RGB'))  # Convert to numpy array
 
                         # Use the predictor to predict the Pokémon
-                        prediction, time_taken = self.predictor.predict_pokemon(img)
+                        prediction, time_taken = await self.predictor.predict_pokemon(img)
                         await ctx.reply(prediction, mention_author=False)
                     else:
                         await ctx.reply(f"Failed to download image. Status code: {response.status}", mention_author=False)
@@ -390,12 +393,13 @@ class Pokemon(commands.Cog):
                             img = np.array(img.convert('RGB'))  # Convert to numpy array
 
                             # Use the predictor to predict the Pokémon
-                            prediction, time_taken = self.predictor.predict_pokemon(img)
+                            prediction, time_taken = await self.predictor.predict_pokemon(img)
                             await message.channel.send(prediction, reference=message)
                         else:
                             await message.channel.send(f"Failed to download image. Status code: {response.status}", reference=message)
     
     @commands.command(help="Displays Pokemon dex information.", aliases=['pokdex', 'dex','d','p'])
+    @commands.cooldown(1, 6, commands.BucketType.user) 
     async def pokemon(self, ctx, *, args=None, form=None):   
      # Get the primary color of the bot's icon
      primary_color = self.primary_color()
