@@ -54,17 +54,28 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 
 class PokemonPredictor:
-    def __init__(self, dataset_folder="Data/pokemon/pokemon_images", output_folder='Data/pokemon/pokemon_images/processed', dataset_file="Data/pokemon/dataset.npy"):
-        self.orb = cv.ORB_create(nfeatures=175)
-        self.flann = cv.FlannBasedMatcher(dict(algorithm=6, table_number=6, key_size=9, multi_probe_level=1), 
-                                          dict(checks=2))
-        self.executor = ThreadPoolExecutor(max_workers=25)
+    def __init__(self, dataset_folder="Data/pokemon/pokemon_images", 
+                 output_folder='Data/pokemon/processed', 
+                 dataset_file="Data/pokemon/dataset.npy", 
+                 saved_images_file="Data/pokemon/pokemon_images_saved.npy"):
+
+        self.orb = cv.ORB_create(nfeatures=180)
+        self.flann = cv.FlannBasedMatcher(
+            dict(algorithm=6, table_number=9, key_size=9, multi_probe_level=1, tree=5), 
+            dict(checks=1)
+        )
+        self.executor = ThreadPoolExecutor(max_workers=50)
         self.cache = {}
+        self.distance_cache = {}  # Cache for storing descriptor distances
         self.output_folder = output_folder
         os.makedirs(self.output_folder, exist_ok=True)  # Create output folder if it doesn't exist
         self.dataset_file = dataset_file  # Change to use .npy
-        self.load_dataset(dataset_folder)
-        
+        self.saved_images_file = saved_images_file  # File to save processed images
+        self.dataset_folder = dataset_folder
+
+        # Load the dataset without awaiting
+        self.load_dataset(self.dataset_folder)
+
     def load_dataset(self, dataset_folder):
         if os.path.exists(self.dataset_file):
             self.load_from_npy(self.dataset_file)
@@ -72,137 +83,114 @@ class PokemonPredictor:
             self.load_from_images(dataset_folder)
 
     def load_from_npy(self, dataset_file):
-        data = np.load(dataset_file, allow_pickle=True).item()  # Load the .npy file
-        for filename, (descriptors, bounding_box) in data.items():
-            self.cache[filename] = (descriptors, bounding_box)
+        data = np.load(dataset_file, allow_pickle=True).item()
+        self.sub_image_filenames = list(data.keys())
+        self.cache = data
+        print(f"Loaded dataset from {dataset_file}. Total images: {len(self.sub_image_filenames)}")
 
-    async def load_from_images(self, dataset_folder):
+    def load_from_images(self, dataset_folder):
         tasks = []
         for filename in os.listdir(dataset_folder):
             path = os.path.join(dataset_folder, filename)
             if os.path.isfile(path):
-                tasks.append(self.process_image(path, filename))
+                tasks.append((path, filename))
 
-        await asyncio.gather(*tasks)
+        # Use ThreadPoolExecutor to process images concurrently
+        with ThreadPoolExecutor() as executor:
+            executor.map(lambda p: self.process_image(*p), tasks)
 
         # Save the cache as .npy after processing
         np.save(self.dataset_file, self.cache)
+        self.save_processed_images()  # Save processed images to the new file
 
-    async def process_image(self, path, filename):
-        # Use ThreadPoolExecutor to process images concurrently
-        loop = asyncio.get_event_loop()
-        img = await asyncio.get_event_loop().run_in_executor(self.executor, cv.imread, path)
+    def process_image(self, path, filename):
+        img = cv.imread(path)
         
         if img is not None:
-            keypoints, descriptors = await loop.run_in_executor(self.executor, self.orb.detectAndCompute, 
-                                                               cv.cvtColor(img, cv.COLOR_BGR2GRAY), None)
+            gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+            keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
             if descriptors is not None:
-                bounding_box = await loop.run_in_executor(self.executor, self.calculate_bounding_box, keypoints)
-                self.cache[filename] = (descriptors.astype(np.uint8), bounding_box)
+                self.cache[filename] = (descriptors.astype(np.uint8))
+                self.distance_cache[filename] = descriptors  # Store distances for future use
+                self.cache_flipped_image(img, filename)
 
-                await self.cache_flipped_image(img, filename, bounding_box)
-
-    async def cache_flipped_image(self, img, filename, bounding_box):
-        # Use ThreadPoolExecutor for flipping and processing the image
-        loop = asyncio.get_event_loop()
-        flipped_img = await loop.run_in_executor(self.executor, cv.flip, img, 1)
-        keypoints, descriptors = await loop.run_in_executor(self.executor, self.orb.detectAndCompute,
-                                                           cv.cvtColor(flipped_img, cv.COLOR_BGR2GRAY), None)
+    def cache_flipped_image(self, img, filename):
+        flipped_img = cv.flip(img, 1)
+        gray_flipped_img = cv.cvtColor(flipped_img, cv.COLOR_BGR2GRAY)
+        keypoints, descriptors = self.orb.detectAndCompute(gray_flipped_img, None)
         if descriptors is not None:
-            flipped_filename = filename.replace(".png", "_flipped.png")
-            self.cache[flipped_filename] = (descriptors.astype(np.uint8), bounding_box)
+            flipped_filename = filename.replace(".png", "_flipped.png")  # Keep flipped filename for cache
+            self.cache[flipped_filename] = (descriptors.astype(np.uint8))
+            self.distance_cache[flipped_filename] = descriptors  # Store distances for future use
 
-    def compress_image(self, img, quality=90):
-        """Compress an image to reduce file size."""
-        encode_param = [int(cv.IMWRITE_JPEG_QUALITY), quality]
-        result, encimg = cv.imencode('.jpg', img, encode_param)
-        if result:
-            return cv.imdecode(encimg, 1)
-        return img
+    def save_processed_images(self):
+        """Save processed images and descriptors to a .npy file."""
+        data_to_save = {}
+        for filename, (descriptors) in self.cache.items():
+            data_to_save[filename] = (descriptors)
+        np.save(self.saved_images_file, data_to_save)
+        print(f"Processed images saved to {self.saved_images_file}")
 
-    async def save_image(self, img, filename):
-        """Save the compressed image to the output folder."""
-        output_path = os.path.join(self.output_folder, filename)
-        cv.imwrite(output_path, img)
-
-    def calculate_bounding_box(self, keypoints):
-        points = np.array([kp.pt for kp in keypoints], dtype=np.int32)
-        return cv.boundingRect(points)
-
-    async def compute_roi_density(self, img):
+    def compute_roi_density(self, img):
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         density = cv.countNonZero(gray) / (gray.shape[0] * gray.shape[1])
         return density
 
-    async def match(self, img, desB):
-     roi_density = await self.compute_roi_density(img)
-     if roi_density < 0.01:
-        return None
-    
-     futures = [self.executor.submit(self.flann.knnMatch, desB, desA, k=2) 
-               for _, (desA, _) in self.cache.items()]
-     results = [future.result() for future in futures]
-     best_match = self.process_knn_results(results)
+    def cross_match(self, img, desB, k=2):
+        roi_density = self.compute_roi_density(img)
 
-     return best_match
+        # Compute matches using descriptors
+        futures = [
+            self.executor.submit(self.flann.knnMatch, desB, desA, k)
+            for desA in self.cache.values()  # Only get the descriptors
+        ]
+        
+        results = [future.result() for future in futures]
+        
+        # Evaluate matches and find the best match
+        best_match = None
+        max_accuracy = 0
 
-    def process_knn_results(self, results):
-     best_match = None
-     max_accuracy = 0
+        # Create item_distances mapping with safety check
+        item_distances = {}
+        for filename in self.cache.keys():
+            if filename in self.distance_cache:
+                item_distances[filename] = np.mean(self.distance_cache[filename])  # Get the average distance
+            else:
+                print(f"Warning: No distance data for {filename}. Skipping this file.")
 
-     def evaluate_matches(filename, matches):
-        if len(matches) < 2:
-            # If matches don't have at least two items, skip the calculation
-            return filename, 0
+        with ThreadPoolExecutor() as executor:
+            accuracy_futures = {
+                executor.submit(self.evaluate_matches, matches, filename): filename
+                for filename, matches in zip(self.cache.keys(), results)
+            }
 
-        try:
-            # Calculate good matches
-            good_matches = [m for m, n in matches if m.distance < 0.75 * n.distance]
-            accuracy = len(good_matches) / len(matches) * 100 if matches else 0
-            # Return the filename and accuracy for the best match
-            return filename, accuracy
-        except Exception:
-            pass
+            for future in accuracy_futures:
+                try:
+                    accuracy = future.result()
+                    if accuracy > max_accuracy:
+                        max_accuracy = accuracy
+                        best_match = accuracy_futures[future]
+                except Exception as e:
+                    continue
 
-     with ThreadPoolExecutor() as executor:
-        # Create a list of tasks for evaluating matches
-        futures = {
-            executor.submit(evaluate_matches, filename, matches): filename
-            for filename, matches in zip(self.cache.keys(), results)
-        }
+        # Check if the max accuracy meets the threshold
+        if max_accuracy >= 0.001:
+            return best_match, max_accuracy
+        
+        return None  # If no match meets the required accuracy
 
-        for future in as_completed(futures):
-            try:
-                filename, accuracy = future.result()
-                if accuracy > max_accuracy:
-                    max_accuracy = accuracy
-                    best_match = (filename, accuracy)
-            except Exception:
-                continue
-                
-     return best_match
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-    async def predict_pokemon(self, img):
+    async def predict_pokemon(self, img):  # Changed to async
         start_time = time.time()
         gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         kpB, desB = self.orb.detectAndCompute(gray_img, None)
-        best_match = await self.match(img, desB)
+        best_match = self.cross_match(img, desB)
 
         if best_match:
             predicted_pokemon, accuracy = best_match
-            predicted_name = predicted_pokemon.replace(".png", "")
+            predicted_name = predicted_pokemon.replace(".png", "").replace("_flipped", "").replace("_saved", "")
             elapsed_time = time.time() - start_time
-            return f"{predicted_name.replace('_flipped','').title()}: {round(accuracy, 2)}%", elapsed_time
+            return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time
         
         return "No match found", time.time() - start_time
 
@@ -218,34 +206,88 @@ class PokemonPredictor:
         """Handles multiple predictions and sorts them based on accuracy."""
         sorted_results = sorted(results, key=lambda x: x[1], reverse=True)  # Sort by accuracy
         return sorted_results
+    
+    def evaluate_matches(self, matches, filename):
+        """Evaluate the matches and return the accuracy."""
+        if not matches:
+            return 0  # No matches found, accuracy is 0
 
+        # Calculate accuracy based on the number of good matches
+        good_matches = [m for m, n in matches if m.distance < 0.7 * n.distance]  # Use Lowe's ratio test
+        accuracy = len(good_matches) / len(matches) * 100  # Convert to percentage
 
+        return accuracy  # Return the calculated accuracy
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    def save_predicted_image(self, img, best_match):
+        if best_match:
+            pokemon_img_path = os.path.join("pokemon_images", best_match.replace('_flipped', ''))
+            target_img = cv.imread(pokemon_img_path.replace('_flipped', ''))
 
+            if target_img is not None:
+                # Save the input image with the predicted Pokémon's name in the saved_matches folder
+                output_dir = "saved_matches"
+                os.makedirs(output_dir, exist_ok=True)
+                predicted_pokemon = best_match.split("_flipped")[0].replace(".png", "")
+                saved_image_path = os.path.join("saved_matches", f"{predicted_pokemon}_saved.png")
+                cv.imwrite(saved_image_path, img)  # Save the input image here
+                print(f"Saved input image to {saved_image_path}")
+            else:
+                print("Could not read the target image.")
+
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
             
         
 class Pokemon(commands.Cog):
