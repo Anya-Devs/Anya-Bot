@@ -431,6 +431,19 @@ class Quest_Data(commands.Cog):
         except PyMongoError as e:
             logger.error(f"Error occurred while adding item to inventory: {e}")
             raise e
+    
+    async def add_tool_to_inventory(self, guild_id: str, user_id: str, material_name: str, quantity: int) -> None:
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db['Servers']
+            await server_collection.update_one(
+                {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
+                {'$inc': {f'members.{user_id}.inventory.tool.{material_name}': quantity}},
+                upsert=True
+            )
+        except PyMongoError as e:
+            logger.error(f"Error occurred while adding item to inventory: {e}")
+            raise e
             
     async def remove_all_server_quests(self, guild_id: str) -> None:
      try:
@@ -1542,7 +1555,7 @@ class MaterialsButton(discord.ui.View):
                 await self.quest_data.add_item_to_inventory(self.guild_id, self.user_id, material_name, -required_quantity)
 
             # Add tool to inventory
-            await self.quest_data.add_item_to_inventory(self.guild_id, self.user_id, tool_name, 1)
+            await self.quest_data.add_tool_to_inventory(self.guild_id, self.user_id, tool_name, 1)
 
             # Call update_view after buying
             await self.update_view()
