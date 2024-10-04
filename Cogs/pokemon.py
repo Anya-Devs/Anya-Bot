@@ -14,6 +14,7 @@ import sqlite3
 import random
 import threading
 import asyncio
+import pandas as pd
 import multiprocessing
 from functools import lru_cache
 from typing import List, Tuple, Optional
@@ -29,6 +30,7 @@ import psutil
 import hnswlib
 import ijson
 import imagehash
+import motor.motor_asyncio
 from PIL import Image, ImageChops
 
 
@@ -51,6 +53,60 @@ from Data.const import error_custom_embed, sdxl, primary_color
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
 
+
+class PokemonData:
+    def __init__(self):
+        self.DB_NAME = 'Pokemon_SH'
+        
+        # Initialize MongoDB connection
+        mongo_url = os.getenv('MONGO_URI')
+        if not mongo_url:
+            raise ValueError("No MONGO_URI found in environment variables")
+        self.mongoConnect = motor.motor_asyncio.AsyncIOMotorClient(mongo_url)
+        self.db = self.mongoConnect[self.DB_NAME]
+        self.users_collection = self.db['users_pokemon']
+
+        # Load the CSV file containing Pokémon descriptions
+        self.pokemon_df = pd.read_csv('Data/pokemon/pokemon_description.csv')
+
+    async def check_pokemon_exists(self, pokemon_name):
+        # Check if the Pokémon exists in the CSV file
+        return not self.pokemon_df[self.pokemon_df['slug'].str.lower() == pokemon_name.lower()].empty
+
+    async def get_user_pokemon(self, user_id):
+        # Get the user's Pokémon list from the database
+        user_data = await self.users_collection.find_one({'user_id': user_id})
+        if user_data:
+            return user_data['pokemon_list']
+        return []
+
+    async def add_pokemon_to_user(self, user_id, pokemon_name):
+        # Add the Pokémon to the user's list
+        user_pokemon = await self.get_user_pokemon(user_id)
+        user_pokemon.append(pokemon_name)
+        await self.users_collection.update_one(
+            {'user_id': user_id},
+            {'$set': {'pokemon_list': user_pokemon}},
+            upsert=True
+        )
+
+    async def remove_pokemon_from_user(self, user_id, pokemon_name):
+        # Remove the Pokémon from the user's list
+        user_pokemon = await self.get_user_pokemon(user_id)
+        user_pokemon = [p for p in user_pokemon if p.lower() != pokemon_name.lower()]
+        await self.users_collection.update_one(
+            {'user_id': user_id},
+            {'$set': {'pokemon_list': user_pokemon}}
+        )
+
+    async def get_hunters_for_pokemon(self, pokemon_name):
+        # Find users who have the specified Pokémon in their list
+        hunters = await self.users_collection.find(
+            {'pokemon_list': {'$in': [pokemon_name]}}
+        ).to_list(None)
+
+        # Return the list of user IDs
+        return [hunter['user_id'] for hunter in hunters]
 
 
 class PokemonPredictor:
@@ -157,7 +213,7 @@ class PokemonPredictor:
             if filename in self.distance_cache:
                 item_distances[filename] = np.mean(self.distance_cache[filename])  # Get the average distance
             else:
-                print(f"Warning: No distance data for {filename}. Skipping this file.")
+              pass
 
         with ThreadPoolExecutor() as executor:
             accuracy_futures = {
@@ -190,7 +246,7 @@ class PokemonPredictor:
             predicted_pokemon, accuracy = best_match
             predicted_name = predicted_pokemon.replace(".png", "").replace("_flipped", "").replace("_saved", "")
             elapsed_time = time.time() - start_time
-            return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time
+            return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
         
         return "No match found", time.time() - start_time
 
@@ -295,6 +351,7 @@ class Pokemon(commands.Cog):
         self.bot = bot
         self.author_id = 716390085896962058
         self.predictor = PokemonPredictor()
+        self.data_handler = PokemonData()  # PokemonData instance
         self.primary_color = primary_color
         self.error_custom_embed = error_custom_embed
         self.local_color_memory = []  # Binary local color comparator memory
@@ -435,11 +492,90 @@ class Pokemon(commands.Cog):
                             img = np.array(img.convert('RGB'))  # Convert to numpy array
 
                             # Use the predictor to predict the Pokémon
-                            prediction, time_taken = await self.predictor.predict_pokemon(img)
+                            prediction, time_taken, predicted_name = await self.predictor.predict_pokemon(img)
                             await message.channel.send(prediction, reference=message)
+                            predicted_pokemon = prediction.lower()
+
+                            # Get all users who have this Pokémon in their list
+                            hunters = await self.data_handler.get_hunters_for_pokemon(predicted_pokemon)
+
+                            if hunters:
+                                # Create a mention string for the hunters
+                                hunter_mentions = ", ".join([f"<@{hunter_id}>" for hunter_id in hunters])
+                                ping_message = f"Shiny Hunters: {hunter_mentions}"
+                                await message.channel.send(f"{ping_message}\n{prediction.title()}")
+                                return
+
+                            else:
+                                await message.channel.send(f"{prediction.title()}")
+                                return
                         else:
                             await message.channel.send(f"Failed to download image. Status code: {response.status}", reference=message)
+                            return
+
+
     
+    @commands.command(name="shiny")
+    async def shiny(self, ctx, action="list", pokemon_name: str = None):
+     user_id = ctx.author.id
+
+     if action == "list":
+        # List the user's current Pokémon
+        user_pokemon = await self.data_handler.get_user_pokemon(user_id)
+
+        if user_pokemon:
+            await ctx.send(f"Your Pokémon list: {', '.join(user_pokemon)}")
+        else:
+            await ctx.send("You don't have any Pokémon yet!")
+
+     elif action == "add":
+        if not pokemon_name:
+            await ctx.send("Please provide a Pokémon name to add.")
+            return
+
+        # Check if the Pokémon exists in the database (from CSV)
+        exists = await self.data_handler.check_pokemon_exists(pokemon_name)  # Ensure this is awaited
+        if not exists:
+            await ctx.send(f"{pokemon_name} does not exist in the Pokémon database.")
+            return
+
+        # Get the user's current Pokémon list
+        user_pokemon = await self.data_handler.get_user_pokemon(user_id)
+
+        # Check if the user has already reached the maximum Pokémon count
+        if len(user_pokemon) >= 10:
+            await ctx.send("You already have 10 Pokémon. Remove one to add a new one.")
+            return
+
+        # Check if the Pokémon is already in the user's list
+        if any(p.lower() == pokemon_name.lower() for p in user_pokemon):
+            await ctx.send(f"You already have {pokemon_name}.")
+            return
+
+        # Add the Pokémon to the user's list
+        await self.data_handler.add_pokemon_to_user(user_id, pokemon_name)
+        await ctx.send(f"{pokemon_name} has been added to your Pokémon list!")
+
+     elif action == "remove":
+        if not pokemon_name:
+            await ctx.send("Please provide a Pokémon name to remove.")
+            return
+
+        # Get the user's current Pokémon list
+        user_pokemon = await self.data_handler.get_user_pokemon(user_id)
+
+        # Check if the Pokémon is in the user's list
+        if not any(p.lower() == pokemon_name.lower() for p in user_pokemon):
+            await ctx.send(f"{pokemon_name} is not in your Pokémon list.")
+            return
+
+        # Remove the Pokémon from the user's list
+        await self.data_handler.remove_pokemon_from_user(user_id, pokemon_name)
+        await ctx.send(f"{pokemon_name} has been removed from your Pokémon list!")
+
+     else:
+        await ctx.send("Invalid action! Use `list`, `add`, or `remove`.")
+
     @commands.command(help="Displays Pokemon dex information.", aliases=['pokdex', 'dex','d','p'])
     @commands.cooldown(1, 6, commands.BucketType.user) 
     async def pokemon(self, ctx, *, args=None, form=None):   
