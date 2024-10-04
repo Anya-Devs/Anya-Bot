@@ -471,7 +471,7 @@ class Pokemon(commands.Cog):
                         img = np.array(img.convert('RGB'))  # Convert to numpy array
 
                         # Use the predictor to predict the Pokémon
-                        prediction, time_taken = await self.predictor.predict_pokemon(img)
+                        prediction, time_taken, predicted_name = await self.predictor.predict_pokemon(img)
                         await ctx.reply(prediction, mention_author=False)
                     else:
                         await ctx.reply(f"Failed to download image. Status code: {response.status}", mention_author=False)
@@ -490,25 +490,25 @@ class Pokemon(commands.Cog):
                             img_bytes = await response.read()
                             img = Image.open(io.BytesIO(img_bytes))
                             img = np.array(img.convert('RGB'))  # Convert to numpy array
-
-                            # Use the predictor to predict the Pokémon
-                            prediction, time_taken, predicted_name = await self.predictor.predict_pokemon(img)
-                            await message.channel.send(prediction, reference=message)
-                            predicted_pokemon = prediction.lower()
-
+                            
                             # Get all users who have this Pokémon in their list
-                            hunters = await self.data_handler.get_hunters_for_pokemon(predicted_pokemon)
+                            prediction, time_taken, predicted_name = await self.predictor.predict_pokemon(img)
+                            hunters = await self.data_handler.get_hunters_for_pokemon(predicted_name)
 
                             if hunters:
                                 # Create a mention string for the hunters
                                 hunter_mentions = ", ".join([f"<@{hunter_id}>" for hunter_id in hunters])
                                 ping_message = f"Shiny Hunters: {hunter_mentions}"
-                                await message.channel.send(f"{ping_message}\n{prediction.title()}")
-                                return
+                                await message.channel.send(f"{ping_message}")
 
-                            else:
-                                await message.channel.send(f"{prediction.title()}")
-                                return
+                            # Use the predictor to predict the Pokémon
+                            
+                            await message.channel.send(prediction, reference=message)
+                            predicted_pokemon = prediction.lower()
+
+                            
+
+                
                         else:
                             await message.channel.send(f"Failed to download image. Status code: {response.status}", reference=message)
                             return
@@ -524,19 +524,19 @@ class Pokemon(commands.Cog):
         user_pokemon = await self.data_handler.get_user_pokemon(user_id)
 
         if user_pokemon:
-            await ctx.send(f"Your Pokémon list: {', '.join(user_pokemon)}")
+            await ctx.reply(f"Your Pokémon list: `{', '.join(pokemon.lower() for pokemon in user_pokemon)}`", mention_author=False)
         else:
-            await ctx.send("You don't have any Pokémon yet!")
+            await ctx.reply("You don't have any Pokémon yet! `Try doing ...shiny add <pokemon_name>`", mention_author=False)
 
      elif action == "add":
         if not pokemon_name:
-            await ctx.send("Please provide a Pokémon name to add.")
+            await ctx.reply("Please provide a Pokémon name to add.", mention_author=False)
             return
 
         # Check if the Pokémon exists in the database (from CSV)
         exists = await self.data_handler.check_pokemon_exists(pokemon_name)  # Ensure this is awaited
         if not exists:
-            await ctx.send(f"{pokemon_name} does not exist in the Pokémon database.")
+            await ctx.reply(f"{pokemon_name} does not exist in the Pokémon database.", mention_author=False)
             return
 
         # Get the user's current Pokémon list
@@ -544,21 +544,21 @@ class Pokemon(commands.Cog):
 
         # Check if the user has already reached the maximum Pokémon count
         if len(user_pokemon) >= 10:
-            await ctx.send("You already have 10 Pokémon. Remove one to add a new one.")
+            await ctx.reply("You already have 10 Pokémon. Remove one to add a new one.", mention_author=False)
             return
 
         # Check if the Pokémon is already in the user's list
         if any(p.lower() == pokemon_name.lower() for p in user_pokemon):
-            await ctx.send(f"You already have {pokemon_name}.")
+            await ctx.reply(f"You already have {pokemon_name}.", mention_author=False)
             return
 
         # Add the Pokémon to the user's list
         await self.data_handler.add_pokemon_to_user(user_id, pokemon_name)
-        await ctx.send(f"{pokemon_name} has been added to your Pokémon list!")
+        await ctx.reply(f"{pokemon_name} has been added to your Pokémon list!", mention_author=False)
 
      elif action == "remove":
         if not pokemon_name:
-            await ctx.send("Please provide a Pokémon name to remove.")
+            await ctx.reply("Please provide a Pokémon name to remove.", mention_author=False)
             return
 
         # Get the user's current Pokémon list
@@ -566,16 +566,16 @@ class Pokemon(commands.Cog):
 
         # Check if the Pokémon is in the user's list
         if not any(p.lower() == pokemon_name.lower() for p in user_pokemon):
-            await ctx.send(f"{pokemon_name} is not in your Pokémon list.")
+            await ctx.reply(f"{pokemon_name} is not in your Pokémon list.", mention_author=False)
             return
 
         # Remove the Pokémon from the user's list
         await self.data_handler.remove_pokemon_from_user(user_id, pokemon_name)
-        await ctx.send(f"{pokemon_name} has been removed from your Pokémon list!")
+        await ctx.reply(f"{pokemon_name} has been removed from your Pokémon list!", mention_author=False)
 
      else:
-        await ctx.send("Invalid action! Use `list`, `add`, or `remove`.")
-
+        await ctx.reply("Invalid action! Use `list`, `add`, or `remove`.", mention_author=False)
+        
     @commands.command(help="Displays Pokemon dex information.", aliases=['pokdex', 'dex','d','p'])
     @commands.cooldown(1, 6, commands.BucketType.user) 
     async def pokemon(self, ctx, *, args=None, form=None):   
