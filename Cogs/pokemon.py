@@ -445,38 +445,49 @@ class Pokemon(commands.Cog):
             f.write(response.read())
 
     @commands.command(name='predict')
-    @commands.cooldown(1, 6, commands.BucketType.user)  # 1 use per 24 hours per user
+    @commands.cooldown(1, 6, commands.BucketType.user)  # 1 use per 6 seconds per user
     async def predict(self, ctx, *, arg=None):
-        image_url = None
+     image_url = None
 
-        if arg:
-            image_url = arg
-        elif ctx.message.attachments:
-            image_url = ctx.message.attachments[0].url
-        elif ctx.message.reference:
-            reference_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-            if reference_message.attachments:
-                image_url = reference_message.attachments[0].url
-            elif reference_message.embeds:
-                embed = reference_message.embeds[0]
-                if embed.image:
-                    image_url = embed.image.url
+     if arg:
+        image_url = arg
+     elif ctx.message.attachments:
+        image_url = ctx.message.attachments[0].url
+     elif ctx.message.reference:
+        reference_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+        if reference_message.attachments:
+            image_url = reference_message.attachments[0].url
+        elif reference_message.embeds:
+            embed = reference_message.embeds[0]
+            if embed.image:
+                image_url = embed.image.url
 
-        if image_url:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(image_url) as response:
-                    if response.status == 200:
-                        img_bytes = await response.read()
-                        img = Image.open(io.BytesIO(img_bytes))
-                        img = np.array(img.convert('RGB'))  # Convert to numpy array
+     if image_url:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(image_url) as response:
+                if response.status == 200:
+                    img_bytes = await response.read()
+                    img = Image.open(io.BytesIO(img_bytes))
+                    img = np.array(img.convert('RGB'))  # Convert to numpy array
 
-                        # Use the predictor to predict the Pokémon
-                        prediction, time_taken, predicted_name = await self.predictor.predict_pokemon(img)
-                        await ctx.reply(prediction, mention_author=False)
-                    else:
-                        await ctx.reply(f"Failed to download image. Status code: {response.status}", mention_author=False)
-        else:
-            await ctx.send("No image found to predict.")
+                    # Use the predictor to predict the Pokémon
+                    prediction, time_taken, predicted_name = await self.predictor.predict_pokemon(img)
+                    
+                    # Check if the user is a hunter for the predicted Pokémon
+                    hunters = await self.data_handler.get_hunters_for_pokemon(predicted_name)
+                    user_id = ctx.author.id
+                    is_hunter = user_id in hunters
+                    
+                    # Prepare the response message
+                    response_message = prediction
+                    if is_hunter:
+                        response_message = f"{ctx.author.mention}, {response_message}"  # Mention the user if they are a hunter
+                    
+                    await ctx.reply(response_message, mention_author=False)
+                else:
+                    await ctx.reply(f"Failed to download image. Status code: {response.status}", mention_author=False)
+     else:
+        await ctx.send("No image found to predict.")
     
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -497,9 +508,9 @@ class Pokemon(commands.Cog):
 
                             if hunters:
                                 # Create a mention string for the hunters
-                                hunter_mentions = ", ".join([f"<@{hunter_id}>" for hunter_id in hunters])
-                                ping_message = f"Shiny Hunters: {hunter_mentions}"
-                                await message.channel.send(f"{ping_message}")
+                                hunter_mentions = " ".join([f"<@{hunter_id}>" for hunter_id in hunters])  # Updated format for mentions
+                                ping_message = f"Hunters: {hunter_mentions}"
+                                await message.channel.send(f"{ping_message}", reference=message)
 
                             # Use the predictor to predict the Pokémon
                             
@@ -515,7 +526,7 @@ class Pokemon(commands.Cog):
 
 
     
-    @commands.command(name="shiny")
+    @commands.command(name="hunt")
     async def shiny(self, ctx, action="list", pokemon_name: str = None):
      user_id = ctx.author.id
 
@@ -526,7 +537,7 @@ class Pokemon(commands.Cog):
         if user_pokemon:
             await ctx.reply(f"Your Pokémon list: `{', '.join(pokemon.lower() for pokemon in user_pokemon)}`", mention_author=False)
         else:
-            await ctx.reply("You don't have any Pokémon yet! `Try doing ...shiny add <pokemon_name>`", mention_author=False)
+            await ctx.reply("You don't have any Pokémon yet! `Try doing ...hunt add <pokemon_name>`", mention_author=False)
 
      elif action == "add":
         if not pokemon_name:
@@ -534,9 +545,9 @@ class Pokemon(commands.Cog):
             return
 
         # Check if the Pokémon exists in the database (from CSV)
-        exists = await self.data_handler.check_pokemon_exists(pokemon_name)  # Ensure this is awaited
+        exists = await self.data_handler.check_pokemon_exists(pokemon_name.lower())  # Ensure this is awaited
         if not exists:
-            await ctx.reply(f"{pokemon_name} does not exist in the Pokémon database.", mention_author=False)
+            await ctx.reply(f"`{pokemon_name}` does not exist in the Pokémon database.", mention_author=False)
             return
 
         # Get the user's current Pokémon list
@@ -544,17 +555,17 @@ class Pokemon(commands.Cog):
 
         # Check if the user has already reached the maximum Pokémon count
         if len(user_pokemon) >= 10:
-            await ctx.reply("You already have 10 Pokémon. Remove one to add a new one.", mention_author=False)
+            await ctx.reply("You already have 10 **Pokémon** in your hunt list. Remove one to add a new one.", mention_author=False)
             return
 
         # Check if the Pokémon is already in the user's list
         if any(p.lower() == pokemon_name.lower() for p in user_pokemon):
-            await ctx.reply(f"You already have {pokemon_name}.", mention_author=False)
+            await ctx.reply(f"You already have `{pokemon_name}`.", mention_author=False)
             return
 
         # Add the Pokémon to the user's list
         await self.data_handler.add_pokemon_to_user(user_id, pokemon_name)
-        await ctx.reply(f"{pokemon_name} has been added to your Pokémon list!", mention_author=False)
+        await ctx.reply(f"`{pokemon_name.lower()}` has been __added__ to your Pokémon list!", mention_author=False)
 
      elif action == "remove":
         if not pokemon_name:
