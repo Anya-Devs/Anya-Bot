@@ -509,7 +509,7 @@ class Pokemon(commands.Cog):
                             if hunters:
                                 # Create a mention string for the hunters
                                 hunter_mentions = " ".join([f"<@{hunter_id}>" for hunter_id in hunters])  # Updated format for mentions
-                                ping_message = f"Hunters: {hunter_mentions}"
+                                ping_message = f"`{predicted_name}` Hunters: {hunter_mentions}"
                                 await message.channel.send(f"{ping_message}", reference=message)
 
                             # Use the predictor to predict the Pokémon
@@ -527,7 +527,7 @@ class Pokemon(commands.Cog):
 
     
     @commands.command(name="hunt")
-    async def shiny(self, ctx, action="list", pokemon_name: str = None):
+    async def hunt(self, ctx, action="list", *pokemon_names):
      user_id = ctx.author.id
 
      if action == "list":
@@ -540,49 +540,81 @@ class Pokemon(commands.Cog):
             await ctx.reply("You don't have any Pokémon yet! `Try doing ...hunt add <pokemon_name>`", mention_author=False)
 
      elif action == "add":
-        if not pokemon_name:
-            await ctx.reply("Please provide a Pokémon name to add.", mention_author=False)
-            return
-
-        # Check if the Pokémon exists in the database (from CSV)
-        exists = await self.data_handler.check_pokemon_exists(pokemon_name.lower())  # Ensure this is awaited
-        if not exists:
-            await ctx.reply(f"`{pokemon_name}` does not exist in the Pokémon database.", mention_author=False)
+        if not pokemon_names:
+            await ctx.reply("Please provide at least one Pokémon name to add.", mention_author=False)
             return
 
         # Get the user's current Pokémon list
         user_pokemon = await self.data_handler.get_user_pokemon(user_id)
 
         # Check if the user has already reached the maximum Pokémon count
-        if len(user_pokemon) >= 10:
-            await ctx.reply("You already have 10 **Pokémon** in your hunt list. Remove one to add a new one.", mention_author=False)
+        if len(user_pokemon) + len(pokemon_names) > 10:
+            await ctx.reply("You already have 10 **Pokémon** in your hunt list. Remove one to add new ones.", mention_author=False)
             return
 
-        # Check if the Pokémon is already in the user's list
-        if any(p.lower() == pokemon_name.lower() for p in user_pokemon):
-            await ctx.reply(f"You already have `{pokemon_name}`.", mention_author=False)
-            return
+        added_pokemon = []
+        not_exist_pokemon = []
+        already_have_pokemon = []
 
-        # Add the Pokémon to the user's list
-        await self.data_handler.add_pokemon_to_user(user_id, pokemon_name)
-        await ctx.reply(f"`{pokemon_name.lower()}` has been __added__ to your Pokémon list!", mention_author=False)
+        for pokemon_name in pokemon_names:
+            # Check if the Pokémon exists in the database (from CSV)
+            exists = await self.data_handler.check_pokemon_exists(pokemon_name.lower())
+            if not exists:
+                not_exist_pokemon.append(pokemon_name)
+                continue
+
+            # Check if the Pokémon is already in the user's list
+            if any(p.lower() == pokemon_name.lower() for p in user_pokemon):
+                already_have_pokemon.append(pokemon_name)
+                continue
+
+            # Add the Pokémon to the user's list
+            await self.data_handler.add_pokemon_to_user(user_id, pokemon_name)
+            added_pokemon.append(pokemon_name)
+
+        # Create response messages
+        response_messages = []
+        if added_pokemon:
+            response_messages.append(f"`{', '.join(p.lower() for p in added_pokemon)}` has been __added__ to your Pokémon list!")
+
+        if already_have_pokemon:
+            response_messages.append(f"You already have: `{', '.join(already_have_pokemon)}`.")
+
+        if not_exist_pokemon:
+            response_messages.append(f"The following Pokémon do not exist in the database: `{', '.join(not_exist_pokemon)}`.")
+
+        await ctx.reply("\n".join(response_messages), mention_author=False)
 
      elif action == "remove":
-        if not pokemon_name:
-            await ctx.reply("Please provide a Pokémon name to remove.", mention_author=False)
+        if not pokemon_names:
+            await ctx.reply("Please provide at least one Pokémon name to remove.", mention_author=False)
             return
 
         # Get the user's current Pokémon list
         user_pokemon = await self.data_handler.get_user_pokemon(user_id)
 
-        # Check if the Pokémon is in the user's list
-        if not any(p.lower() == pokemon_name.lower() for p in user_pokemon):
-            await ctx.reply(f"{pokemon_name} is not in your Pokémon list.", mention_author=False)
-            return
+        removed_pokemon = []
+        not_in_list_pokemon = []
 
-        # Remove the Pokémon from the user's list
-        await self.data_handler.remove_pokemon_from_user(user_id, pokemon_name)
-        await ctx.reply(f"{pokemon_name} has been removed from your Pokémon list!", mention_author=False)
+        for pokemon_name in pokemon_names:
+            # Check if the Pokémon is in the user's list
+            if not any(p.lower() == pokemon_name.lower() for p in user_pokemon):
+                not_in_list_pokemon.append(pokemon_name)
+                continue
+
+            # Remove the Pokémon from the user's list
+            await self.data_handler.remove_pokemon_from_user(user_id, pokemon_name)
+            removed_pokemon.append(pokemon_name)
+
+        # Create response messages
+        response_messages = []
+        if removed_pokemon:
+            response_messages.append(f"`{', '.join(removed_pokemon)}` has been removed from your Pokémon list!")
+
+        if not_in_list_pokemon:
+            response_messages.append(f"The following Pokémon are not in your list: `{', '.join(not_in_list_pokemon)}`.")
+
+        await ctx.reply("\n".join(response_messages), mention_author=False)
 
      else:
         await ctx.reply("Invalid action! Use `list`, `add`, or `remove`.", mention_author=False)
