@@ -193,7 +193,6 @@ class Quest_View(View):
         reward = quest['reward']
         
         # Get the channel using the channel ID
-        print('channel_id:', quest['channel_id'])
         channel = self.bot.get_channel(int(quest['channel_id']))
 
         # Generate instructions based on method
@@ -813,20 +812,21 @@ class Quest_Data(commands.Cog):
     
     async def store_channels_for_guild(self, guild_id: str, channel_ids: list):
      """
-     Store the provided list of channel IDs for the guild in the database.
+     Store the provided list of channel IDs for the guild in the database, 
+     replacing any existing channel IDs.
      """
      try:
         db = self.mongoConnect[self.DB_NAME]
         server_collection = db['Servers']
         
-        # Update the document with the list of channels for the guild
+        # Replace the document with the new channel IDs for the guild
         await server_collection.update_one(
             {'guild_id': guild_id},
-            {'$set': {'channels': channel_ids}},
+            {'$set': {'channels': channel_ids}},  # This will replace the 'channels' field
             upsert=True
         )
         
-        logger.debug(f"Stored channels {channel_ids} for guild {guild_id}.")
+        logger.debug(f"Stored (overwritten) channels {channel_ids} for guild {guild_id}.")
         return True
      except PyMongoError as e:
         logger.error(f"Error occurred while storing channels: {e}")
