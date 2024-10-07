@@ -151,30 +151,6 @@ class Quest(commands.Cog):
             shop_data = json.load(file)
         return shop_data
     
-    @commands.command(name='mytools')
-    async def my_tools(self, ctx):
-     user_id = str(ctx.author.id)
-     guild_id = str(ctx.guild.id)
-    
-     try:
-        db = self.mongoConnect[self.DB_NAME]
-        server_collection = db['Servers']
-        
-        user_data = await server_collection.find_one({'guild_id': guild_id, f'members.{user_id}': {'$exists': True}}, {'members': 1})
-        
-        if user_data:
-            inventory = user_data['members'][user_id].get('inventory', {})
-            tools_list = [f"{tool}: {quantity}" for tool, quantity in inventory.items() if quantity > 0]
-            
-            if tools_list:
-                await ctx.reply("Your tools:\n" + "```\n" + "\n".join(tools_list) + "\n```")
-            else:
-                await ctx.send("You have no tools in your inventory.")
-        else:
-            await ctx.send("User data not found.")
-     except Exception as e:
-        await ctx.send(f"An error occurred: {e}")
-        
         
         
 class Quest_View(View):
@@ -217,6 +193,7 @@ class Quest_View(View):
         reward = quest['reward']
         
         # Get the channel using the channel ID
+        print('channel_id:', quest['channel_id'])
         channel = self.bot.get_channel(int(quest['channel_id']))
 
         # Generate instructions based on method
@@ -239,7 +216,7 @@ class Quest_View(View):
         if channel:
             channel_link = f'[Go here](https://discord.com/channels/{self.ctx.guild.id}/{channel.id})' if channel.id != self.ctx.channel.id else 'In this channel'
         else:
-            channel_link = 'Channel not found'  # Fallback in case the channel is not found
+            channel_link = f'Channel not found | Recommended: `/quest delete quest_id: {quest_id}`'  # Fallback in case the channel is not found
 
         embed.add_field(
             name="",  # Step 1: Field name
