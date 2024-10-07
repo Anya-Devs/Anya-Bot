@@ -800,32 +800,31 @@ class Quest_Data(commands.Cog):
         raise e
         
         
-    async def get_random_channel_for_guild(self, guild_id: str, fallback_channel: discord.TextChannel = None):
-     """
-     Retrieve a random channel ID for the specified guild from the database.
-     If no channels are stored, fall back to a provided fallback channel or return None.
-     """
-     try:
-        db = self.mongoConnect[self.DB_NAME]
-        server_collection = db['Servers']
-        
-        # Get the stored channels for the guild
-        guild_data = await server_collection.find_one({'guild_id': guild_id}, {'channels': 1})
-        stored_channels = guild_data.get('channels', []) if guild_data else []
-        
-        if stored_channels:
-            return random.choice(stored_channels)
-        else:
-            logger.debug(f"No stored channels for guild {guild_id}. Falling back to the fallback channel.")
-            if fallback_channel:
-                return fallback_channel.id
+    async def get_random_channel_for_guild(self, guild_id: str, fallback_channel=None):
+        """
+        Retrieve a random channel ID for the specified guild from the database.
+        If no channels are found, return the fallback channel ID if provided.
+        """
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db['Servers']
+
+            # Fetch the channels for the guild from the database
+            guild_data = await server_collection.find_one({'guild_id': guild_id}, {'channels': 1})
+
+            if guild_data and 'channels' in guild_data and guild_data['channels']:
+                # If channels are found, select a random one
+                channel_ids = guild_data['channels']
+                random_channel_id = random.choice(channel_ids)
+                logger.debug(f"Random channel ID selected: {random_channel_id} for guild {guild_id}")
+                return random_channel_id
             else:
-                # Optionally, select a default channel (e.g., general) if no fallback is provided
-                logger.debug(f"No fallback channel provided. Returning None.")
-                return None
-     except PyMongoError as e:
-        logger.error(f"Error occurred while retrieving channels: {e}")
-        return None    
+                logger.debug(f"No channels found for guild {guild_id}. Using fallback channel.")
+                return fallback_channel.id if fallback_channel else None
+
+        except PyMongoError as e:
+            logger.error(f"Error occurred while retrieving random channel: {e}")
+            return fallback_channel.id if fallback_channel else None    
     
     
     async def store_channels_for_guild(self, guild_id: str, channel_ids: list):
