@@ -34,7 +34,29 @@ class Quest(commands.Cog):
         self.bot = bot
         self.quest_data = Quest_Data(bot)
         self.shop_file = 'Data/commands/quest/shop.json'
-
+        
+    @commands.command(name="redirect")
+    async def redirect(self, ctx, *channel_mentions: discord.TextChannel):
+     if not (ctx.author.guild_permissions.manage_channels or discord.utils.get(ctx.author.roles, name="Anya Manager")):
+        await ctx.reply("You need the `Manage Channels` permission or the `Anya Manager` role to use this command.", mention_author=False)
+        return  # Exit if the user doesn't have the required permission or role
+     """
+     Command to store channels for the guild.
+     Usage: !setchannels #channel1 #channel2
+     """
+     try:
+        guild_id = str(ctx.guild.id)
+        channel_ids = [str(channel.id) for channel in channel_mentions]
+        
+        # Store the channels in the database
+        if await self.quest_data.store_channels_for_guild(guild_id, channel_ids):
+            await ctx.reply(f"<:anya_wow:1268976258566328430> Now quest missions to {', '.join([channel.mention for channel in channel_mentions])}", mention_author=False)
+        else:
+            await ctx.reply("Failed to store the channels. Please try again later.", mention_author=False)
+     except Exception as e:
+        logger.error(f"Error in setchannels command: {e}")
+        await ctx.send("An error occurred while setting the channels.")
+        
     @commands.command(name='quest', aliases=['q'])
     async def quest(self, ctx, args: str = None):
         logger.debug("Quest command invoked.")
@@ -52,7 +74,7 @@ class Quest(commands.Cog):
             
             if not user_exists:
                 prompt_embed = await Quest_Prompt.get_embed(self.bot)
-                await ctx.reply(embed=prompt_embed, view=Quest_Button(self.bot, ctx))
+                await ctx.reply(embed=prompt_embed, view=Quest_Button(self.bot, ctx), mention_author=False)
                 return
 
             quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
@@ -72,7 +94,8 @@ class Quest(commands.Cog):
 
             else:
                 no_quest_message = "You have no quests."
-                await ctx.reply(no_quest_message, mention_author=False)
+                
+                await ctx.reply(no_quest_message, view=Quest_Button1(self.bot, ctx), mention_author=False)
                 
         except Exception as e:
             error_message = "An error occurred while fetching quests."
@@ -151,6 +174,9 @@ class Quest(commands.Cog):
             await ctx.send("User data not found.")
      except Exception as e:
         await ctx.send(f"An error occurred: {e}")
+        
+        
+        
 class Quest_View(View):
     def __init__(self, bot, quests, ctx, page=0, filtered_quests=None):
         super().__init__(timeout=None)
@@ -298,8 +324,72 @@ class QuestButton(discord.ui.Button):
         embed = await view.generate_messages()
         await interaction.response.edit_message(embed=embed, view=view)
 
+        
+class Quest_Button1(discord.ui.View):
+    def __init__(self, bot, ctx):
+        super().__init__()
+        self.ctx = ctx
+        self.bot = bot
+        self.quest_data = Quest_Data(bot)
 
-            
+    async def add_user_to_server(self):
+        logger.debug("Adding user to server.")
+        try:
+            user_id = str(self.ctx.author.id)
+            guild_id = str(self.ctx.guild.id)
+            users_in_server = await self.quest_data.find_users_in_server(guild_id)
+            logger.debug(f"Users in server: {users_in_server}")
+
+            if user_id not in users_in_server:
+                await self.quest_data.add_user_to_server(user_id, guild_id)
+                return True
+            else:
+                return False
+        except Exception as e:
+            error_message = "An error occurred while adding user to server."
+            logger.error(f"{error_message}: {e}")
+            traceback.print_exc()
+            await error_custom_embed(self.bot, self.ctx, error_message, title="Add User Error")
+            return False
+
+    @discord.ui.button(label="New Quest", style=discord.ButtonStyle.success)
+    async def new_quest_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+        try:
+            # Retrieve guild ID and check if redirect channels exist for this guild
+            guild_id = str(button.guild.id)
+            channel_id = await self.quest_data.get_random_channel_for_guild(guild_id)
+
+            if not channel_id:
+                # If no redirect channels are found, notify the user (without mentioning the author)
+                await button.response.send_message(
+                    "No redirected channels found for this guild. Please set redirect channels before creating a new quest.\n"
+                    "> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `...redirect <channels>`",
+                    ephemeral=True)
+                return  # Exit if no channels are set
+
+            # Proceed to create new quests for the user
+            button_user = button.user
+
+            # Add the user to the guild's quest balance
+            await self.quest_data.add_balance(button_user, guild_id, 0)
+
+            # Add new quests for the user
+            for _ in range(25):
+                logger.debug("Adding new quest")
+                await self.quest_data.add_new_quest(guild_id, button_user, chance=100)
+
+            # Notify the user that new quests have been created
+            await button.response.send_message(
+                f"Successfully created new quests for you, {button_user.mention}!",
+                ephemeral=True,
+            )
+
+        except Exception as e:
+            error_message = "An error occurred while processing the new quest button."
+            logger.error(f"{error_message}: {e}")
+            traceback.print_exc()
+            await error_custom_embed(self.bot, self.ctx, error_message, title="Button Error")
+        
 class Quest_Button(discord.ui.View):
     def __init__(self, bot, ctx):
         super().__init__()
@@ -329,34 +419,48 @@ class Quest_Button(discord.ui.View):
 
     @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
     async def accept_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-        try:
-            added = await self.add_user_to_server()
+     guild_id = str(button.guild.id)
+     channel_id = await self.quest_data.get_random_channel_for_guild(guild_id)
+     if not channel_id:
+                # If no redirect channels are found, notify the user (without mentioning the author)
+                await button.response.send_message(
+                    "No redirected channels found for this guild. Please set redirect channels before creating a new quest.\n"
+                    "> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `...redirect <channels>`",
+                    ephemeral=True, 
+                )
+                return  # Exit if no channels are set
+     try:
+        added = await self.add_user_to_server()
+        
+        if added:
+            # Retrieve guild ID and check if redirect channels exist for this guild
+            guild_id = str(button.guild.id)
             
+
+            # Proceed if channels are available
+            embed = await QuestEmbed.get_agree_confirmation_embed(self.bot, button.user)
+            await button.response.send_message(embed=embed)
+            await button.followup.delete_message(button.message.id)
+
+            button_user = button.user
+
+            # Add the user to the guild's quest balance
+            await self.quest_data.add_balance(button_user, guild_id, 0)
             
-            if added:
-                embed = await QuestEmbed.get_agree_confirmation_embed(self.bot, button.user)
-                
-                await button.response.send_message(embed=embed)
-                await button.followup.delete_message(button.message.id)
+            # Add new quests for the user
+            for _ in range(10):
+                logger.debug("Adding new quest")
+                await self.quest_data.add_new_quest(guild_id, button_user, chance=100)
 
-                button_user = button.user
-                guild_id = str(button.guild.id)
-                
-                await self.quest_data.add_balance(button_user, guild_id, 0)
-                
-                for _ in range(10):
-                                logger.debug("Adding new quest")
-                                await self.quest_data.add_new_quest(guild_id, button_user, chance=100)
-
-
-            else:
-                await button.response.send_message("You are already part of the game!", ephemeral=True)
-                await button.followup.edit_message(button.message.id, view=None)
-        except Exception as e:
-            error_message = "An error occurred while processing the accept button."
-            logger.error(f"{error_message}: {e}")
-            traceback.print_exc()
-            await error_custom_embed(self.bot, self.ctx, error_message, title="Button Error")
+        else:
+            # Notify the user if they are already part of the game
+            await button.response.send_message("You are already part of the game!", ephemeral=True, mention_author=False)
+            await button.followup.edit_message(button.message.id, view=None)
+     except Exception as e:
+        error_message = "An error occurred while processing the accept button."
+        logger.error(f"{error_message}: {e}")
+        traceback.print_exc()
+        await error_custom_embed(self.bot, self.ctx, error_message, title="Button Error", mention_author=False)
 
     @discord.ui.button(label="Decline", style=discord.ButtonStyle.danger)
     async def decline_button(self, button: discord.ui.Button, interaction: discord.Interaction):
@@ -695,6 +799,57 @@ class Quest_Data(commands.Cog):
         logger.error(f"Error occurred while storing quest data: {e}")
         raise e
         
+        
+    async def get_random_channel_for_guild(self, guild_id: str, fallback_channel: discord.TextChannel = None):
+     """
+     Retrieve a random channel ID for the specified guild from the database.
+     If no channels are stored, fall back to a provided fallback channel or return None.
+     """
+     try:
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+        
+        # Get the stored channels for the guild
+        guild_data = await server_collection.find_one({'guild_id': guild_id}, {'channels': 1})
+        stored_channels = guild_data.get('channels', []) if guild_data else []
+        
+        if stored_channels:
+            return random.choice(stored_channels)
+        else:
+            logger.debug(f"No stored channels for guild {guild_id}. Falling back to the fallback channel.")
+            if fallback_channel:
+                return fallback_channel.id
+            else:
+                # Optionally, select a default channel (e.g., general) if no fallback is provided
+                logger.debug(f"No fallback channel provided. Returning None.")
+                return None
+     except PyMongoError as e:
+        logger.error(f"Error occurred while retrieving channels: {e}")
+        return None    
+    
+    
+    async def store_channels_for_guild(self, guild_id: str, channel_ids: list):
+     """
+     Store the provided list of channel IDs for the guild in the database.
+     """
+     try:
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+        
+        # Update the document with the list of channels for the guild
+        await server_collection.update_one(
+            {'guild_id': guild_id},
+            {'$set': {'channels': channel_ids}},
+            upsert=True
+        )
+        
+        logger.debug(f"Stored channels {channel_ids} for guild {guild_id}.")
+        return True
+     except PyMongoError as e:
+        logger.error(f"Error occurred while storing channels: {e}")
+        return False     
+    
+    
     async def server_quests(self, guild_id: str):
         try:
             db = self.mongoConnect[self.DB_NAME]
@@ -710,12 +865,24 @@ class Quest_Data(commands.Cog):
         except PyMongoError as e:
             logger.error(f"Error occurred while getting server quests: {e}")
             raise e
-    async def create_quest(self, guild_id: str, action: str, method: str, content: str, channel_id: int, times: int, reward: int, interaction=None):
+    async def create_quest(self, guild_id: str, action: str, method: str, content: str, times: int, reward: int, interaction=None):
      try:
+        # Fetch a random channel for the guild, provide an interaction fallback
+        fallback_channel = discord.utils.get(interaction.guild.text_channels, name="general") if interaction else None
+        channel_id = await self.get_random_channel_for_guild(guild_id, fallback_channel=fallback_channel)
+
+        if not channel_id:
+            # Notify you or the user that no channels have been redirected for the guild
+            message = "No redirected channels found for this guild. Please use the command to set redirect channels first."
+            logger.error(message)
+            if interaction:
+                await interaction.send(message)
+            return  # Exit function, no channels to create the quest
+        
         # Calculate reward as a random value between 4 and 20 times the `times` value
         reward = random.randint(4, 20) * times
 
-        # Ensure the reward is correctly set in the quest data
+        # Prepare quest data
         quest_data = {
             'action': action,
             'method': method,
@@ -725,6 +892,7 @@ class Quest_Data(commands.Cog):
             'reward': reward
         }
         
+        # Validate the quest data
         await self.validate_input(**quest_data)
         
         # Store the quest data in MongoDB
@@ -942,13 +1110,22 @@ class Quest_Data(commands.Cog):
             logger.debug("User has reached the quest limit. No quest will be created.")
             return None
 
-        
+        # Get a random channel for the guild, provide an interaction fallback
+        fallback_channel = discord.utils.get(message_author.guild.text_channels, name="general") if message_author.guild else None
+        channel_id = await self.get_random_channel_for_guild(guild_id, fallback_channel=fallback_channel)
+
+        if not channel_id:
+            # Notify user to create redirect channels
+            message = "No redirected channels found for this guild. Please use the command to set redirect channels first."
+            logger.error(message)
+            await message_author.send(message)  # Assuming `message_author` is a user object
+            return None  # Exit function, no channels to create the quest
 
         while True:
             # Randomly choose method if not provided
             if method is None:
-             method = random.choice(['message', 'reaction', 'emoji'])
-             logger.debug(f"Method chosen: {method}")
+                method = random.choice(['message', 'reaction', 'emoji'])
+                logger.debug(f"Method chosen: {method}")
                 
             # Generate random quest content based on the method
             if method == 'message':
@@ -960,20 +1137,12 @@ class Quest_Data(commands.Cog):
                 return None
 
             # Check if the content is already used in other quests
-            content_exists = False
-            for quest in existing_quests:
-                if quest['content'] == content:
-                    content_exists = True
-                    break
+            content_exists = any(quest['content'] == content for quest in existing_quests)
 
             if not content_exists:
                 break  # Exit the loop if the content is unique
 
         logger.debug(f"Generated quest content: {content}")
-
-        # Get the most active channel in the guild
-        channel_id = await self.get_most_active_channel(guild_id)
-        logger.debug(f"Most active channel ID: {channel_id}")
 
         # Fetch the latest quest ID for the user in the guild
         latest_quest_id = await self.get_latest_quest_id(guild_id, user_id)
@@ -1001,9 +1170,11 @@ class Quest_Data(commands.Cog):
         else:
             logger.debug(f"Failed to create quest for user_id: {user_id}, guild_id: {guild_id} because the user path does not exist.")
             return None
+
      except Exception as e:
         logger.error(f"Error occurred while adding new quest: {e}")
         return None
+    
     async def add_user_to_server(self, user_id: str, guild_id: str):
         try:
             db = self.mongoConnect[self.DB_NAME]
