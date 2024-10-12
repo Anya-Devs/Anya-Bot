@@ -151,30 +151,6 @@ class Quest(commands.Cog):
             shop_data = json.load(file)
         return shop_data
     
-    @commands.command(name='mytools')
-    async def my_tools(self, ctx):
-     user_id = str(ctx.author.id)
-     guild_id = str(ctx.guild.id)
-    
-     try:
-        db = self.mongoConnect[self.DB_NAME]
-        server_collection = db['Servers']
-        
-        user_data = await server_collection.find_one({'guild_id': guild_id, f'members.{user_id}': {'$exists': True}}, {'members': 1})
-        
-        if user_data:
-            inventory = user_data['members'][user_id].get('inventory', {})
-            tools_list = [f"{tool}: {quantity}" for tool, quantity in inventory.items() if quantity > 0]
-            
-            if tools_list:
-                await ctx.reply("Your tools:\n" + "```\n" + "\n".join(tools_list) + "\n```")
-            else:
-                await ctx.send("You have no tools in your inventory.")
-        else:
-            await ctx.send("User data not found.")
-     except Exception as e:
-        await ctx.send(f"An error occurred: {e}")
-        
         
         
 class Quest_View(View):
@@ -196,55 +172,62 @@ class Quest_View(View):
             self.add_item(QuestButton("Next", discord.ButtonStyle.primary, "next", bot, self.filtered_quests, ctx, self.page))
 
     async def generate_messages(self):
-        start_index = self.page * 3
-        end_index = start_index + 3
-        quests_to_display = self.filtered_quests[start_index:end_index]
+     start_index = self.page * 3
+     end_index = start_index + 3
+     quests_to_display = self.filtered_quests[start_index:end_index]
 
-        # Create a single embed for the current page
-        embed = discord.Embed(title="Quests", description="Here are the quests you need to complete. Each quest has a specific objective, progress, and reward. Click on the location link to navigate to the respective channel where the quest can be completed.", color=primary_color())
+     # Create a single embed for the current page
+     embed = discord.Embed(
+        title="Quests", 
+        description="Here are the quests you need to complete. Each quest has a specific objective, progress, and reward. Click on the location link to navigate to the respective channel where the quest can be completed.", 
+        color=primary_color()
+     )
+    
+     for quest in quests_to_display:
+        quest_id = quest['quest_id']
+        progress = quest['progress']
+        times = quest['times']
+        action = quest['action']
+        method = quest['method']
+        content = quest['content']
+        reward = quest['reward']
         
-        for quest in quests_to_display:
-            quest_id = quest['quest_id']
-            progress = quest['progress']
-            times = quest['times']
-            action = quest['action']
-            method = quest['method']
-            content = quest['content']
-            reward = quest['reward']
-            channel = self.bot.get_channel(quest['channel_id'])
+        # Get the channel using the channel ID
+        channel = self.bot.get_channel(int(quest['channel_id']))
 
-            # Generate instructions based on method
-            if method == 'message':
-                instruction = f"Send: {content}"
-            elif method == 'emoji':
-                instruction = f"Send emoji: {content}"
-            elif method == 'reaction':
-                instruction = f"react with: {content}"
-            else:
-                instruction = "Unknown method. Please refer to the quest details."
+        # Generate instructions based on method
+        if method == 'message':
+            instruction = f"Send: {content}"
+        elif method == 'emoji':
+            instruction = f"Send emoji: {content}"
+        elif method == 'reaction':
+            instruction = f"React with: {content}"
+        else:
+            instruction = "Unknown method. Please refer to the quest details."
 
-            progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
-            
-            reward_emoji_id = 1247800150479339581
-            reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
-            channel = f'[Go here](https://discord.com/channels/{self.ctx.guild.id}/{channel.id})' if channel.id != self.ctx.channel.id else 'In this channel'
-            
-            embed.add_field(
-                name="",  # Step 1: Field name
-                value=(
-                    f"Quest {quest_id} | {progress_bar} `{progress}/{times}`\n"  # Step 2: Progress information
-                    f"**{channel}** | **{instruction}**\t    | {reward_emoji} `{reward} stp`"  # Step 5: Reward information
-                    f"\n\n"  # Steps 3 & 4: Channel link and instructions
+        # Generate progress bar
+        progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
+        
+        reward_emoji_id = 1247800150479339581
+        reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
 
-                ),
-                inline=False
-            ) 
-            
-            
+        # Construct the channel link based on whether it's the current channel
+        if channel:
+            channel_link = f'[Go here](https://discord.com/channels/{self.ctx.guild.id}/{channel.id})' if channel.id != self.ctx.channel.id else 'In this channel'
+        else:
+            channel_link = f'Channel not found | Recommended: `/quest delete quest_id: {quest_id}`'  # Fallback in case the channel is not found
 
-            # embed.set_thumbnail(url=self.ctx.author.avatar)
+        embed.add_field(
+            name="",  # Step 1: Field name
+            value=(
+                f"Quest {quest_id} | {progress_bar} `{progress}/{times}`\n"  # Step 2: Progress information
+                f"**{channel_link}** | **{instruction}** | {reward_emoji} `{reward} stp`"  # Step 5: Reward information
+                f"\n\n"  # Steps 3 & 4: Channel link and instructions
+            ),
+            inline=False
+        )
 
-        return embed
+     return embed
 
     
     
@@ -829,20 +812,21 @@ class Quest_Data(commands.Cog):
     
     async def store_channels_for_guild(self, guild_id: str, channel_ids: list):
      """
-     Store the provided list of channel IDs for the guild in the database.
+     Store the provided list of channel IDs for the guild in the database, 
+     replacing any existing channel IDs.
      """
      try:
         db = self.mongoConnect[self.DB_NAME]
         server_collection = db['Servers']
         
-        # Update the document with the list of channels for the guild
+        # Replace the document with the new channel IDs for the guild
         await server_collection.update_one(
             {'guild_id': guild_id},
-            {'$set': {'channels': channel_ids}},
+            {'$set': {'channels': channel_ids}},  # This will replace the 'channels' field
             upsert=True
         )
         
-        logger.debug(f"Stored channels {channel_ids} for guild {guild_id}.")
+        logger.debug(f"Stored (overwritten) channels {channel_ids} for guild {guild_id}.")
         return True
      except PyMongoError as e:
         logger.error(f"Error occurred while storing channels: {e}")
