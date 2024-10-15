@@ -54,6 +54,178 @@ from Data.const import error_custom_embed, sdxl, primary_color
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
 
 
+
+
+
+
+
+
+class PokemonPredictor:
+    def __init__(self, dataset_folder="Data/pokemon/pokemon_images", 
+                 dataset_file="Data/pokemon/dataset.npy"):
+        self.orb = cv.ORB_create(nfeatures=180)
+        self.flann = cv.FlannBasedMatcher(
+            dict(algorithm=6, table_number=9, key_size=9, multi_probe_level=1, tree=5), 
+            dict(checks=1, fast=True)
+        )
+        self.executor = ThreadPoolExecutor(max_workers=50)
+        self.cache = {}  # Store descriptors
+        self.dataset_file = dataset_file        
+        self.dataset_folder = dataset_folder
+
+        # Load the dataset
+        self.load_dataset(self.dataset_folder)
+
+    def load_dataset(self, dataset_folder):
+        if os.path.exists(self.dataset_file):
+            self.load_from_npy(self.dataset_file)
+        else:
+            asyncio.run(self.load_from_images(dataset_folder))
+
+    def load_from_npy(self, dataset_file):
+        data = np.load(dataset_file, allow_pickle=True).item()
+        self.sub_image_filenames = list(data.keys())
+        self.cache = data
+        print(f"Loaded dataset from {dataset_file}. Total images: {len(self.sub_image_filenames)}")
+
+    async def load_from_images(self, dataset_folder):
+        tasks = [
+            self.process_image(os.path.join(dataset_folder, filename), filename)
+            for filename in os.listdir(dataset_folder) if os.path.isfile(os.path.join(dataset_folder, filename))
+        ]
+        await asyncio.gather(*tasks)
+        np.save(self.dataset_file, self.cache)
+
+    async def process_image(self, path, filename):
+        loop = asyncio.get_event_loop()
+        img = await loop.run_in_executor(self.executor, cv.imread, path)
+
+        if img is not None:
+            gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+            keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
+            if descriptors is not None:
+                self.cache[filename] = descriptors.astype(np.uint8)
+                await self.cache_flipped_image(img, filename)
+
+    async def cache_flipped_image(self, img, filename):
+        flipped_img = cv.flip(img, 1)
+        gray_flipped_img = cv.cvtColor(flipped_img, cv.COLOR_BGR2GRAY)
+        keypoints, descriptors = self.orb.detectAndCompute(gray_flipped_img, None)
+        if descriptors is not None:
+            flipped_filename = filename.replace(".png", "_flipped.png")
+            self.cache[flipped_filename] = descriptors.astype(np.uint8)
+
+    def calculate_shift(self, keypoints, image_shape):
+        if keypoints:
+            x_coords = np.array([kp.pt[0] for kp in keypoints])
+            y_coords = np.array([kp.pt[1] for kp in keypoints])
+            keypoints_array = np.column_stack((x_coords, y_coords))
+
+            center_x, center_y = image_shape[1] // 2, image_shape[0] // 2
+            mean_x, mean_y = np.mean(x_coords), np.mean(y_coords)
+            dx, dy = int(mean_x - center_x), int(mean_y - center_y)
+
+            distances = np.linalg.norm(keypoints_array[:, np.newaxis] - keypoints_array, axis=2)
+            avg_distance = np.mean(distances)
+
+            if avg_distance < 10:
+                dx, dy = 0, 0
+
+            if abs(dx) < 5:
+                dx = 0
+            if abs(dy) < 5:
+                dy = 0
+        else:
+            dx, dy = 0, 0
+        return dx, dy
+
+    def shift(self, image, dx, dy):
+        height, width = image.shape[:2]
+        M = np.float32([[1, 0, dx], [0, 1, dy]])
+        return cv.warpAffine(image, M, (width, height))
+
+    async def cross_match(self, img, desB, k=2):
+        desB = np.asarray(desB, dtype=np.uint8)
+
+        futures = [
+            asyncio.get_event_loop().run_in_executor(self.executor, self.flann.knnMatch, desB, desA, k)
+            for desA in self.cache.values()
+        ]
+        results = await asyncio.gather(*futures)
+
+        best_match, max_accuracy = None, 0
+        accuracy_futures = {
+            asyncio.get_event_loop().run_in_executor(self.executor, self.evaluate_matches, matches, filename): filename
+            for filename, matches in zip(self.cache.keys(), results)
+        }
+
+        for future in accuracy_futures:
+            try:
+                accuracy = await future
+                if accuracy > max_accuracy:
+                    max_accuracy = accuracy
+                    best_match = accuracy_futures[future]
+            except Exception:
+                continue
+
+        return best_match, max_accuracy if max_accuracy >= 0.001 else None
+
+    async def predict_pokemon(self, img):
+        start_time = time.time()
+        gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+        kpB, desB = self.orb.detectAndCompute(gray_img, None)
+
+        dx, dy = self.calculate_shift(kpB, img.shape)
+        shifted_img = self.shift(img, dx, dy)
+
+        best_match = await self.cross_match(img, desB)
+        shifted_match = await self.cross_match(shifted_img, desB)
+
+        if best_match and shifted_match:
+            if shifted_match[1] > best_match[1]:
+                predicted_pokemon, accuracy = shifted_match
+            else:
+                predicted_pokemon, accuracy = best_match
+        elif best_match:
+            predicted_pokemon, accuracy = best_match
+        elif shifted_match:
+            predicted_pokemon, accuracy = shifted_match
+        else:
+            return "No match found", time.time() - start_time
+
+        predicted_name = predicted_pokemon.replace(".png", "").replace("_flipped", "").replace("_saved", "")
+        elapsed_time = time.time() - start_time
+        return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
+
+    async def load_image_from_url(self, url):
+        try:
+            loop = asyncio.get_event_loop()
+            img = await loop.run_in_executor(self.executor, lambda: np.asarray(bytearray(requests.get(url).content), dtype=np.uint8))
+            return cv.imdecode(img, cv.IMREAD_COLOR)
+        except requests.RequestException as e:
+            print(f"Error fetching image from URL: {e}")
+            return None
+
+    def evaluate_matches(self, matches, filename):
+        if not matches:
+            return 0
+        good_matches = [m for m, n in matches if m.distance < 0.7 * n.distance]
+        return len(good_matches) / len(matches) * 100
+
+    async def scan_images_for_matching(self, img, keypoints, descriptors):
+        gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+        matches = await asyncio.get_event_loop().run_in_executor(self.executor, self.flann.knnMatch, descriptors, gray_img)
+        good_matches = [m for m, n in matches if m.distance < 0.8 * n.distance]
+        return good_matches
+    
+    
+    
+    
+    
+    
+    
+    
+    
 class PokemonData:
     def __init__(self):
         self.DB_NAME = 'Pokemon_SH'
@@ -108,243 +280,8 @@ class PokemonData:
         # Return the list of user IDs
         return [hunter['user_id'] for hunter in hunters]
 
-
-class PokemonPredictor:
-    def __init__(self, dataset_folder="Data/pokemon/pokemon_images", 
-                 output_folder='Data/pokemon/processed', 
-                 dataset_file="Data/pokemon/dataset.npy", 
-                 saved_images_file="Data/pokemon/pokemon_images_saved.npy"):
-
-        self.orb = cv.ORB_create(nfeatures=180)
-        self.flann = cv.FlannBasedMatcher(
-            dict(algorithm=6, table_number=9, key_size=9, multi_probe_level=1, tree=5), 
-            dict(checks=1)
-        )
-        self.executor = ThreadPoolExecutor(max_workers=50)
-        self.cache = {}
-        self.distance_cache = {}  # Cache for storing descriptor distances
-        self.output_folder = output_folder
-        os.makedirs(self.output_folder, exist_ok=True)  # Create output folder if it doesn't exist
-        self.dataset_file = dataset_file  # Change to use .npy
-        self.saved_images_file = saved_images_file  # File to save processed images
-        self.dataset_folder = dataset_folder
-
-        # Load the dataset without awaiting
-        self.load_dataset(self.dataset_folder)
-
-    def load_dataset(self, dataset_folder):
-        if os.path.exists(self.dataset_file):
-            self.load_from_npy(self.dataset_file)
-        else:
-            self.load_from_images(dataset_folder)
-
-    def load_from_npy(self, dataset_file):
-        data = np.load(dataset_file, allow_pickle=True).item()
-        self.sub_image_filenames = list(data.keys())
-        self.cache = data
-        print(f"Loaded dataset from {dataset_file}. Total images: {len(self.sub_image_filenames)}")
-
-    def load_from_images(self, dataset_folder):
-        tasks = []
-        for filename in os.listdir(dataset_folder):
-            path = os.path.join(dataset_folder, filename)
-            if os.path.isfile(path):
-                tasks.append((path, filename))
-
-        # Use ThreadPoolExecutor to process images concurrently
-        with ThreadPoolExecutor() as executor:
-            executor.map(lambda p: self.process_image(*p), tasks)
-
-        # Save the cache as .npy after processing
-        np.save(self.dataset_file, self.cache)
-        self.save_processed_images()  # Save processed images to the new file
-
-    def process_image(self, path, filename):
-        img = cv.imread(path)
+       
         
-        if img is not None:
-            gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-            keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
-            if descriptors is not None:
-                self.cache[filename] = (descriptors.astype(np.uint8))
-                self.distance_cache[filename] = descriptors  # Store distances for future use
-                self.cache_flipped_image(img, filename)
-
-    def cache_flipped_image(self, img, filename):
-        flipped_img = cv.flip(img, 1)
-        gray_flipped_img = cv.cvtColor(flipped_img, cv.COLOR_BGR2GRAY)
-        keypoints, descriptors = self.orb.detectAndCompute(gray_flipped_img, None)
-        if descriptors is not None:
-            flipped_filename = filename.replace(".png", "_flipped.png")  # Keep flipped filename for cache
-            self.cache[flipped_filename] = (descriptors.astype(np.uint8))
-            self.distance_cache[flipped_filename] = descriptors  # Store distances for future use
-
-    def save_processed_images(self):
-        """Save processed images and descriptors to a .npy file."""
-        data_to_save = {}
-        for filename, (descriptors) in self.cache.items():
-            data_to_save[filename] = (descriptors)
-        np.save(self.saved_images_file, data_to_save)
-        print(f"Processed images saved to {self.saved_images_file}")
-
-    def compute_roi_density(self, img):
-        gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        density = cv.countNonZero(gray) / (gray.shape[0] * gray.shape[1])
-        return density
-
-    def cross_match(self, img, desB, k=2):
-        roi_density = self.compute_roi_density(img)
-
-        # Compute matches using descriptors
-        futures = [
-            self.executor.submit(self.flann.knnMatch, desB, desA, k)
-            for desA in self.cache.values()  # Only get the descriptors
-        ]
-        
-        results = [future.result() for future in futures]
-        
-        # Evaluate matches and find the best match
-        best_match = None
-        max_accuracy = 0
-
-        # Create item_distances mapping with safety check
-        item_distances = {}
-        for filename in self.cache.keys():
-            if filename in self.distance_cache:
-                item_distances[filename] = np.mean(self.distance_cache[filename])  # Get the average distance
-            else:
-              pass
-
-        with ThreadPoolExecutor() as executor:
-            accuracy_futures = {
-                executor.submit(self.evaluate_matches, matches, filename): filename
-                for filename, matches in zip(self.cache.keys(), results)
-            }
-
-            for future in accuracy_futures:
-                try:
-                    accuracy = future.result()
-                    if accuracy > max_accuracy:
-                        max_accuracy = accuracy
-                        best_match = accuracy_futures[future]
-                except Exception as e:
-                    continue
-
-        # Check if the max accuracy meets the threshold
-        if max_accuracy >= 0.001:
-            return best_match, max_accuracy
-        
-        return None  # If no match meets the required accuracy
-
-    async def predict_pokemon(self, img):  # Changed to async
-        start_time = time.time()
-        gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        kpB, desB = self.orb.detectAndCompute(gray_img, None)
-        best_match = self.cross_match(img, desB)
-
-        if best_match:
-            predicted_pokemon, accuracy = best_match
-            predicted_name = predicted_pokemon.replace(".png", "").replace("_flipped", "").replace("_saved", "")
-            elapsed_time = time.time() - start_time
-            return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
-        
-        return "No match found", time.time() - start_time
-
-    def load_image_from_url(self, url):
-        try:
-            img = np.asarray(bytearray(requests.get(url).content), dtype=np.uint8)
-            return cv.imdecode(img, cv.IMREAD_COLOR)
-        except requests.RequestException as e:
-            print(f"Error fetching image from URL: {e}")
-            return None
-
-    def fluster(self, results):
-        """Handles multiple predictions and sorts them based on accuracy."""
-        sorted_results = sorted(results, key=lambda x: x[1], reverse=True)  # Sort by accuracy
-        return sorted_results
-    
-    def evaluate_matches(self, matches, filename):
-        """Evaluate the matches and return the accuracy."""
-        if not matches:
-            return 0  # No matches found, accuracy is 0
-
-        # Calculate accuracy based on the number of good matches
-        good_matches = [m for m, n in matches if m.distance < 0.7 * n.distance]  # Use Lowe's ratio test
-        accuracy = len(good_matches) / len(matches) * 100  # Convert to percentage
-
-        return accuracy  # Return the calculated accuracy
-
-    def save_predicted_image(self, img, best_match):
-        if best_match:
-            pokemon_img_path = os.path.join("pokemon_images", best_match.replace('_flipped', ''))
-            target_img = cv.imread(pokemon_img_path.replace('_flipped', ''))
-
-            if target_img is not None:
-                # Save the input image with the predicted Pokémon's name in the saved_matches folder
-                output_dir = "saved_matches"
-                os.makedirs(output_dir, exist_ok=True)
-                predicted_pokemon = best_match.split("_flipped")[0].replace(".png", "")
-                saved_image_path = os.path.join("saved_matches", f"{predicted_pokemon}_saved.png")
-                cv.imwrite(saved_image_path, img)  # Save the input image here
-                print(f"Saved input image to {saved_image_path}")
-            else:
-                print("Could not read the target image.")
-
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-            
         
 class Pokemon(commands.Cog):
     def __init__(self, bot):
@@ -539,13 +476,13 @@ class Pokemon(commands.Cog):
  
         if user_pokemon:
            await ctx.reply(
-                   f"### Your Pokétwo Pokémon List:\n" + "```" +
+                   f"### Your Pokétwo Pokémon List:\n"+
                    '\n'.join(f"{i + 1}. {pokemon.lower()}" for i, pokemon in enumerate(sorted(user_pokemon, key=str.lower))) + 
-                   "\n" + '```', 
+                   "\n", 
                    mention_author=False
            )
         else:
-            await ctx.reply("### You don't have any Pokémon yet!\n- `Try doing ...hunt add <pokemon_name>`", mention_author=False)
+            await ctx.reply("### You don't have any Pokémon in your hunting list yet!\n- `Try doing ...hunt add <pokemon_name>`", mention_author=False)
 
      elif action == "add":
         if not pokemon_names:
@@ -595,7 +532,7 @@ class Pokemon(commands.Cog):
 
      elif action == "remove":
         if not pokemon_names:
-            await ctx.reply("Please provide at least one Pokémon name to remove.", mention_author=False)
+            await ctx.reply("Please provide at least one Pokémon name to **remove**.", mention_author=False)
             return
 
         # Get the user's current Pokémon list
@@ -617,7 +554,7 @@ class Pokemon(commands.Cog):
         # Create response messages
         response_messages = []
         if removed_pokemon:
-            response_messages.append(f"`{', '.join(removed_pokemon)}` has been removed from your Pokémon list!")
+            response_messages.append(f"`{', '.join(removed_pokemon)}` has been **removed** from your Pokémon list!")
 
         if not_in_list_pokemon:
             response_messages.append(f"The following Pokémon are not in your list: `{', '.join(not_in_list_pokemon)}`.")
@@ -1668,10 +1605,10 @@ class Pokebuttons(discord.ui.View):
      
      if current_pokemon == next_pokemon:
         # If the Pokémon evolves into itself (final form)
-        embed.description = f"{current_pokemon} is the final form."
+        embed.description = f"```{current_pokemon} is the final form.```"
      else:
         # Normal evolution description
-        embed.description = f"{current_pokemon} evolves into {next_pokemon} {method}"
+        embed.description = f"```{current_pokemon} evolves into {next_pokemon} {method}```"
     
      return embed
 
