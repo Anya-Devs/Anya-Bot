@@ -173,7 +173,7 @@ class Options_ImageGenerator:
         self.font_path_base = "Data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
         self.character_path = "Data/commands/help/menu/initial/style/assets/character.png"
         self.background_path = "Data/commands/help/menu/initial/style/assets/background.png"
-
+ 
         # Font sizes
         self.header_font_size = 35
         self.base_font_size = 12
@@ -356,13 +356,12 @@ class ImageGenerator:
         # Text content
         self.text1 = self._truncate_text(f"{ctx.me.display_name} Help", 350)  # Truncate user_name if needed
         self.text2_options = [
-            "what would you like assistance with?",
             "how can I help you today?",
             "need help with something?",
             "what can I do for you?",
             "how may I assist you?"
         ]
-        self.text2 = f"{self.user_name}, {random.choice(self.text2_options)}"
+        self.text2 = f"Hello {self.user_name}, {random.choice(self.text2_options)}"
         self.text3 = "Command: [option]?"
 
         # Layout positions
