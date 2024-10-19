@@ -222,6 +222,11 @@ class PokemonPredictor:
     
     
     
+
+
+
+
+
     
     
     
@@ -445,15 +450,16 @@ class Pokemon(commands.Cog):
 
                             if hunters:
                                 # Create a mention string for the hunters
-                                hunter_mentions = " ".join([f"<@{hunter_id}>" for hunter_id in hunters])  # Updated format for mentions
-                                ping_message = f"`{predicted_name.title()}` **Hunters**: {hunter_mentions}"
+                                hunter_mentions = " ".join([f"||<@{hunter_id}>||" for hunter_id in hunters])  # Updated format for mentions
+                                ping_message = f"{prediction}\n\n{hunter_mentions}"
                                 await message.channel.send(f"{ping_message}", reference=message)
 
-                            # Use the predictor to predict the Pokémon
-                            
-                            await message.channel.send(prediction, reference=message)
-                            predicted_pokemon = prediction.lower()
 
+                            # Use the predictor to predict the Pokémon
+                            else:
+                             await message.channel.send(prediction, reference=message)
+                             predicted_pokemon = prediction.lower()
+ 
                             
 
                 
@@ -562,7 +568,8 @@ class Pokemon(commands.Cog):
         await ctx.reply("\n".join(response_messages), mention_author=False)
 
      else:
-        await ctx.reply("Invalid action! Use `list`, `add`, or `remove`.", mention_author=False)
+        actions = ["list", "add <pokemon>", "remove <pokemon>"]
+        await ctx.reply(f"Invalid action! Use `...hunt {'`, `...hunt '.join(actions)}`.", mention_author=False)
         
     @commands.command(help="Displays Pokemon dex information.", aliases=['pokdex', 'dex','d','p'])
     @commands.cooldown(1, 6, commands.BucketType.user) 
