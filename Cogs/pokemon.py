@@ -488,7 +488,7 @@ class Pokemon(commands.Cog):
                    mention_author=False
            )
         else:
-            await ctx.reply("### You don't have any Pokémon in your hunting list yet!\n- `Try doing ...hunt add <pokemon_name>`", mention_author=False)
+            await ctx.reply(f"### You don't have any Pokémon in your hunting list yet!\n- `Try doing {ctx.prefix} hunt add <pokemon_name>`", mention_author=False)
 
      elif action == "add":
         if not pokemon_names:
