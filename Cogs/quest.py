@@ -288,7 +288,7 @@ class Quest_Select_Filter(Select):
             error_message = "An error occurred while fetching quests."
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
-            await ctx.send(f"{error_message}")
+            await self.ctx.send(f"{error_message}")
 
 class QuestButton(discord.ui.Button):
     def __init__(self, label, style, custom_id, bot, quests, ctx, page):
