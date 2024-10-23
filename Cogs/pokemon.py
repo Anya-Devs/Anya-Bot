@@ -125,10 +125,22 @@ class PokemonPredictor:
             self.cache[flipped_filename] = descriptors.astype(np.uint8)
         else:
             logging.warning(f"No descriptors found for flipped image of {filename}.")
+        
+    async def predict_pokemon_beta(self, img_url):
+        start_time = time.time()
+        img = await self.load_image_from_url(img_url)
+
+        gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+        kpB, desB = self.orb.detectAndCompute(gray_img, None)
+        best_match = await self.cross_match(img, desB)
+        predicted_name = predicted_pokemon.replace(".png", "").replace("_flipped", "").replace("_saved", "")
+        elapsed_time = time.time() - start_time
+        return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
 
     async def predict_pokemon(self, img_url):
         start_time = time.time()
         img = await self.load_image_from_url(img_url)
+        
         
         if img is None:
             logging.info("No significant Pokémon detected in the input image.")
@@ -143,6 +155,7 @@ class PokemonPredictor:
         kpB, desB = self.orb.detectAndCompute(img, None)
 
         if desB is None or len(desB) == 0:
+            return await self.predict_pokemon_beta(img_url)  # Call the alternative prediction method
             logging.info("No descriptors found for the input image.")
             return "No descriptors found for the input image", time.time() - start_time, None
 
@@ -154,34 +167,63 @@ class PokemonPredictor:
         elapsed_time = time.time() - start_time
         return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
     
-    def extract_image(self, img, min_contour_area=500):
-        """Extract Pokémon region from the image based on contour detection."""
-        if img is None:
-            logging.info("Input image is None, cannot extract.")
-            return None
+     def extract_image(self, img, min_contour_area=500, contour_color=(0, 255, 0), box_color=(255, 0, 0)):
+      """Extract Pokémon region from the image using contour and color detection."""
+      if img is None:
+        logging.info("Input image is None, cannot extract.")
+        return None
 
+      try:
+        # Convert the image to grayscale and apply Gaussian Blur
         gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         blurred_img = cv.GaussianBlur(gray_img, (5, 5), 0)
+
+        # Use Canny edge detection to find edges
         edged_img = cv.Canny(blurred_img, 50, 150)
+
+        # Find contours in the edged image
         contours, _ = cv.findContours(edged_img, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
 
-        largest_contour = None
-        largest_area = 0
+        # Initialize lists for valid contours and color regions
+        valid_contours = []
+        color_mask = np.zeros_like(img)
 
+        # Filter and process each contour
         for cnt in contours:
             area = cv.contourArea(cnt)
-            if area > min_contour_area and area > largest_area:
-                largest_area = area
-                largest_contour = cnt
+            if area > min_contour_area:  # Only consider contours larger than min_contour_area
+                valid_contours.append(cnt)  # Collect all valid contours
+                # Fill the color mask with the color of the contour
+                cv.drawContours(color_mask, [cnt], -1, contour_color, thickness=cv.FILLED)  # Fill with specified color for visualization
 
-        if largest_contour is not None:
-            x, y, w, h = cv.boundingRect(largest_contour)
-            roi = img[y:y + h, x:x + w]
-            cv.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
-            return roi
+        if valid_contours:
+            # Create a bounding box that fits all valid contours
+            all_points = np.vstack(valid_contours)  # Stack all contours
+            x, y, w, h = cv.boundingRect(all_points)  # Get bounding box from all contours combined
+
+            # Extract the ROI from the original image
+            roi = img[y:y + h, x:x + w]  # Extract ROI
+
+            # Draw bounding box around detected Pokémon based on all contours
+            cv.rectangle(img, (x, y), (x + w, y + h), box_color, 2)
+
+            # Optionally, show the original image with bounding boxes for visualization
+            cv.imshow("Detected Pokémon", img)
+            cv.waitKey(0)  # Wait for a key press to close the window
+            cv.destroyAllWindows()
+
+            return roi  # Return the extracted ROI
         else:
             logging.info("No significant Pokémon detected in the image.")
-            return None
+            cv.imshow("Detected Pokémon", img)
+            cv.waitKey(0)
+            cv.destroyAllWindows()
+            return None  # Return None if no valid contours found
+
+      except Exception as e:
+        logging.error(f"Error extracting Pokémon from image: {e}")
+        return None  # Return None in case of an error
+   
    
     async def cross_match(self, desB, k=2):
         desB = np.asarray(desB, dtype=np.uint8)
