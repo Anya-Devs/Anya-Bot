@@ -34,15 +34,6 @@ import motor.motor_asyncio
 from PIL import Image, ImageChops
 
 
-import cv2 as cv
-import numpy as np
-import time
-import aiohttp
-import asyncio
-import logging
-from concurrent.futures import ThreadPoolExecutor
-
-
 
 # Concurrent and multiprocessing imports
 from concurrent import *
@@ -73,214 +64,170 @@ class PokemonPredictor:
     def __init__(self, dataset_folder="Data/pokemon/pokemon_images", 
                  dataset_file="Data/pokemon/dataset.npy"):
         self.orb = cv.ORB_create(nfeatures=180)
-        self.flann = cv.FlannBasedMatcher(dict(algorithm=6, table_number=9, key_size=9, multi_probe_level=1, tree=5), dict(checks=50))
-        self.executor = ThreadPoolExecutor(max_workers=os.cpu_count())
+        self.flann = cv.FlannBasedMatcher(
+            dict(algorithm=6, table_number=9, key_size=9, multi_probe_level=1, tree=5), 
+            dict(checks=1, fast=True)
+        )
+        self.executor = ThreadPoolExecutor(max_workers=50)
         self.cache = {}  # Store descriptors
         self.dataset_file = dataset_file        
         self.dataset_folder = dataset_folder
 
         # Load the dataset
-        self.load_dataset()
+        self.load_dataset(self.dataset_folder)
 
-    def load_dataset(self):
+    def load_dataset(self, dataset_folder):
         if os.path.exists(self.dataset_file):
             self.load_from_npy(self.dataset_file)
         else:
-            asyncio.run(self.load_from_images(self.dataset_folder))
+            asyncio.run(self.load_from_images(dataset_folder))
 
     def load_from_npy(self, dataset_file):
-        try:
-            data = np.load(dataset_file, allow_pickle=True).item()
-            self.cache = data
-            logging.info(f"Loaded dataset from {dataset_file}. Total images: {len(self.cache)}")
-        except Exception as e:
-            logging.error(f"Error loading dataset from {dataset_file}: {e}")
+        data = np.load(dataset_file, allow_pickle=True).item()
+        self.sub_image_filenames = list(data.keys())
+        self.cache = data
+        print(f"Loaded dataset from {dataset_file}. Total images: {len(self.sub_image_filenames)}")
 
     async def load_from_images(self, dataset_folder):
         tasks = [
             self.process_image(os.path.join(dataset_folder, filename), filename)
-            for filename in os.listdir(dataset_folder) if filename.lower().endswith(('.png', '.jpg', '.jpeg'))
+            for filename in os.listdir(dataset_folder) if os.path.isfile(os.path.join(dataset_folder, filename))
         ]
         await asyncio.gather(*tasks)
         np.save(self.dataset_file, self.cache)
 
     async def process_image(self, path, filename):
-        img = await asyncio.to_thread(cv.imread, path)
+        loop = asyncio.get_event_loop()
+        img = await loop.run_in_executor(self.executor, cv.imread, path)
 
         if img is not None:
             gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
             keypoints, descriptors = self.orb.detectAndCompute(gray_img, None)
-            if descriptors is not None and len(descriptors) > 0:
+            if descriptors is not None:
                 self.cache[filename] = descriptors.astype(np.uint8)
                 await self.cache_flipped_image(img, filename)
-            else:
-                logging.warning(f"No descriptors found for {filename}.")
 
     async def cache_flipped_image(self, img, filename):
         flipped_img = cv.flip(img, 1)
         gray_flipped_img = cv.cvtColor(flipped_img, cv.COLOR_BGR2GRAY)
         keypoints, descriptors = self.orb.detectAndCompute(gray_flipped_img, None)
-        if descriptors is not None and len(descriptors) > 0:
+        if descriptors is not None:
             flipped_filename = filename.replace(".png", "_flipped.png")
             self.cache[flipped_filename] = descriptors.astype(np.uint8)
-        else:
-            logging.warning(f"No descriptors found for flipped image of {filename}.")
-        
-    async def predict_pokemon_beta(self, img_url):
-        start_time = time.time()
-        img = await self.load_image_from_url(img_url)
 
+    def calculate_shift(self, keypoints, image_shape):
+        if keypoints:
+            x_coords = np.array([kp.pt[0] for kp in keypoints])
+            y_coords = np.array([kp.pt[1] for kp in keypoints])
+            keypoints_array = np.column_stack((x_coords, y_coords))
+
+            center_x, center_y = image_shape[1] // 2, image_shape[0] // 2
+            mean_x, mean_y = np.mean(x_coords), np.mean(y_coords)
+            dx, dy = int(mean_x - center_x), int(mean_y - center_y)
+
+            distances = np.linalg.norm(keypoints_array[:, np.newaxis] - keypoints_array, axis=2)
+            avg_distance = np.mean(distances)
+
+            if avg_distance < 10:
+                dx, dy = 0, 0
+
+            if abs(dx) < 5:
+                dx = 0
+            if abs(dy) < 5:
+                dy = 0
+        else:
+            dx, dy = 0, 0
+        return dx, dy
+
+    def shift(self, image, dx, dy):
+        height, width = image.shape[:2]
+        M = np.float32([[1, 0, dx], [0, 1, dy]])
+        return cv.warpAffine(image, M, (width, height))
+
+    async def cross_match(self, img, desB, k=2):
+        desB = np.asarray(desB, dtype=np.uint8)
+
+        futures = [
+            asyncio.get_event_loop().run_in_executor(self.executor, self.flann.knnMatch, desB, desA, k)
+            for desA in self.cache.values()
+        ]
+        results = await asyncio.gather(*futures)
+
+        best_match, max_accuracy = None, 0
+        accuracy_futures = {
+            asyncio.get_event_loop().run_in_executor(self.executor, self.evaluate_matches, matches, filename): filename
+            for filename, matches in zip(self.cache.keys(), results)
+        }
+
+        for future in accuracy_futures:
+            try:
+                accuracy = await future
+                if accuracy > max_accuracy:
+                    max_accuracy = accuracy
+                    best_match = accuracy_futures[future]
+            except Exception:
+                continue
+
+        return best_match, max_accuracy if max_accuracy >= 0.001 else None
+
+    async def predict_pokemon(self, img):
+        start_time = time.time()
         gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         kpB, desB = self.orb.detectAndCompute(gray_img, None)
+
+        dx, dy = self.calculate_shift(kpB, img.shape)
+        shifted_img = self.shift(img, dx, dy)
+
         best_match = await self.cross_match(img, desB)
+        shifted_match = await self.cross_match(shifted_img, desB)
+
+        if best_match and shifted_match:
+            if shifted_match[1] > best_match[1]:
+                predicted_pokemon, accuracy = shifted_match
+            else:
+                predicted_pokemon, accuracy = best_match
+        elif best_match:
+            predicted_pokemon, accuracy = best_match
+        elif shifted_match:
+            predicted_pokemon, accuracy = shifted_match
+        else:
+            return "No match found", time.time() - start_time
+
         predicted_name = predicted_pokemon.replace(".png", "").replace("_flipped", "").replace("_saved", "")
         elapsed_time = time.time() - start_time
         return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
 
-    async def predict_pokemon(self, img_url):
-        start_time = time.time()
-        img = await self.load_image_from_url(img_url)
-        
-        
-        if img is None:
-            logging.info("No significant Pokémon detected in the input image.")
-            return "No significant Pokémon detected", time.time() - start_time, None
-
-        img = self.extract_image(img)
-
-        if img is None:
-            logging.info("No significant Pokémon detected in the input image.")
-            return "No significant Pokémon detected", time.time() - start_time, None
-
-        kpB, desB = self.orb.detectAndCompute(img, None)
-
-        if desB is None or len(desB) == 0:
-            return await self.predict_pokemon_beta(img_url)  # Call the alternative prediction method
-            logging.info("No descriptors found for the input image.")
-            return "No descriptors found for the input image", time.time() - start_time, None
-
-        best_match, accuracy = await self.cross_match(desB)
-        if not best_match:
-            return "No match found", time.time() - start_time
-
-        predicted_name = best_match.replace(".png", "").replace("_flipped", "").replace("_saved", "")
-        elapsed_time = time.time() - start_time
-        return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
-    
-     def extract_image(self, img, min_contour_area=500, contour_color=(0, 255, 0), box_color=(255, 0, 0)):
-      """Extract Pokémon region from the image using contour and color detection."""
-      if img is None:
-        logging.info("Input image is None, cannot extract.")
-        return None
-
-      try:
-        # Convert the image to grayscale and apply Gaussian Blur
-        gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        blurred_img = cv.GaussianBlur(gray_img, (5, 5), 0)
-
-        # Use Canny edge detection to find edges
-        edged_img = cv.Canny(blurred_img, 50, 150)
-
-        # Find contours in the edged image
-        contours, _ = cv.findContours(edged_img, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-
-        # Initialize lists for valid contours and color regions
-        valid_contours = []
-        color_mask = np.zeros_like(img)
-
-        # Filter and process each contour
-        for cnt in contours:
-            area = cv.contourArea(cnt)
-            if area > min_contour_area:  # Only consider contours larger than min_contour_area
-                valid_contours.append(cnt)  # Collect all valid contours
-                # Fill the color mask with the color of the contour
-                cv.drawContours(color_mask, [cnt], -1, contour_color, thickness=cv.FILLED)  # Fill with specified color for visualization
-
-        if valid_contours:
-            # Create a bounding box that fits all valid contours
-            all_points = np.vstack(valid_contours)  # Stack all contours
-            x, y, w, h = cv.boundingRect(all_points)  # Get bounding box from all contours combined
-
-            # Extract the ROI from the original image
-            roi = img[y:y + h, x:x + w]  # Extract ROI
-
-            # Draw bounding box around detected Pokémon based on all contours
-            cv.rectangle(img, (x, y), (x + w, y + h), box_color, 2)
-
-            # Optionally, show the original image with bounding boxes for visualization
-            cv.imshow("Detected Pokémon", img)
-            cv.waitKey(0)  # Wait for a key press to close the window
-            cv.destroyAllWindows()
-
-            return roi  # Return the extracted ROI
-        else:
-            logging.info("No significant Pokémon detected in the image.")
-            cv.imshow("Detected Pokémon", img)
-            cv.waitKey(0)
-            cv.destroyAllWindows()
-            return None  # Return None if no valid contours found
-
-      except Exception as e:
-        logging.error(f"Error extracting Pokémon from image: {e}")
-        return None  # Return None in case of an error
-   
-   
-    async def cross_match(self, desB, k=2):
-        desB = np.asarray(desB, dtype=np.uint8)
-        logging.info(f"Input descriptors shape: {desB.shape}, dtype: {desB.dtype}")
-
-        futures = [asyncio.to_thread(self.flann.knnMatch, desB, desA, k) for desA in self.cache.values()]
-        results = await asyncio.gather(*futures)
-
-        best_match, max_accuracy = None, 0
-        for filename, matches in zip(self.cache.keys(), results):
-            accuracy = self.evaluate_matches(matches)
-            if accuracy > max_accuracy:
-                max_accuracy = accuracy
-                best_match = filename
-
-        return best_match, max_accuracy if max_accuracy > 0 else None
-
-    def evaluate_matches(self, matches):
-        if not matches:
-            return 0
-        good_matches = []
-        for match in matches:
-            if len(match) < 2:  # Check if there are less than 2 matches
-                continue
-            m, n = match  # Unpack only if there are enough matches
-            if m.distance < 0.7 * n.distance:
-                good_matches.append(m)
-        return len(good_matches) / len(matches) * 100 if matches else 0
-
     async def load_image_from_url(self, url):
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
-                    response.raise_for_status()
-                    img_data = await response.read()
-                    img_array = np.frombuffer(img_data, np.uint8)
-                    img = cv.imdecode(img_array, cv.IMREAD_COLOR)
-                    if img is None:
-                        logging.error("Image could not be decoded.")
-                    return img
-        except aiohttp.ClientError as e:
-            logging.error(f"Error fetching image from URL: {e}")
+            loop = asyncio.get_event_loop()
+            img = await loop.run_in_executor(self.executor, lambda: np.asarray(bytearray(requests.get(url).content), dtype=np.uint8))
+            return cv.imdecode(img, cv.IMREAD_COLOR)
+        except requests.RequestException as e:
+            print(f"Error fetching image from URL: {e}")
             return None
 
-    async def run(self):
-        while True:
-            img_url = input("Enter an image URL (or type 'quit' to exit): ")
-            if img_url.lower() == 'quit':
-                logging.info("Exiting the Pokemon Predictor.")
-                break
+    def evaluate_matches(self, matches, filename):
+        if not matches:
+            return 0
+        good_matches = [m for m, n in matches if m.distance < 0.7 * n.distance]
+        return len(good_matches) / len(matches) * 100
 
-            img = await self.load_image_from_url(img_url)
-            if img is not None:
-                prediction, elapsed, name = await self.predict_pokemon(img_url)
-                print(f"Prediction: {prediction} (Time: {elapsed:.2f}s)")
-                logging.info(f"Prediction for {img_url}: {prediction}")
+    async def scan_images_for_matching(self, img, keypoints, descriptors):
+        gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+        matches = await asyncio.get_event_loop().run_in_executor(self.executor, self.flann.knnMatch, descriptors, gray_img)
+        good_matches = [m for m, n in matches if m.distance < 0.8 * n.distance]
+        return good_matches
+    
+    
+    
+    
+    
 
+
+
+
+
+    
     
     
     
@@ -466,7 +413,7 @@ class Pokemon(commands.Cog):
                     img = np.array(img.convert('RGB'))  # Convert to numpy array
 
                     # Use the predictor to predict the Pokémon
-                    prediction, time_taken, predicted_name = await self.predictor.predict_pokemon(image_url)
+                    prediction, time_taken, predicted_name = await self.predictor.predict_pokemon(img)
                     
                     # Check if the user is a hunter for the predicted Pokémon
                     hunters = await self.data_handler.get_hunters_for_pokemon(predicted_name)
@@ -498,7 +445,7 @@ class Pokemon(commands.Cog):
                             img = np.array(img.convert('RGB'))  # Convert to numpy array
                             
                             # Get all users who have this Pokémon in their list
-                            prediction, time_taken, predicted_name = await self.predictor.predict_pokemon(image_url)
+                            prediction, time_taken, predicted_name = await self.predictor.predict_pokemon(img)
                             hunters = await self.data_handler.get_hunters_for_pokemon(predicted_name)
 
                             if hunters:
@@ -541,7 +488,7 @@ class Pokemon(commands.Cog):
                    mention_author=False
            )
         else:
-            await ctx.reply(f"### You don't have any Pokémon in your hunting list yet!\n- `Try doing {ctx.prefix}hunt add <pokemon_name>`", mention_author=False)
+            await ctx.reply(f"### You don't have any Pokémon in your hunting list yet!\n- `Try doing {ctx.prefix} hunt add <pokemon_name>`", mention_author=False)
 
      elif action == "add":
         if not pokemon_names:
