@@ -5,28 +5,9 @@ import traceback
 import asyncio
 import requests
 
-
+# Install dependencies if not present
 os.system('pip install joblib')
 
-"""
- : pokemon images folder dl
- # import Data.images
-"""
-
-
-"""
-   : Run This if any installation problems occur
-
-"""
-"""
-def run_package_installer():
-    try:
-        subprocess.check_call([sys.executable, "Imports/depend_imports.py"])
-    except subprocess.CalledProcessError as e:
-        print(f"An error occurred while running the package installer: {e}")
-        
-run_package_installer()
-"""
 from Imports.depend_imports import *
 import Imports.depend_imports as depend_imports
 from Imports.discord_imports import *
@@ -42,11 +23,41 @@ import pymongo  # Import database API
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import ConfigurationError
 
+from Cogs.pokemon import PokemonPredictor
+
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
-        super().__init__(command_prefix=commands.when_mentioned_or('...'), intents=intents, help_command=None, shard_count=3)
+        intents.members = True  # Enable member-related events and data
+        super().__init__(command_prefix=commands.when_mentioned_or('...'), 
+                         intents=intents, 
+                         help_command=None, 
+                         shard_count=3)
         self.mongoConnect = None  # Initialize the MongoDB connection attribute
+        self.all_members = {}  # Store member data here
+
+    async def on_ready(self):
+        """Gather all users on startup and store them."""
+        print(Fore.GREEN + f"Logged in as {self.user} (ID: {self.user.id})" + Style.RESET_ALL)
+        print(Fore.BLUE + "Gathering members from all guilds..." + Style.RESET_ALL)
+
+        # Create a list of asyncio tasks for fetching members
+        fetch_tasks = [self.fetch_members(guild) for guild in self.guilds]
+
+        # Execute all fetch tasks concurrently
+        await asyncio.gather(*fetch_tasks)
+
+        print(Fore.BLUE + "All members have been gathered and registered." + Style.RESET_ALL)
+
+    async def fetch_members(self, guild):
+        """Fetch members for a given guild and store them."""
+        print(Fore.YELLOW + f"Processing Guild: {guild.name} (ID: {guild.id})" + Style.RESET_ALL)
+        
+        # Use a loop to fetch all members
+        async for member in guild.fetch_members(limit=None):
+            # Store user data in the dictionary (can be used later)
+            self.all_members[member.id] = member
+            print(Fore.GREEN + f"Registered Member: {member.name}#{member.discriminator}" + Style.RESET_ALL)
 
     async def start_bot(self):
         await self.setup()
@@ -87,14 +98,12 @@ class BotSetup(commands.AutoShardedBot):
                     obj = getattr(module, obj_name)
                     if isinstance(obj, commands.CogMeta):
                         if obj_name == "PokemonPredictor":
-                            # Remove the cog if detected
                             existing_cog = self.get_cog("PokemonPredictor")
                             if existing_cog:
                                 await self.remove_cog("PokemonPredictor")
                                 print(Fore.RED + f"│   │   Removed {obj_name} cog" + Style.RESET_ALL)
                         else:
-                            # Add other cogs
-                            if not self.get_cog(obj_name):  # Check if cog already added
+                            if not self.get_cog(obj_name):
                                 await self.add_cog(obj(self))
                                 print(Fore.GREEN + f"│   │   └── {obj_name}" + Style.RESET_ALL)
 
@@ -117,6 +126,9 @@ async def check_rate_limit():
         logger.error(f"Failed to check rate limit. Status code: {response.status_code}")
 
 async def main():
+    #predictor = PokemonPredictor()
+    #await predictor.initialize()  # Initialize the predictor asynchronously
+
     bot = BotSetup()
 
     try:
