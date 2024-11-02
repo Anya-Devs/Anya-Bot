@@ -75,8 +75,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 class PokemonPredictor:
     def __init__(self, dataset_folder="Data/pokemon/pokemon_images", 
-                 dataset_file="Data/pokemon/dataset.npy", 
-                 output_folder="Data/pokemon/predictions"):
+                 dataset_file="Data/pokemon/dataset.npy",
+                 predicted_pokemon_file="Data/pokemon/predicted_pokemon.json"):
         self.orb = cv.ORB_create(nfeatures=180)
         self.flann = cv.FlannBasedMatcher(
             dict(algorithm=6, table_number=9, key_size=9, multi_probe_level=1, tree=5), 
@@ -86,13 +86,13 @@ class PokemonPredictor:
         self.cache = {}  # Store descriptors
         self.dataset_file = dataset_file
         self.dataset_folder = dataset_folder
-        self.output_folder = output_folder
-
-        # Ensure output folder exists
-        os.makedirs(self.output_folder, exist_ok=True)
+        self.predicted_pokemon_file = predicted_pokemon_file
+        self.image_hashes = {}
 
         # Load the dataset
         self.load_dataset(self.dataset_folder)
+        # Load existing predicted hashes
+        self.load_predicted_hashes()
 
     def load_dataset(self, dataset_folder):
         """Load dataset from npy file or images."""
@@ -168,6 +168,13 @@ class PokemonPredictor:
 
     async def predict_pokemon(self, img):
         """Predict the Pokémon in the given image."""
+        image_hash = self.get_image_hash(img)  # Get the image hash first
+
+        # Check if the hash already exists in the JSON
+        if image_hash in self.image_hashes:
+            predicted_name = self.image_hashes[image_hash]
+            return f"Already known: {predicted_name.title()}", 0, predicted_name
+        
         start_time = time.time()
         gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         _, descriptors = self.orb.detectAndCompute(gray_img, None)
@@ -177,15 +184,10 @@ class PokemonPredictor:
         if best_match:
             predicted_name = best_match.replace(".png", "").replace("_flipped", "")
             elapsed_time = time.time() - start_time
-            self.save_prediction(img, predicted_name)
+            self.update_predicted_hash(image_hash, predicted_name)
             return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
         else:
             return "No match found", time.time() - start_time
-
-    def save_prediction(self, img, predicted_name):
-        """Save the predicted image to the output folder."""
-        output_path = os.path.join(self.output_folder, f"{predicted_name}.png")
-        cv.imwrite(output_path, img)
 
     async def load_image_from_url(self, url):
         """Load an image from a URL."""
@@ -199,6 +201,51 @@ class PokemonPredictor:
         except requests.RequestException as e:
             print(f"Error fetching image from URL: {e}")
             return None
+
+    def get_image_hash(self, img):
+        """Generate a hash for the given image."""
+        img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+        _, buffer = cv.imencode('.png', img)
+        return hashlib.sha256(buffer).hexdigest()
+
+    def load_predicted_hashes(self):
+        """Load existing image hashes from the JSON file."""
+        if os.path.exists(self.predicted_pokemon_file):
+            with open(self.predicted_pokemon_file, 'r') as file:
+                self.image_hashes = json.load(file)
+
+    def update_predicted_hash(self, image_hash, predicted_name):
+        """Update the predicted hash in the JSON file."""
+        self.image_hashes[image_hash] = predicted_name
+        with open(self.predicted_pokemon_file, 'w') as file:
+            json.dump(self.image_hashes, file, indent=4)
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
         
         
         
