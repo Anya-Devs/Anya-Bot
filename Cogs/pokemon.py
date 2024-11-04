@@ -87,12 +87,11 @@ class PokemonPredictor:
         self.dataset_file = dataset_file
         self.dataset_folder = dataset_folder
         self.predicted_pokemon_file = predicted_pokemon_file
-        self.image_hashes = {}
 
         # Load the dataset
         self.load_dataset(self.dataset_folder)
-        # Load existing predicted hashes
-        self.load_predicted_hashes()
+        # Load existing predictions
+        self.predictions = {}
 
     def load_dataset(self, dataset_folder):
         """Load dataset from npy file or images."""
@@ -168,13 +167,6 @@ class PokemonPredictor:
 
     async def predict_pokemon(self, img):
         """Predict the Pokémon in the given image."""
-        image_hash = self.get_image_hash(img)  # Get the image hash first
-
-        # Check if the hash already exists in the JSON
-        if image_hash in self.image_hashes:
-            predicted_name = self.image_hashes[image_hash]
-            return f"{predicted_name.title()}: 99.{random.randint(1,99)}", 0, predicted_name
-        
         start_time = time.time()
         gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         _, descriptors = self.orb.detectAndCompute(gray_img, None)
@@ -184,7 +176,8 @@ class PokemonPredictor:
         if best_match:
             predicted_name = best_match.replace(".png", "").replace("_flipped", "")
             elapsed_time = time.time() - start_time
-            self.update_predicted_hash(image_hash, predicted_name)
+            # Save prediction to the JSON file
+            self.update_prediction(predicted_name)
             return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
         else:
             return "No match found", time.time() - start_time
@@ -202,27 +195,15 @@ class PokemonPredictor:
             print(f"Error fetching image from URL: {e}")
             return None
 
-    def get_image_hash(self, img):
-        """Generate a hash for the given image."""
-        img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        _, buffer = cv.imencode('.png', img)
-        return hashlib.sha256(buffer).hexdigest()
+    def update_prediction(self, predicted_name):
+        """Update the predictions list in the JSON file."""
+        if predicted_name in self.predictions:
+            self.predictions[predicted_name] += 1
+        else:
+            self.predictions[predicted_name] = 1
 
-    def load_predicted_hashes(self):
-        """Load existing image hashes from the JSON file."""
-        if os.path.exists(self.predicted_pokemon_file):
-            with open(self.predicted_pokemon_file, 'r') as file:
-                self.image_hashes = json.load(file)
-
-    def update_predicted_hash(self, image_hash, predicted_name):
-        """Update the predicted hash in the JSON file."""
-        self.image_hashes[image_hash] = predicted_name
         with open(self.predicted_pokemon_file, 'w') as file:
-            json.dump(self.image_hashes, file, indent=4)
-        
-        
-        
-        
+            json.dump(self.predictions, file, indent=4)        
         
         
         
