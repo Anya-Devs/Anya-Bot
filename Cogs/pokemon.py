@@ -84,23 +84,35 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 
+import os
+import time
+import numpy as np
+import cv2 as cv
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import requests
 
 class PokemonPredictor:
     def __init__(self, dataset_folder="Data/pokemon/pokemon_images", 
                  dataset_file="Data/pokemon/dataset.npy"):
-        self.orb = cv.ORB_create(nfeatures=180)
+        self.orb = cv.ORB_create(nfeatures=172)
         self.flann = cv.FlannBasedMatcher(
-            dict(algorithm=6, table_number=9, key_size=9, multi_probe_level=1, tree=5), 
+            dict(algorithm=6, table_number=9, key_size=9, multi_probe_level=1, tree=1), 
             dict(checks=1, fast=True)
         )
         self.executor = ThreadPoolExecutor(max_workers=50)
         self.cache = {}  # Store descriptors
         self.dataset_file = dataset_file
         self.dataset_folder = dataset_folder
-
+        
+        
         # Load the dataset
         self.load_dataset(self.dataset_folder)
 
+
+    async def initialize(self):
+        await self.load_from_images(self.dataset_folder)
+        
     def load_dataset(self, dataset_folder):
         """Load dataset from npy file or images."""
         if os.path.exists(self.dataset_file):
@@ -108,8 +120,6 @@ class PokemonPredictor:
         else: 
             print(f'You need to make this file: {self.dataset_file}')
 
-    async def initialize(self):
-        await self.load_from_images(self.dataset_folder)
 
     def load_from_npy(self, dataset_file):
         """Load cached dataset from npy file."""
@@ -148,55 +158,42 @@ class PokemonPredictor:
             flipped_filename = filename.replace(".png", "_flipped.png")
             self.cache[flipped_filename] = descriptors.astype(np.uint8)
 
-    async def cross_match(self, img, desB, k=2):
-        desB = np.asarray(desB, dtype=np.uint8)
+    def evaluate_accuracy(self, matches):
+        """Evaluate the percentage of good matches."""
+        good_matches = sum(1 for match_pair in matches if len(match_pair) >= 2 
+                           and match_pair[0].distance < 0.75 * match_pair[1].distance)
+        return (good_matches / len(matches) * 100) if matches else 0
 
+    async def cross_match(self, descriptors, k=2):
+        """Match descriptors with cached Pokémon descriptors and return the best match."""
+        descriptors = np.asarray(descriptors, dtype=np.uint8)
+
+        # Match descriptors and compute accuracies in parallel
         futures = [
-            asyncio.get_event_loop().run_in_executor(self.executor, self.flann.knnMatch, desB, desA, k)
-            for desA in self.cache.values()
+            asyncio.get_event_loop().run_in_executor(
+                self.executor, lambda desA: self.flann.knnMatch(descriptors, desA, k), desA
+            ) for desA in self.cache.values()
         ]
+        
         results = await asyncio.gather(*futures)
 
         best_match, max_accuracy = None, 0
-        accuracy_futures = {
-            asyncio.get_event_loop().run_in_executor(self.executor, self.evaluate_matches, matches, filename): filename
-            for filename, matches in zip(self.cache.keys(), results)
-        }
+        for filename, matches in zip(self.cache.keys(), results):
+            accuracy = self.evaluate_accuracy(matches)
+            if accuracy > max_accuracy:
+                best_match, max_accuracy = filename, accuracy
 
-        for future in accuracy_futures:
-            try:
-                accuracy = await future
-                if accuracy > max_accuracy:
-                    max_accuracy = accuracy
-                    best_match = accuracy_futures[future]
-            except Exception:
-                continue
-
-        return best_match, max_accuracy if max_accuracy >= 0.001 else None
-
-    
-    def evaluate_matches(self, matches, filename):
-        if not matches:
-            return 0
-        good_matches = [m for m, n in matches if m.distance < 0.7 * n.distance]
-        return len(good_matches) / len(matches) * 100
+        return (best_match, max_accuracy) if max_accuracy >= 0.001 else (None, 0)
 
     async def predict_pokemon(self, img):
         """Predict the Pokémon in the given image."""
         start_time = time.time()
-        
-        # Preprocess and extract Pokémon from the image
-        img = self.preprocess_image(img)
-
-        # Convert the processed image to grayscale for ORB descriptor extraction
         gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         _, descriptors = self.orb.detectAndCompute(gray_img, None)
-        kpB, desB = self.orb.detectAndCompute(gray_img, None)
-        
-        best_match = await self.cross_match(img, desB)
+
+        best_match, accuracy = await self.cross_match(descriptors)
 
         if best_match:
-            print(f'Best Match: ', best_match)
             predicted_name = best_match.replace(".png", "").replace("_flipped", "")
             elapsed_time = time.time() - start_time
             return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
@@ -216,77 +213,6 @@ class PokemonPredictor:
             print(f"Error fetching image from URL: {e}")
             return None
 
-    def preprocess_image(self, img):
-        # Convert to gray scale
-        gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-
-        # Apply Gaussian blur to reduce noise and improve edge detection
-        blurred_img = cv.GaussianBlur(gray_img, (5, 5), 0)
-
-        # Use binary thresholding to create a binary image
-        _, binary_img = cv.threshold(blurred_img, 128, 255, cv.THRESH_BINARY)
-
-        # Find contours in the binary image
-        contours, _ = cv.findContours(binary_img, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-
-        # Create a mask for the Pokémon
-        mask = np.zeros_like(img)
-
-        # Draw contours on the mask
-        if contours:
-            cv.drawContours(mask, contours, -1, (255, 255, 255), thickness=cv.FILLED)
-
-        # Bitwise AND to extract the Pokémon from the image
-        extracted_pokemon = cv.bitwise_and(img, mask)
-
-        return extracted_pokemon
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     
     
     
