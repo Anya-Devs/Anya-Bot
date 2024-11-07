@@ -293,7 +293,8 @@ class Quest_Select_Filter(Select):
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
             await self.ctx.send(f"{error_message}")
-
+            
+            
 class QuestButton(discord.ui.Button):
     def __init__(self, label, style, custom_id, bot, quests, ctx, page):
         super().__init__(label=label, style=style, custom_id=custom_id)
@@ -301,11 +302,12 @@ class QuestButton(discord.ui.Button):
         self.quests = quests
         self.ctx = ctx
         self.page = page
-        
         self.quest_data = Quest_Data(bot)
 
-
     async def callback(self, interaction: discord.Interaction):
+        embed = None  # Declare embed variable
+        view = None  # Default to no view
+
         if self.custom_id == "previous":
             self.page -= 1
         elif self.custom_id == "next":
@@ -314,16 +316,29 @@ class QuestButton(discord.ui.Button):
             # Call the delete all quests function
             success = await self.quest_data.delete_all_quests(self.ctx.guild.id, self.ctx.author)
             if success:
-                await interaction.response.send_message("All quests have been deleted. Starting fresh!", ephemeral=True)
+                embed = discord.Embed(
+                    description=f":white_check_mark: All quests have been deleted for you {self.ctx.author.mention}. Starting fresh!",
+                    color=discord.Color.green()
+                )
+                # Reset page and quest list after deletion
+                self.page = 0
+                self.quests = []  # Clear quests since they are all deleted
+                # After fresh start, we don't need a view anymore
+                view = None  # Remove the view after successful fresh start
             else:
-                await interaction.response.send_message("Failed to delete quests. Please try again.", ephemeral=True)
-            # Reset the page and quests list after deletion
-            self.page = 0
-            self.quests = []  # Clear quests as they have all been deleted
+                embed = discord.Embed(
+                    description="You have no quests.",
+                    color=discord.Color.red()
+                )
+                # If no quests exist, maintain the view and reset quests accordingly
+                view = Quest_View(self.bot, self.quests, self.ctx, self.page)
 
-        # Update the view with the current page and reset quests if necessary
-        view = Quest_View(self.bot, self.quests, self.ctx, self.page)
-        embed = await view.generate_messages()
+        # Only call view.generate_messages() if fresh start wasn't successful
+        if not embed:  
+            view = Quest_View(self.bot, self.quests, self.ctx, self.page)
+            embed = await view.generate_messages()
+
+        # Edit the message to include the embed and updated view (even if the view is None)
         await interaction.response.edit_message(embed=embed, view=view)
         
 class Quest_Button1(discord.ui.View):
@@ -361,11 +376,11 @@ class Quest_Button1(discord.ui.View):
             channel_id = await self.quest_data.get_random_channel_for_guild(guild_id)
 
             if not channel_id:
-                # If no redirect channels are found, notify the user (without mentioning the author)
-                await button.response.send_message(
-                    "No redirected channels found for this guild. Please set redirect channels before creating a new quest.\n"
-                    "> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `...redirect <channels>`",
-                    ephemeral=True)
+                # If no redirect channels are found, edit the original message (instead of sending a new one)
+                await button.response.edit_message(
+                    content="No redirected channels found for this guild. Please set redirect channels before creating a new quest.\n"
+                            "> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `...redirect <channels>`"
+                )
                 return  # Exit if no channels are set
 
             # Proceed to create new quests for the user
@@ -379,10 +394,10 @@ class Quest_Button1(discord.ui.View):
                 logger.debug("Adding new quest")
                 await self.quest_data.add_new_quest(guild_id, button_user, chance=100)
 
-            # Notify the user that new quests have been created
-            await button.response.send_message(
-                f"Successfully created new quests for you, {button_user.mention}!",
-                ephemeral=True,
+            # Edit the original message to notify the user that new quests have been created
+            await button.response.edit_message(
+                content=f"Successfully created new quests for you, {button_user.mention}!",
+                view=None
             )
 
         except Exception as e:
@@ -390,7 +405,6 @@ class Quest_Button1(discord.ui.View):
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
             await error_custom_embed(self.bot, self.ctx, error_message, title="Button Error")
-        
 class Quest_Button(discord.ui.View):
     def __init__(self, bot, ctx):
         super().__init__()
@@ -1182,15 +1196,35 @@ class Quest_Data(commands.Cog):
         user_id = str(message_author.id)
 
         # Fetch all quests for the user in the specified guild
-        existing_quests = await self.find_quests_by_user_and_server(user_id, guild_id)
-        if not existing_quests:
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+
+        # Find the guild document by guild_id
+        guild_document = await server_collection.find_one({'guild_id': str(guild_id)})
+
+        if not guild_document:
+            logger.debug(f"No guild found with ID {guild_id}.")
+            return False  # No guild data found
+
+        # Extract the members data
+        members_data = guild_document.get('members', {})
+
+        # Check if the user exists in the members data
+        if user_id not in members_data:
+            logger.debug(f"User ID {user_id} not found in the guild {guild_id}.")
+            return False  # No quests to delete if user does not exist
+
+        user_data = members_data[user_id]
+        quests = user_data.get('quests', [])
+
+        if not quests:
             logger.debug("No quests found for the user. Nothing to delete.")
-            return False  # Indicate no quests to delete
+            return False  # No quests to delete for the user
 
         # Loop through and delete each quest individually
-        for quest in existing_quests:
-            quest_id = quest['quest_id']
-            deletion_success = await self.delete_quest(guild_id, user_id, quest_id)
+        for quest in quests:
+            quest_id = quest.get('quest_id')
+            deletion_success = await self.delete_quest(guild_id, quest_id, message_author)
             
             if deletion_success:
                 logger.debug(f"Deleted quest_id: {quest_id} for user_id: {user_id} in guild_id: {guild_id}")
@@ -1198,7 +1232,7 @@ class Quest_Data(commands.Cog):
                 logger.warning(f"Failed to delete quest_id: {quest_id} for user_id: {user_id} in guild_id: {guild_id}")
 
         logger.info(f"Successfully deleted all quests for user_id: {user_id} in guild_id: {guild_id}")
-        return True  # Indicate successful deletion of all quests
+        return True  # Return True once all quests are deleted
 
      except Exception as e:
         logger.error(f"Error occurred while deleting all quests: {e}")
