@@ -132,7 +132,7 @@ class PokemonPredictor:
             dict(algorithm=6, table_number=9, key_size=9, multi_probe_level=1),
             dict(checks=10)
         )
-        self.executor = ThreadPoolExecutor(max_workers=3)  
+        self.executor = ThreadPoolExecutor(max_workers=3)
         self.cache = {}
         self.dataset_file = dataset_file
         self.dataset_folder = dataset_folder
@@ -250,10 +250,14 @@ class PokemonPredictor:
         
         sharpness = evaluated_results.get('sharpness', None)
         if sharpness is None:
-            sharpness = self.evaluate_image_quality(image, evaluated_results)  # Ensure sharpness is only calculated once
+            sharpness = self.evaluate_image_quality(matches, evaluated_results)  # Ensure sharpness is only calculated once
             
         quality_adjustment = 1 + (sharpness * 0.01)  # Minor adjustment based on sharpness
         accuracy = (good_matches / len(matches) * 100) * quality_adjustment if matches else 0
+        
+        # Clamp accuracy to a maximum of 100%
+        accuracy = min(accuracy, 100)
+
         print(f"Accuracy evaluation time: {time.time() - start_time:.2f} seconds")
         return accuracy
 
@@ -273,8 +277,7 @@ class PokemonPredictor:
             return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
         else:
             return "No match found", elapsed_time
-    
-    
+
     
     
     
