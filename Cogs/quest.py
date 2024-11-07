@@ -163,6 +163,7 @@ class Quest_View(View):
         self.page = page
         self.max_pages = min((len(self.filtered_quests) + 2) // 3, 2)
 
+        # Add quest filters and navigation buttons
         self.add_item(Quest_Select_Filter(bot, quests, ctx))
         if self.page < self.max_pages - 1:
             self.add_item(Quest_Select(bot, self.filtered_quests, ctx, self.max_pages))
@@ -170,6 +171,9 @@ class Quest_View(View):
             self.add_item(QuestButton("Previous", discord.ButtonStyle.primary, "previous", bot, self.filtered_quests, ctx, self.page))
         if self.page < self.max_pages - 1:
             self.add_item(QuestButton("Next", discord.ButtonStyle.primary, "next", bot, self.filtered_quests, ctx, self.page))
+
+        # Add the "Fresh Start" button on the bottom row
+        self.add_item(QuestButton("Fresh Start", discord.ButtonStyle.danger, "fresh_start", bot, self.filtered_quests, ctx, self.page))
 
     async def generate_messages(self):
      start_index = self.page * 3
@@ -297,16 +301,30 @@ class QuestButton(discord.ui.Button):
         self.quests = quests
         self.ctx = ctx
         self.page = page
+        
+        self.quest_data = Quest_Data(bot)
+
 
     async def callback(self, interaction: discord.Interaction):
         if self.custom_id == "previous":
             self.page -= 1
         elif self.custom_id == "next":
             self.page += 1
+        elif self.custom_id == "fresh_start":
+            # Call the delete all quests function
+            success = await self.delete_all_quests(self.ctx.guild.id, self.ctx.author)
+            if success:
+                await interaction.response.send_message("All quests have been deleted. Starting fresh!", ephemeral=True)
+            else:
+                await interaction.response.send_message("Failed to delete quests. Please try again.", ephemeral=True)
+            # Reset the page and quests list after deletion
+            self.page = 0
+            self.quests = []  # Clear quests as they have all been deleted
+
+        # Update the view with the current page and reset quests if necessary
         view = Quest_View(self.bot, self.quests, self.ctx, self.page)
         embed = await view.generate_messages()
         await interaction.response.edit_message(embed=embed, view=view)
-
         
 class Quest_Button1(discord.ui.View):
     def __init__(self, bot, ctx):
