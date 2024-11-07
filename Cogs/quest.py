@@ -50,7 +50,7 @@ class Quest(commands.Cog):
         
         # Store the channels in the database
         if await self.quest_data.store_channels_for_guild(guild_id, channel_ids):
-            await ctx.reply(f"<:anya_wow:1268976258566328430> Now quest missions to {', '.join([channel.mention for channel in channel_mentions])}", mention_author=False)
+            await ctx.reply(f"Now redirecting missions to {', '.join([channel.mention for channel in channel_mentions])}", mention_author=False)
         else:
             await ctx.reply("Failed to store the channels. Please try again later.", mention_author=False)
      except Exception as e:
@@ -1139,7 +1139,7 @@ class Quest_Data(commands.Cog):
             'action': action,
             'method': method,
             'channel_id': channel_id,
-            'times': times,
+            'times': times if method not in ('message', 'emoji') else 1, # Updated
             'content': content,
             'reward': reward,
             'progress': 0  # Initialize progress to 0
@@ -1157,6 +1157,34 @@ class Quest_Data(commands.Cog):
      except Exception as e:
         logger.error(f"Error occurred while adding new quest: {e}")
         return None
+    
+    async def delete_all_quests(self, guild_id, message_author):
+     logger.debug(f"Attempting to delete all quests for guild_id: {guild_id}, user_id: {message_author.id}")
+     try:
+        user_id = str(message_author.id)
+
+        # Fetch all quests for the user in the specified guild
+        existing_quests = await self.find_quests_by_user_and_server(user_id, guild_id)
+        if not existing_quests:
+            logger.debug("No quests found for the user. Nothing to delete.")
+            return False  # Indicate no quests to delete
+
+        # Loop through and delete each quest individually
+        for quest in existing_quests:
+            quest_id = quest['quest_id']
+            deletion_success = await self.delete_quest(guild_id, user_id, quest_id)
+            
+            if deletion_success:
+                logger.debug(f"Deleted quest_id: {quest_id} for user_id: {user_id} in guild_id: {guild_id}")
+            else:
+                logger.warning(f"Failed to delete quest_id: {quest_id} for user_id: {user_id} in guild_id: {guild_id}")
+
+        logger.info(f"Successfully deleted all quests for user_id: {user_id} in guild_id: {guild_id}")
+        return True  # Indicate successful deletion of all quests
+
+     except Exception as e:
+        logger.error(f"Error occurred while deleting all quests: {e}")
+        return False
     
     async def add_user_to_server(self, user_id: str, guild_id: str):
         try:
