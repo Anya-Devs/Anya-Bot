@@ -312,7 +312,7 @@ class QuestButton(discord.ui.Button):
             self.page += 1
         elif self.custom_id == "fresh_start":
             # Call the delete all quests function
-            success = await self.delete_all_quests(self.ctx.guild.id, self.ctx.author)
+            success = await self.quest_data.delete_all_quests(self.ctx.guild.id, self.ctx.author)
             if success:
                 await interaction.response.send_message("All quests have been deleted. Starting fresh!", ephemeral=True)
             else:
