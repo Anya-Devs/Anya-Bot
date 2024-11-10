@@ -66,30 +66,61 @@ class Information(commands.Cog):
         
     @commands.command(name='server')
     async def server_info(self, ctx):
-        guild = ctx.guild
-        description = (
-            f"{guild.owner.mention} | `{guild.member_count:,}` members\n"
-            f"Created: {timestamp_gen(guild.created_at.timestamp())}"
-        )
-        embed = discord.Embed(
-            description=description,
-            color=primary_color(),
-            timestamp=datetime.now()
-        )
-        embed.set_footer(icon_url=self.bot.user.avatar, text=f'{guild.name}')
-        embed.set_image(url=guild.owner.avatar)
-        embed.set_thumbnail(url=ctx.guild.icon.url)
-        await ctx.reply(embed=embed, mention_author=False)
+     guild = ctx.guild
+     owner = guild.owner
+     boosts = guild.premium_subscription_count
+     boost_tier = f"Tier {guild.premium_tier}" if boosts > 0 else "Not boosted"
+    
+     overview = f"Owner: {owner.mention}\n" \
+                  f"Boosts: {boosts}/14\n" \
+                  f"Boost Tier: {boost_tier}"
+
+     # Other details for the second field
+     other_info = f"Roles: {len(guild.roles)}\n" \
+                 f"Channels: {len(guild.channels)} - Text: {len([c for c in guild.channels if isinstance(c, discord.TextChannel)])} - Voice: {len([c for c in guild.channels if isinstance(c, discord.VoiceChannel)])}\n" \
+                 f"Members: {guild.member_count}"
+
+     embed = discord.Embed(
+        color=primary_color(),
+        timestamp=datetime.now()
+     )
+
+     # Fields for overview and other details
+     embed.add_field(name="Overview", value=overview, inline=True)
+     embed.add_field(name="Other", value=other_info, inline=True)
+
+     # Thumbnail (guild icon) and footer with server ID
+     embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+     embed.set_footer(text=f"ID: {guild.id}") 
+ 
+     # Owner details in the author section
+     embed.set_author(name=f"{owner.name}", icon_url=owner.avatar.url)
+
+     await ctx.reply(embed=embed, mention_author=False)
+
 
     @commands.command(name='pfp')
     async def pfp(self, ctx, user: discord.Member = None):
-        user = user or ctx.author
-        embed = discord.Embed(
-            color=primary_color(),
-            timestamp=datetime.now()
-        )
-        embed.set_image(url=user.avatar.url)
-        await ctx.reply(embed=embed, mention_author=False)
+     user = user or ctx.author
+     avatar_url = user.avatar.url  # Get the URL of the avatar image
+
+     # Embed creation
+     embed = discord.Embed(
+        title=user.display_name,
+        color=primary_color(),
+        timestamp=datetime.now(),
+        url=avatar_url  # This will make the title a clickable link to the avatar image
+     )
+     embed.set_image(url=avatar_url)
+
+     # Add a button for downloading the image
+     button = discord.ui.Button(label="Download", style=discord.ButtonStyle.link, url=avatar_url)
+     view = discord.ui.View()
+     view.add_item(button)
+
+     # Create the message with the embed and the button
+     await ctx.reply(embed=embed, mention_author=False, view=view)
+
 
     @commands.command(name='role')
     async def role(self, ctx, user: discord.Member = None):
@@ -110,17 +141,35 @@ class Information(commands.Cog):
 
     @commands.command(name='banner')
     async def banner(self, ctx, user: discord.Member = None):
-        user = user or ctx.author
-        banner_url = await get_user_banner_url(self.bot, user)
+     user = user or ctx.author
+     banner_url = await get_user_banner_url(self.bot, user)
+    
+     if banner_url:
+        # Embed creation
         embed = discord.Embed(
+            title=f"{user.display_name}'s banner",
+            color=primary_color(),
+            timestamp=datetime.now(),
+            url=banner_url  # This will make the title a clickable link to the banner image
+        )
+        embed.set_image(url=banner_url)
+
+        # Add a link button for downloading the banner image
+        button = discord.ui.Button(label="Download Banner", style=discord.ButtonStyle.link, url=banner_url)
+        view = discord.ui.View()
+        view.add_item(button)
+     else:
+        # If no banner, display a message
+        embed = discord.Embed(
+            title=user.display_name,
+            description="No banner set",
             color=primary_color(),
             timestamp=datetime.now()
         )
-        if banner_url:
-            embed.set_image(url=banner_url)
-        else:
-            embed.description = "No banner set"
-        await ctx.reply(embed=embed, mention_author=False)
+        view = None  # No button if there is no banner
+
+     # Send the message with the embed and the view (if any)
+     await ctx.reply(embed=embed, mention_author=False, view=view)
 
     @commands.command(name='joined')
     async def joined(self, ctx, user: discord.Member = None):
@@ -228,8 +277,6 @@ class PermissionsView(discord.ui.View):
     async def previous(self, button: discord.ui.Button, interaction: discord.Interaction):
         print(f"Interaction received: previous")  # Debugging the interaction ID
         
-        await button.response.defer()  # Defer the response to prevent interaction failure
-        print("Response deferred to prevent interaction failure")
 
         # Handle previous button press
         if self.page > 0:
@@ -250,8 +297,6 @@ class PermissionsView(discord.ui.View):
     async def next(self, button: discord.ui.Button, interaction: discord.Interaction):
         print(f"Interaction received: next")  # Debugging the interaction ID
         
-        await button.response.defer()  # Defer the response to prevent interaction failure
-        print("Response deferred to prevent interaction failure")
 
         # Handle next button press
         if self.page < len(self.perm_categories) - 1:
