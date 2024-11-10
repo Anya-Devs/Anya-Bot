@@ -31,9 +31,6 @@ import numpy as np
 import aiohttp
 import requests
 import psutil
-import hnswlib
-import ijson
-import imagehash
 import motor.motor_asyncio
 from PIL import Image, ImageChops
 
@@ -231,14 +228,14 @@ class PokemonPredictor:
     def is_potential_match(self, desA, descriptors):
         """Pre-filter images based on sharpness to improve performance."""
         sharpness = self.evaluate_image_quality(descriptors)
-        return sharpness > 0.1  # Basic filter for sharpness
+        return sharpness > 0.2  # Basic filter for sharpness
 
     def evaluate_accuracy(self, matches, evaluated_results, image=None):
      """Evaluate the accuracy of the matches based on sharpness."""
      start_time = time.time()
 
      # Count good matches where the ratio is less than 0.75
-     good_matches = sum(1 for match in matches if len(match) >= 2 and match[0].distance < 0.75 * match[1].distance)
+     good_matches = sum(1 for match in matches if len(match) >= 2 and match[0].distance < 0.65 * match[1].distance)
     
      # Retrieve sharpness value
      sharpness = evaluated_results.get('sharpness', None)
