@@ -94,7 +94,7 @@ class Information(commands.Cog):
      embed.set_footer(text=f"ID: {guild.id}") 
  
      # Owner details in the author section
-     embed.set_author(name=f"{owner.name}", icon_url=owner.avatar.url)
+     embed.set_author(name=f"{guild.name}", icon_url=owner.avatar.url)
 
      await ctx.reply(embed=embed, mention_author=False)
 
