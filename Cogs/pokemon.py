@@ -31,6 +31,7 @@ import numpy as np
 import aiohttp
 import requests
 import psutil
+import imagehash
 import motor.motor_asyncio
 from PIL import Image, ImageChops
 
@@ -55,9 +56,13 @@ from Data.const import error_custom_embed, sdxl, primary_color
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler()])
-
+import os
+import numpy as np
+import cv2 as cv
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from tqdm import tqdm
+import time
 
 
 class PokemonPredictor:
@@ -67,46 +72,72 @@ class PokemonPredictor:
             dict(algorithm=6, table_number=9, key_size=9, multi_probe_level=1),
             dict(checks=10)
         )
+        self.executor = ThreadPoolExecutor(max_workers=3)  
         self.cache = {}
         self.dataset_file = dataset_file
         self.dataset_folder = dataset_folder
         self.load_dataset()
 
+
+    async def initialize(self):
+        # Asynchronous initialization to load the dataset images
+        await self.load_dataset(self.dataset_folder)
+
     def load_dataset(self):
-        """Load dataset from file if it exists."""
+        # Load precomputed dataset from file if it exists.
         start_time = time.time()
         if os.path.exists(self.dataset_file):
             self.cache = np.load(self.dataset_file, allow_pickle=True).item()
-            self._print(f"Dataset loaded with {len(self.cache)} images.")
+            print(f"Dataset loaded with {len(self.cache)} images.")
         else:
-            self._print("Dataset not found. Precomputing dataset now...")
-            self.create_dataset()  # Precompute dataset if not available
-        self._print(f"Dataset loading time: {time.time() - start_time:.2f} seconds")
+            print(f"Dataset not found. Precomputing dataset now...")
+            asyncio.run(self.create_dataset())  # Precompute dataset if not available
+        print(f"Dataset loading time: {time.time() - start_time:.2f} seconds")
 
-    def create_dataset(self):
-        """Create dataset by processing images."""
+
+    def load_from_npy(self, dataset_file):
+        # Load cached dataset from npy file.
+        data = np.load(dataset_file, allow_pickle=True).item()
+        self.cache = data
+        print(f"Loaded dataset from {dataset_file}. Total images: {len(data)}")
+
+    async def create_dataset_files(self, dataset_folder):
+        # Create dataset files if they don't exist
+        print(f"Processing images from: {dataset_folder}")
+        await self.load_from_images(dataset_folder)  # Process images and descriptors
+
+    async def load_from_images(self, dataset_folder):
+        # Process images in the dataset folder and save descriptors
         filenames = [
-            filename for filename in os.listdir(self.dataset_folder)
-            if os.path.isfile(os.path.join(self.dataset_folder, filename))
+            filename for filename in os.listdir(dataset_folder)
+            if os.path.isfile(os.path.join(dataset_folder, filename))
         ]
         
-        self._print(f"Processing {len(filenames)} images...")
+        print(f"Processing {len(filenames)} images...")
 
-        for filename in filenames:
-            self.process_image(os.path.join(self.dataset_folder, filename), filename)
-
+        tasks = [
+            self.process_image(os.path.join(dataset_folder, filename), filename)
+            for filename in filenames
+        ]
+        
+        # Use tqdm with asyncio.gather to display progress bar while processing
+        for _ in tqdm(await asyncio.gather(*tasks), total=len(tasks), desc="Processing images"):
+            pass
+        
+        # Check if cache has any descriptors before saving
         if self.cache:
-            self._print(f"Saving dataset with {len(self.cache)} images to {self.dataset_file}")
+            print(f"Saving dataset with {len(self.cache)} images to {self.dataset_file}")
             np.save(self.dataset_file, self.cache)
-            self._print(f"Dataset saved to {self.dataset_file}")
+            print(f"Dataset saved to {self.dataset_file}")
         else:
-            self._print("No descriptors found, nothing to save.")
+            print("No descriptors found, nothing to save.")
 
-    def process_image(self, path, filename):
-        """Process image and extract descriptors."""
+    async def process_image(self, path, filename):
+        # Process each image to extract descriptors, including flipped versions
         start_time = time.time()
         
-        img = self.read_data(path)
+        # Process original image
+        img = await self.read_data(path)
         if img is not None:
             self._process_single_image(img, filename)
         
@@ -116,35 +147,51 @@ class PokemonPredictor:
             flipped_filename = filename.replace(".png", "_flipped.png")
             self._process_single_image(flipped_img, flipped_filename)
         
-        self._print(f"Processed image {filename} in {time.time() - start_time:.2f} seconds")
+        print(f"Processed image {filename} in {time.time() - start_time:.2f} seconds")
 
     def _process_single_image(self, img, filename):
-        """Extract descriptors and store them."""
+        # Helper function to process an individual image and store its descriptors
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         _, descriptors = self.orb.detectAndCompute(gray, None)
         
         if descriptors is not None and len(descriptors) > 0:
+            # Store descriptors in cache for the original or flipped image
             self.cache[filename] = {'descriptors': descriptors.astype(np.uint8)}
-            self._print(f"Processed image {filename} with {len(descriptors)} descriptors.")
+            print(f"Processed image {filename} with {len(descriptors)} descriptors.")
         else:
-            self._print(f"No descriptors found for {filename}.")
+            print(f"No descriptors found for {filename}.")
 
-    def read_data(self, path):
-        """Read image data."""
+    async def read_data(self, path):
+        # Read image data for processing
         try:
             img = cv.imread(path)
             if img is None:
-                self._print(f"Failed to read image at {path}")
+                print(f"Failed to read image at {path}")
             return img
         except Exception as e:
-            self._print(f"Error loading image {path}: {e}")
+            print(f"Error loading image {path}: {e}")
             return None
 
-    def cross_match(self, descriptors, image, k=2):
-        """Match image descriptors with the dataset."""
+    def evaluate_image_quality(self, image, evaluated_results=None):
+        #Evaluate sharpness of an image. Only calculate once
+        if evaluated_results and 'sharpness' in evaluated_results:
+            return evaluated_results['sharpness']
+        
+        start_time = time.time()
+        sharpness = cv.Laplacian(image, cv.CV_64F).var()
+        if evaluated_results is None:
+            evaluated_results = {}
+        evaluated_results['sharpness'] = sharpness
+        print(f"Sharpness evaluation time: {time.time() - start_time:.2f} seconds")
+        return sharpness
+
+    async def cross_match(self, descriptors, image, k=2):
+        # Optimized matching with reduced CPU load
         start_time = time.time()
 
-        sharpness = self.evaluate_image_quality(image)
+        # Precompute sharpness once and reuse it
+        evaluated_results = {}
+        sharpness = self.evaluate_image_quality(image, evaluated_results)
 
         # Filter images based on sharpness before matching
         potential_matches = [filename for filename, desA in self.cache.items() if self.is_potential_match(desA, descriptors)]
@@ -152,38 +199,64 @@ class PokemonPredictor:
         if not potential_matches:
             return None, 0
 
-        results = {}
-        for filename in potential_matches:
-            matches = self.flann.knnMatch(descriptors, self.cache[filename]['descriptors'], k)
-            results[filename] = matches
+        futures = {
+            filename: self.executor.submit(self.flann.knnMatch, descriptors, self.cache[filename]['descriptors'], k)
+            for filename in potential_matches
+        }
 
+        # Collect results with timeout and handle potential blocking
+        results = {}
+        for filename, future in futures.items():
+            try:
+                print(f"Waiting for result from future for {filename}...")
+                matches = future.result(timeout=5)  # Timeout after 5 seconds
+                results[filename] = matches
+                print(f"Received result for {filename}.")
+            except TimeoutError:
+                print(f"Timeout reached for {filename}.")
+                continue  # Skip this match if it times out
+
+        # Evaluate matches and select the best match
         best_match, max_accuracy = None, 0
         for filename, matches in results.items():
-            accuracy = self.evaluate_accuracy(matches)
+            accuracy = self.evaluate_accuracy(matches, evaluated_results)
             if accuracy > max_accuracy:
                 best_match, max_accuracy = filename, accuracy
 
-        self._print(f"Cross-match evaluation time: {time.time() - start_time:.2f} seconds")
+        print(f"Cross-match evaluation time: {time.time() - start_time:.2f} seconds")
         return (best_match, max_accuracy) if max_accuracy >= 0.001 else (None, 0)
 
     def is_potential_match(self, desA, descriptors):
-        """Check if an image is a potential match based on sharpness."""
+        # Pre-filter images based on sharpness to improve performance
         sharpness = self.evaluate_image_quality(descriptors)
         return sharpness > 0.2  # Basic filter for sharpness
 
-    def evaluate_image_quality(self, image):
-        """Evaluate sharpness of an image."""
-        sharpness = cv.Laplacian(image, cv.CV_64F).var()
-        return sharpness
+    def evaluate_accuracy(self, matches, evaluated_results, image=None):
+     # Evaluate the accuracy of the matches based on sharpness.
+     start_time = time.time()
 
-    def evaluate_accuracy(self, matches):
-        """Evaluate accuracy of the matches."""
-        good_matches = sum(1 for match in matches if len(match) >= 2 and match[0].distance < 0.65 * match[1].distance)
-        accuracy = (good_matches / len(matches)) * 100 if matches else 0
-        return accuracy
+     # Count good matches where the ratio is less than 0.75
+     good_matches = sum(1 for match in matches if len(match) >= 2 and match[0].distance < 0.65 * match[1].distance)
+    
+     # Retrieve sharpness value
+     sharpness = evaluated_results.get('sharpness', None)
+    
+     # If sharpness is not already evaluated, calculate it using the image
+     if sharpness is None and image is not None:
+        sharpness = self.evaluate_image_quality(image, evaluated_results)  # Ensure sharpness is calculated
+    
+     # Apply sharpness adjustment, defaulting to no adjustment if sharpness is None
+     quality_adjustment = 1 + (sharpness * 0.01) if sharpness is not None else 1
+    
+     # Calculate accuracy, ensuring it's capped at 100
+     accuracy = (good_matches / len(matches) * 100) * quality_adjustment if matches else 0
+     accuracy = min(accuracy, 100)  # Ensure accuracy doesn't exceed 100
 
-    def predict_pokemon(self, img):
-        """Predict Pokémon by comparing descriptors."""
+     print(f"Accuracy evaluation time: {time.time() - start_time:.2f} seconds")
+     return accuracy
+
+    async def predict_pokemon(self, img):
+        # Predict Pokémon by comparing descriptors with precomputed dataset.
         start_time = time.time()
         gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         _, descriptors = self.orb.detectAndCompute(gray_img, None)
@@ -191,18 +264,37 @@ class PokemonPredictor:
         if descriptors is None:
             return "No descriptors found", time.time() - start_time
 
-        best_match, accuracy = self.cross_match(descriptors, img)
+        best_match, accuracy = await self.cross_match(descriptors, img)
         elapsed_time = time.time() - start_time
         if best_match:
             predicted_name = best_match.replace(".png", "").replace("_flipped", "")
             return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
         else:
             return "No match found", elapsed_time
-
-    def _print(self, msg):
-        """Print only important messages or errors."""
-        if "Error" in msg or "No match" in msg:
-            print(msg)  # Only print error or match-related messages
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
         
         
         
@@ -624,7 +716,7 @@ class Pokemon(commands.Cog):
                     img = np.asarray(img_bytes, dtype=np.uint8)
                     img = cv.imdecode(img, cv.IMREAD_COLOR)
                     # Use the predictor to predict the Pokémon
-                    prediction, time_taken, predicted_name =  self.predictor.predict_pokemon(img)
+                    prediction, time_taken, predicted_name = await self.predictor.predict_pokemon(img)
                     
                     # Check if the user is a hunter for the predicted Pokémon
                     hunters = await self.data_handler.get_hunters_for_pokemon(predicted_name)
@@ -658,7 +750,7 @@ class Pokemon(commands.Cog):
                             img = np.asarray(img_bytes, dtype=np.uint8)
                             img = cv.imdecode(img, cv.IMREAD_COLOR)
                             # Get all users who have this Pokémon in their list
-                            prediction, time_taken, predicted_name =  self.predictor.predict_pokemon(img)
+                            prediction, time_taken, predicted_name = await self.predictor.predict_pokemon(img)
                             hunters = await self.data_handler.get_hunters_for_pokemon(predicted_name)
 
                             if hunters:
@@ -785,104 +877,6 @@ class Pokemon(commands.Cog):
         await ctx.reply(f"Invalid action! Use `...hunt {'`, `...hunt '.join(actions)}`.", mention_author=False)
         
 
-     @commands.command(name='rename')
-     async def rename_predictions(self, ctx, *, search_term: str):
-        """Search for prediction files and rename based on user input."""
-        matching_files = [
-            f for f in os.listdir(self.output_folder)
-            if re.search(search_term, f, re.IGNORECASE)  # Case-insensitive search
-        ]
-
-        # If no files match, do a fuzzy search
-        if not matching_files:
-            all_files = os.listdir(self.output_folder)
-            # Get close matches based on user input
-            close_matches = get_close_matches(search_term, all_files, n=5, cutoff=0.3)  # Adjust n and cutoff as needed
-            if close_matches:
-                matching_files = close_matches
-            else:
-                await ctx.send("No matching files found.")
-                return
-
-        # List matching files with indices
-        file_list = "\n".join([f"{i}: {filename}" for i, filename in enumerate(matching_files)])
-        await ctx.reply(f"Matching files:\n```{file_list}```\nPlease provide the index of the file to rename:", mention_author=False)
-
-        # Wait for user input
-        def check(m):
-            return m.author == ctx.author and m.channel == ctx.channel
-
-        try:
-            response = await self.bot.wait_for('message', check=check, timeout=30.0)
-            index_input = response.content.strip()
-
-            # Convert user input to an integer index
-            try:
-                index = int(index_input)
-                if index < 0 or index >= len(matching_files):
-                    await ctx.send("Invalid index. Please try again.")
-                    return
-            except ValueError:
-                await ctx.send("Please enter a valid number for the index.")
-                return
-
-            # Get the file to rename
-            file_to_rename = matching_files[index]
-            await ctx.reply(f"You chose to rename: `{file_to_rename}`. Please provide a new name:", mention_author=False)
-
-            # Wait for new name input
-            response = await self.bot.wait_for('message', check=check, timeout=30.0)
-            new_name = response.content.strip()
-
-            # Rename the file
-            old_path = os.path.join(self.output_folder, file_to_rename)
-            new_path = os.path.join(self.output_folder, new_name)
-            os.rename(old_path, new_path)
-
-            await ctx.send("File renamed successfully!")
-        except Exception as e:
-            await ctx.send(f"An error occurred: {e}")
-        except asyncio.TimeoutError:
-            await ctx.send("You took too long to respond. Rename operation canceled.")
-
-
-    @commands.command(name='recan')
-    async def recan(self, ctx):
-        """Recan the predictions folder and update dataset.npy."""
-        processed_folder = self.output_folder
-        dataset_file = self.dataset_file
-        
-        # Load the current dataset
-        if os.path.exists(dataset_file):
-            data = np.load(dataset_file, allow_pickle=True).item()
-        else:
-            data = {}
-
-        # Clear the current dataset to recan it
-        data.clear()
-
-        # Scan the predictions folder for new processed files
-        for filename in os.listdir(processed_folder):
-            if filename.endswith('.png'):
-                file_path = os.path.join(processed_folder, filename)
-                # Add the file to the dataset
-                data[filename] = None  # Or set it to the appropriate descriptor if available
-
-                # Create embed with the image and file path
-                embed = discord.Embed(title="Recan Prediction", description=f"File Path: {file_path}")
-                
-                # Create the file object for the image
-                image_file = discord.File(file_path, filename=filename)
-
-                # Set the image in the embed
-                embed.set_image(url=f"attachment://{filename}")
-
-                # Send the image and embed
-                await ctx.send(file=image_file, embed=embed)
-
-        # Save the updated dataset
-        np.save(dataset_file, data)
-        print(f"Updated dataset saved to {dataset_file}")
     
     @commands.command(help="Displays Pokemon dex information.", aliases=['pokdex', 'dex','d','p'])
     @commands.cooldown(1, 6, commands.BucketType.user) 
@@ -1049,43 +1043,6 @@ class Pokemon(commands.Cog):
         await find_pokemon_description(pokemon_name)
         print(f"Error: An unexpected error occurred - {e}")
 
-        
-     async def find_pokemon_description(pokemon_name):
-      POKEMON_DIR = "Data/pokemon"
-      os.makedirs(POKEMON_DIR, exist_ok=True)
-      POKEMON_DESCRIPTION_FILE = os.path.join(POKEMON_DIR, "pokemon_descriptions.txt")
-
-      if not os.path.exists(POKEMON_DESCRIPTION_FILE):
-            with open(POKEMON_DESCRIPTION_FILE, 'w') as file:
-                file.write("")  # Creating an empty text file          
-      with open(POKEMON_DESCRIPTION_FILE, 'r') as file:
-        pokemon_name = pokemon_name.lower()
-        print(pokemon_name)
-        for line in file:
-            # Split the line into Pokemon name and description
-            pokemon, description = line.strip().split(':', 1)
-            
-            # Check if the current line's Pokemon name matches the requested name
-            if pokemon.strip() == pokemon_name:
-                print(f"{pokemon.strip()} : {description.strip()}")
-                return description.strip()
-            
-            else:
-                return None
-    
-      # If the Pokemon name is not found, return None
-      return None
-
-     async def replace_words(text, replacements):
-        for old_word, new_word in replacements.items():
-            text = text.replace(old_word, new_word)
-        return text
-
-     async def capitalize_sentences(text):
-        sentences = text.split('.')
-        capitalized_sentences = '. '.join(sentence.strip().capitalize() for sentence in sentences if sentence.strip())
-        return capitalized_sentences
-    
      def get_pokemon_description(pokemon_id, file_path='Data/pokemon/pokemon_description.csv'):
       with open(file_path, mode='r', encoding='utf-8') as csv_file:
         reader = csv.DictReader(csv_file)
@@ -1096,29 +1053,43 @@ class Pokemon(commands.Cog):
        
       return "Pokémon ID not found"
     
+     def get_pokemon_region(pokemon_id, file_path='Data/pokemon/pokemon_description.csv'):
+        try:
+            with open(file_path, mode='r', encoding='utf-8') as csv_file:
+                reader = csv.DictReader(csv_file)
+                for row in reader:
+                    if row['id'] == str(pokemon_id):
+                        return row['region']
+        except FileNotFoundError:
+            return None
+        except PermissionError:
+            return None
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return None
+        return None
+     
+     def get_pokemon_alternate_names(data_species, pokemon_name):
+      try:
+       if data_species:
+        alternate_names = [(name['name'], name['language']['name']) for name in data_species['names']]
+        return alternate_names
+       else:
+        print(f"Error: Unable to retrieve data for {pokemon_name}")
+        return None
+      except KeyError:
+        return None  # or handle the missing key case accordingly
+    
+     region = get_pokemon_region(id) or None
 
-     pokemon_description = get_pokemon_description(id)  # await get_pokemon_info(data_species,name) or await find_pokemon_description(pokemon_name) or " "
+
+     pokemon_description = get_pokemon_description(id)
+     
      
      species_url = data['species']['url']
      species_data = requests.get(species_url).json()
      species_name = species_data['name']
-     # Fetch the Pokémon's characteristic
-     characteristic_id = id  # You can use the Pokémon's ID as the characteristic ID
-     characteristic_url = f'https://pokeapi.co/api/v2/characteristic/{characteristic_id}/'
-     characteristic_response = requests.get(characteristic_url)
-
-     if characteristic_response.status_code == 200:
-       characteristic_data = characteristic_response.json()
-       # Get the English description
-       for description in characteristic_data['descriptions']:
-                    if description['language']['name'] == 'en':
-                        characteristic_description = description['description']
-                        break
-                    else:
-                         characteristic_description = 'No English description available'
-
-     else:
-                characteristic_description = 'Characteristic data not found'
+   
         
      if type == "shiny":
       image_url = data['sprites']['other']['official-artwork']['front_shiny']
@@ -1184,17 +1155,6 @@ class Pokemon(commands.Cog):
      mot = ctx.guild.get_member(ctx.bot.user.id)
      # color = mot.color
     
-     # Define the function to get alternate names
-     def get_pokemon_alternate_names(data_species, pokemon_name):
-      try:
-       if data_species:
-        alternate_names = [(name['name'], name['language']['name']) for name in data_species['names']]
-        return alternate_names
-       else:
-        print(f"Error: Unable to retrieve data for {pokemon_name}")
-        return None
-      except KeyError:
-        return None  # or handle the missing key case accordingly
     
      def get_pokemon_species_data(name):
       response = requests.get(f'https://pokeapi.co/api/v2/pokemon-species/{name.lower()}')
@@ -1206,24 +1166,7 @@ class Pokemon(commands.Cog):
 
       
     
-     def get_pokemon_region(pokemon_id, file_path='Data/pokemon/pokemon_description.csv'):
-        try:
-            with open(file_path, mode='r', encoding='utf-8') as csv_file:
-                reader = csv.DictReader(csv_file)
-                for row in reader:
-                    if row['id'] == str(pokemon_id):
-                        return row['region']
-        except FileNotFoundError:
-            return None
-        except PermissionError:
-            return None
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return None
-        return None
-    
-     region = get_pokemon_region(id) or None
-
+     
      language_codes = ["ja", "ja", "ja", "en", "de", "fr"]
       # Define a mapping between language codes and flag emojis
      flag_mapping = {
@@ -1301,6 +1244,7 @@ class Pokemon(commands.Cog):
       return result
     
      p = organize_pokemon_names_by_region(name)
+        
      print(p)
      async def get_type_chart(max_retries=3):
       url = 'https://pokeapi.co/api/v2/type'
@@ -1375,19 +1319,7 @@ class Pokemon(commands.Cog):
     
      type_chart = await get_type_chart()
     
-     def get_pokemon_spawn_rate(pokemon_id):
-      url = f'https://pokeapi.co/api/v2/pokemon/{pokemon_id}/encounters'
-      response = requests.get(url)
 
-      if response.status_code == 200:
-        data = response.json()
-        return data
-      else:
-        print(f"Error: {response.status_code}")
-        return None
-    
-     spawn_data = get_pokemon_spawn_rate(id)
-    
      def get_pokemon_gender_ratio_display(data_species):
       try:
        # Extract gender data
