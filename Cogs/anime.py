@@ -216,7 +216,7 @@ class Anime(commands.Cog):
 
             image_url = self.get_image_url(anime['images'])
             if image_url:
-                embed.set_thumbnail(url=image_url)
+                embed.set_image(url=image_url)
 
             embed.add_field(
                 name=" ",
