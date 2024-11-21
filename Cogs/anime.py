@@ -59,7 +59,7 @@ class Anime(commands.Cog):
 
             view = self.AnimeView(anime_data, current_index, current_page)
             embed = await view.update_embed()
-            message = await ctx.reply(embed=embed, view=view)
+            message = await ctx.reply(embed=embed, view=view, mention_author=False)
 
         except aiohttp.ClientError as e:
             logging.error(f"An HTTP error occurred: {e}")
