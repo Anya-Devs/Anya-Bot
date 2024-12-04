@@ -72,7 +72,7 @@ class PokemonPredictor:
             dict(algorithm=6, table_number=9, key_size=9, multi_probe_level=1),
             dict(checks=10)
         )
-        self.executor = ThreadPoolExecutor(max_workers=3)  
+        self.executor = ThreadPoolExecutor(max_workers=3)
         self.cache = {}
         self.dataset_file = dataset_file
         self.dataset_folder = dataset_folder
@@ -93,16 +93,10 @@ class PokemonPredictor:
             asyncio.run(self.create_dataset())  # Precompute dataset if not available
         print(f"Dataset loading time: {time.time() - start_time:.2f} seconds")
 
-    def load_from_npy(self, dataset_file):
-        # Load cached dataset from npy file.
-        data = np.load(dataset_file, allow_pickle=True).item()
-        self.cache = data
-        print(f"Loaded dataset from {dataset_file}. Total images: {len(data)}")
-
-    async def create_dataset_files(self, dataset_folder):
+    async def create_dataset(self):
         # Create dataset files if they don't exist
-        print(f"Processing images from: {dataset_folder}")
-        await self.load_from_images(dataset_folder)  # Process images and descriptors
+        print(f"Processing images from: {self.dataset_folder}")
+        await self.load_from_images(self.dataset_folder)  # Process images and descriptors
 
     async def load_from_images(self, dataset_folder):
         # Process images in the dataset folder and save descriptors
@@ -110,18 +104,18 @@ class PokemonPredictor:
             filename for filename in os.listdir(dataset_folder)
             if os.path.isfile(os.path.join(dataset_folder, filename))
         ]
-        
+
         print(f"Processing {len(filenames)} images...")
 
+        # Use asyncio.gather to run all image processing concurrently
         tasks = [
             self.process_image(os.path.join(dataset_folder, filename), filename)
             for filename in filenames
         ]
-        
+
         # Use tqdm with asyncio.gather to display progress bar while processing
-        for _ in tqdm(await asyncio.gather(*tasks), total=len(tasks), desc="Processing images"):
-            pass
-        
+        results = await asyncio.gather(*tasks)
+
         # Check if cache has any descriptors before saving
         if self.cache:
             print(f"Saving dataset with {len(self.cache)} images to {self.dataset_file}")
@@ -133,25 +127,25 @@ class PokemonPredictor:
     async def process_image(self, path, filename):
         # Process each image to extract descriptors, including flipped versions
         start_time = time.time()
-        
+
         # Process original image
         img = await self.read_data(path)
         if img is not None:
             self._process_single_image(img, filename)
-        
+
         # Process flipped image
         flipped_img = cv.flip(img, 1) if img is not None else None
         if flipped_img is not None:
             flipped_filename = filename.replace(".png", "_flipped.png")
             self._process_single_image(flipped_img, flipped_filename)
-        
+
         print(f"Processed image {filename} in {time.time() - start_time:.2f} seconds")
 
     def _process_single_image(self, img, filename):
         # Helper function to process an individual image and store its descriptors
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         _, descriptors = self.orb.detectAndCompute(gray, None)
-        
+
         if descriptors is not None and len(descriptors) > 0:
             # Store descriptors in cache for the original or flipped image
             self.cache[filename] = {'descriptors': descriptors.astype(np.uint8)}
@@ -170,19 +164,6 @@ class PokemonPredictor:
             print(f"Error loading image {path}: {e}")
             return None
 
-    def evaluate_image_quality(self, image, evaluated_results=None):
-        #Evaluate sharpness of an image. Only calculate once
-        if evaluated_results and 'sharpness' in evaluated_results:
-            return evaluated_results['sharpness']
-        
-        start_time = time.time()
-        sharpness = cv.Laplacian(image, cv.CV_64F).var()
-        if evaluated_results is None:
-            evaluated_results = {}
-        evaluated_results['sharpness'] = sharpness
-        print(f"Sharpness evaluation time: {time.time() - start_time:.2f} seconds")
-        return sharpness
-
     async def cross_match(self, descriptors, image, k=2):
         # Optimized matching with reduced CPU load
         start_time = time.time()
@@ -193,10 +174,11 @@ class PokemonPredictor:
 
         # Filter images based on sharpness before matching
         potential_matches = [filename for filename, desA in self.cache.items() if self.is_potential_match(desA, descriptors)]
-        
+
         if not potential_matches:
             return None, 0
 
+        # Perform FLANN matching in parallel
         futures = {
             filename: self.executor.submit(self.flann.knnMatch, descriptors, self.cache[filename]['descriptors'], k)
             for filename in potential_matches
@@ -230,28 +212,28 @@ class PokemonPredictor:
         return sharpness > 0.2  # Basic filter for sharpness
 
     def evaluate_accuracy(self, matches, evaluated_results, image=None):
-     # Evaluate the accuracy of the matches based on sharpness.
-     start_time = time.time()
+        # Evaluate the accuracy of the matches based on sharpness.
+        start_time = time.time()
 
-     # Count good matches where the ratio is less than 0.75
-     good_matches = sum(1 for match in matches if len(match) >= 2 and match[0].distance < 0.65 * match[1].distance)
-    
-     # Retrieve sharpness value
-     sharpness = evaluated_results.get('sharpness', None)
-    
-     # If sharpness is not already evaluated, calculate it using the image
-     if sharpness is None and image is not None:
-        sharpness = self.evaluate_image_quality(image, evaluated_results)  # Ensure sharpness is calculated
-    
-     # Apply sharpness adjustment, defaulting to no adjustment if sharpness is None
-     quality_adjustment = 1 + (sharpness * 0.01) if sharpness is not None else 1
-    
-     # Calculate accuracy, ensuring it's capped at 100
-     accuracy = (good_matches / len(matches) * 100) * quality_adjustment if matches else 0
-     accuracy = min(accuracy, 100)  # Ensure accuracy doesn't exceed 100
+        # Count good matches where the ratio is less than 0.75
+        good_matches = sum(1 for match in matches if len(match) >= 2 and match[0].distance < 0.65 * match[1].distance)
 
-     print(f"Accuracy evaluation time: {time.time() - start_time:.2f} seconds")
-     return accuracy
+        # Retrieve sharpness value
+        sharpness = evaluated_results.get('sharpness', None)
+
+        # If sharpness is not already evaluated, calculate it using the image
+        if sharpness is None and image is not None:
+            sharpness = self.evaluate_image_quality(image, evaluated_results)  # Ensure sharpness is calculated
+
+        # Apply sharpness adjustment, defaulting to no adjustment if sharpness is None
+        quality_adjustment = 1 + (sharpness * 0.01) if sharpness is not None else 1
+
+        # Calculate accuracy, ensuring it's capped at 100
+        accuracy = (good_matches / len(matches) * 100) * quality_adjustment if matches else 0
+        accuracy = min(accuracy, 100)  # Ensure accuracy doesn't exceed 100
+
+        print(f"Accuracy evaluation time: {time.time() - start_time:.2f} seconds")
+        return accuracy
 
     async def predict_pokemon(self, img):
         # Predict Pokémon by comparing descriptors with precomputed dataset.
@@ -260,22 +242,15 @@ class PokemonPredictor:
         _, descriptors = self.orb.detectAndCompute(gray_img, None)
 
         if descriptors is None:
-            return "No descriptors found."
+            return "No descriptors found", time.time() - start_time
 
         best_match, accuracy = await self.cross_match(descriptors, img)
-
-        print(f"Prediction completed in {time.time() - start_time:.2f} seconds")
-
-        return best_match if accuracy > 0.5 else "No matching Pokémon found."
-
-
-        
-        
-        
-        
-        
-        
-        
+        elapsed_time = time.time() - start_time
+        if best_match:
+            predicted_name = best_match.replace(".png", "").replace("_flipped", "")
+            return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
+        else:
+            return "No match found", elapsed_time
         
         
         
