@@ -144,7 +144,7 @@ class PokemonPredictor:
         if descriptors is None:
             return "No descriptors found", time.time() - start_time
 
-        best_match, accuracy = await self.cross_match(descriptors, img)
+        best_match, accuracy =  self.cross_match(descriptors, img)
         elapsed_time = time.time() - start_time
         if best_match:
             predicted_name = best_match.replace(".png", "").replace("_flipped", "")
