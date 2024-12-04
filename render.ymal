@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: discord-bot
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python main.py"
+    envVars:
+      - key: TOKEN
+        value: ${TOKEN}
+      - key: Waifu_Token
+        value: ${Waifu_Token}
+    branch: main
+    repo: https://github.com/cringe-neko-girl/Waifu.it-Showcase.git
+    pullRequestPreviews: false
+    autoDeploy: true
+    restartPolicy: always
+    port: 8080  # Add a port for the web service
