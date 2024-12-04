@@ -730,7 +730,14 @@ class Information_Embed:
             f"-# **Created**: {formatted_created_timestamp}\n"
             f"-# **Joined**: {formatted_joined_timestamp}\n\n"
             f"-# **Roles**: \n"
-            f"{''.join([f'- {role.mention} (admin)\n' if role.permissions.administrator else f'- {role.mention} (moderator)\n' if role.permissions.kick_members or role.permissions.ban_members else f'- {role.mention} (baby moderator)\n' if role.permissions.manage_messages else f'- {role.mention}\n' for role in sorted(member.roles, key=lambda r: (r.permissions.administrator, r.permissions.kick_members or r.permissions.ban_members, r.permissions.manage_messages), reverse=True) if role.name != '@everyone']) or 'No roles'}"
+            f"{''.join([f'- {role.mention} (admin)\n' if role.permissions.administrator 
+                else f'- {role.mention} (moderator)\n' if role.permissions.kick_members or role.permissions.ban_members 
+                else f'- {role.mention} (baby moderator)\n' if role.permissions.manage_messages 
+                else f'- {role.mention}\n' 
+                for role in sorted(member.roles, key=lambda r: (r.permissions.administrator, 
+                                                                r.permissions.kick_members or r.permissions.ban_members, 
+                                                                r.permissions.manage_messages), reverse=True) 
+                if role.name != '@everyone']) or 'No roles'}"
         )
 
 
