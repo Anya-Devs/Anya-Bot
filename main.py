@@ -4,6 +4,8 @@ import subprocess
 import traceback
 import asyncio
 import requests
+from aiohttp import web
+
 
 # Install dependencies if not present
 os.system('pip install --upgrade pip')
