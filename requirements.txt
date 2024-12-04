@@ -20,3 +20,4 @@ scipy
 tqdm
 graphviz
 aiofiles
+python-dotenv
