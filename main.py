@@ -60,21 +60,29 @@ class BotSetup(commands.AutoShardedBot):
             print(Fore.GREEN + f"Registered Member: {member.name}#{member.discriminator}" + Style.RESET_ALL)
 
     async def start_bot(self):
-        await self.setup()
-        token = os.getenv('TOKEN')
+     await self.setup()
+     token = os.getenv('TOKEN')
 
-        if not token:
-            logger.error("No token found. Please set the TOKEN environment variable.")
-            return
+     if not token:
+        logger.error("No token found. Please set the TOKEN environment variable.")
+        return
 
-        try:
-            await self.start(token)
-        except KeyboardInterrupt:
-            await self.close()
-        except Exception as e:
-            traceback_string = traceback.format_exc()
-            logger.error(f"An error occurred while logging in: {e}\n{traceback_string}")
-            await self.close()
+     try:
+        await self.start(token)
+     except KeyboardInterrupt:
+        await self.close()
+     except Exception as e:
+        traceback_string = traceback.format_exc()
+        logger.error(f"An error occurred while logging in: {e}\n{traceback_string}")
+        await self.close()
+     finally:
+        # Ensure proper bot cleanup even on error
+        if self.is_closed():
+            print("Bot is closed, cleaning up.")
+        else:
+            print("Bot is still running.")
+        await self.close()
+
 
     async def setup(self):
         print("\n")
