@@ -1,3 +1,4 @@
+version: 1
 services:
   - type: web
     name: discord-bot
@@ -7,9 +8,11 @@ services:
     envVars:
       - key: TOKEN
         value: ${TOKEN}
+      - key: PORT
+        value: "8080"  # Add the port to environment variables
     branch: main
     repo: https://github.com/Anya-Devs/Anya-Bot.git
     pullRequestPreviews: false
     autoDeploy: true
     restartPolicy: always
-    port: 8080  # Add a port for the web service
+    port: 8080  # Port is explicitly set here for Render
