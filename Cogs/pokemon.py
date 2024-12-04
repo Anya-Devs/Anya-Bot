@@ -72,186 +72,81 @@ class PokemonPredictor:
             dict(algorithm=6, table_number=9, key_size=9, multi_probe_level=1),
             dict(checks=10)
         )
-        self.executor = ThreadPoolExecutor(max_workers=3)
-        self.cache = {}
         self.dataset_file = dataset_file
         self.dataset_folder = dataset_folder
+        self.cache = {}
+
+        # Load or create the dataset on initialization
         self.load_dataset()
 
-    async def initialize(self):
-        # Asynchronous initialization to load the dataset images
-        await self.load_dataset(self.dataset_folder)
-
     def load_dataset(self):
-        # Load precomputed dataset from file if it exists.
-        start_time = time.time()
         if os.path.exists(self.dataset_file):
             self.cache = np.load(self.dataset_file, allow_pickle=True).item()
             print(f"Dataset loaded with {len(self.cache)} images.")
         else:
-            print(f"Dataset not found. Precomputing dataset now...")
-            asyncio.run(self.create_dataset())  # Precompute dataset if not available
-        print(f"Dataset loading time: {time.time() - start_time:.2f} seconds")
+            print("Dataset not found, creating a new one...")
+            self.create_dataset()
 
-    async def create_dataset(self):
-        # Create dataset files if they don't exist
-        print(f"Processing images from: {self.dataset_folder}")
-        await self.load_from_images(self.dataset_folder)  # Process images and descriptors
-
-    async def load_from_images(self, dataset_folder):
-        # Process images in the dataset folder and save descriptors
-        filenames = [
-            filename for filename in os.listdir(dataset_folder)
-            if os.path.isfile(os.path.join(dataset_folder, filename))
-        ]
-
-        print(f"Processing {len(filenames)} images...")
-
-        # Use asyncio.gather to run all image processing concurrently
-        tasks = [
-            self.process_image(os.path.join(dataset_folder, filename), filename)
-            for filename in filenames
-        ]
-
-        # Use tqdm with asyncio.gather to display progress bar while processing
-        results = await asyncio.gather(*tasks)
-
-        # Check if cache has any descriptors before saving
+    def create_dataset(self):
+        for filename in os.listdir(self.dataset_folder):
+            if filename.endswith(".png"):
+                path = os.path.join(self.dataset_folder, filename)
+                self.process_image(path, filename)
+        
+        # Save the created dataset
         if self.cache:
-            print(f"Saving dataset with {len(self.cache)} images to {self.dataset_file}")
             np.save(self.dataset_file, self.cache)
-            print(f"Dataset saved to {self.dataset_file}")
-        else:
-            print("No descriptors found, nothing to save.")
+            print(f"Dataset saved with {len(self.cache)} images.")
 
-    async def process_image(self, path, filename):
-        # Process each image to extract descriptors, including flipped versions
-        start_time = time.time()
-
-        # Process original image
-        img = await self.read_data(path)
-        if img is not None:
-            self._process_single_image(img, filename)
-
-        # Process flipped image
-        flipped_img = cv.flip(img, 1) if img is not None else None
-        if flipped_img is not None:
-            flipped_filename = filename.replace(".png", "_flipped.png")
-            self._process_single_image(flipped_img, flipped_filename)
-
-        print(f"Processed image {filename} in {time.time() - start_time:.2f} seconds")
-
-    def _process_single_image(self, img, filename):
-        # Helper function to process an individual image and store its descriptors
+    def process_image(self, path, filename):
+        img = cv.imread(path)
+        if img is None:
+            return
+        
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         _, descriptors = self.orb.detectAndCompute(gray, None)
-
+        
         if descriptors is not None and len(descriptors) > 0:
-            # Store descriptors in cache for the original or flipped image
             self.cache[filename] = {'descriptors': descriptors.astype(np.uint8)}
-            print(f"Processed image {filename} with {len(descriptors)} descriptors.")
-        else:
-            print(f"No descriptors found for {filename}.")
 
-    async def read_data(self, path):
-        # Read image data for processing
-        try:
-            img = cv.imread(path)
-            if img is None:
-                print(f"Failed to read image at {path}")
-            return img
-        except Exception as e:
-            print(f"Error loading image {path}: {e}")
-            return None
+    def evaluate_image_quality(self, image):
+        # Simple sharpness evaluation using Laplacian variance
+        sharpness = cv.Laplacian(image, cv.CV_64F).var()
+        return sharpness
 
-    async def cross_match(self, descriptors, image, k=2):
-        # Optimized matching with reduced CPU load
-        start_time = time.time()
+    def cross_match(self, descriptors, image, k=2):
+        sharpness = self.evaluate_image_quality(image)
 
-        # Precompute sharpness once and reuse it
-        evaluated_results = {}
-        sharpness = self.evaluate_image_quality(image, evaluated_results)
-
-        # Filter images based on sharpness before matching
-        potential_matches = [filename for filename, desA in self.cache.items() if self.is_potential_match(desA, descriptors)]
-
-        if not potential_matches:
+        # Only consider sharp images for matching
+        if sharpness < 0.2:
             return None, 0
-
-        # Perform FLANN matching in parallel
-        futures = {
-            filename: self.executor.submit(self.flann.knnMatch, descriptors, self.cache[filename]['descriptors'], k)
-            for filename in potential_matches
-        }
-
-        # Collect results with timeout and handle potential blocking
-        results = {}
-        for filename, future in futures.items():
-            try:
-                print(f"Waiting for result from future for {filename}...")
-                matches = future.result(timeout=5)  # Timeout after 5 seconds
-                results[filename] = matches
-                print(f"Received result for {filename}.")
-            except TimeoutError:
-                print(f"Timeout reached for {filename}.")
-                continue  # Skip this match if it times out
-
-        # Evaluate matches and select the best match
+        
         best_match, max_accuracy = None, 0
-        for filename, matches in results.items():
-            accuracy = self.evaluate_accuracy(matches, evaluated_results)
+        for filename, data in self.cache.items():
+            matches = self.flann.knnMatch(descriptors, data['descriptors'], k)
+            accuracy = self.evaluate_accuracy(matches)
             if accuracy > max_accuracy:
                 best_match, max_accuracy = filename, accuracy
 
-        print(f"Cross-match evaluation time: {time.time() - start_time:.2f} seconds")
-        return (best_match, max_accuracy) if max_accuracy >= 0.001 else (None, 0)
+        return best_match, max_accuracy
 
-    def is_potential_match(self, desA, descriptors):
-        # Pre-filter images based on sharpness to improve performance
-        sharpness = self.evaluate_image_quality(descriptors)
-        return sharpness > 0.2  # Basic filter for sharpness
-
-    def evaluate_accuracy(self, matches, evaluated_results, image=None):
-        # Evaluate the accuracy of the matches based on sharpness.
-        start_time = time.time()
-
-        # Count good matches where the ratio is less than 0.75
-        good_matches = sum(1 for match in matches if len(match) >= 2 and match[0].distance < 0.65 * match[1].distance)
-
-        # Retrieve sharpness value
-        sharpness = evaluated_results.get('sharpness', None)
-
-        # If sharpness is not already evaluated, calculate it using the image
-        if sharpness is None and image is not None:
-            sharpness = self.evaluate_image_quality(image, evaluated_results)  # Ensure sharpness is calculated
-
-        # Apply sharpness adjustment, defaulting to no adjustment if sharpness is None
-        quality_adjustment = 1 + (sharpness * 0.01) if sharpness is not None else 1
-
-        # Calculate accuracy, ensuring it's capped at 100
-        accuracy = (good_matches / len(matches) * 100) * quality_adjustment if matches else 0
-        accuracy = min(accuracy, 100)  # Ensure accuracy doesn't exceed 100
-
-        print(f"Accuracy evaluation time: {time.time() - start_time:.2f} seconds")
+    def evaluate_accuracy(self, matches):
+        good_matches = sum(1 for match in matches if len(match) >= 2 and match[0].distance < 0.75 * match[1].distance)
+        accuracy = (good_matches / len(matches)) * 100 if matches else 0
         return accuracy
 
-    async def predict_pokemon(self, img):
-        # Predict Pokémon by comparing descriptors with precomputed dataset.
-        start_time = time.time()
+    def predict_pokemon(self, img):
         gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         _, descriptors = self.orb.detectAndCompute(gray_img, None)
 
         if descriptors is None:
-            return "No descriptors found", time.time() - start_time
+            return "No descriptors found"
 
-        best_match, accuracy = await self.cross_match(descriptors, img)
-        elapsed_time = time.time() - start_time
+        best_match, accuracy = self.cross_match(descriptors, img)
         if best_match:
-            predicted_name = best_match.replace(".png", "").replace("_flipped", "")
-            return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
+            return f"{best_match.replace('.png', '')}: {round(accuracy, 2)}%"
         else:
-            return "No match found", elapsed_time
-        
+            return "No match found"
         
         
         
