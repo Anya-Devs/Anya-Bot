@@ -3,7 +3,7 @@ services:
   - type: web
     name: discord-bot
     env: python
-    buildCommand: "pip install -r requirements.txt"
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt && pip install numpy"
     startCommand: "python main.py"
     envVars:
       - key: TOKEN
