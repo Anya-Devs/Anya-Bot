@@ -135,7 +135,7 @@ class PokemonPredictor:
         accuracy = (good_matches / len(matches)) * 100 if matches else 0
         return accuracy
 
-     async def predict_pokemon(self, img):
+    async def predict_pokemon(self, img):
         # Predict Pokémon by comparing descriptors with precomputed dataset.
         start_time = time.time()
         gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
