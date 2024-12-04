@@ -1396,9 +1396,7 @@ class Pokemon(commands.Cog):
             gender_differ = False
      else:
         gender_differ = False
-        
-     spawn_data = get_pokemon_spawn_rate(id)
-     
+
     
      # embed.add_field(name='', value=f"```Type: {formatted_types}```",inline=False)
      base_stats = formatted_base_stats
