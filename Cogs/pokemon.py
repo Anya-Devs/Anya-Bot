@@ -50,7 +50,7 @@ from sklearn.cluster import KMeans
 from Imports.discord_imports import *
 from discord.ext import tasks
 from Imports.log_imports import logger
-from Data.const import error_custom_embed, sdxl, primary_color
+from Data.const import error_custom_embed, primary_color
 
 
 # Configure logging
