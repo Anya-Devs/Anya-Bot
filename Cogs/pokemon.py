@@ -78,7 +78,6 @@ class PokemonPredictor:
         self.dataset_folder = dataset_folder
         self.load_dataset()
 
-
     async def initialize(self):
         # Asynchronous initialization to load the dataset images
         await self.load_dataset(self.dataset_folder)
@@ -93,7 +92,6 @@ class PokemonPredictor:
             print(f"Dataset not found. Precomputing dataset now...")
             asyncio.run(self.create_dataset())  # Precompute dataset if not available
         print(f"Dataset loading time: {time.time() - start_time:.2f} seconds")
-
 
     def load_from_npy(self, dataset_file):
         # Load cached dataset from npy file.
@@ -262,15 +260,15 @@ class PokemonPredictor:
         _, descriptors = self.orb.detectAndCompute(gray_img, None)
 
         if descriptors is None:
-            return "No descriptors found", time.time() - start_time
+            return "No descriptors found."
 
         best_match, accuracy = await self.cross_match(descriptors, img)
-        elapsed_time = time.time() - start_time
-        if best_match:
-            predicted_name = best_match.replace(".png", "").replace("_flipped", "")
-            return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
-        else:
-            return "No match found", elapsed_time
+
+        print(f"Prediction completed in {time.time() - start_time:.2f} seconds")
+
+        return best_match if accuracy > 0.5 else "No matching Pokémon found."
+
+
         
         
         
