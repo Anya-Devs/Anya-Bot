@@ -34,7 +34,7 @@ class BotSetup(commands.AutoShardedBot):
         super().__init__(command_prefix=commands.when_mentioned_or('...'), 
                          intents=intents, 
                          help_command=None, 
-                         shard_count=3)
+                         shard_count=3, shard_reconnect_interval=10)
         self.mongoConnect = None  # Initialize the MongoDB connection attribute
         self.all_members = {}  # Store member data here
 
