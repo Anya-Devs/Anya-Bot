@@ -154,7 +154,7 @@ async def start_http_server():
         app.router.add_get('/', lambda request: web.Response(text="Bot is running"))
         runner = web.AppRunner(app)
         await runner.setup()
-        port = int(os.getenv("PORT", 8080))  # Adapt for Render's PORT environment variable
+        port = int(os.getenv("PORT", 8080))  # Use PORT from environment variable
         site = web.TCPSite(runner, '0.0.0.0', port)
         await site.start()
         print(f"HTTP server started on port {port}")
