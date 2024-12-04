@@ -6,7 +6,7 @@ import asyncio
 import requests
 
 # Install dependencies if not present
-os.system('pip install joblib')
+os.system('pip install --upgrade pip')
 
 from Imports.depend_imports import *
 import Imports.depend_imports as depend_imports
