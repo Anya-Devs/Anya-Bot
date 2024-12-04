@@ -11,11 +11,11 @@
     },
     "Anime": {
         "anime": "Get information about an anime.",
-        "character": "Description to fill out"
+        "character": " "
     },
     "System": {
         "ping": "Check the bot's response time.",
-        "credit": "Description to fill out"
+        "credit": " "
     },
     "Pokemon": {
         "predict": "Predict Pok\u00e9mon details.",
@@ -25,7 +25,7 @@
         "about": "Get details about users or bot."
     },
     "PokemonBot": {
-        "predict": "Description to fill out"
+        "predict": " "
     },
     "Quest_Data": {},
     "Quest_Slash": {},
