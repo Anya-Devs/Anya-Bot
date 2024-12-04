@@ -509,10 +509,12 @@ class Quest_Completed_Embed:
         
         embed.add_field(name=f'Reward ', value=f'{reward_emoji} {reward_text}', inline=True)
         embed.add_field(name=f'Stella Points:', value=f'{balance:,}', inline=True)
+        
 
         
         # Set thumbnail image
         embed.set_thumbnail(url=user.avatar)
+        embed.set_footer(text=f"Congrats, you've completed quest {quest_id}!")
         return embed
     
     
@@ -653,7 +655,7 @@ class Information_Embed:
             created_timestamp = int(bot_user.created_at.timestamp())
             created_relative = timestamp_gen(created_timestamp)
 
-            owner = bot.get_user(1030285330739363880)
+            owner_1 = bot.get_user(1124389055598170182)
             about = discord.Embed(
                 title="Bot Information",
                 description= (
@@ -667,14 +669,14 @@ class Information_Embed:
                     f"❤️ Internal:\n"
                     f"- **CPU**: {cpu_text}\n- **RAM**: {ram_text}\n\n"
                     f":clock: Creation:\n"
-                    f"- **Developer**: {owner}\n- **When?**: {created_relative}\n\n"
+                    f"- **Developer**: {owner_1}\n- **When?**: {created_relative}\n\n"
                     "-# [Support server](https://discord.gg/5p5b7A7WRH)\n"
                     "-# [Invite bot](https://discord.com/oauth2/authorize?client_id=1234247716243112100&permissions=27482422508608&scope=bot)\n\n"
                 ),
                 timestamp=datetime.now(),
                 color=primary_color()
             )
-            about.set_thumbnail(url=owner.avatar)
+            about.set_thumbnail(url=owner_1.avatar)
             banner_url = await Information_Embed.get_user_banner_url(bot, bot.user)
             about.set_image(url=banner_url)
             
@@ -923,5 +925,15 @@ async def error_custom_embed(bot, ctx, e, title="Custom Error", thumbnail_url=An
         elif isinstance(ctx, discord.Interaction):
             await ctx.response.send_message(error_message)
 
-    
- 
+            
+            
+            
+            
+            
+            
+            
+            
+
+def timestamp_gen(timestamp: int) -> str:
+           dt = datetime.utcfromtimestamp(timestamp).replace(tzinfo=timezone.utc)
+           return f'<t:{int(dt.timestamp())}:R>'
