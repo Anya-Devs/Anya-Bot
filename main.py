@@ -149,6 +149,17 @@ async def main():
     finally:
         await bot.close()
 
+# Create a simple HTTP server to bind to a port
+async def start_http_server():
+    app = web.Application()
+    app.router.add_get('/', lambda request: web.Response(text="Bot is running"))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.getenv("PORT", 8080))  # Adapt for Render's PORT environment variable
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    loop = asyncio.get_event_loop()
+    loop.create_task(start_http_server())  # Start the HTTP server
+    loop.run_until_complete(main())  # Run the bot
