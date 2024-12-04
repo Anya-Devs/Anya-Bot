@@ -135,24 +135,27 @@ class PokemonPredictor:
         accuracy = (good_matches / len(matches)) * 100 if matches else 0
         return accuracy
 
-    async def predict_pokemon(self, img):
+     async def predict_pokemon(self, img):
+        # Predict Pokémon by comparing descriptors with precomputed dataset.
         start_time = time.time()
-
         gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         _, descriptors = self.orb.detectAndCompute(gray_img, None)
 
         if descriptors is None:
-            return "No descriptors found", time.time() - start_time, None
+            return "No descriptors found", time.time() - start_time
 
         best_match, accuracy = await self.cross_match(descriptors, img)
-        time_taken = time.time() - start_time
-
+        elapsed_time = time.time() - start_time
         if best_match:
-            predicted_name = best_match.replace('.png', '')
-            print(f"{predicted_name}: {round(accuracy, 2)}%")
-            return f"{predicted_name}: {round(accuracy, 2)}%", time_taken, predicted_name
+            predicted_name = best_match.replace(".png", "").replace("_flipped", "")
+            return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
         else:
-            return "No match found", time_taken, None
+            return "No match found", elapsed_time
+        
+        
+        
+        
+        
         
         
         
