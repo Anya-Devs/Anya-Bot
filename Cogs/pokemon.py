@@ -136,17 +136,22 @@ class PokemonPredictor:
         return accuracy
 
     def predict_pokemon(self, img):
+        start_time = time.time()
+
         gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         _, descriptors = self.orb.detectAndCompute(gray_img, None)
 
         if descriptors is None:
-            return "No descriptors found"
+            return "No descriptors found", time.time() - start_time, None
 
         best_match, accuracy = self.cross_match(descriptors, img)
+        time_taken = time.time() - start_time
+
         if best_match:
-            return f"{best_match.replace('.png', '')}: {round(accuracy, 2)}%"
+            predicted_name = best_match.replace('.png', '')
+            return f"{predicted_name}: {round(accuracy, 2)}%", time_taken, predicted_name
         else:
-            return "No match found"
+            return "No match found", time_taken, None
         
         
         
