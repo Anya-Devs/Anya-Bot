@@ -126,9 +126,6 @@ async def check_rate_limit():
         logger.error(f"Failed to check rate limit. Status code: {response.status_code}")
 
 async def main():
-    #predictor = PokemonPredictor()
-    #await predictor.initialize()  # Initialize the predictor asynchronously
-
     bot = BotSetup()
 
     try:
@@ -151,13 +148,19 @@ async def main():
 
 # Create a simple HTTP server to bind to a port
 async def start_http_server():
-    app = web.Application()
-    app.router.add_get('/', lambda request: web.Response(text="Bot is running"))
-    runner = web.AppRunner(app)
-    await runner.setup()
-    port = int(os.getenv("PORT", 8080))  # Adapt for Render's PORT environment variable
-    site = web.TCPSite(runner, '0.0.0.0', port)
-    await site.start()
+    try:
+        from aiohttp import web
+        app = web.Application()
+        app.router.add_get('/', lambda request: web.Response(text="Bot is running"))
+        runner = web.AppRunner(app)
+        await runner.setup()
+        port = int(os.getenv("PORT", 8080))  # Adapt for Render's PORT environment variable
+        site = web.TCPSite(runner, '0.0.0.0', port)
+        await site.start()
+        print(f"HTTP server started on port {port}")
+    except Exception as e:
+        logger.error(f"Failed to start HTTP server: {e}")
+        print("Failed to start HTTP server.")
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
