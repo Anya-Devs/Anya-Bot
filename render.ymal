@@ -10,7 +10,7 @@ services:
       - key: Waifu_Token
         value: ${Waifu_Token}
     branch: main
-    repo: https://github.com/cringe-neko-girl/Waifu.it-Showcase.git
+    repo: https://github.com/Anya-Devs/Anya-Bot.git
     pullRequestPreviews: false
     autoDeploy: true
     restartPolicy: always
