@@ -69,7 +69,7 @@ class Select(discord.ui.Select):
                 cog_commands = [cmd for cmd in cog.get_commands() if not cmd.hidden]
                 for cmd in cog_commands:
                     if cmd.name not in mapping[cog_name]:
-                        mapping[cog_name][cmd.name] = "Description to fill out"
+                        mapping[cog_name][cmd.name] = "---------"
         self._save_command_mapping(mapping)
 
     async def callback(self, interaction: discord.Interaction):
@@ -127,7 +127,7 @@ class Select(discord.ui.Select):
                             for param in cmd.clean_params.values()
                         ]
                         args_str = " ".join(cmd_args)
-                        command_info = f"`...{cmd.name}`  {command_mapping.get(cmd.name, 'No description available')}"
+                        command_info = f"`{cmd.name}`  {command_mapping.get(cmd.name, 'No description available')}"
                         
                         self.cog_embed2.add_field(
                             name='',
@@ -189,7 +189,7 @@ class Options_ImageGenerator:
         self.cog_name = cog_name
         self.header_text = f"{cog_name.replace('_', ' ')}"
         self.description_text = self._wrap_text(
-            f"{Help_Select_Embed_Mapping.embeds[cog_name.lower()]['description'] or 'No description available.'}", 
+            f"{Help_Select_Embed_Mapping.embeds[cog_name.lower()]['description'] or '...'}", 
             max_width=500
         )
 
@@ -520,7 +520,7 @@ class Help(commands.Cog):
                 cog_commands = [cmd for cmd in cog.get_commands() if not cmd.hidden]
                 for cmd in cog_commands:
                     if cmd.name not in mapping[cog_name]:
-                        mapping[cog_name][cmd.name] = "Description to fill out"
+                        mapping[cog_name][cmd.name] = " "
         self._save_command_mapping(mapping)
 
     def format_cog_commands(self, cog_name, cog_commands, command_mapping):
@@ -616,7 +616,6 @@ class Help(commands.Cog):
                     options = HelpMenu(self.bot, primary_color_value, select_view)
 
                     help_embed.set_image(url='attachment://image.png')
-                    help_embed.set_footer(text=f'Requested by {ctx.author}', icon_url=ctx.author.avatar)
                     await ctx.send(embed=help_embed, file=discord.File(file, 'image.png'), view=options, reference=ctx.message, allowed_mentions=discord.AllowedMentions.none())
 
                 # Ensure file cleanup if necessary
