@@ -723,22 +723,16 @@ class Information_Embed:
             if owner_id:
                 bot_owner_mention = f'\n-# **Bot Owner**: <@{bot.owner_id}>'
 
-        description = (
-            f"-# **User**: {member}\n"
-            f"-# **Nick**: {member.nick if member.nick else 'No nickname'}\n\n"
-            f"-# **Status**: {member.status}\n"
-            f"-# **Created**: {formatted_created_timestamp}\n"
-            f"-# **Joined**: {formatted_joined_timestamp}\n\n"
-            f"-# **Roles**: \n"
-            f"{''.join([f'- {role.mention} (admin)\n' if role.permissions.administrator 
-                else f'- {role.mention} (moderator)\n' if role.permissions.kick_members or role.permissions.ban_members 
-                else f'- {role.mention} (baby moderator)\n' if role.permissions.manage_messages 
-                else f'- {role.mention}\n' 
-                for role in sorted(member.roles, key=lambda r: (r.permissions.administrator, 
-                                                                r.permissions.kick_members or r.permissions.ban_members, 
-                                                                r.permissions.manage_messages), reverse=True) 
-                if role.name != '@everyone']) or 'No roles'}"
-        )
+        description = "-# **User**: {}\n-# **Nick**: {}\n\n-# **Status**: {}\n-# **Created**: {}\n-# **Joined**: {}\n\n-# **Roles**: \n{}".format(
+    member, member.nick or 'No nickname', member.status, formatted_created_timestamp, formatted_joined_timestamp,
+    ''.join([f'- {role.mention} (admin)\n' if role.permissions.administrator 
+             else f'- {role.mention} (moderator)\n' if role.permissions.kick_members or role.permissions.ban_members
+             else f'- {role.mention} (baby moderator)\n' if role.permissions.manage_messages
+             else f'- {role.mention}\n' for role in sorted(member.roles, key=lambda r: (r.permissions.administrator, 
+                                                                                      r.permissions.kick_members or r.permissions.ban_members, 
+                                                                                      r.permissions.manage_messages), reverse=True) 
+             if role.name != '@everyone']) or 'No roles'
+)
 
 
         
@@ -764,20 +758,18 @@ class Information_Embed:
     
     @staticmethod
     async def get_bot_owner_id(bot, bot_id):
-        # Fetch bot user information
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f'https://discord.com/api/v10/users/{bot_id}', headers={
-                'Authorization': f'Bot {os.getenv('TOKEN')}'
-            }) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    print(data)
-                    # The owner ID is stored in the 'id' field
-                    return data.get('id')
-                else:
-                    print(f"Failed to fetch bot owner. Status code: {response.status}")
-                    return None
-
+     # Fetch bot user information
+     async with aiohttp.ClientSession() as session:
+        async with session.get(f'https://discord.com/api/v10/users/{bot_id}', headers={
+            'Authorization': f"Bot {os.getenv('TOKEN')}"}) as response:
+            if response.status == 200:
+                data = await response.json()
+                print(data)
+                # The owner ID is stored in the 'id' field
+                return data.get('id')
+            else:
+                print(f"Failed to fetch bot owner. Status code: {response.status}")
+                return None
     @staticmethod
     async def get_guild_embed(guild):
         embed = discord.Embed(
