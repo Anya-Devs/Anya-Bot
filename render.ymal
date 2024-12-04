@@ -7,8 +7,6 @@ services:
     envVars:
       - key: TOKEN
         value: ${TOKEN}
-      - key: Waifu_Token
-        value: ${Waifu_Token}
     branch: main
     repo: https://github.com/Anya-Devs/Anya-Bot.git
     pullRequestPreviews: false
