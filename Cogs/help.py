@@ -127,7 +127,7 @@ class Select(discord.ui.Select):
                             for param in cmd.clean_params.values()
                         ]
                         args_str = " ".join(cmd_args)
-                        command_info = f"`{cmd.name}`  {command_mapping.get(cmd.name, 'No description available')}"
+                        command_info = f"`{cmd.name}`"  #{command_mapping.get(cmd.name, 'No description available')}"
                         
                         self.cog_embed2.add_field(
                             name='',
