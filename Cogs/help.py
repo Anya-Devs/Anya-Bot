@@ -84,8 +84,7 @@ class Select(discord.ui.Select):
             cog_info = self.cog_commands.get(cog_name)
             color = self.primary_color
             emoji = Help_Select_Embed_Mapping.emojis.get(cog_name.lower())
-            
- 
+
             # Create the embeds
             self.cog_embed1 = discord.Embed(
                 title=f'Category - {emoji} {cog_name.replace("_", " ")}',
@@ -104,11 +103,13 @@ class Select(discord.ui.Select):
                 file_path = 'Data/commands/help/set_image/ai.png'
                 if os.path.exists(file_path):
                     file = discord.File(file_path, filename='thumbnail.png')
-                    self.cog_embed2.set_thumbnail(url='attachment://thumbnail.png') #'attachment://thumbnail.png'
+                    self.cog_embed2.set_thumbnail(url='attachment://thumbnail.png')
                 else:
                     logger.error(f"Thumbnail file '{file_path}' not found.")
             else:
-                 self.cog_embed2.set_thumbnail(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["thumbnail_url"])
+                self.cog_embed2.set_thumbnail(
+                    url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["thumbnail_url"]
+                )
 
             # Attach the generated image
             if os.path.exists(image_path):
@@ -116,6 +117,7 @@ class Select(discord.ui.Select):
                     file = discord.File(f, filename='cog_image.png')
                 self.cog_embed2.set_image(url='attachment://cog_image.png')
 
+            # Add commands to the embed
             cog = self.bot.get_cog(cog_name)
             if cog:
                 cog_commands = [cmd for cmd in cog.get_commands() if not cmd.hidden]
@@ -126,11 +128,11 @@ class Select(discord.ui.Select):
                             f"[{param.name}]" if param.default is not param.empty else f"<{param.name}>"
                             for param in cmd.clean_params.values()
                         ]
-                        args_str = " ".join(cmd_args)
-                        command_info = f"`{cmd.name}`"  #{command_mapping.get(cmd.name, 'No description available')}"
-                        
+                        args_str = " ".join(cmd_args)  # Command arguments
+                        command_info = f"`{cmd.name}`\t{args_str}"  # Command with arguments
+
                         self.cog_embed2.add_field(
-                            name='',
+                            name="",
                             value=command_info,
                             inline=False
                         )
@@ -139,6 +141,7 @@ class Select(discord.ui.Select):
             else:
                 logger.info(f"Cog not found: {cog_name}")
 
+            # Send or update the interaction message
             if file:
                 await interaction.response.edit_message(embed=self.cog_embed2, attachments=[file])
             else:
