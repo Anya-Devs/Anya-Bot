@@ -222,7 +222,7 @@ class Quest_View(View):
         
         reward_emoji_id = 1247800150479339581
         reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
-        instructions_emoji = 📋
+        instructions_emoji = '📋'
 
         # Construct the channel link based on whether it's the current channel
         if channel:
