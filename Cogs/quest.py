@@ -82,15 +82,24 @@ class Quest(commands.Cog):
             if quests:
                 view = Quest_View(self.bot, quests, ctx)
                 embeds = await view.generate_messages()
+                # Initialize the ImageGenerator class
+                image_generator = ImageGenerator(self.ctx, text='Here are the quests you need to complete. Each quest has a specific objective, progress, and reward. Click on the location link to navigate to the respective channel where the quest can be completed.')  # Pass the quest message as text to the image generator
+                # Generate the image
+                img = image_generator.create_image()
+                # Save the image as a BytesIO object to send as an embed
+                img_bytes = BytesIO()
+                img.save(img_bytes, format='PNG')
+                img_bytes.seek(0)  # Reset the pointer to the start of the BytesIO object
+
 
                 # Send initial embed and view
                 if embeds:
                     if len(quests) > 3:
                         # Multiple pages if there are more quests than fit on one page
-                        await ctx.reply(embed=embeds, view=view, mention_author=False)
+                        await ctx.reply(embed=embeds, view=view, mention_author=False,  file=discord.File(img_bytes, "Data/Images/generated_image.png"))
                     else:
                         # Single embed if the number of quests fits on one page
-                        await ctx.reply(embed=embeds, mention_author=False)
+                        await ctx.reply(embed=embeds, mention_author=False,  file=discord.File(img_bytes, "Data/Images/generated_image.png"))
 
             else:
                 no_quest_message = "You have no quests."
@@ -112,7 +121,7 @@ class Quest(commands.Cog):
             
         try:
             if method == "add":
-                if ctx.author.id == 1030285330739363880:
+                if ctx.author.id in [1030285330739363880, 1124389055598170182] :
                     await self.quest_data.add_balance(str(member.id), guild_id, amount)
                     amount_with_commas = "{:,}".format(amount)
                     await ctx.send(f":white_check_mark: Successfully added {amount_with_commas} balance to {member.display_name}'s account.")
@@ -181,12 +190,11 @@ class Quest_View(View):
      quests_to_display = self.filtered_quests[start_index:end_index]
 
      # Create a single embed for the current page
+     
      embed = discord.Embed(
-        title="Quests", 
-        description="Here are the quests you need to complete. Each quest has a specific objective, progress, and reward. Click on the location link to navigate to the respective channel where the quest can be completed.", 
         color=primary_color()
      )
-    
+     embed.set_author(name=f"{self.ctx.author.display_name}'s quests", icon_url=self.ctx.author.avatar)
      for quest in quests_to_display:
         quest_id = quest['quest_id']
         progress = quest['progress']
@@ -201,7 +209,7 @@ class Quest_View(View):
 
         # Generate instructions based on method
         if method == 'message':
-            instruction = f"Send: {content}"
+            instruction = f"Send: {content.replace('\n',' ')}"
         elif method == 'emoji':
             instruction = f"Send emoji: {content}"
         elif method == 'reaction':
@@ -214,6 +222,7 @@ class Quest_View(View):
         
         reward_emoji_id = 1247800150479339581
         reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
+        instructions_emoji = 📋
 
         # Construct the channel link based on whether it's the current channel
         if channel:
@@ -221,16 +230,22 @@ class Quest_View(View):
         else:
             channel_link = f'Channel not found | Recommended: `/quest delete quest_id: {quest_id}`'  # Fallback in case the channel is not found
 
+        message = (
+                 f"✦ Quest {quest_id} | {progress_bar} `{progress}/{times}`\n"  # Progress info
+                 f"├ {instructions_emoji} {channel_link} | **{instruction}**\n" 
+                 f"└ {reward_emoji} Reward: `{reward} stp`"  # Reward and instruction
+                 f"\n\n"  # For spacing
+        
+        )
+        
         embed.add_field(
             name="",  # Step 1: Field name
-            value=(
-                f"Quest {quest_id} | {progress_bar} `{progress}/{times}`\n"  # Step 2: Progress information
-                f"**{channel_link}** | **{instruction}** | {reward_emoji} `{reward} stp`"  # Step 5: Reward information
-                f"\n\n"  # Steps 3 & 4: Channel link and instructions
-            ),
+            value=message,
             inline=False
         )
 
+
+    
      return embed
 
     
@@ -405,6 +420,8 @@ class Quest_Button1(discord.ui.View):
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
             await error_custom_embed(self.bot, self.ctx, error_message, title="Button Error")
+            
+            
 class Quest_Button(discord.ui.View):
     def __init__(self, bot, ctx):
         super().__init__()
@@ -488,6 +505,167 @@ class Quest_Button(discord.ui.View):
             traceback.print_exc()
             await error_custom_embed(self.bot, self.ctx, error_message, title="Button Error")
 
+            
+            
+            
+            
+class ImageGenerator:
+    def __init__(self, ctx, text):
+        """Initialize the ImageGenerator with user-specific data and load resources."""
+        self.user_name = ctx.author.display_name
+        
+        # Configurable values
+        self.font_path_header = "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
+        self.font_path_base = "Data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
+        self.character_path = "Data/commands/help/menu/initial/style/assets/character.png"
+        self.background_path = "Data/commands/help/menu/initial/style/assets/background.png"
+
+        # Color replacements
+        self.color_replacements_map = {
+            # 'f9fbfa': 'transparent', 
+            # 'f8a9a2': 'transparent',  # Replace this color with a solid color
+            # 'ffd7d4': 'transparent',
+        }
+        
+        # Font sizes
+        self.header_font_size = 35
+        self.base_font_size = 22
+        self.command_font_size = 13
+
+        # Font colors
+        self.header_font_color = "white"
+        self.base_font_color = "black"
+        self.command_font_color = "white"
+
+        # Character image scale
+        self.character_scale = 0.4
+
+        # Text content
+        self.text1 = self._truncate_text(f"Quest Help", 350)  # Truncate user_name if needed
+    
+        self.text2 = f"{self.text}"
+        self.text3 = "Command: [option]?"
+
+        # Layout positions
+        self.character_pos = (5, 5)
+        self.text_x_offset = 10
+        self.text_y_offset = 25
+        self.text_spacing = 20
+
+
+        self.command_text_margin = 40
+        self.command_text_bottom_margin = 30
+
+        # Load fonts and images
+        self._load_resources()
+
+    def _truncate_text(self, text, max_width):
+        """Truncate text to fit within the specified width."""
+        draw = ImageDraw.Draw(Image.new('RGBA', (1, 1)))  # Dummy image to get draw object
+        font = ImageFont.truetype(self.font_path_header, self.header_font_size)  # Use header font size
+
+        # Check if text fits within the specified width
+        while draw.textbbox((0, 0), text, font=font)[2] > max_width:
+            text = text[:-1]  # Remove the last character
+            if len(text) == 0:  # Ensure there's some text
+                break
+        return text
+
+    def _load_resources(self):
+        """Load the fonts and images required for generating the help menu image."""
+        self.font = ImageFont.truetype(self.font_path_header, self.header_font_size)
+        self.base_font = ImageFont.truetype(self.font_path_base, self.base_font_size)
+        self.command_font = ImageFont.truetype(self.font_path_base, self.command_font_size)
+        self.character = Image.open(self.character_path).convert("RGBA")
+        self.background = Image.open(self.background_path).convert("RGBA")
+
+        # Process color replacements
+        if self.color_replacements_map:
+            self._apply_color_replacements()
+
+        self._resize_character()
+
+    def _download_image(self, url):
+        """Download an image from a URL and return it as a PIL Image."""
+        response = requests.get(url)
+        response.raise_for_status()
+        return Image.open(BytesIO(response.content))
+
+    def _apply_color_replacements(self):
+        """Replace specific colors in the background image with colors from replacement images, solid colors, or transparency."""
+        bg_array = np.array(self.background)
+
+        for old_hex, replacement in self.color_replacements_map.items():
+            old_color = tuple(int(old_hex[i:i+2], 16) for i in (0, 2, 4))
+            if replacement == 'transparent':  # If replacement is transparency
+                mask = cv2.inRange(bg_array[:, :, :3], np.array(old_color) - 10, np.array(old_color) + 10)
+                bg_array[mask > 0] = [0, 0, 0, 0]  # Set the pixels to fully transparent
+            elif replacement.startswith('http'):  # Replacement is an image URL
+                replacement_img = self._download_image(replacement)
+                replacement_img = replacement_img.resize((self.background.width, self.background.height))
+                replacement_array = np.array(replacement_img)[:, :, :3]
+
+                mask = cv2.inRange(bg_array[:, :, :3], np.array(old_color) - 10, np.array(old_color) + 10)
+                bg_array[mask > 0, :3] = replacement_array[mask > 0]
+            else:  # Replacement is a solid color hex code
+                replacement_color = tuple(int(replacement[i:i+2], 16) for i in (1, 3, 5))
+                mask = cv2.inRange(bg_array[:, :, :3], np.array(old_color) - 10, np.array(old_color) + 10)
+                bg_array[mask > 0, :3] = replacement_color
+
+        self.background = Image.fromarray(bg_array, 'RGBA')
+
+    def _resize_character(self):
+        """Resize the character image to a percentage of its original size."""
+        new_width = round(self.character.width * self.character_scale)
+        new_height = round(self.character.height * self.character_scale)
+        self.character = self.character.resize((new_width, new_height))
+
+    def _draw_text(self, draw, text_x, text_y):
+        """Draw all text on the image."""
+        draw.text((text_x, text_y), self.text1, font=self.font, fill=self.header_font_color)
+        text_y += self.font.size + self.text_spacing
+        draw.text((text_x, text_y), self.text2, font=self.base_font, fill=self.base_font_color)
+        text_y += self.base_font.size + self.text_spacing
+
+        textbbox = draw.textbbox((0, 0), self.text3, font=self.command_font)
+        w, h = textbbox[2] - textbbox[0], textbbox[3] - textbbox[1]
+        draw.text((self.background.width - w - self.command_text_margin, self.background.height - h - self.command_text_bottom_margin),
+                  self.text3, font=self.command_font, fill=self.command_font_color)
+
+    def create_image(self):
+        """Generate the complete image with the background, character, and text."""
+        bg = self.background.copy()
+        draw = ImageDraw.Draw(bg)
+
+        # Paste the character image onto the background
+        character_x, character_y = self.character_pos
+        bg.paste(self.character, (character_x, character_y), self.character)
+
+        # Draw all text onto the image
+        text_x = self.character.width + self.text_x_offset
+        text_y = self.text_y_offset
+        self._draw_text(draw, text_x, text_y)
+
+        return bg
+
+    def save_image(self, file_path):
+        """Save the generated image to the given file path."""
+        img = self.create_image()
+        img.save(file_path)
+        return file_path
+
+    def show_image(self):
+        """Display the generated image within the notebook (for Jupyter environments)."""
+        img = self.create_image()
+        img_bytes = BytesIO()
+        img.save(img_bytes, format='PNG')
+        display(IPImage(img_bytes.getvalue()))
+
+                    
+            
+            
+            
+            
             
 class Quest_Data(commands.Cog):
     def __init__(self, bot):
