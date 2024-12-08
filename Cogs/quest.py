@@ -532,7 +532,7 @@ class ImageGenerator:
  
         # Font sizes
         self.header_font_size = 35
-        self.base_font_size = 12.5
+        self.base_font_size = 11
 
         # Font colors
         self.header_font_color = "white"
