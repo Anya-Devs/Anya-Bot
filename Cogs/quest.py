@@ -1373,7 +1373,7 @@ class Quest_Data(commands.Cog):
             'action': action,
             'method': method,
             'channel_id': channel_id,
-            'times': times if method not in ('message', 'emoji') else 1, # Updated
+            'times': times if method not in ('message', 'emoji') else random.randint(1,3), # Updated
             'content': content,
             'reward': reward,
             'progress': 0  # Initialize progress to 0
