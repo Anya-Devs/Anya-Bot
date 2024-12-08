@@ -10,6 +10,7 @@ import asyncio
 import discord
 import random
 import logging
+from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
 
