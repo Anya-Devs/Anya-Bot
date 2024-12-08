@@ -223,7 +223,7 @@ class Quest_View(View):
 
         # Generate instructions based on method
         if method == 'message':
-            instruction = f"Send: {content.replace(chr(92) + 'n', ' ')}"
+            instruction = "Send: {0}".format(content.replace('\n', ' '))
 
         elif method == 'emoji':
             instruction = f"Send emoji: {content}"
