@@ -92,7 +92,7 @@ class Quest(commands.Cog):
                 img.save(img_bytes, format='PNG')
                 img_bytes.seek(0)  # Reset the pointer to the start of the BytesIO object
 
-                ImageGenerator.save_image("Data/Images/generated_image.png")
+                ImageGenerator.save_image(file_path="Data/Images/generated_image.png")
                 file = discord.File("Data/Images/generated_image.png", filename='image.png')
     
                 # Set the image in the embed using the attachment URL
