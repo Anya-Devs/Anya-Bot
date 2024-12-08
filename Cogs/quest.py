@@ -11,7 +11,7 @@ import discord
 import random
 import logging
 from concurrent.futures import ThreadPoolExecutor
-
+from PIL import Image, ImageDraw, ImageFont, ImageSequence
 
 
 # Third-Party Library Imports
