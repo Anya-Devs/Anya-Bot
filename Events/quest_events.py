@@ -36,7 +36,7 @@ class Quest_Checker(commands.Cog):
 
             for quest in quests:
                 if quest['action'] == 'send':
-                    if quest['channel_id'] == message.channel.id:
+                    if int(quest['channel_id']) == message.channel.id:
                         if quest['method'] == 'message':
                             await self.handle_message_quest(quest, message, user_id, guild_id)
                         elif quest['method'] == 'emoji':
@@ -126,7 +126,7 @@ class Quest_Checker(commands.Cog):
 
             for quest in quests:
                 if quest['action'] == 'send' and quest['method'] == 'reaction':
-                    if quest['channel_id'] == message.channel.id:
+                    if int(quest['channel_id']) == message.channel.id:
                         quest_emoji = quest['content']
                         reaction_emoji = str(reaction.emoji)
 
@@ -154,7 +154,7 @@ class Quest_Checker(commands.Cog):
     async def complete_quest(self, guild_id, user_id, quest, times, user_mention, quest_id, message, method=None, reward='N/A'):
         try:
             logger.debug(f"Completing quest: {quest_id} for user_id: {user_id} in guild_id: {guild_id}")
-            channel = self.bot.get_channel(quest['channel_id'])
+            channel = self.bot.get_channel(int(quest['channel_id']))
             if channel:
                 await self.quest_data.add_balance(user_id, guild_id, quest['reward'])
 
