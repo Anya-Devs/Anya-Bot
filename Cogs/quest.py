@@ -91,15 +91,21 @@ class Quest(commands.Cog):
                 img.save(img_bytes, format='PNG')
                 img_bytes.seek(0)  # Reset the pointer to the start of the BytesIO object
 
+                ImageGenerator.save_image("Data/Images/generated_image.png")
+                file = discord.File("Data/Images/generated_image.png", filename='image.png')
+    
+                # Set the image in the embed using the attachment URL
+                embeds.set_image(url=f"attachment://image.png")
+
 
                 # Send initial embed and view
                 if embeds:
                     if len(quests) > 3:
                         # Multiple pages if there are more quests than fit on one page
-                        await ctx.reply(embed=embeds, view=view, mention_author=False,  file=discord.File(img_bytes, "Data/Images/generated_image.png"))
+                        await ctx.reply(embed=embeds, view=view, mention_author=False,  file=file)
                     else:
                         # Single embed if the number of quests fits on one page
-                        await ctx.reply(embed=embeds, mention_author=False,  file=discord.File(img_bytes, "Data/Images/generated_image.png"))
+                        await ctx.reply(embed=embeds, mention_author=False,  file=file)
 
             else:
                 no_quest_message = "You have no quests."
