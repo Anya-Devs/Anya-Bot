@@ -520,45 +520,30 @@ class Quest_Button(discord.ui.View):
 
             
             
-            
-            
 class ImageGenerator:
     def __init__(self, ctx, text):
-        """Initialize the ImageGenerator with user-specific data and load resources."""
-        self.user_name = ctx.author.display_name
-        self.text = text
-        
+        """Initialize the ImageGenerator with cog-specific data and load resources."""
         # Configurable values
         self.font_path_header = "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
         self.font_path_base = "Data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
         self.character_path = "Data/commands/help/menu/initial/style/assets/character.png"
         self.background_path = "Data/commands/help/menu/initial/style/assets/background.png"
-
-        # Color replacements
-        self.color_replacements_map = {
-            # 'f9fbfa': 'transparent', 
-            # 'f8a9a2': 'transparent',  # Replace this color with a solid color
-            # 'ffd7d4': 'transparent',
-        }
-        
+ 
         # Font sizes
         self.header_font_size = 35
-        self.base_font_size = 22
-        self.command_font_size = 13
+        self.base_font_size = 12
 
         # Font colors
         self.header_font_color = "white"
         self.base_font_color = "black"
-        self.command_font_color = "white"
 
         # Character image scale
         self.character_scale = 0.4
 
         # Text content
-        self.text1 = self._truncate_text(f"Quest Help", 350)  # Truncate user_name if needed
-    
-        self.text2 = f"{self.text}"
-        self.text3 = "Command: [option]?"
+        self.cog_name = cog_name
+        self.header_text = 'Whats This?'
+        self.description_text = text
 
         # Layout positions
         self.character_pos = (5, 5)
@@ -566,44 +551,31 @@ class ImageGenerator:
         self.text_y_offset = 25
         self.text_spacing = 20
 
-
-        self.command_text_margin = 40
-        self.command_text_bottom_margin = 30
+        # Color replacements
+        self.color_replacements_map = {
+            # 'f9fbfa': 'transparent', 
+            # 'f8a9a2': 'transparent',  # Replace this color with a solid color
+        }
 
         # Load fonts and images
         self._load_resources()
-
-    def _truncate_text(self, text, max_width):
-        """Truncate text to fit within the specified width."""
-        draw = ImageDraw.Draw(Image.new('RGBA', (1, 1)))  # Dummy image to get draw object
-        font = ImageFont.truetype(self.font_path_header, self.header_font_size)  # Use header font size
-
-        # Check if text fits within the specified width
-        while draw.textbbox((0, 0), text, font=font)[2] > max_width:
-            text = text[:-1]  # Remove the last character
-            if len(text) == 0:  # Ensure there's some text
-                break
-        return text
+        self._apply_color_replacements()
 
     def _load_resources(self):
-        """Load the fonts and images required for generating the help menu image."""
-        self.font = ImageFont.truetype(self.font_path_header, self.header_font_size)
+        """Load the fonts and images required for generating the image."""
+        self.header_font = ImageFont.truetype(self.font_path_header, self.header_font_size)
         self.base_font = ImageFont.truetype(self.font_path_base, self.base_font_size)
-        self.command_font = ImageFont.truetype(self.font_path_base, self.command_font_size)
         self.character = Image.open(self.character_path).convert("RGBA")
         self.background = Image.open(self.background_path).convert("RGBA")
 
-        # Process color replacements
-        if self.color_replacements_map:
-            self._apply_color_replacements()
-
+        # Resize character image
         self._resize_character()
 
-    def _download_image(self, url):
-        """Download an image from a URL and return it as a PIL Image."""
-        response = requests.get(url)
-        response.raise_for_status()
-        return Image.open(BytesIO(response.content))
+    def _resize_character(self):
+        """Resize the character image to a percentage of its original size."""
+        new_width = round(self.character.width * self.character_scale)
+        new_height = round(self.character.height * self.character_scale)
+        self.character = self.character.resize((new_width, new_height))
 
     def _apply_color_replacements(self):
         """Replace specific colors in the background image with colors from replacement images, solid colors, or transparency."""
@@ -628,26 +600,45 @@ class ImageGenerator:
 
         self.background = Image.fromarray(bg_array, 'RGBA')
 
-    def _resize_character(self):
-        """Resize the character image to a percentage of its original size."""
-        new_width = round(self.character.width * self.character_scale)
-        new_height = round(self.character.height * self.character_scale)
-        self.character = self.character.resize((new_width, new_height))
+    def _wrap_text(self, text, max_width):
+        """Wrap text to fit within the specified width."""
+        lines = []
+        words = text.split()
+        current_line = []
+
+        draw = ImageDraw.Draw(Image.new('RGBA', (1, 1)))  # Dummy image to get draw object
+        font = ImageFont.truetype(self.font_path_base, self.base_font_size)  # Use base font size
+
+        for word in words:
+            current_line.append(word)
+            line_width = draw.textbbox((0, 0), ' '.join(current_line), font=font)[2]
+            if line_width > max_width:
+                current_line.pop()
+                lines.append(' '.join(current_line))
+                current_line = [word]
+
+        if current_line:
+            lines.append(' '.join(current_line))
+
+        return '\n'.join(lines)
 
     def _draw_text(self, draw, text_x, text_y):
         """Draw all text on the image."""
-        draw.text((text_x, text_y), self.text1, font=self.font, fill=self.header_font_color)
-        text_y += self.font.size + self.text_spacing
-        draw.text((text_x, text_y), self.text2, font=self.base_font, fill=self.base_font_color)
-        text_y += self.base_font.size + self.text_spacing
+        # Draw header text
+        draw.text((text_x, text_y), self.header_text, font=self.header_font, fill=self.header_font_color)
+        text_y += self.header_font.size + self.text_spacing
+        
+        # Draw description text
+        draw.text((text_x, text_y), self.description_text, font=self.base_font, fill=self.base_font_color)
 
-        textbbox = draw.textbbox((0, 0), self.text3, font=self.command_font)
-        w, h = textbbox[2] - textbbox[0], textbbox[3] - textbbox[1]
-        draw.text((self.background.width - w - self.command_text_margin, self.background.height - h - self.command_text_bottom_margin),
-                  self.text3, font=self.command_font, fill=self.command_font_color)
+    def _download_image(self, url):
+        """Download an image from a URL."""        
+        response = requests.get(url)
+        response.raise_for_status()  # Ensure we notice bad responses
+        return Image.open(BytesIO(response.content)).convert("RGBA")
 
     def create_image(self):
-        """Generate the complete image with the background, character, and text."""
+        """Generate the complete image with the background, character, and text."""        
         bg = self.background.copy()
         draw = ImageDraw.Draw(bg)
 
@@ -663,22 +654,20 @@ class ImageGenerator:
         return bg
 
     def save_image(self, file_path):
-        """Save the generated image to the given file path."""
+        """Save the generated image to the given file path."""        
         img = self.create_image()
         img.save(file_path)
         return file_path
 
     def show_image(self):
-        """Display the generated image within the notebook (for Jupyter environments)."""
+        """Display the generated image within the notebook (for Jupyter environments)."""        
         img = self.create_image()
         img_bytes = BytesIO()
         img.save(img_bytes, format='PNG')
         display(IPImage(img_bytes.getvalue()))
+            
+            
 
-                    
-            
-            
-            
             
             
 class Quest_Data(commands.Cog):
