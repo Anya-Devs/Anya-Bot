@@ -261,7 +261,7 @@ class Quest_View(View):
         file = discord.File("Data/Images/generated_image.png", filename='image.png')
     
         # Set the image in the embed using the attachment URL
-        embeds.set_image(url=f"attachment://image.png")
+        embed.set_image(url=f"attachment://image.png")
                 
 
 
