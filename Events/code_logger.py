@@ -10,6 +10,34 @@ from Imports.log_imports import logger
 from Imports.discord_imports import *
 import traceback
 
+# Define ANSI escape codes for colors
+class LogColors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    ERROR = '\033[91m'
+    ENDC = '\033[0m'
+
+# Set up logging with custom formatting
+class CustomFormatter(logging.Formatter):
+    def format(self, record):
+        if record.levelno == logging.DEBUG:
+            record.msg = f"{LogColors.OKBLUE}{record.msg}{LogColors.ENDC}"
+        elif record.levelno == logging.INFO:
+            record.msg = f"{LogColors.OKGREEN}{record.msg}{LogColors.ENDC}"
+        elif record.levelno == logging.WARNING:
+            record.msg = f"{LogColors.WARNING}{record.msg}{LogColors.ENDC}"
+        elif record.levelno == logging.ERROR:
+            record.msg = f"{LogColors.ERROR}{record.msg}{LogColors.ENDC}"
+        return super().format(record)
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+for handler in logging.getLogger().handlers:
+    handler.setFormatter(CustomFormatter())
+
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -93,7 +121,7 @@ class Permission(commands.Cog):
         error_message = f"Command `{ctx.invoked_with}` not found. {suggestion}"
         
         embed = discord.Embed(description=error_message)
-        await ctx.reply(embed=embed)
+        await ctx.reply(embed=embed, mention_author=False)
 
 # Define the Logs cog
 class Logs(commands.Cog):
