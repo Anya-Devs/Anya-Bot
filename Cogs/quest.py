@@ -103,6 +103,7 @@ class Quest(commands.Cog):
     
                 # Set the image in the embed using the attachment URL
                 embeds.set_image(url=f"attachment://image.png")
+                
 
 
                 # Send initial embed and view
@@ -207,7 +208,7 @@ class Quest_View(View):
      embed = discord.Embed(
         color=primary_color()
      )
-     embed.set_author(name=f"{self.ctx.author.display_name}'s quests", icon_url=self.ctx.author.avatar)
+     embed.set_footer(text=f"{self.ctx.author.display_name}'s quests", icon_url=self.ctx.author.avatar)
      for quest in quests_to_display:
         quest_id = quest['quest_id']
         progress = quest['progress']
