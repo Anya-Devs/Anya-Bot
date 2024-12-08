@@ -520,6 +520,7 @@ class ImageGenerator:
     def __init__(self, ctx, text):
         """Initialize the ImageGenerator with user-specific data and load resources."""
         self.user_name = ctx.author.display_name
+        self.text = text
         
         # Configurable values
         self.font_path_header = "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
