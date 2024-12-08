@@ -541,7 +541,6 @@ class ImageGenerator:
         self.character_scale = 0.4
 
         # Text content
-        self.cog_name = cog_name
         self.header_text = 'Whats This?'
         self.description_text = text
 
