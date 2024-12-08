@@ -162,19 +162,23 @@ class Ai(commands.Cog):
 
     @commands.command(name='imagine', description="Generate an image", aliases=['i'])
     async def imagine(self, ctx: commands.Context, *, prompt: str):
-        try:
-            async with ctx.typing():
-                message = await ctx.reply('> **Please wait while I generate your prompt...**')
-                image_path = await self.generate_image(prompt)
-                image_file = discord.File(image_path, filename="generated_image.png")
-                embed = discord.Embed(description=f'Prompt: {prompt}', color=primary_color())
-                embed.set_image(url="attachment://generated_image.png")
-                embed.set_footer(icon_url=ctx.author.avatar, text=f'Requested by {ctx.author}')
-                await message.delete()
-                await ctx.reply(embed=embed, file=image_file)
-        except Exception as e:
-            await ctx.send(f"An error occurred: {e}")
-
+     try:
+        async with ctx.typing():
+            message = await ctx.reply('> **Please wait while I generate your prompt...**', mention_author=False)
+            image_path = await self.generate_image(prompt)
+            image_file = discord.File(image_path, filename="generated_image.png")
+            
+            # Create a description string properly
+            description = f'**Prompt:** ```{prompt}```\n**Prompt Length:** {len(prompt)} characters'
+            embed = discord.Embed(description=description, color=primary_color())
+            embed.set_image(url="attachment://generated_image.png")
+            embed.set_footer(icon_url=ctx.author.avatar, text=f'Requested by {ctx.author}')
+            
+            await message.delete()
+            await ctx.reply(embed=embed, file=image_file)
+     except Exception as e:
+        await ctx.send(f"An error occurred: {e}")
+        
     @commands.command(name='vision', description="Generate a vision-based response", aliases=['v'])
     async def vision_command(self, ctx, image_url: str = None):
          async def vision(image_link: str, prompt: str = ' ') -> str:
@@ -202,7 +206,7 @@ class Ai(commands.Cog):
 
           prompt = ('Speak in childlike wonder and innocence, use alittle bit of childlike grammar like a 6 year old. Read the images mind like a telapath. Have the vocab and personality of Anya Forger form spy x family thus make her your persona. Be logical')
           async with ctx.typing():
-            message = await ctx.reply('> **Please wait while I analyze the image...**')
+            message = await ctx.reply('> **Please wait while I analyze the image...**', mention_author=False)
 
             if not image_url:
                 if ctx.message.attachments:
@@ -238,7 +242,7 @@ class Ai(commands.Cog):
             response = await vision(image_url, prompt)
             embed = discord.Embed(description=f'-# Asked by {ctx.author.mention}\n\n**Vision** - {response}', color=primary_color())
             embed.set_thumbnail(url=image_url)
-            embed.set_footer(icon_url=self.bot.user.avatar, text=f'Thanks for using {self.bot.user.name} | Model: {self.vision_model} | Inspired by alphast101')
+            embed.set_footer(icon_url=self.bot.user.avatar, text=f'Thanks for using {self.bot.user.name}')
             await message.delete()
             await ctx.reply(embed=embed)
          except Exception as e:
