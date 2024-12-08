@@ -83,7 +83,7 @@ class Quest(commands.Cog):
                 view = Quest_View(self.bot, quests, ctx)
                 embeds = await view.generate_messages()
                 # Initialize the ImageGenerator class
-                image_generator = ImageGenerator(self.ctx, text='Here are the quests you need to complete. Each quest has a specific objective, progress, and reward. Click on the location link to navigate to the respective channel where the quest can be completed.')  # Pass the quest message as text to the image generator
+                image_generator = ImageGenerator(ctx, text='Here are the quests you need to complete. Each quest has a specific objective, progress, and reward. Click on the location link to navigate to the respective channel where the quest can be completed.')  # Pass the quest message as text to the image generator
                 # Generate the image
                 img = image_generator.create_image()
                 # Save the image as a BytesIO object to send as an embed
