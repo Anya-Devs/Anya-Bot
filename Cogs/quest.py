@@ -543,7 +543,7 @@ class ImageGenerator:
         self.character_scale = 0.4
 
         # Text content
-        self.header_text = 'Whats This?'
+        self.header_text = 'Anya Quest!'
         self.description_text = text
 
         # Layout positions
