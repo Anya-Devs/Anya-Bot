@@ -92,7 +92,12 @@ class Quest(commands.Cog):
                 img.save(img_bytes, format='PNG')
                 img_bytes.seek(0)  # Reset the pointer to the start of the BytesIO object
 
-                ImageGenerator.save_image(file_path="Data/Images/generated_image.png")
+                image_generator = ImageGenerator(
+                    ctx=ctx, 
+                    text='Here are the quests you need to complete. Each quest has a specific objective, progress, and reward. Click on the location link to navigate to the respective channel where the quest can be completed.'
+                )
+
+                image_generator.save_image(file_path="Data/Images/generated_image.png")
                 file = discord.File("Data/Images/generated_image.png", filename='image.png')
     
                 # Set the image in the embed using the attachment URL
