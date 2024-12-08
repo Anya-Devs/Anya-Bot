@@ -527,12 +527,12 @@ class ImageGenerator:
         # Configurable values
         self.font_path_header = "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
         self.font_path_base = "Data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
-        self.character_path = "Data/commands/help/menu/initial/style/assets/character.png"
+        self.character_path = "Data/commands/help/menu/initial/style/assets/character_quest.png"
         self.background_path = "Data/commands/help/menu/initial/style/assets/background.png"
  
         # Font sizes
         self.header_font_size = 35
-        self.base_font_size = 12
+        self.base_font_size = 8
 
         # Font colors
         self.header_font_color = "white"
@@ -550,11 +550,11 @@ class ImageGenerator:
         self.text_x_offset = 10
         self.text_y_offset = 25
         self.text_spacing = 20
+        self.text_box_margin = 20  # Margin for text box
 
         # Color replacements
         self.color_replacements_map = {
-            # 'f9fbfa': 'transparent', 
-            # 'f8a9a2': 'transparent',  # Replace this color with a solid color
+            # Add your custom mappings here
         }
 
         # Load fonts and images
@@ -563,8 +563,16 @@ class ImageGenerator:
 
     def _load_resources(self):
         """Load the fonts and images required for generating the image."""
-        self.header_font = ImageFont.truetype(self.font_path_header, self.header_font_size)
-        self.base_font = ImageFont.truetype(self.font_path_base, self.base_font_size)
+        try:
+            self.header_font = ImageFont.truetype(self.font_path_header, self.header_font_size)
+        except Exception:
+            self.header_font = ImageFont.load_default()
+
+        try:
+            self.base_font = ImageFont.truetype(self.font_path_base, self.base_font_size)
+        except Exception:
+            self.base_font = ImageFont.load_default()
+
         self.character = Image.open(self.character_path).convert("RGBA")
         self.background = Image.open(self.background_path).convert("RGBA")
 
@@ -578,24 +586,27 @@ class ImageGenerator:
         self.character = self.character.resize((new_width, new_height))
 
     def _apply_color_replacements(self):
-        """Replace specific colors in the background image with colors from replacement images, solid colors, or transparency."""
-        bg_array = np.array(self.background)
+        """Replace specific colors in the background image."""
+        bg_array = np.array(self.background).copy()
 
         for old_hex, replacement in self.color_replacements_map.items():
             old_color = tuple(int(old_hex[i:i+2], 16) for i in (0, 2, 4))
-            if replacement == 'transparent':  # If replacement is transparency
-                mask = cv2.inRange(bg_array[:, :, :3], np.array(old_color) - 10, np.array(old_color) + 10)
-                bg_array[mask > 0] = [0, 0, 0, 0]  # Set the pixels to fully transparent
-            elif replacement.startswith('http'):  # Replacement is an image URL
+            lower_bound = np.array(old_color) - 10
+            upper_bound = np.array(old_color) + 10
+
+            if replacement == 'transparent':  # Replace with transparency
+                mask = cv2.inRange(bg_array[:, :, :3], lower_bound, upper_bound)
+                bg_array[mask > 0] = [0, 0, 0, 0]
+            elif replacement.startswith('http'):  # Replace with image from URL
                 replacement_img = self._download_image(replacement)
                 replacement_img = replacement_img.resize((self.background.width, self.background.height))
                 replacement_array = np.array(replacement_img)[:, :, :3]
 
-                mask = cv2.inRange(bg_array[:, :, :3], np.array(old_color) - 10, np.array(old_color) + 10)
+                mask = cv2.inRange(bg_array[:, :, :3], lower_bound, upper_bound)
                 bg_array[mask > 0, :3] = replacement_array[mask > 0]
-            else:  # Replacement is a solid color hex code
+            else:  # Replace with solid color
                 replacement_color = tuple(int(replacement[i:i+2], 16) for i in (1, 3, 5))
-                mask = cv2.inRange(bg_array[:, :, :3], np.array(old_color) - 10, np.array(old_color) + 10)
+                mask = cv2.inRange(bg_array[:, :, :3], lower_bound, upper_bound)
                 bg_array[mask > 0, :3] = replacement_color
 
         self.background = Image.fromarray(bg_array, 'RGBA')
@@ -606,12 +617,12 @@ class ImageGenerator:
         words = text.split()
         current_line = []
 
-        draw = ImageDraw.Draw(Image.new('RGBA', (1, 1)))  # Dummy image to get draw object
-        font = ImageFont.truetype(self.font_path_base, self.base_font_size)  # Use base font size
+        dummy_img = Image.new('RGBA', (1, 1))
+        draw = ImageDraw.Draw(dummy_img)
 
         for word in words:
             current_line.append(word)
-            line_width = draw.textbbox((0, 0), ' '.join(current_line), font=font)[2]
+            line_width = draw.textlength(' '.join(current_line), font=self.base_font)
             if line_width > max_width:
                 current_line.pop()
                 lines.append(' '.join(current_line))
@@ -623,50 +634,54 @@ class ImageGenerator:
         return '\n'.join(lines)
 
     def _draw_text(self, draw, text_x, text_y):
-        """Draw all text on the image."""
+        """Draw all text on the image, ensuring it doesn't touch the edges."""
         # Draw header text
         draw.text((text_x, text_y), self.header_text, font=self.header_font, fill=self.header_font_color)
         text_y += self.header_font.size + self.text_spacing
         
-        # Draw description text
-        draw.text((text_x, text_y), self.description_text, font=self.base_font, fill=self.base_font_color)
+        # Set the max width of the description text box
+        text_box_width = self.background.width - text_x - self.text_box_margin * 2
+        wrapped_text = self._wrap_text(self.description_text, text_box_width)
+        draw.multiline_text((text_x + self.text_box_margin, text_y), wrapped_text, font=self.base_font, fill=self.base_font_color)
 
     def _download_image(self, url):
-        """Download an image from a URL."""        
-        response = requests.get(url)
-        response.raise_for_status()  # Ensure we notice bad responses
-        return Image.open(BytesIO(response.content)).convert("RGBA")
+        """Download an image from a URL."""
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            return Image.open(BytesIO(response.content)).convert("RGBA")
+        except Exception as e:
+            print(f"Error downloading image: {e}")
+            raise
 
     def create_image(self):
-        """Generate the complete image with the background, character, and text."""        
+        """Generate the complete image with the background, character, and text."""
         bg = self.background.copy()
         draw = ImageDraw.Draw(bg)
-
-        # Paste the character image onto the background
         character_x, character_y = self.character_pos
         bg.paste(self.character, (character_x, character_y), self.character)
 
-        # Draw all text onto the image
-        text_x = self.character.width + self.text_x_offset
+        # Use the adjusted text_x with proper margin for wrapping
+        text_x = self.character.width + self.text_x_offset - 45
+
         text_y = self.text_y_offset
         self._draw_text(draw, text_x, text_y)
 
         return bg
 
     def save_image(self, file_path):
-        """Save the generated image to the given file path."""        
+        """Save the generated image to the given file path."""
         img = self.create_image()
         img.save(file_path)
         return file_path
 
     def show_image(self):
-        """Display the generated image within the notebook (for Jupyter environments)."""        
+        """Display the generated image."""
         img = self.create_image()
         img_bytes = BytesIO()
         img.save(img_bytes, format='PNG')
         display(IPImage(img_bytes.getvalue()))
-            
-            
+
 
             
             
