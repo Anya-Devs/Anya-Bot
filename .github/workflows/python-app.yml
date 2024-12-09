@@ -25,6 +25,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install flake8 pytest
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+    - name: Set up environment variables
+      run: |
+        echo "Setting up environment variables from .github/.env"
+        set -o allexport; source .github/.env; set +o allexport
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
