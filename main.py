@@ -1,4 +1,13 @@
 import os
+
+# Set environment variables
+os.environ['DBUSER'] = 'senko_dev'
+os.environ['DBPASSWORD'] = '7wKW1SL6UorrlpuH'
+os.environ['CLUSTERSTRING'] = 'clusterstring'
+os.environ['MONGO_URI'] = 'mongodb+srv://senkos:senkos@wakuwaku.hnhzcbd.mongodb.net/?retryWrites=true&w=majority&appName=WakuWaku'
+os.environ['HUGGINGFACE_API_KEY'] = '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'
+os.environ['api_key'] = 'aner123!'
+
 import sys
 import subprocess
 import traceback
@@ -20,12 +29,15 @@ os.system('pip install --upgrade pip')
 # Load environment variables from .env file
 load_dotenv()
 
+
 # MongoDB client setup
 from Imports.depend_imports import *
 import Imports.depend_imports as depend_imports
 from Imports.discord_imports import *
 from Imports.log_imports import logger
 from Cogs.pokemon import PokemonPredictor
+
+
 
 
 # Bot setup and implementation
