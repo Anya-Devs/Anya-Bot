@@ -6,35 +6,36 @@ import asyncio
 import requests
 from aiohttp import web
 import time
+from discord.ext import commands
 from discord import HTTPException
+from colorama import Fore, Style
+from dotenv import load_dotenv
+import pymongo
+from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import ConfigurationError
 
 # Install dependencies if not present
 os.system('pip install --upgrade pip')
 
+# Load environment variables from .env file
+load_dotenv()
+
+# MongoDB client setup
 from Imports.depend_imports import *
 import Imports.depend_imports as depend_imports
 from Imports.discord_imports import *
 from Imports.log_imports import logger
-
-from colorama import Fore, Style  # Import Fore and Style explicitly
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
-
-import pymongo  # Import database API
-from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo.errors import ConfigurationError
-
 from Cogs.pokemon import PokemonPredictor
 
+
+# Bot setup and implementation
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         intents.members = True  # Enable member-related events and data
-        super().__init__(command_prefix=commands.when_mentioned_or('...'), 
-                         intents=intents, 
-                         help_command=None, 
+        super().__init__(command_prefix=commands.when_mentioned_or('...'),
+                         intents=intents,
+                         help_command=None,
                          shard_count=3, shard_reconnect_interval=10)
         self.mongoConnect = None  # Initialize the MongoDB connection attribute
         self.all_members = {}  # Store member data here
@@ -121,6 +122,7 @@ class BotSetup(commands.AutoShardedBot):
                             await self.add_cog(obj(self))
                             print(Fore.GREEN + f"│   │   └── {obj_name}" + Style.RESET_ALL)
 
+
 # Function to handle checking rate limits more gracefully
 async def check_rate_limit():
     url = "https://discord.com/api/v10/users/@me"  # Example endpoint to get the current user
@@ -161,10 +163,10 @@ async def main():
     finally:
         await bot.close()
 
+
 # Create a simple HTTP server to bind to a port
 async def start_http_server():
     try:
-        from aiohttp import web
         app = web.Application()
         app.router.add_get('/', lambda request: web.Response(text="Bot is running"))
         runner = web.AppRunner(app)
