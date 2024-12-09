@@ -5,7 +5,8 @@ import traceback
 import asyncio
 import requests
 from aiohttp import web
-
+import time
+from discord import HTTPException
 
 # Install dependencies if not present
 os.system('pip install --upgrade pip')
@@ -52,39 +53,48 @@ class BotSetup(commands.AutoShardedBot):
         print(Fore.BLUE + "All members have been gathered and registered." + Style.RESET_ALL)
 
     async def fetch_members(self, guild):
-        """Fetch members for a given guild and store them."""
+        """Fetch members for a given guild and store them with rate limiting."""
         print(Fore.YELLOW + f"Processing Guild: {guild.name} (ID: {guild.id})" + Style.RESET_ALL)
         
         # Use a loop to fetch all members
-        async for member in guild.fetch_members(limit=None):
-            # Store user data in the dictionary (can be used later)
-            self.all_members[member.id] = member
-            print(Fore.GREEN + f"Registered Member: {member.name}#{member.discriminator}" + Style.RESET_ALL)
+        try:
+            async for member in guild.fetch_members(limit=None):
+                # Store user data in the dictionary (can be used later)
+                self.all_members[member.id] = member
+                print(Fore.GREEN + f"Registered Member: {member.name}#{member.discriminator}" + Style.RESET_ALL)
+        except HTTPException as e:
+            if e.status == 429:  # Rate limit exceeded
+                retry_after = int(e.response.headers.get("Retry-After", 0))
+                logger.error(f"Rate limit exceeded. Retry after {retry_after} seconds.")
+                await asyncio.sleep(retry_after)  # Wait before retrying
+                await self.fetch_members(guild)  # Retry the request
+            else:
+                logger.error(f"Error fetching members for guild {guild.name}: {e}")
+                await asyncio.sleep(5)  # Wait before retrying in case of other errors
 
     async def start_bot(self):
-     await self.setup()
-     token = os.getenv('TOKEN')
+        await self.setup()
+        token = os.getenv('TOKEN')
 
-     if not token:
-        logger.error("No token found. Please set the TOKEN environment variable.")
-        return
+        if not token:
+            logger.error("No token found. Please set the TOKEN environment variable.")
+            return
 
-     try:
-        await self.start(token)
-     except KeyboardInterrupt:
-        await self.close()
-     except Exception as e:
-        traceback_string = traceback.format_exc()
-        logger.error(f"An error occurred while logging in: {e}\n{traceback_string}")
-        await self.close()
-     finally:
-        # Ensure proper bot cleanup even on error
-        if self.is_closed():
-            print("Bot is closed, cleaning up.")
-        else:
-            print("Bot is still running.")
-        await self.close()
-
+        try:
+            await self.start(token)
+        except KeyboardInterrupt:
+            await self.close()
+        except Exception as e:
+            traceback_string = traceback.format_exc()
+            logger.error(f"An error occurred while logging in: {e}\n{traceback_string}")
+            await self.close()
+        finally:
+            # Ensure proper bot cleanup even on error
+            if self.is_closed():
+                print("Bot is closed, cleaning up.")
+            else:
+                print("Bot is still running.")
+            await self.close()
 
     async def setup(self):
         print("\n")
@@ -107,16 +117,11 @@ class BotSetup(commands.AutoShardedBot):
                 for obj_name in dir(module):
                     obj = getattr(module, obj_name)
                     if isinstance(obj, commands.CogMeta):
-                        if obj_name == "PokemonPredictor":
-                            existing_cog = self.get_cog("PokemonPredictor")
-                            if existing_cog:
-                                await self.remove_cog("PokemonPredictor")
-                                print(Fore.RED + f"│   │   Removed {obj_name} cog" + Style.RESET_ALL)
-                        else:
-                            if not self.get_cog(obj_name):
-                                await self.add_cog(obj(self))
-                                print(Fore.GREEN + f"│   │   └── {obj_name}" + Style.RESET_ALL)
+                        if not self.get_cog(obj_name):
+                            await self.add_cog(obj(self))
+                            print(Fore.GREEN + f"│   │   └── {obj_name}" + Style.RESET_ALL)
 
+# Function to handle checking rate limits more gracefully
 async def check_rate_limit():
     url = "https://discord.com/api/v10/users/@me"  # Example endpoint to get the current user
     headers = {
@@ -142,7 +147,7 @@ async def main():
         await check_rate_limit()  # Check rate limits before starting the bot
         await bot.start_bot()
     except HTTPException as e:
-        if e.status == 429:
+        if e.status == 429:  # Handle rate limit exceeded
             retry_after = int(e.response.headers.get("Retry-After", 0))
             logger.error(f"Rate limit exceeded. Retry after {retry_after} seconds.")
             print(f"Rate limit exceeded. Please wait for {retry_after} seconds before retrying.")
