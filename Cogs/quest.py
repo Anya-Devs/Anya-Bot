@@ -698,7 +698,7 @@ class Quest_Data(commands.Cog):
         self.quest_content_file = 'Data/commands/quest/quest_content.txt'
 
         # Initialize MongoDB connection
-        mongo_url = os.getenv('MONGO_URI', 'mongodb+srv://senkos:senkos@wakuwaku.hnhzcbd.mongodb.net/?retryWrites')
+        mongo_url = os.getenv('MONGO_URI')
 
         if not mongo_url:
             raise ValueError("No MONGO_URI found in environment variables")
