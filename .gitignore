@@ -1,0 +1,5 @@
+# Ignore .env file in .github folder
+.github/.env
+
+# Ignore all .env files in the repository (if applicable)
+*.env
