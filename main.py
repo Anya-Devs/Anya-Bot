@@ -16,7 +16,6 @@ from pymongo.errors import ConfigurationError
 
 os.system('pip install --upgrade pip')
 
-# Load environment variables from the .env file in the .github folder
 env_path = os.path.join('.github', '.env')
 load_dotenv(dotenv_path=env_path)
 
