@@ -1,12 +1,5 @@
 import os
 
-# Set environment variables
-os.environ['DBUSER'] = 'senko_dev'
-os.environ['DBPASSWORD'] = '7wKW1SL6UorrlpuH'
-os.environ['CLUSTERSTRING'] = 'clusterstring'
-os.environ['MONGO_URI'] = 'mongodb+srv://senkos:senkos@wakuwaku.hnhzcbd.mongodb.net/?retryWrites=true&w=majority&appName=WakuWaku'
-os.environ['HUGGINGFACE_API_KEY'] = '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'
-os.environ['api_key'] = 'aner123!'
 
 import sys
 import subprocess
