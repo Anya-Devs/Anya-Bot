@@ -5,20 +5,29 @@ import traceback
 import asyncio
 import requests
 from aiohttp import web
-from dotenv import load_dotenv
+
 import pymongo
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import ConfigurationError
+
+from dotenv import load_dotenv
+
+# Load environment variables (still necessary for other environment-related settings)
+load_dotenv(dotenv_path=os.path.join('.github', '.env'))
+
+# Print loaded environment variables
+print("\033[93mLoaded Environment Variables:\033[0m")
+for key, value in os.environ.items():
+    if key.startswith("TOKEN") or key.startswith("PASSWORD") or key.startswith("SECRET"):
+        print(f"{key} = [REDACTED]")
+    else:
+        print(f"{key} = {value}")
 
 # Custom Imports
 from Imports.depend_imports import *
 from Imports.discord_imports import *
 from Imports.log_imports import logger
 from Cogs.pokemon import PokemonPredictor
-
-# MongoDB setup
-DB_NAME = 'Bot'
-COLLECTION_NAME = 'information'
 
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
@@ -32,15 +41,34 @@ class BotSetup(commands.AutoShardedBot):
             shard_reconnect_interval=10
         )
         self.mongoConnect = None
+        self.DB_NAME = 'Bot'
+        self.COLLECTION_NAME = 'information'
 
     async def on_ready(self):
         print(f"\033[92mLogged in as {self.user} (ID: {self.user.id})\033[0m")
+
+    async def get_token_from_db(self):
+        # Connect to the MongoDB client
+        mongo_url = os.getenv('MONGO_URI')  # Ensure your MongoDB URI is set as an environment variable
+        if not mongo_url:
+            raise ValueError("No MONGO_URI found in environment variables")
+
+        client = AsyncIOMotorClient(mongo_url)
+        db = client[self.DB_NAME]
+        collection = db[self.COLLECTION_NAME]
+
+        # Fetch token by _id
+        token_data = await collection.find_one({"_id": "675a67943bf54387fa4d5b9c"})  # You can modify this query to match your document structure
+        if token_data:
+            return token_data.get("Token")  # Adjust the field name if needed
+        else:
+            raise ValueError("No token found in the database")
 
     async def start_bot(self):
         await self.setup()
         token = await self.get_token_from_db()
         if not token:
-            logger.error("No token found in the database.")
+            logger.error("No token found. Please check the database.")
             return
 
         try:
@@ -56,23 +84,6 @@ class BotSetup(commands.AutoShardedBot):
             else:
                 print("Bot is still running.")
             await self.close()
-
-    async def get_token_from_db(self):
-        # Connect to MongoDB and fetch the token
-        mongo_url = os.getenv('MONGO_URI')  # Make sure this is set to connect to your MongoDB
-        if not mongo_url:
-            raise ValueError("No MONGO_URI found in environment variables.")
-        
-        client = AsyncIOMotorClient(mongo_url)
-        db = client[DB_NAME]
-        collection = db[COLLECTION_NAME]
-        
-        # Query the token from the database by _id
-        document = await collection.find_one({"_id": "675a67943bf54387fa4d5b9c"})  # Replace with actual _id if needed
-        
-        if document and 'Token' in document:
-            return document['Token']
-        return None
 
     async def setup(self):
         print("\n\033[94m• —— Cogs/\033[0m")
@@ -95,8 +106,9 @@ class BotSetup(commands.AutoShardedBot):
 
 async def check_rate_limit():
     url = "https://discord.com/api/v10/users/@me"
+    token = await BotSetup().get_token_from_db()  # Get token from DB
     headers = {
-        "Authorization": f"Bot {os.getenv('TOKEN')}"
+        "Authorization": f"Bot {token}"
     }
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
