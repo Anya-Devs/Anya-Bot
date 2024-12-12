@@ -35,31 +35,11 @@ class BotSetup(commands.AutoShardedBot):
                          help_command=None,
                          shard_count=1, shard_reconnect_interval=10)
         self.mongoConnect = None
-        self.all_members = {}
 
     async def on_ready(self):
         print(Fore.GREEN + f"Logged in as {self.user} (ID: {self.user.id})" + Style.RESET_ALL)
-        print(Fore.BLUE + "Gathering members from all guilds..." + Style.RESET_ALL)
-        fetch_tasks = [self.fetch_members(guild) for guild in self.guilds]
-        await asyncio.gather(*fetch_tasks)
-        print(Fore.BLUE + "All members have been gathered and registered." + Style.RESET_ALL)
 
-    async def fetch_members(self, guild):
-        print(Fore.YELLOW + f"Processing Guild: {guild.name} (ID: {guild.id})" + Style.RESET_ALL)
-        try:
-            async for member in guild.fetch_members(limit=None):
-                self.all_members[member.id] = member
-                print(Fore.GREEN + f"Registered Member: {member.name}#{member.discriminator}" + Style.RESET_ALL)
-        except HTTPException as e:
-            if e.status == 429:
-                retry_after = int(e.response.headers.get("Retry-After", 0))
-                logger.error(f"Rate limit exceeded. Retry after {retry_after} seconds.")
-                await asyncio.sleep(retry_after)
-                await self.fetch_members(guild)
-            else:
-                logger.error(f"Error fetching members for guild {guild.name}: {e}")
-                await asyncio.sleep(5)
-
+    
     async def start_bot(self):
         await self.setup()
         token = os.getenv('TOKEN')
