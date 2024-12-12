@@ -13,7 +13,6 @@ from pymongo.errors import ConfigurationError
 from dotenv import load_dotenv
 
 # Set environment variables
-os.environ['TOKEN'] = 'MTIzNDI0NzcxNjI0MzExMjEwMA.GRs2GO.KRqV1UlZOs3uPo7uOrSb_yBY5b_CLyuMeeSD00'
 os.environ['DBUSER'] = 'senko_dev'
 os.environ['DBPASSWORD'] = '7wKW1SL6UorrlpuH'
 os.environ['CLUSTERSTRING'] = 'clusterstring'
