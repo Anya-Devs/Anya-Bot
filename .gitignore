@@ -3,3 +3,4 @@
 
 # Ignore .env files in any subdirectory
 **/.env
+.github/.env
