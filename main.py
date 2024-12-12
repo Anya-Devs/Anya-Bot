@@ -5,20 +5,7 @@ import traceback
 import asyncio
 import requests
 from aiohttp import web
-
 from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv(dotenv_path=os.path.join('.github', '.env'))
-
-# Print loaded environment variables
-print("\033[93mLoaded Environment Variables:\033[0m")
-for key, value in os.environ.items():
-    if key.startswith("TOKEN") or key.startswith("PASSWORD") or key.startswith("SECRET"):
-        print(f"{key} = [REDACTED]")
-    else:
-        print(f"{key} = {value}")
-
 import pymongo
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import ConfigurationError
@@ -28,6 +15,10 @@ from Imports.depend_imports import *
 from Imports.discord_imports import *
 from Imports.log_imports import logger
 from Cogs.pokemon import PokemonPredictor
+
+# MongoDB setup
+DB_NAME = 'Bot'
+COLLECTION_NAME = 'information'
 
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
@@ -47,9 +38,9 @@ class BotSetup(commands.AutoShardedBot):
 
     async def start_bot(self):
         await self.setup()
-        token = os.getenv('TOKEN')
+        token = await self.get_token_from_db()
         if not token:
-            logger.error("No token found. Please set the TOKEN environment variable.")
+            logger.error("No token found in the database.")
             return
 
         try:
@@ -65,6 +56,23 @@ class BotSetup(commands.AutoShardedBot):
             else:
                 print("Bot is still running.")
             await self.close()
+
+    async def get_token_from_db(self):
+        # Connect to MongoDB and fetch the token
+        mongo_url = os.getenv('MONGO_URI')  # Make sure this is set to connect to your MongoDB
+        if not mongo_url:
+            raise ValueError("No MONGO_URI found in environment variables.")
+        
+        client = AsyncIOMotorClient(mongo_url)
+        db = client[DB_NAME]
+        collection = db[COLLECTION_NAME]
+        
+        # Query the token from the database by _id
+        document = await collection.find_one({"_id": "675a67943bf54387fa4d5b9c"})  # Replace with actual _id if needed
+        
+        if document and 'Token' in document:
+            return document['Token']
+        return None
 
     async def setup(self):
         print("\n\033[94m• —— Cogs/\033[0m")
