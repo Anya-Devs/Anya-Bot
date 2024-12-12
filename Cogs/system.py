@@ -1,27 +1,29 @@
 import os
 import gc
-import pip
 import json
 import logging
-import aiohttp
-import requests
 import platform
 import psutil
-import colorama
-from Imports.discord_imports import *
-from Imports.log_imports import *
-from colorama import Fore, Style
-import Data.const as const  # Importing the const module
-from Data.const import primary_color
-from datetime import datetime
 import sys
 import subprocess
+import time
+from datetime import datetime, timedelta
 
+import aiohttp
+import requests
+import colorama
+from colorama import Fore, Style
 
+from Imports.discord_imports import *
+from Imports.log_imports import *
+import Data.const as const 
+from Data.const import primary_color, timestamp_gen
 
 class System(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.start_time = time.time()  # Store the bot's start time
+
         # logger.info(f"{Fore.GREEN}[System cog] Initialized{Style.RESET_ALL}")
 
     async def get_latest_python_version(self):
@@ -72,7 +74,20 @@ class System(commands.Cog):
     def cog_unload(self):
         logger.info(f"{Fore.RED}[System cog] Unloaded{Style.RESET_ALL}")
         
-        
+    @commands.command(name='uptime')
+    async def uptime(self, ctx):
+        """Shows how long the bot has been running."""
+        bot_uptime = timestamp_gen(self.start_time)  # Assuming `bot.start_time` is the timestamp of when the bot started
+
+
+        embed = discord.Embed(
+            title="How Long Has Bot Been Awake?",
+            description=f"The bot was been running {bot_uptime}",
+            color=primary_color(),
+            timestamp=datetime.now()
+        )
+        embed.set_footer(text="Uptime", icon_url=self.bot.user.avatar)
+        await ctx.reply(embed=embed, mention_author=False)     
         
         
     @commands.command(name='credit')

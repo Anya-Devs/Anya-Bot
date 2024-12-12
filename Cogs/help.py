@@ -199,7 +199,7 @@ class Options_ImageGenerator:
         # Layout positions
         self.character_pos = (5, 5)
         self.text_x_offset = 10
-        self.text_y_offset = 25
+        self.text_y_offset = 30
         self.text_spacing = 20
 
         # Color replacements

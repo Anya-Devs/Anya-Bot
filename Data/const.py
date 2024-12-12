@@ -101,7 +101,7 @@ class Help_Select_Embed_Mapping:
         },
         "quest": {
             "title": "Quest",
-            "description": 'Participate in activities within your server, staying active with simple quests.',
+            "description": 'Manages quest tracking, balance points, and a shop in a Discord bot. It allows users to view and track quests, configure mission channels, and manage balance.',
             "color": None,  # Customize color as needed
             "thumbnail_url": AnyaImages.help_quest_thumbnail
         },

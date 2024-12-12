@@ -2,7 +2,8 @@
     "Quest": {
         "quest": " View server quest in order to complete them.",
         "stars": " View how many stellas you have currently.",
-        "shop": "Buy a Spy Tool."
+        "shop": "Buy a Spy Tool.",
+        "redirect": " "
     },
     "Ai": {
         "vision_model": "Get the current vision model.",
@@ -11,18 +12,29 @@
     },
     "Anime": {
         "anime": "Get information about an anime.",
-        "character": " "
+        "character": " ",
+        "manga": " "
     },
     "System": {
         "ping": "Check the bot's response time.",
-        "credit": " "
+        "credit": " ",
+        "uptime": " "
     },
     "Pokemon": {
         "predict": "Predict Pok\u00e9mon details.",
-        "pokemon": "Get information about a Pok\u00e9mon."
+        "pokemon": "Get information about a Pok\u00e9mon.",
+        "hunt": " "
     },
     "Information": {
-        "about": "Get details about users or bot."
+        "about": "Get details about users or bot.",
+        "server": " ",
+        "pfp": " ",
+        "role": " ",
+        "banner": " ",
+        "joined": " ",
+        "roles": " ",
+        "invite": " ",
+        "perms": " "
     },
     "PokemonBot": {
         "predict": " "
