@@ -18,6 +18,7 @@ load_dotenv(dotenv_path=os.path.join('.github', '.env'))
 
 # Print loaded environment variables
 print("\033[93mLoaded Environment Variables:\033[0m")
+
 for key, value in os.environ.items():
     if key.startswith("TOKEN") or key.startswith("PASSWORD") or key.startswith("SECRET"):
         print(f"{key} = [REDACTED]")
