@@ -12,13 +12,6 @@ from pymongo.errors import ConfigurationError
 
 from dotenv import load_dotenv
 
-# Set environment variables
-os.environ['DBUSER'] = 'senko_dev'
-os.environ['DBPASSWORD'] = '7wKW1SL6UorrlpuH'
-os.environ['CLUSTERSTRING'] = 'clusterstring'
-os.environ['MONGO_URI'] = 'mongodb+srv://senkos:senkos@wakuwaku.hnhzcbd.mongodb.net/?retryWrites=true&w=majority&appName=WakuWaku'
-os.environ['HUGGINGFACE_API_KEY'] = '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'
-os.environ['api_key'] = 'aner123!'
 
 # Load environment variables (still necessary for other environment-related settings)
 load_dotenv(dotenv_path=os.path.join('.github', '.env'))
