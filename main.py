@@ -49,7 +49,7 @@ class BotSetup(commands.AutoShardedBot):
 
     async def get_token_from_db(self):
         # Connect to the MongoDB client
-        mongo_url = os.getenv('MONGO_URI')  # Ensure your MongoDB URI is set as an environment variable
+        mongo_url = os.getenv('MONGO_URI_BOT')  # Ensure your MongoDB URI is set as an environment variable
         if not mongo_url:
             raise ValueError("No MONGO_URI found in environment variables")
 
