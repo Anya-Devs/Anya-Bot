@@ -7,5 +7,11 @@ ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
 RUN pip install poetry
 RUN poetry config virtualenvs.create false
 
+# Copy the requirements.txt first for caching dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the application code
 COPY . .
+
 CMD ["python", "main.py"]
