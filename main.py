@@ -5,54 +5,48 @@ import traceback
 import asyncio
 import requests
 from aiohttp import web
-import time
-from discord.ext import commands
-from discord import HTTPException
-from colorama import Fore, Style
 from dotenv import load_dotenv
 import pymongo
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import ConfigurationError
 
-os.system('pip install --upgrade pip')
-
-env_path = os.path.join('.github', '.env')
-load_dotenv(dotenv_path=env_path)
-
-
+# Custom Imports
 from Imports.depend_imports import *
-import Imports.depend_imports as depend_imports
 from Imports.discord_imports import *
 from Imports.log_imports import logger
 from Cogs.pokemon import PokemonPredictor
+
+from discord.ext import commands
 
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         intents.members = True
-        super().__init__(command_prefix=commands.when_mentioned_or('...'),
-                         intents=intents,
-                         help_command=None,
-                         shard_count=1, shard_reconnect_interval=10)
+        super().__init__(
+            command_prefix=commands.when_mentioned_or('...'),
+            intents=intents,
+            help_command=None,
+            shard_count=1,
+            shard_reconnect_interval=10
+        )
         self.mongoConnect = None
 
     async def on_ready(self):
-        print(Fore.GREEN + f"Logged in as {self.user} (ID: {self.user.id})" + Style.RESET_ALL)
+        print(f"\033[92mLogged in as {self.user} (ID: {self.user.id})\033[0m")
 
-    
     async def start_bot(self):
         await self.setup()
         token = os.getenv('TOKEN')
         if not token:
             logger.error("No token found. Please set the TOKEN environment variable.")
             return
+
         try:
             await self.start(token)
         except KeyboardInterrupt:
             await self.close()
         except Exception as e:
-            traceback_string = traceback.format_exc()
-            logger.error(f"An error occurred while logging in: {e}\n{traceback_string}")
+            logger.error(f"An error occurred while logging in: {e}\n{traceback.format_exc()}")
             await self.close()
         finally:
             if self.is_closed():
@@ -62,27 +56,23 @@ class BotSetup(commands.AutoShardedBot):
             await self.close()
 
     async def setup(self):
-        print("\n")
-        print(Fore.BLUE + "・ ── Cogs/" + Style.RESET_ALL)
+        print("\n\033[94m• —— Cogs/\033[0m")
         await self.import_cogs("Cogs")
-        print("\n")
-        print(Fore.BLUE + "・ ── Events/" + Style.RESET_ALL)
+        print("\n\033[94m• —— Events/\033[0m")
         await self.import_cogs("Events")
-        print("\n")
-        print(Fore.BLUE + "===== Setup Completed =====" + Style.RESET_ALL)
+        print("\n\033[94m===== Setup Completed =====\033[0m")
 
     async def import_cogs(self, dir_name):
-        files_dir = os.listdir(dir_name)
-        for filename in files_dir:
+        for filename in os.listdir(dir_name):
             if filename.endswith(".py"):
-                print(Fore.BLUE + f"│   ├── {filename}" + Style.RESET_ALL)
+                print(f"\033[94m|   ├── {filename}\033[0m")
                 module = __import__(f"{dir_name}.{os.path.splitext(filename)[0]}", fromlist=[""])
                 for obj_name in dir(module):
                     obj = getattr(module, obj_name)
                     if isinstance(obj, commands.CogMeta):
                         if not self.get_cog(obj_name):
                             await self.add_cog(obj(self))
-                            print(Fore.GREEN + f"│   │   └── {obj_name}" + Style.RESET_ALL)
+                            print(f"\033[92m|   |   └── {obj_name}\033[0m")
 
 async def check_rate_limit():
     url = "https://discord.com/api/v10/users/@me"
@@ -100,26 +90,6 @@ async def check_rate_limit():
     else:
         logger.error(f"Failed to check rate limit. Status code: {response.status_code}")
 
-async def main():
-    bot = BotSetup()
-    try:
-        await check_rate_limit()
-        await bot.start_bot()
-    except HTTPException as e:
-        if e.status == 429:
-            retry_after = int(e.response.headers.get("Retry-After", 0))
-            logger.error(f"Rate limit exceeded. Retry after {retry_after} seconds.")
-            print(f"Rate limit exceeded. Please wait for {retry_after} seconds before retrying.")
-            await asyncio.sleep(retry_after)
-        else:
-            traceback_string = traceback.format_exc()
-            logger.error(f"An error occurred: {e}\n{traceback_string}")
-    except Exception as e:
-        traceback_string = traceback.format_exc()
-        logger.error(f"An error occurred: {e}\n{traceback_string}")
-    finally:
-        await bot.close()
-
 async def start_http_server():
     try:
         app = web.Application()
@@ -134,7 +104,25 @@ async def start_http_server():
         logger.error(f"Failed to start HTTP server: {e}")
         print("Failed to start HTTP server.")
 
+async def main():
+    bot = BotSetup()
+    try:
+        await check_rate_limit()
+        await bot.start_bot()
+    except discord.HTTPException as e:
+        if e.status == 429:
+            retry_after = int(e.response.headers.get("Retry-After", 0))
+            logger.error(f"Rate limit exceeded. Retry after {retry_after} seconds.")
+            print(f"Rate limit exceeded. Please wait for {retry_after} seconds before retrying.")
+            await asyncio.sleep(retry_after)
+        else:
+            logger.error(f"An error occurred: {e}\n{traceback.format_exc()}")
+    except Exception as e:
+        logger.error(f"An error occurred: {e}\n{traceback.format_exc()}")
+    finally:
+        await bot.close()
+
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.create_task(start_http_server())
-    loop.run_until_complete(main())
+    load_dotenv(dotenv_path=os.path.join('.github', '.env'))
+    asyncio.run(start_http_server())
+    asyncio.run(main())
