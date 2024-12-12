@@ -57,8 +57,9 @@ class BotSetup(commands.AutoShardedBot):
         db = client[self.DB_NAME]
         collection = db[self.COLLECTION_NAME]
 
-        # Fetch token by _id
-        token_data = await collection.find_one({"_id": "675a67943bf54387fa4d5b9c"})  # You can modify this query to match your document structure
+        # Search for the document containing the Token field
+        token_data = await collection.find_one({"Token": {"$exists": True}})
+        
         if token_data:
             return token_data.get("Token")  # Adjust the field name if needed
         else:
