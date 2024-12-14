@@ -2084,7 +2084,7 @@ class SpyToolSelect(discord.ui.Select):
     def __init__(self, shop_data, materials_dict, quest_data, user_id, guild_id):
         spy_tools = shop_data.get("Spy Tools", [])
         options = [
-            discord.SelectOption(emoji={tool.get('emoji', '')}, label=f"{tool.get('name', 'Unknown Item')}", value=tool.get('name', 'Unknown Item'))
+            discord.SelectOption(emoji=f"{tool.get('emoji', '')}", label=f"{tool.get('name', 'Unknown Item')}", value=tool.get('name', 'Unknown Item'))
             for tool in spy_tools
         ]
         super().__init__(placeholder="Select a Spy Tool", options=options)
