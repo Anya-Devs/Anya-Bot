@@ -178,10 +178,16 @@ class Quest(commands.Cog):
 
         # Add fields for each tool and its quantity, including emojis
         for tool, quantity in inventory.items():
-            # Check if the unique tool ID exists
-            un_tool_id = await self.quest_data.get_or_create_un_tool_id(guild_id, user_id, tool)
-            emoji = self.get_tool_emoji(tool)
-            embed.add_field(name=f" ", value=f"`{un_tool_id}`　{emoji} : `x{quantity}`", inline=False)
+            try:
+                # Try to get the unique tool ID, and if not found, generate it
+                un_tool_id = await self.quest_data.get_or_create_un_tool_id(guild_id, user_id, tool)
+                emoji = self.get_tool_emoji(tool)
+                embed.add_field(name=f" ", value=f"`{un_tool_id}`　{emoji} : `x{quantity}`", inline=False)
+            except Exception as e:
+                # If the un_tool_id generation fails, notify the user
+                await ctx.reply(f"{ctx.author.mention}, it seems the unique tool ID for `{tool}` is missing. I'll update it now. Please wait a moment.", mention_author=False)
+                # You can handle the update here if needed, or inform the user it's being handled
+                logger.error(f"Error generating un_tool_id for {tool}: {e}")
 
         embed.set_footer(text="Inventory", icon_url=self.bot.user.avatar.url)
 
@@ -190,9 +196,8 @@ class Quest(commands.Cog):
 
      except Exception as e:
         await ctx.reply(f"An error occurred while fetching your inventory: {e}", mention_author=False)
+        logger.error(f"Error in inventory command: {e}")
 
-
-   
     @commands.command(name='stars', aliases=['bal', 'points', 'balance'])
     async def balance(self, ctx, method=None, amount: int = None, member: discord.Member = None):
         user_id = str(ctx.author.id)
