@@ -58,7 +58,7 @@ class Quest(commands.Cog):
      except Exception as e:
         logger.error(f"Error in setchannels command: {e}")
         await ctx.send("An error occurred while setting the channels.")
-        
+     
     @commands.command(name='quest', aliases=['q'])
     async def quest(self, ctx, args: str = None):
         logger.debug("Quest command invoked.")
@@ -125,6 +125,50 @@ class Quest(commands.Cog):
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
             await ctx.send(f"{error_message}")
+            
+    @commands.command(name="inventory", aliases=["inv"])
+    async def inventory(self, ctx):
+        """
+        Command to display the user's inventory.
+        """
+        try:
+            user_id = str(ctx.author.id)
+            guild_id = str(ctx.guild.id)
+
+            # Fetch the inventory for the user
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_collection = db['Servers']
+
+            user_data = await server_collection.find_one(
+                {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
+                {f'members.{user_id}.inventory': 1}
+            )
+
+            if not user_data or 'inventory' not in user_data['members'][user_id]:
+                await ctx.reply(f"{ctx.author.mention}, your inventory is empty.", mention_author=False)
+                return
+
+            inventory = user_data['members'][user_id]['inventory']
+
+            # Prepare the embed
+            embed = discord.Embed(
+                title=f"{ctx.author.display_name}'s Inventory",
+                description="Here are the items you currently have:",
+                color=primary_color(),
+                timestamp=datetime.now()
+            )
+            embed.set_thumbnail(url=ctx.author.avatar.url)
+
+            for item, quantity in inventory.items():
+                embed.add_field(name=item.capitalize(), value=f"`x{quantity}`", inline=True)
+
+            embed.set_footer(text="Inventory", icon_url=self.bot.user.avatar.url)
+
+            await ctx.reply(embed=embed, mention_author=False)
+
+        except Exception as e:
+            logger.error(f"Error in inventory command: {e}")
+            await ctx.send(f"An error occurred while fetching your inventory. Please try again later.")
 
     @commands.command(name='stars', aliases=['bal', 'points', 'balance'])
     async def balance(self, ctx, method=None, amount: int = None, member: discord.Member = None):
