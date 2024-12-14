@@ -21,3 +21,4 @@ tqdm
 graphviz
 aiofiles
 python-dotenv
+asyncio-redis

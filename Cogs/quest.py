@@ -3,6 +3,7 @@ import os
 import datetime
 import random
 import re
+import uuid
 from datetime import timedelta, datetime
 import typing
 import traceback
@@ -161,6 +162,7 @@ class Quest(commands.Cog):
         )
 
         inventory = user_data.get('members', {}).get(user_id, {}).get('inventory', {}).get('tool', {})
+
         if not inventory:
             await ctx.reply(f"{ctx.author.mention}, your inventory is empty! Start collecting tools to see them here.", mention_author=False)
             return
@@ -176,8 +178,10 @@ class Quest(commands.Cog):
 
         # Add fields for each tool and its quantity, including emojis
         for tool, quantity in inventory.items():
+            # Check if the unique tool ID exists
+            un_tool_id = await self.quest_data.get_or_create_un_tool_id(guild_id, user_id, tool)
             emoji = self.get_tool_emoji(tool)
-            embed.add_field(name=f" ", value=f"{emoji} : `x{quantity}`", inline=True)
+            embed.add_field(name=f" ", value=f"`{un_tool_id}`　{emoji} : `x{quantity}`", inline=False)
 
         embed.set_footer(text="Inventory", icon_url=self.bot.user.avatar.url)
 
@@ -186,7 +190,8 @@ class Quest(commands.Cog):
 
      except Exception as e:
         await ctx.reply(f"An error occurred while fetching your inventory: {e}", mention_author=False)
-   
+
+
    
     @commands.command(name='stars', aliases=['bal', 'points', 'balance'])
     async def balance(self, ctx, method=None, amount: int = None, member: discord.Member = None):
@@ -773,7 +778,7 @@ class Quest_Data(commands.Cog):
         for key, value in kwargs.items():
             if value is None or value == "":
                 raise ValueError(f"{key} cannot be None or empty")
-                
+               
     async def get_user_inventory_count(self, guild_id: str, user_id: str, material_name: str) -> int:
      try:
         db = self.mongoConnect[self.DB_NAME]
@@ -828,7 +833,32 @@ class Quest_Data(commands.Cog):
         except PyMongoError as e:
             logger.error(f"Error occurred while adding item to inventory: {e}")
             raise e
-            
+   
+    async def get_or_create_un_tool_id(self, guild_id, user_id, tool):
+        """Fetch or create a unique tool ID for the user and tool."""
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+        
+        # Check if the un_tool_id exists for this tool in the user's inventory
+        user_tool_data = await server_collection.find_one(
+            {'guild_id': guild_id, f'members.{user_id}.inventory.tool.{tool}': {'$exists': True}},
+            {f'members.{user_id}.inventory.tool.{tool}': 1}
+        )
+        
+        # If the tool doesn't have a unique ID, create one
+        if not user_tool_data or 'un_tool_id' not in user_tool_data['members'][user_id]['inventory']['tool'][tool]:
+            un_tool_id = str(uuid.uuid4())  # Generate a unique ID for the tool
+            # Add the un_tool_id to the user's inventory for this tool
+            await server_collection.update_one(
+                {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
+                {'$set': {f'members.{user_id}.inventory.tool.{tool}.un_tool_id': un_tool_id}}
+            )
+        else:
+            # If the tool already has a unique ID, retrieve it
+            un_tool_id = user_tool_data['members'][user_id]['inventory']['tool'][tool]['un_tool_id']
+        
+        return un_tool_id
+          
     async def remove_all_server_quests(self, guild_id: str) -> None:
      try:
         db = self.mongoConnect[self.DB_NAME]

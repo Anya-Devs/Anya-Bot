@@ -14,7 +14,7 @@
         {
             "name": "Spy Briefcase",
             "emoji": "<:spy_briefcase:1317341084833284157>",
-            "description": ". This briefcase allows you to discreetly siphon off 30% of another member's points.",
+            "description": "This briefcase allows you to discreetly siphon off 30% of another member's points.",
             "materials": [
                 {"material": "Silicon", "quantity": 3},
                 {"material": "Leather", "quantity": 5},
