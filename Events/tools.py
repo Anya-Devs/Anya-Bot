@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from discord.ext import commands
 import motor.motor_asyncio
 from pymongo.errors import PyMongoError
+from Cogs.quest import Quest_Data
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -100,6 +101,8 @@ class ToolActivation(commands.Cog):
         self.bot = bot
         self.DB_NAME = 'Quest'
         mongo_url = os.getenv('MONGO_URI')
+        self.quest_data = Quest_Data(bot)
+
         if not mongo_url:
             raise ValueError("No MONGO_URI found in environment variables")
         self.mongoConnect = motor.motor_asyncio.AsyncIOMotorClient(mongo_url)
@@ -239,7 +242,7 @@ class ToolActivation(commands.Cog):
                 tool = content[1].strip()  # The tool name after the ID
 
                 # Fetch or create the tool's unique ID for the mentioned user
-                un_tool_id_db = await self.get_or_create_un_tool_id(
+                un_tool_id_db = await self.quest_data.get_un_tool_id(
                     str(message.guild.id), str(mentioned_user.id), tool
                 )
 

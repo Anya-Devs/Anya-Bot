@@ -4,6 +4,7 @@ import datetime
 import random
 import re
 import uuid
+import string
 from datetime import timedelta, datetime
 import typing
 import traceback
@@ -145,7 +146,7 @@ class Quest(commands.Cog):
             traceback.print_exc()
             await ctx.send(f"{error_message}")
 
-    @commands.command(name="inventory", aliases=["inv"])
+    @commands.command(name="inventory", aliases=["inv"]) 
     async def inventory(self, ctx):
      """Displays the user's tool inventory."""
      try:
@@ -158,36 +159,54 @@ class Quest(commands.Cog):
 
         user_data = await server_collection.find_one(
             {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
-            {f'members.{user_id}.inventory.tool': 1}
+            {f'members.{user_id}.inventory.tool'}
         )
 
         inventory = user_data.get('members', {}).get(user_id, {}).get('inventory', {}).get('tool', {})
 
         if not inventory:
-            await ctx.reply(f"{ctx.author.mention}, your inventory is empty! Start collecting tools to see them here.", mention_author=False)
+            await ctx.reply(
+                f"{ctx.author.mention}, your inventory is empty! Start collecting tools to see them here.",
+                mention_author=False
+            )
             return
 
         # Prepare the embed
         embed = discord.Embed(
             title=f"{ctx.author.display_name}'s Inventory",
-            description="```Your Inventory```",
+            description="Your current tool inventory:",
             color=primary_color(),
             timestamp=datetime.now()
         )
         embed.set_thumbnail(url=ctx.author.avatar.url)
 
-        # Add fields for each tool and its quantity, including emojis
-        for tool, quantity in inventory.items():
+         # Add fields for each tool and its quantity, including emojis
+        for tool in inventory.keys():
             try:
-                # Try to get the unique tool ID, and if not found, generate it
-                un_tool_id = await self.quest_data.get_or_create_un_tool_id(guild_id, user_id, tool)
-                emoji = self.get_tool_emoji(tool)
-                embed.add_field(name=f" ", value=f"`{un_tool_id}`　{emoji} : `x{quantity}`", inline=False)
+                # Fetch the unique tool ID
+                un_tool_id = await self.quest_data.get_existing_tool_id(guild_id, user_id, tool)
+
+                if not un_tool_id:
+                    # Create a new unique tool ID if it doesn't exist
+                    un_tool_id = await self.quest_data.create_un_tool_id(guild_id, user_id, tool)
+
+                # Fetch the quantity for the tool
+                quantity = await self.quest_data.get_quantity(guild_id, user_id, tool)
+
+                emoji = self.get_tool_emoji(tool) or ""  # Default to empty string if emoji not found
+
+                # Add field to embed
+                embed.add_field(
+                    name=f"{tool.capitalize()}",
+                    value=f"`{un_tool_id}` : \t{emoji}\t`x{quantity}`",
+                    inline=False
+                )
             except Exception as e:
-                # If the un_tool_id generation fails, notify the user
-                await ctx.reply(f"{ctx.author.mention}, it seems the unique tool ID for `{tool}` is missing. I'll update it now. Please wait a moment.", mention_author=False)
-                # You can handle the update here if needed, or inform the user it's being handled
-                logger.error(f"Error generating un_tool_id for {tool}: {e}")
+                await ctx.reply(
+                    f"{ctx.author.mention}, there was an issue processing `{tool}`. Please try again later.",
+                    mention_author=False
+                )
+                logger.error(f"Error generating or fetching un_tool_id or quantity for {tool}: {e}")
 
         embed.set_footer(text="Inventory", icon_url=self.bot.user.avatar.url)
 
@@ -197,7 +216,13 @@ class Quest(commands.Cog):
      except Exception as e:
         await ctx.reply(f"An error occurred while fetching your inventory: {e}", mention_author=False)
         logger.error(f"Error in inventory command: {e}")
-
+   
+   
+   
+   
+   
+   
+   
     @commands.command(name='stars', aliases=['bal', 'points', 'balance'])
     async def balance(self, ctx, method=None, amount: int = None, member: discord.Member = None):
         user_id = str(ctx.author.id)
@@ -825,45 +850,127 @@ class Quest_Data(commands.Cog):
         except PyMongoError as e:
             logger.error(f"Error occurred while adding item to inventory: {e}")
             raise e
-    
-    async def add_tool_to_inventory(self, guild_id: str, user_id: str, material_name: str, quantity: int) -> None:
+        
+    async def get_existing_tool_id(self, guild_id: str, user_id: str, tool_name: str) -> str:
+        """Fetches the existing un_tool_id for the tool from the inventory."""
         try:
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db['Servers']
-            await server_collection.update_one(
+            user_data = await server_collection.find_one(
                 {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
-                {'$inc': {f'members.{user_id}.inventory.tool.{material_name}': quantity}},
-                upsert=True
+                {f'members.{user_id}.inventory.tool.{tool_name}': 1}
             )
+
+            # Check if the tool has an existing un_tool_id
+            tool_data = user_data.get('members', {}).get(user_id, {}).get('inventory', {}).get('tool', {}).get(tool_name, {})
+            return tool_data.get('un_tool_id', None)
         except PyMongoError as e:
-            logger.error(f"Error occurred while adding item to inventory: {e}")
-            raise e
-   
-    async def get_or_create_un_tool_id(self, guild_id, user_id, tool):
-        """Fetch or create a unique tool ID for the user and tool."""
+            logger.error(f"Error occurred while getting existing tool ID: {e}")
+            return None
+            
+    async def get_quantity(self, guild_id: str, user_id: str, material_name: str) -> int:
+     """
+     Retrieves the quantity of a specific material in a user's inventory.
+     If the material does not exist, returns 0.
+     """
+     try:
         db = self.mongoConnect[self.DB_NAME]
         server_collection = db['Servers']
+
+        # Fetch the user's inventory and get the quantity for the specific material
+        user_data = await server_collection.find_one(
+            {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
+            {f'members.{user_id}.inventory.tool.{material_name}.quantity': 1}
+        )
+
+        # Retrieve the quantity or default to 0 if not found
+        quantity = user_data.get('members', {}).get(user_id, {}).get('inventory', {}).get('tool', {}).get(material_name, {}).get('quantity', 0)
+        return quantity
+     except PyMongoError as e:
+        logger.error(f"Error occurred while retrieving quantity for {material_name}: {e}")
+        raise e
+     
+    async def add_tool_to_inventory(self, guild_id: str, user_id: str, material_name: str, quantity: int) -> None:
+     try:
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+
+        # Increment the material quantity while ensuring the structure includes a `quantity` field
+        await server_collection.update_one(
+            {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
+            {
+                '$inc': {f'members.{user_id}.inventory.tool.{material_name}.quantity': quantity}
+            },
+            upsert=True
+        )
+     except PyMongoError as e:
+        logger.error(f"Error occurred while adding item to inventory: {e}")
+        raise e
+     
+    async def create_un_tool_id(self, guild_id, user_id, tool):
+     """Create a new unique tool ID for the user and tool."""
+    
+     # Helper function to generate a short, 6-digit unique ID for the tool
+     def generate_short_uuid():
+        return ''.join(random.choices(string.digits, k=6))  # Only digits now
+
+     db = self.mongoConnect[self.DB_NAME]
+     server_collection = db['Servers']
+
+     try:
+        # Generate a new 6-digit ID
+        un_tool_id = generate_short_uuid()
+
+        # Create the tool data with the generated un_tool_id
+        tool_data = {'un_tool_id': un_tool_id}
+
+        # Use upsert to ensure the tool is added with the generated un_tool_id
+        result = await server_collection.update_one(
+            {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
+            {'$set': {f'members.{user_id}.inventory.tool.{tool}': tool_data}},
+            upsert=True  # Ensures the tool is inserted if missing
+        )
+
+        # Debugging info
+        logger.debug(f"Generated new un_tool_id: {un_tool_id} for tool '{tool}'")
+        logger.debug(f"Database update result: {result.raw_result}")
         
-        # Check if the un_tool_id exists for this tool in the user's inventory
+        return un_tool_id
+     except Exception as e:
+        logger.error(f"Error in create_un_tool_id for tool '{tool}' (guild: {guild_id}, user: {user_id}): {e}")
+        raise  # Re-raise the exception after logging it
+     
+    async def get_un_tool_id(self, guild_id, user_id, tool):
+        """Fetch the unique tool ID for the user and tool."""
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+
+        # Check if the tool exists in the user's inventory
         user_tool_data = await server_collection.find_one(
             {'guild_id': guild_id, f'members.{user_id}.inventory.tool.{tool}': {'$exists': True}},
             {f'members.{user_id}.inventory.tool.{tool}': 1}
         )
-        
-        # If the tool doesn't have a unique ID, create one
-        if not user_tool_data or 'un_tool_id' not in user_tool_data['members'][user_id]['inventory']['tool'][tool]:
-            un_tool_id = str(uuid.uuid4())  # Generate a unique ID for the tool
-            # Add the un_tool_id to the user's inventory for this tool
-            await server_collection.update_one(
-                {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
-                {'$set': {f'members.{user_id}.inventory.tool.{tool}.un_tool_id': un_tool_id}}
-            )
+
+        if user_tool_data:
+            try:
+                # Access the tool data safely
+                tool_data = user_tool_data['members'][user_id]['inventory']['tool'].get(tool)
+
+                if isinstance(tool_data, dict) and 'un_tool_id' in tool_data:
+                    # Return the un_tool_id if it exists
+                    return tool_data['un_tool_id']
+
+                # If the un_tool_id doesn't exist, handle the case separately
+                logger.error(f"Tool {tool} does not have an 'un_tool_id' or is in an unexpected format.")
+                return None
+
+            except KeyError as e:
+                logger.error(f"KeyError: Missing key in user_tool_data for {guild_id} and {user_id}: {e}")
+                return None
         else:
-            # If the tool already has a unique ID, retrieve it
-            un_tool_id = user_tool_data['members'][user_id]['inventory']['tool'][tool]['un_tool_id']
-        
-        return un_tool_id
-          
+            # If the tool does not exist in the user's inventory
+            logger.error(f"Tool {tool} does not exist in the inventory.")
+            return None
     async def remove_all_server_quests(self, guild_id: str) -> None:
      try:
         db = self.mongoConnect[self.DB_NAME]
