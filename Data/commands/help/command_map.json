@@ -3,7 +3,8 @@
         "quest": " View server quest in order to complete them.",
         "stars": " View how many stellas you have currently.",
         "shop": "Buy a Spy Tool.",
-        "redirect": " "
+        "redirect": " ",
+        "inventory": " "
     },
     "Ai": {
         "vision_model": "Get the current vision model.",

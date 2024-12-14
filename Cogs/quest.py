@@ -174,7 +174,7 @@ class Quest(commands.Cog):
         # Prepare the embed
         embed = discord.Embed(
             title=f"{ctx.author.display_name}'s Inventory",
-            description="Your current tool inventory:",
+            description="Your current tool inventory:\n- ||Due to bugs, purchasing doesn't grant an item but only reserves a slot on first purchase.||",
             color=primary_color(),
             timestamp=datetime.now()
         )
@@ -192,6 +192,7 @@ class Quest(commands.Cog):
 
                 # Fetch the quantity for the tool
                 quantity = await self.quest_data.get_quantity(guild_id, user_id, tool)
+     
 
                 emoji = self.get_tool_emoji(tool) or ""  # Default to empty string if emoji not found
 
@@ -903,6 +904,8 @@ class Quest_Data(commands.Cog):
             },
             upsert=True
         )
+        await self.get_quantity(guild_id, user_id, material_name)
+
      except PyMongoError as e:
         logger.error(f"Error occurred while adding item to inventory: {e}")
         raise e
@@ -2197,12 +2200,13 @@ class MaterialsButton(discord.ui.View):
 
             # Add tool to inventory
             await self.quest_data.add_tool_to_inventory(self.guild_id, self.user_id, tool_name, 1)
+           
 
             # Call update_view after buying
             await self.update_view()
-
+    
             await interaction.response.send_message(f"{tool_name} purchased successfully!", ephemeral=True)
-
+          
         except Exception as e:
             traceback.print_exc()
             await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)

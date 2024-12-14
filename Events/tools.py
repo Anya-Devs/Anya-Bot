@@ -46,33 +46,28 @@ class AffectedUser:
         current_time = datetime.utcnow()
 
         if tool == "Motion Alarm":
-            # Motion Alarm effect duration
             duration = timedelta(seconds=Config.TOOL_DURATIONS.get("Motion Alarm", 20))
             expiration_time = current_time + duration
             effect = {"type": "Motion Alarm", "expires_at": expiration_time.isoformat()}
 
         elif tool == "Chimera":
-            # Chimera tool effect, no expiration, permanent protection effect
             effect = {"type": "Chimera", "expires_at": None}
 
         elif tool == "Shadow Cloak":
-            # Shadow Cloak effect with expiration time (e.g., 45 minutes)
             duration = timedelta(minutes=Config.TOOL_DURATIONS.get("Shadow Cloak", 45))
             expiration_time = current_time + duration
             effect = {"type": "Shadow Cloak", "expires_at": expiration_time.isoformat()}
 
         elif tool == "Spy Briefcase":
-            # Spy Briefcase doesn't have a lasting effect in terms of time
             effect = {"type": "Spy Briefcase", "expires_at": None}
 
         else:
             return None  # Unknown tool, return None
 
-        # Store the effect in Redis, setting the expiration time (if any)
+        # Store the effect in Redis
         self.redis.set(tool_key, json.dumps(effect))
         
         if effect["expires_at"]:
-            # Set expiration based on the expiration time for the tool
             expiration_time = datetime.fromisoformat(effect["expires_at"]) - current_time
             self.redis.expire(tool_key, max(0, expiration_time.total_seconds()))
         
@@ -85,14 +80,12 @@ class AffectedUser:
 
         if effect_data:
             effect = json.loads(effect_data)
-            # If the effect has expired, remove it from Redis
             if effect["expires_at"]:
                 expiration_time = datetime.fromisoformat(effect["expires_at"])
                 if datetime.utcnow() > expiration_time:
                     self.redis.delete(tool_key)
                     return None  # Effect expired, return None
             return effect
-
         return None  # No effect found in Redis
 
 
@@ -141,23 +134,19 @@ class ToolActivation(commands.Cog):
     
     async def handle_spy_briefcase(self, message, mentioned_user):
         """Handle the Spy Briefcase effect (siphon points from another member)."""
-        # Get the user balance of the mentioned user and the user who triggered the effect
         guild_id = str(message.guild.id)
-        user_id = str(message.author.id)  # The user who sent the message
-        target_user_id = str(mentioned_user.id)  # The user to siphon points from
+        user_id = str(message.author.id)
+        target_user_id = str(mentioned_user.id)
         
         user_balance = await self.get_balance(user_id, guild_id)
         target_balance = await self.get_balance(target_user_id, guild_id)
 
-        # Calculate 30% siphon of the target user's points
         siphoned_points = target_balance * 0.30
         
         if siphoned_points > 0:
-            # Deduct the siphoned points from the target and add to the user
             new_target_balance = target_balance - siphoned_points
             new_user_balance = user_balance + siphoned_points
             
-            # Update the balances in the database
             await self.update_balance(user_id, guild_id, new_user_balance)
             await self.update_balance(target_user_id, guild_id, new_target_balance)
             
@@ -169,19 +158,14 @@ class ToolActivation(commands.Cog):
     
     async def handle_shadow_cloak(self, message, mentioned_user):
         """Handle the Shadow Cloak effect, which deletes messages from the user."""
-        
-        # Store the time when Shadow Cloak is applied (45 minutes)
         duration = Config.TOOL_DURATIONS["Shadow Cloak"]
         end_time = datetime.utcnow() + timedelta(minutes=duration)
 
-        # Keep track of the time until the Shadow Cloak expires
         while datetime.utcnow() < end_time:
-            # Check if the message author is the affected user
             if message.author == mentioned_user:
-                await message.delete()  # Delete the message
-            await asyncio.sleep(5)  # Sleep for 5 seconds before checking again to reduce load
+                await message.delete()
+            await asyncio.sleep(5)
 
-        # After the duration expires, notify that the effect ended
         await message.channel.send(f"{mentioned_user.mention}'s Shadow Cloak effect has ended.")
     
     async def get_balance(self, user_id: str, guild_id: str):
@@ -209,7 +193,6 @@ class ToolActivation(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db['Servers']
 
-            # Update the balance in the database
             result = await server_collection.update_one(
                 {'guild_id': guild_id},
                 {'$set': {f'members.{user_id}.stella_points': new_balance}}
@@ -223,31 +206,28 @@ class ToolActivation(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        """Listen for messages and apply tool effects when triggered."""
-        
-        # Ignore messages from bots
-        if message.author.bot:
-            return
+     """Listen for messages and apply tool effects when triggered."""
+    
+     # Ignore messages from bots or bot mentions
+     if message.author.bot or any(mention.bot for mention in message.mentions):
+        return
 
-        # Split the message content for processing
-        content = message.content.split()
+     content = message.content.split()
 
-        # Ensure the message contains enough content and includes a mentioned user
-        if len(content) >= 2:
-            un_tool_id = content[0]  # The unique tool ID from the message
-            mentioned_user = message.mentions[0] if message.mentions else None
+     # Ensure the message contains enough content and includes a mentioned user
+     if len(content) >= 2:
+        un_tool_id = content[0]
+        mentioned_user = message.mentions[0] if message.mentions else None
 
-            # Ensure that a user is mentioned
-            if mentioned_user:
-                tool = content[1].strip()  # The tool name after the ID
+        if mentioned_user:
+            tool = content[1].strip()
 
-                # Fetch or create the tool's unique ID for the mentioned user
-                un_tool_id_db = await self.quest_data.get_un_tool_id(
-                    str(message.guild.id), str(mentioned_user.id), tool
-                )
+            # Fetch or create the tool's unique ID for the mentioned user
+            un_tool_id_db = await self.quest_data.get_un_tool_id(
+                str(message.guild.id), str(mentioned_user.id), tool
+            )
 
-                # If the tool is recognized and valid, apply its effect
-                if un_tool_id == un_tool_id_db:
-                    await self.apply_tool_effect(message, mentioned_user, tool)
-                else:
-                    await message.channel.send("Tool mismatch detected.")
+            if un_tool_id == un_tool_id_db:
+                await self.apply_tool_effect(message, mentioned_user, tool)
+            else:
+                await message.channel.send("Tool mismatch detected.")
