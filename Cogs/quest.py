@@ -125,51 +125,51 @@ class Quest(commands.Cog):
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
             await ctx.send(f"{error_message}")
-            
+
     @commands.command(name="inventory", aliases=["inv"])
     async def inventory(self, ctx):
-        """
-        Command to display the user's inventory.
-        """
-        try:
-            user_id = str(ctx.author.id)
-            guild_id = str(ctx.guild.id)
+     """Displays the user's tool inventory."""
+     try:
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        # Fetch the user's inventory from the database
+        db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+        server_collection = db['Servers']
+        
+        user_data = await server_collection.find_one(
+            {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
+            {f'members.{user_id}.inventory.tool': 1}
+        )
+        
+        # Check if user has any tools in their inventory
+        inventory = user_data.get('members', {}).get(user_id, {}).get('inventory', {}).get('tool', {})
+        if not inventory:
+            await ctx.reply(f"{ctx.author.mention}, your inventory is empty! Start collecting tools to see them here.", mention_author=False)
+            return
 
-            # Fetch the inventory for the user
-            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
-            server_collection = db['Servers']
+        # Prepare the embed
+        embed = discord.Embed(
+            title=f"{ctx.author.display_name}'s Inventory",
+            description="Here are the tools you currently have:",
+            color=primary_color(),
+            timestamp=datetime.now()
+        )
+        embed.set_thumbnail(url=ctx.author.avatar.url)
 
-            user_data = await server_collection.find_one(
-                {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
-                {f'members.{user_id}.inventory': 1}
-            )
+        # Add fields for each tool and its quantity
+        for tool, quantity in inventory.items():
+            embed.add_field(name=tool.capitalize(), value=f"`x{quantity}`", inline=True)
 
-            if not user_data or 'inventory' not in user_data['members'][user_id]:
-                await ctx.reply(f"{ctx.author.mention}, your inventory is empty.", mention_author=False)
-                return
+        embed.set_footer(text="Inventory", icon_url=self.bot.user.avatar.url)
+        
+        # Send the embed
+        await ctx.reply(embed=embed, mention_author=False)
 
-            inventory = user_data['members'][user_id]['inventory']
-
-            # Prepare the embed
-            embed = discord.Embed(
-                title=f"{ctx.author.display_name}'s Inventory",
-                description="Here are the items you currently have:",
-                color=primary_color(),
-                timestamp=datetime.now()
-            )
-            embed.set_thumbnail(url=ctx.author.avatar.url)
-
-            for item, quantity in inventory.items():
-                embed.add_field(name=item.capitalize(), value=f"`x{quantity}`", inline=True)
-
-            embed.set_footer(text="Inventory", icon_url=self.bot.user.avatar.url)
-
-            await ctx.reply(embed=embed, mention_author=False)
-
-        except Exception as e:
-            logger.error(f"Error in inventory command: {e}")
-            await ctx.send(f"An error occurred while fetching your inventory. Please try again later.")
-
+     except Exception as e:
+        logger.error(f"Error occurred in inventory command: {e}")
+        await ctx.send("An error occurred while fetching your inventory. Please try again later.")
+        
     @commands.command(name='stars', aliases=['bal', 'points', 'balance'])
     async def balance(self, ctx, method=None, amount: int = None, member: discord.Member = None):
         user_id = str(ctx.author.id)
