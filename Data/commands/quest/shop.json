@@ -1,137 +1,141 @@
 {
-    "SpyTools": [
-      {
-        "name": "Chimera",
-        "emoji": "<:chimera:1317338025470070866>",
-        "description": "Hold it close for unexpected protection. If used, it will grant one-time protection against the effects of other users.",
-        "materials": [
-          {"material": "Cotton", "quantity": 5},
-          {"material": "Fabric", "quantity": 5},
-          {"material": "Thread", "quantity": 10}
-        ]
-      },
-      {
-        "name": "Spy Briefcase",
-        "emoji": "<:spy_briefcase:1317341084833284157>",
-        "description": ". This briefcase allows you to discreetly siphon off 30% of another member's points.",
-        "materials": [
-          {"material": "Silicon", "quantity": 3},
-          {"material": "Leather", "quantity": 5},
-          {"material": "Wire", "quantity": 5}
-        ]
-      },
-      {
-        "name": "Shadow Cloak",
-        "emoji": "🧥",
-        "description": "When used, this cloak allows the user to go invisible, hiding their presence and messages in all channels for 45 minutes.",
-        "materials": [
-          {"material": "Fabric", "quantity": 10},
-          {"material": "Thread", "quantity": 5},
-          {"material": "Circuit", "quantity": 2}
-        ]
-      },
-      {
-        "name": "Mute Muffler",
-        "emoji": "🔇",
-        "description": "This muffler silences the target user, preventing them from sending messages in all channels for 30 minutes.",
-        "materials": [
-          {"material": "Solder", "quantity": 6},
-          {"material": "Soundproofing Material", "quantity": 4},
-          {"material": "Battery", "quantity": 3}
-        ]
-      },
-      {
-        "name": "Motion Alarm",
-        "emoji": "<:motion_sensor:1317345108869513227>",
-        "description": "This single-use alarm triggers a 20-minute timeout for a targeted user if they send any emoji.",
-        "materials": [
-          {"material": "Plastic", "quantity": 8},
-          {"material": "Chip", "quantity": 4},
-          {"material": "Solder", "quantity": 6},
-          {"material": "CPU", "quantity": 1}
-        ]
-      }
-    ],
-    "Materials": [
-      {
-        "name": "Leather",
-        "emoji": "<:leather:1317346727929319475>",
-        "price": 15
-      },
-      {
-        "name": "Cotton",
-        "emoji": "👕",
-        "price": 15
-      },
-      {
-        "name": "Pencil",
-        "emoji": "📝",
-        "price": 5
-      },
-      {
-        "name": "Fabric",
-        "emoji": "🧵",
-        "price": 15
-      },
-      {
-        "name": "CPU",
-        "emoji": "💻",
-        "price": 90
-      },
-      {
-        "name": "Glass",
-        "emoji": "🪟",
-        "price": 60
-      },
-      {
-        "name": "Silicon",
-        "emoji": "💾",
-        "price": 10
-      },
-      {
-        "name": "Wire",
-        "emoji": "🔌",
-        "price": 5
-      },
-      {
-        "name": "Thread",
-        "emoji": "🧶",
-        "price": 15
-      },
-      {
-        "name": "Circuit",
-        "emoji": "🔋",
-        "price": 25
-      },
-      {
-        "name": "Cloth",
-        "emoji": "🧥",
-        "price": 10 
-      }, 
-      {
-        "name": "Soundproofing Material",
-        "emoji": "🎧",
-        "price": 30
-      },
-      {
-        "name": "Battery",
-        "emoji": "🔋",
-        "price": 30
-      },
-      {
-        "name": "Plastic",
-        "emoji": "🧴",
-        "price": 20
-      },
-      {
-        "name": "Chip",
-        "emoji": "💽",
-        "price": 10
-      },
-      {
-        "name": "Solder",
-        "emoji": "⚒️",
-        "price": 25
-      }
-    ]
-  }
+        "Spy Tools": [
+            {
+                "name": "Chimera",
+                "emoji": "<:chimera:1317338025470070866>",
+                "description": "Hold it close for unexpected protection. If used, it will grant one-time protection against the effects of other users.",
+                "materials": [
+                    {"material": "Cotton", "quantity": 5},
+                    {"material": "Fabric", "quantity": 5},
+                    {"material": "Thread", "quantity": 10}
+    
+                ]
+            },
+            {
+                "name": "Spy Briefcase",
+                "emoji": "<:spy_briefcase:1317341084833284157>",
+                "description": ". This briefcase allows you to discreetly siphon off 30% of another member's points.",
+                "materials": [
+                    {"material": "Silicon", "quantity": 3},
+                    {"material": "Leather", "quantity": 5},
+                    {"material": "Wire", "quantity": 5}
+    
+                ]
+            },
+            {
+                "name": "Shadow Cloak",
+                "emoji": "🧥",
+                "description": "When used, this cloak allows the user to go invisible, hiding their presence and messages in all channels for 45 minutes.",
+                "materials": [
+                    {"material": "Fabric", "quantity": 10},
+                    {"material": "Thread", "quantity": 5},
+                    {"material": "Circuit", "quantity": 2}
+                ]
+            },
+            {
+                "name": "Mute Muffler",
+                "emoji": "🔇",
+                "description": "This muffler silences the target user, preventing them from sending messages in all channels for 30 minutes.",
+                "materials": [
+                    {"material": "Solder", "quantity": 6},
+                    {"material": "Soundproofing Material", "quantity": 4},
+                    {"material": "Battery", "quantity": 3}
+                ]
+            },
+            {
+                "name": "Motion Alarm",
+                "emoji": "<:motion_sensor:1317345108869513227>",
+                "description": "This single-use alarm triggers a 20-minute timeout for a targeted user if they send any emoji.",
+                "materials": [
+                    {"material": "Plastic", "quantity": 8},
+                    {"material": "Chip", "quantity": 4},
+                    {"material": "Solder", "quantity": 6},
+                    {"material": "CPU", "quantity": 1}
+    
+                ]
+            }
+        ],
+        "Materials": [
+            {
+                "name": "Leather",
+                "emoji": "<:leather:1317346727929319475>",
+                "price": 15
+            },
+    
+            {
+                "name": "Cotton",
+                "emoji": "👕",
+                "price": 15
+            },
+            {
+                "name": "Pencil",
+                "emoji": "📝",
+                "price": 5
+            },
+            {
+                "name": "Fabric",
+                "emoji": "🧵",
+                "price": 15
+            },
+            {
+                "name": "CPU",
+                "emoji": "💻",
+                "price": 90
+            },
+            {
+                "name": "Glass",
+                "emoji": "🪟",
+                "price": 60
+            },
+            {
+                "name": "Silicon",
+                "emoji": "💾",
+                "price": 10
+            },
+            {
+                "name": "Wire",
+                "emoji": "🔌",
+                "price": 5
+            },
+            {
+                "name": "Thread",
+                "emoji": "🧶",
+                "price": 15
+            },
+            {
+                "name": "Circuit",
+                "emoji": "🔋",
+                "price": 25
+            },
+            {
+                "name": "Cloth",
+                "emoji": "🧥",
+                "price": 10
+            },
+            {
+                "name": "Soundproofing Material",
+                "emoji": "🎧",
+                "price": 30
+            },
+            {
+                "name": "Battery",
+                "emoji": "🔋",
+                "price": 30
+            },
+            {
+                "name": "Plastic",
+                "emoji": "🧴",
+                "price": 20
+            },
+            {
+                "name": "Chip",
+                "emoji": "💽",
+                "price": 10
+            },
+            {
+                "name": "Solder",
+                "emoji": "⚒️",
+                "price": 25
+            }
+        ]
+    }
