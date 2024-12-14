@@ -3,7 +3,7 @@
         {
             "name": "Chimera",
             "emoji": "<:chimera:1317338025470070866>",
-            "description": "Hold it close for unexpected protection. If used, it will grant one-time protection against the effects of other users.",
+            "description": "Hold it close for unexpected protection. If in inventory, it will grant one-time protection against the effects of other users.",
             "materials": [
                 {"material": "Cotton", "quantity": 5},
                 {"material": "Fabric", "quantity": 5},
