@@ -146,43 +146,48 @@ class Quest(commands.Cog):
 
     @commands.command(name="inventory", aliases=["inv"])
     async def inventory(self, ctx):
-        """Displays the user's tool inventory."""
-        try:
-            guild_id = str(ctx.guild.id)
-            user_id = str(ctx.author.id)
+     """Displays the user's tool inventory."""
+     try:
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
 
-            # Fetch the user's inventory from the database
-            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
-            server_collection = db['Servers']
+        # Fetch the user's inventory from the database
+        db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+        server_collection = db['Servers']
 
-            user_data = await server_collection.find_one(
-                {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
-                {f'members.{user_id}.inventory.tool': 1}
-            )
+        user_data = await server_collection.find_one(
+            {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
+            {f'members.{user_id}.inventory.tool': 1}
+        )
 
-            inventory = user_data.get('members', {}).get(user_id, {}).get('inventory', {}).get('tool', {})
-            if not inventory:
-                await ctx.reply(f"{ctx.author.mention}, your inventory is empty! Start collecting tools to see them here.", mention_author=False)
-                return
+        inventory = user_data.get('members', {}).get(user_id, {}).get('inventory', {}).get('tool', {})
+        if not inventory:
+            await ctx.reply(f"{ctx.author.mention}, your inventory is empty! Start collecting tools to see them here.", mention_author=False)
+            return
 
-            # Prepare the embed
-            embed = discord.Embed(
-                title=f"{ctx.author.display_name}'s Inventory",
-                description="```Your Inventory```",
-                color=primary_color(),
-                timestamp=datetime.now()
-            )
-            embed.set_thumbnail(url=ctx.author.avatar.url)
+        # Prepare the embed
+        embed = discord.Embed(
+            title=f"{ctx.author.display_name}'s Inventory",
+            description="```Your Inventory```",
+            color=primary_color(),
+            timestamp=datetime.now()
+        )
+        embed.set_thumbnail(url=ctx.author.avatar.url)
 
-            # Add fields for each tool and its quantity, including emojis
-            for tool, quantity in inventory.items():
-                emoji = self.get_tool_emoji(tool)
-                embed.add_field(name=f" ", value=f"{emoji} : `x{quantity}`", inline=True)
+        # Add fields for each tool and its quantity, including emojis
+        for tool, quantity in inventory.items():
+            emoji = self.get_tool_emoji(tool)
+            embed.add_field(name=f" ", value=f"{emoji} : `x{quantity}`", inline=True)
 
-            embed.set_footer(text="Inventory", icon_url=self.bot.user.avatar.url)
+        embed.set_footer(text="Inventory", icon_url=self.bot.user.avatar.url)
 
-            # Send the embed
-            await ctx.reply(embed=embed, mention_author=False)  
+        # Send the embed
+        await ctx.reply(embed=embed, mention_author=False)
+
+     except Exception as e:
+        await ctx.reply(f"An error occurred while fetching your inventory: {e}", mention_author=False)
+   
+   
     @commands.command(name='stars', aliases=['bal', 'points', 'balance'])
     async def balance(self, ctx, method=None, amount: int = None, member: discord.Member = None):
         user_id = str(ctx.author.id)
