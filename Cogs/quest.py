@@ -909,6 +909,33 @@ class Quest_Data(commands.Cog):
      except PyMongoError as e:
         logger.error(f"Error occurred while adding item to inventory: {e}")
         raise e
+
+    async def remove_tool_from_inventory(self, guild_id: str, user_id: str, tool_name: str) -> None:
+     try:
+        db = self.mongoConnect[self.DB_NAME]
+        server_collection = db['Servers']
+
+        # Fetch the current quantity of the tool in the user's inventory
+        current_quantity = await self.get_quantity(guild_id, user_id, tool_name)
+
+        if current_quantity > 0:
+            # Decrease the quantity by 1
+            await server_collection.update_one(
+                {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
+                {'$inc': {f'members.{user_id}.inventory.tool.{tool_name}.quantity': -1}},
+                upsert=True
+            )
+        else:
+            logger.warning(f"{user_id} does not have the tool `{tool_name}` in their inventory.")
+            await server_collection.update_one(
+                {'guild_id': guild_id, f'members.{user_id}': {'$exists': True}},
+                {'$set': {f'members.{user_id}.inventory.tool.{tool_name}.quantity': 0}},
+                upsert=True
+            )
+
+     except PyMongoError as e:
+        logger.error(f"Error occurred while removing tool from inventory: {e}")
+        raise e 
      
     async def create_un_tool_id(self, guild_id, user_id, tool):
      """Create a new unique tool ID for the user and tool."""
@@ -942,6 +969,8 @@ class Quest_Data(commands.Cog):
      except Exception as e:
         logger.error(f"Error in create_un_tool_id for tool '{tool}' (guild: {guild_id}, user: {user_id}): {e}")
         raise  # Re-raise the exception after logging it
+
+    
      
     async def get_un_tool_id(self, guild_id, user_id, tool):
         """Fetch the unique tool ID for the user and tool."""
