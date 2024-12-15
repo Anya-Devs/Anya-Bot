@@ -208,41 +208,42 @@ class ToolHandler:
             logger.warning(f"Chimera tool failed for {user_id}")
             await channel.send(f"<@{user_id}> could not be affected by Chimera.")
 
-    async def handle_spy_briefcase(self, author_id ,user_id, channel):
-        """Handle the Spy Briefcase effect (siphon points from another member)."""
-        logger.debug(f"Handling Spy Briefcase for {author_id} in channel {channel.id}")
-        guild_id = str(channel.guild.id)
+    async def handle_spy_briefcase(self, author_id, user_id, channel):
+     """Handle the Spy Briefcase effect (siphon points from another member)."""
+     logger.debug(f"Handling Spy Briefcase for {author_id} in channel {channel.id}")
+     guild_id = str(channel.guild.id)
 
-        # Check if user has the tool in their inventory
-        tool_inventory = await self.check_inventory(author_id, guild_id, "Spy Briefcase")
-        if not tool_inventory:
-            logger.warning(f"You do not have the Spy Briefcase in inventory.")
-            await channel.send(f"<@{author_id}>, you do not have the Spy Briefcase tool in your inventory.")
-            return
+     # Check if user has the tool in their inventory
+     tool_inventory = await self.check_inventory(author_id, guild_id, "Spy Briefcase")
+     if not tool_inventory:
+        logger.warning(f"You do not have the Spy Briefcase in inventory.")
+        await channel.send(f"<@{author_id}>, you do not have the Spy Briefcase tool in your inventory.")
+        return
 
-        # Assuming the mentioned user is the target for siphoning points
-        mentioned_user_id = str(channel.last_message.mentions[0].id)  # Taking the last mentioned user
+     # Assuming the mentioned user is the target for siphoning points
+     mentioned_user_id = str(channel.last_message.mentions[0].id)  # Taking the last mentioned user
 
-        # Get balances
-        user_balance = await self.db_manager.get_balance(user_id, guild_id)
-        target_balance = await self.db_manager.get_balance(mentioned_user_id, guild_id)
-        siphoned_points = target_balance * 0.30
+     # Get balances
+     author_balance = await self.db_manager.get_balance(author_id, guild_id)  # Balance of the author
+     target_balance = await self.db_manager.get_balance(mentioned_user_id, guild_id)  # Balance of the mentioned user
+     siphoned_points = target_balance * 0.25  # Points to siphon (25%)
+
+     if siphoned_points > 0:
+        new_target_balance = target_balance - siphoned_points
+        new_author_balance = author_balance + siphoned_points  # Add siphoned points to the author's balance
         
-        if siphoned_points > 0:
-            new_target_balance = target_balance - siphoned_points
-            new_user_balance = user_balance + siphoned_points
-            
-            await self.db_manager.update_balance(user_id, guild_id, new_user_balance)
-            await self.db_manager.update_balance(mentioned_user_id, guild_id, new_target_balance)
-            
-            logger.info(f"Siphoned {siphoned_points} points from {mentioned_user_id} to {user_id}.")
-            await channel.send(
-                f"<@{user_id}> has siphoned {siphoned_points} points from <@{mentioned_user_id}> using the Spy Briefcase!"
-            )
-        else:
-            logger.info(f"{mentioned_user_id} has no points to siphon.")
-            await channel.send(f"<@{mentioned_user_id}> has no points to siphon.")
-
+        # Update balances
+        await self.db_manager.update_balance(author_id, guild_id, new_author_balance)
+        await self.db_manager.update_balance(mentioned_user_id, guild_id, new_target_balance)
+        
+        logger.info(f"Siphoned {siphoned_points} points from {mentioned_user_id} to {author_id}.")
+        await channel.send(
+            f"<@{author_id}> has siphoned {siphoned_points} points from <@{mentioned_user_id}> using the Spy Briefcase!"
+        )
+     else:
+        logger.info(f"{mentioned_user_id} has no points to siphon.")
+        await channel.send(f"<@{mentioned_user_id}> has no points to siphon.")
+        
     async def handle_shadow_cloak(self, user_id, channel):
         """Handle the Shadow Cloak effect, which deletes messages from the user."""
         logger.debug(f"Handling Shadow Cloak for {user_id} in channel {channel.id}")
@@ -301,7 +302,15 @@ class ToolHandler:
             # Validate quantity
             if quantity > 0:
                 logger.info(f"User has the required {tool} with sufficient quantity.")
-                return True
+
+                # Remove 1 from the inventory
+                success = await self.remove_one_from_inventory(user_id, guild_id, tool)
+                if success:
+                    logger.info(f"Successfully removed 1 {tool} from user {user_id}'s inventory.")
+                    return True
+                else:
+                    logger.warning(f"Failed to remove 1 {tool} from user {user_id}'s inventory.")
+                    return False
             else:
                 logger.warning(f"Tool {tool} found but insufficient quantity ({quantity}).")
                 return False
@@ -311,7 +320,6 @@ class ToolHandler:
      except Exception as e:
         logger.error(f"Error checking inventory for user {user_id} in guild {guild_id}: {e}")
         return False
-    
     
     async def remove_one_from_inventory(self, user_id: str, guild_id: str, tool: str):
      """Remove 1 quantity of a specific tool from the user's inventory."""
