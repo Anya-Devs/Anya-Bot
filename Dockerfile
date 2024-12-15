@@ -1,20 +1,30 @@
-FROM python:3.10-slim
+FROM python:3.10-alpine AS builder
 
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends libjemalloc2 git && rm -rf /var/lib/apt/lists/*
-ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
+RUN apk update && apk add --no-cache \
+    libjemalloc \
+    git \
+    build-base && \
+    rm -rf /var/cache/apk/*
 
 RUN pip install poetry
-RUN poetry config virtualenvs.create false
-
-# Copy the requirements.txt first for caching dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN poetry config virtualenvs.create false && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy the .env file (Optional, if you want to use it within Docker build)
+FROM python:3.10-alpine
+
+WORKDIR /app
+RUN apk update && apk add --no-cache \
+    libjemalloc && \
+    rm -rf /var/cache/apk/*
+
+ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
+
+COPY --from=builder /app /app
 COPY .github/.env ./.env
 
-# Copy the rest of the application code
-COPY . .
+RUN python -OO -m compileall . && \
+    rm -rf /root/.cache /app/.git
 
 CMD ["python", "main.py"]
