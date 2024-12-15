@@ -2205,7 +2205,21 @@ class MaterialsButton(discord.ui.View):
             # Call update_view after buying
             await self.update_view()
     
-            await interaction.response.send_message(f"{tool_name} purchased successfully!", ephemeral=True)
+            # Fetch the user's current quantity of the purchased tool
+            quantity = await self.quest_data.get_quantity(self.guild_id, self.user_id, tool_name)
+
+            # Create the success embed message
+            success_embed = discord.Embed(
+             title="Purchase Successful",
+             description=f"- {tool_name} has been purchased successfully!\n> {tool.get('emoji', '')} : `x{quantity}`",
+             color=primary_color()  # Use the primary color for the embed
+            )
+
+            
+
+            # Send the embed response
+            await interaction.response.send_message(embed=success_embed, ephemeral=True)
+
           
         except Exception as e:
             traceback.print_exc()
