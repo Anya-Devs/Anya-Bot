@@ -39,6 +39,8 @@ class DatabaseManager:
         # Initialize MongoDB connection
         self.mongoConnect = motor.motor_asyncio.AsyncIOMotorClient(mongo_url)
         self.db = self.mongoConnect[db_name]
+        db_name = 'Quest'  # Or set this dynamically based on your setup
+        
 
     def get_collection(self, collection_name):
         """Returns a MongoDB collection."""
@@ -76,7 +78,30 @@ class DatabaseManager:
                 logger.error(f"Failed to update balance for user {user_id} in guild {guild_id}.")
         except PyMongoError as e:
             logger.error(f"Error occurred while updating balance for {user_id} in guild {guild_id}: {e}")
+  
+    async def add_stolen_balance(self, user_id: str, guild_id: str, stolen_points: float):
+     """Add stolen balance (siphoned points) to the author's balance."""
+     logger.debug(f"Adding stolen balance of {stolen_points} to user {user_id} in guild {guild_id}")
+     try:
+        # Get the current balance of the user (author)
+        current_balance = await self.get_balance(user_id, guild_id)
 
+        # Add the stolen points to the current balance
+        new_balance = current_balance + stolen_points
+
+        # Update the balance
+        server_collection = self.db['Servers']
+        result = await server_collection.update_one(
+            {'guild_id': guild_id},
+            {'$set': {f'members.{user_id}.stella_points': new_balance}}
+        )
+        
+        if result.modified_count > 0:
+            logger.info(f"Successfully added stolen points ({stolen_points}) to user {user_id}'s balance. New balance: {new_balance}")
+        else:
+            logger.error(f"Failed to add stolen points for user {user_id} in guild {guild_id}.")
+     except PyMongoError as e:
+        logger.error(f"Error occurred while adding stolen points for {user_id} in guild {guild_id}: {e}")
 
 class Config:
     # Configurations for tool durations (can be extended as needed)
@@ -227,14 +252,17 @@ class ToolHandler:
      author_balance = await self.db_manager.get_balance(author_id, guild_id)  # Balance of the author
      target_balance = await self.db_manager.get_balance(mentioned_user_id, guild_id)  # Balance of the mentioned user
      siphoned_points = target_balance * 0.25  # Points to siphon (25%)
+     siphoned_points = round(siphoned_points)
 
      if siphoned_points > 0:
         new_target_balance = target_balance - siphoned_points
         new_author_balance = author_balance + siphoned_points  # Add siphoned points to the author's balance
         
-        # Update balances
-        await self.db_manager.update_balance(author_id, guild_id, new_author_balance)
+        # Update target balance
         await self.db_manager.update_balance(mentioned_user_id, guild_id, new_target_balance)
+
+        # Add siphoned points to author's balance
+        await self.db_manager.add_stolen_balance(author_id, guild_id, siphoned_points)
         
         logger.info(f"Siphoned {siphoned_points} points from {mentioned_user_id} to {author_id}.")
         await channel.send(
@@ -243,7 +271,7 @@ class ToolHandler:
      else:
         logger.info(f"{mentioned_user_id} has no points to siphon.")
         await channel.send(f"<@{mentioned_user_id}> has no points to siphon.")
-        
+
     async def handle_shadow_cloak(self, user_id, channel):
         """Handle the Shadow Cloak effect, which deletes messages from the user."""
         logger.debug(f"Handling Shadow Cloak for {user_id} in channel {channel.id}")
