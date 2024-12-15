@@ -86,23 +86,20 @@ class DatabaseManager:
         # Get the current balance of the user (author)
         current_balance = await self.get_balance(user_id, guild_id)
 
-        # Add the stolen points to the current balance
-        new_balance = current_balance + stolen_points
-
-        # Update the balance
+        # Update the balance by adding stolen points
         server_collection = self.db['Servers']
         result = await server_collection.update_one(
             {'guild_id': guild_id},
-            {'$set': {f'members.{user_id}.stella_points': new_balance}}
+            {'$inc': {f'members.{user_id}.stella_points': stolen_points}}
         )
         
         if result.modified_count > 0:
+            new_balance = current_balance + stolen_points
             logger.info(f"Successfully added stolen points ({stolen_points}) to user {user_id}'s balance. New balance: {new_balance}")
         else:
             logger.error(f"Failed to add stolen points for user {user_id} in guild {guild_id}.")
      except PyMongoError as e:
         logger.error(f"Error occurred while adding stolen points for {user_id} in guild {guild_id}: {e}")
-
 class Config:
     # Configurations for tool durations (can be extended as needed)
     TOOL_DURATIONS = {
