@@ -1,0 +1,32 @@
+name: Run Anya-Bot
+
+on:
+  push:
+    branches:
+      - main  # or any other branch you want the runner to respond to
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: 3.8  # Update this based on your project requirements
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run the bot
+      run: |
+        source .github/.env
+        python main.py
