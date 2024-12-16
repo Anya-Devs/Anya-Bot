@@ -2,51 +2,55 @@
 
 ## Supported Versions
 
-We ensure that the following versions of **Anya-Bot** are actively supported with security updates. Older versions may not receive security patches or other fixes.
+We actively support the following versions of Anya-Bot:
 
-| Version  | Supported          |
-| -------- | ------------------ |
-| 5.1.x    | :white_check_mark: |
-| 5.0.x    | :x:                |
-| 4.0.x    | :white_check_mark: |
-| < 4.0    | :x:                |
+| Version   | Supported          |
+|-----------|--------------------|
+| Latest    | ✅                 |
+| Previous  | ✅ (Critical fixes)|
+| Older     | ❌                 |
 
-If you are using a version that is no longer supported, please upgrade to the latest stable release to ensure your environment remains secure.
+Please ensure you are using a supported version before reporting issues.
 
 ## Reporting a Vulnerability
 
-To report a vulnerability in **Anya-Bot**, please follow the steps below:
+To report a security vulnerability, please follow these steps:
 
-### Steps to Report:
-1. **Open an Issue**: 
-   - Report the vulnerability by opening a new issue on our GitHub repository:  
-     [https://github.com/Anya-Devs/Anya-Bot/issues](https://github.com/Anya-Devs/Anya-Bot/issues)
-   
-2. **Provide Details**:
-   - Include a detailed description of the vulnerability.
-   - If applicable, provide reproduction steps, potential impact, and any suggested mitigation.
-   - Attach any relevant logs, screenshots, or code snippets to help us understand the issue.
+1. **Contact Information**  
+   Send an email to [senko_owo@gmail.com](mailto:senko_owo@gmail.com) or reach out via Discord at **senko_owo**. Include the following details:
+   - A clear and detailed description of the issue.
+   - Steps to reproduce the vulnerability.
+   - The potential impact of the issue.
 
-3. **Security Label**:
-   - When creating the issue, use the **"Security"** label (if possible) so we can prioritize the response.
-   
-### What to Expect:
-- **Acknowledgment**: We will acknowledge your vulnerability report within 24 hours.
-- **Updates**: You will receive updates as we investigate and resolve the issue. We aim to provide a status update every 3-5 days, depending on the complexity of the vulnerability.
-- **Resolution**: If the vulnerability is verified, we will prioritize a patch and update the bot as soon as possible. A security advisory will also be issued if necessary.
-- **Declined Reports**: If your report is declined (e.g., if it's not reproducible or is determined to be a non-issue), you will be notified with the reasoning.
+2. **Submit via GitHub Issues**  
+   Alternatively, open a [GitHub issue](https://github.com/Anya-Devs/Anya-Bot/issues). For security-sensitive issues, **do not post the full details publicly**. Instead, provide a brief summary and request private follow-up.
 
-### Best Practices for Security
-- Always keep your dependencies up to date.
-- Regularly review your bot’s permissions and limit them to only those necessary.
-- Avoid hardcoding sensitive information like API keys directly in your codebase. Instead, use environment variables or configuration management systems.
+3. **Expected Response Time**  
+   - Initial response: Within **48 hours**.
+   - Resolution timeline: Dependent on the severity and complexity of the issue, but typically within **14 days**.
 
-## Additional Information
+## Security Issue Workflow
 
-For general inquiries or other discussions, feel free to reach out to us on our GitHub repository via [discussions](https://github.com/Anya-Devs/Anya-Bot/discussions).
+- Upon receiving a vulnerability report, we will:
+  1. Acknowledge the report and communicate the next steps.
+  2. Investigate and reproduce the issue.
+  3. Apply a patch and coordinate a release (if necessary).
+  4. Credit the reporter, unless anonymity is requested.
 
-**Note**: We do not accept vulnerability reports via email. Please use the issue tracker for all security-related reports.
+## Scope of Security Concerns
+
+The following types of issues are considered security concerns:
+- Unauthorized access to user data.
+- Exploits allowing privilege escalation within the bot or its servers.
+- Vulnerabilities in third-party integrations used by Anya-Bot.
+
+## Exclusions
+
+The following are **not considered security vulnerabilities**:
+- Bugs unrelated to security (please open a [standard issue](https://github.com/Anya-Devs/Anya-Bot/issues)).
+- Server-specific configurations or mismanagement outside of Anya-Bot’s codebase.
+- Outdated versions no longer supported.
 
 ---
 
-This policy is aimed at ensuring a secure environment for **Anya-Bot** users and developers. We appreciate your collaboration in maintaining the bot's security.
+Thank you for contributing to the security and reliability of **Anya-Bot**!
