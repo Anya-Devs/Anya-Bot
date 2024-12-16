@@ -1,8 +1,5 @@
 # Security Policy
-
-## Supported Versions
-
-We actively support the following versions of Anya-Bot:
+> Supported Versions
 
 | Version   | Supported          |
 |-----------|--------------------|
@@ -10,6 +7,7 @@ We actively support the following versions of Anya-Bot:
 | Previous  | ✅ (Critical fixes)|
 | Older     | ❌                 |
 
+We actively support the following versions of Anya-Bot:
 Please ensure you are using a supported version before reporting issues.
 
 ## Reporting a Vulnerability
