@@ -1,3 +1,4 @@
+# Anya-Bot Community Code of Conduct
 The goal of this document is to help maintain a healthy, respectful community. Please don’t take this as an exhaustive list of things you can or cannot do; rather, try to be your best self. Behavior that moderators find inappropriate, whether listed in the Code of Conduct, the Community Rules, or not, is also not allowed.
 
 ## Our Pledge
