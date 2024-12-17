@@ -342,12 +342,12 @@ class Quest_View(View):
         self.filtered_quests = filtered_quests if filtered_quests is not None else quests
         self.ctx = ctx
         self.page = page
-        self.max_pages = min((len(self.filtered_quests) + 2) // 3, 2)
+        self.max_pages = (len(self.filtered_quests) + 2) // 3  # Calculate the total number of pages
 
         # Add quest filters and navigation buttons
         self.add_item(Quest_Select_Filter(bot, quests, ctx))
         if self.page < self.max_pages - 1:
-            self.add_item(Quest_Select(bot, self.filtered_quests, ctx, self.max_pages))
+            self.add_item(Quest_Select(bot, self.filtered_quests, ctx, self.max_pages))  # Add the Quest_Select button if there are more pages
         if self.page > 0:
             self.add_item(QuestButton("Previous", discord.ButtonStyle.primary, "previous", bot, self.filtered_quests, ctx, self.page))
         if self.page < self.max_pages - 1:
@@ -358,7 +358,7 @@ class Quest_View(View):
 
     async def generate_messages(self):
         start_index = self.page * 3
-        end_index = start_index + 3
+        end_index = start_index + 3  # Always try to display 3 quests per page
         quests_to_display = self.filtered_quests[start_index:end_index]
 
         # Create a single embed for the current page
@@ -367,11 +367,17 @@ class Quest_View(View):
         )
         embed.set_footer(text=f"{self.ctx.author.display_name}'s quests", icon_url=self.ctx.author.avatar)
 
-        for quest in quests_to_display:
+        field_count = 0  # Track how many fields have been added
+        index = start_index  # Start index for iterating over all filtered quests
+
+        # Try to add up to 3 quests per page, replacing inaccessible quests
+        while field_count < 3 and index < len(self.filtered_quests):
+            quest = self.filtered_quests[index]
+            index += 1  # Move to the next quest in the list
+
             quest_id = quest['quest_id']
             progress = quest['progress']
             times = quest['times']
-            action = quest['action']
             method = quest['method']
             content = quest['content']
             reward = quest['reward']
@@ -410,32 +416,33 @@ class Quest_View(View):
             )
 
             # Check if the channel exists and if the member has required roles
+            can_view_channel = True  # Default to True if channel does not exist
             if channel:
-                # Get the permission overwrites for the channel
                 overwrites = channel.overwrites
-
-                # Check if the member has the required role(s)
                 can_view_channel = False
                 for role, overwrite in overwrites.items():
                     if overwrite.read_messages and any(role in self.ctx.author.roles for role in [role]):
                         can_view_channel = True
                         break
 
-                if can_view_channel:
-                    embed.add_field(
-                        name="",  # Step 1: Field name
-                        value=message,
-                        inline=False
-                    )
-                    file = discord.File("Data/Images/generated_image.png", filename='image.png')
+            # Add the quest to the embed only if the user can view it
+            if can_view_channel:
+                embed.add_field(
+                    name="",  # Field name remains blank
+                    value=message,
+                    inline=False
+                )
+                field_count += 1
+            else:
+                # Skip the quest and move to the next available one
+                continue
 
-                    # Set the image in the embed using the attachment URL
-                    embed.set_image(url=f"attachment://image.png")
+        # If you want to set an image, here’s how you can handle it (optional):
+        file = discord.File("Data/Images/generated_image.png", filename='image.png')
+        embed.set_image(url=f"attachment://image.png")
 
         return embed
-
-    
-    
+  
     
     
     
