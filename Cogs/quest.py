@@ -447,6 +447,10 @@ class Quest_Select(Select):
         self.max_pages = max_pages
 
     async def callback(self, interaction: discord.Interaction):
+        if interaction.user != self.ctx.author:
+            await interaction.response.send_message("This is not your section.", ephemeral=True)
+            return
+
         try:
             page_index = int(self.values[0])
             view = Quest_View(self.bot, self.quests, self.ctx, page=page_index, filtered_quests=self.quests)
@@ -456,7 +460,7 @@ class Quest_Select(Select):
             error_message = "An error occurred while fetching quests."
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
-            await ctx.send(f"{error_message}")
+            await self.ctx.send(f"{error_message}")
 
 class Quest_Select_Filter(Select):
     def __init__(self, bot, quests, ctx):
@@ -472,6 +476,10 @@ class Quest_Select_Filter(Select):
         self.ctx = ctx
 
     async def callback(self, interaction: discord.Interaction):
+        if interaction.user != self.ctx.author:
+            await interaction.response.send_message("This is not your section.", ephemeral=True)
+            return
+
         try:
             selected_method = self.values[0]
             if selected_method == "all":
@@ -488,7 +496,6 @@ class Quest_Select_Filter(Select):
             traceback.print_exc()
             await self.ctx.send(f"{error_message}")
             
-            
 class QuestButton(discord.ui.Button):
     def __init__(self, label, style, custom_id, bot, quests, ctx, page):
         super().__init__(label=label, style=style, custom_id=custom_id)
@@ -499,6 +506,10 @@ class QuestButton(discord.ui.Button):
         self.quest_data = Quest_Data(bot)
 
     async def callback(self, interaction: discord.Interaction):
+        if interaction.user != self.ctx.author:
+            await interaction.response.send_message("This is not your section.", ephemeral=True)
+            return
+
         embed = None  # Declare embed variable
         view = None  # Default to no view
 
@@ -535,6 +546,7 @@ class QuestButton(discord.ui.Button):
         # Edit the message to include the embed and updated view (even if the view is None)
         await interaction.response.edit_message(embed=embed, view=view)
         
+              
 class Quest_Button1(discord.ui.View):
     def __init__(self, bot, ctx):
         super().__init__()

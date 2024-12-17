@@ -27,10 +27,10 @@
             "emoji": "<:keychain_sheep:1318415294758129692>",
             "description": "Allows the targeted member to be assigned a random role from the server.\n- Setup using: `...q_roles <@mention role1> <@mention role2>... etc`)",
             "materials": [
-                {"material": "Fabric", "quantity": 10},
-                {"material": "Thread", "quantity": 10},
+                {"material": "Fabric", "quantity": 5},
+                {"material": "Thread", "quantity": 6},
                 {"material": "Cotton", "quantity": 10},
-                {"material": "Chain",  "quantity": 10}
+                {"material": "Chain",  "quantity": 5}
             ]
         },
         {
