@@ -182,7 +182,7 @@ class Quest(commands.Cog):
                 color=primary_color(),
                 timestamp=datetime.now()
             )
-            embed.set_footer(text="Needed Tool: Key Chain Sheep")
+            embed.set_footer(text="Needed Tool: Key Chain Sheep",icon_url=self.bot.user.avatar)
             embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
             await ctx.reply(embed=embed, mention_author=False)
             return
