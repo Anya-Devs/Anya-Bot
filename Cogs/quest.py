@@ -608,7 +608,7 @@ class Quest_Button1(discord.ui.View):
             await self.quest_data.add_balance(button_user, guild_id, 0)
 
             # Add new quests for the user
-            for _ in range(75):
+            for _ in range(50):
                 logger.debug("Adding new quest")
                 await self.quest_data.add_new_quest(guild_id, button_user, chance=100)
 
