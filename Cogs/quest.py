@@ -178,7 +178,7 @@ class Quest(commands.Cog):
 
             embed = discord.Embed(
                 title="Current Set Roles",
-                description=f"Allows targets to get a random role.\n\n{roles_list}",
+               description=f"**Needed Tool:** `Key Chain Sheep`| Grants the target user a random role from the list of available roles in the server.\n\n{roles_list}\nThis tool can be used to assign a random role as part of a quest or special event.",
                 color=primary_color(),
                 timestamp=datetime.now()
             )
@@ -257,7 +257,7 @@ class Quest(commands.Cog):
 
                 # Add field to embed
                 embed.add_field(
-                    name=f"{tool.capitalize()}",
+                    name=f"{tool.tilte()}",
                     value=f"`{un_tool_id}` : \t{emoji}\t`x{quantity}`",
                     inline=False
                 )
