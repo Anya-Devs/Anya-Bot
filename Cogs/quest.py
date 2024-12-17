@@ -148,22 +148,63 @@ class Quest(commands.Cog):
 
     @commands.command(name='q_roles')
     async def q_roles(self, ctx, *role_mentions: discord.Role):
-        """Command for admins to set up roles that a target can get randomly."""
+        """Command for admins to set or list roles that a target can get randomly."""
+        
+        # Check for required permissions
         if not (ctx.author.guild_permissions.manage_roles or discord.utils.get(ctx.author.roles, name="Anya Manager")):
-            await ctx.reply("You need the `Manage Roles` permission or the `Anya Manager` role to use this command.", mention_author=False)
+            embed = discord.Embed(
+                title="Permission Denied",
+                description="You need the `Manage Roles` permission or the `Anya Manager` role to use this command.",
+                color=discord.Color.red(),
+                timestamp=datetime.now()
+            )
+            embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
+            await ctx.reply(embed=embed, mention_author=False)
             return
 
+        guild_id = str(ctx.guild.id)
+
+        # If no roles are mentioned, list the currently set roles
         if not role_mentions:
-            await ctx.reply("Please mention at least one role to set.", mention_author=False)
+            current_roles = await self.quest_data.get_roles_for_guild(guild_id)
+            if current_roles:
+                roles_list = "\n".join([f"<@&{role_id}>" for role_id in current_roles])
+            else:
+                roles_list = (
+                    "No roles have been set yet.\n\n"
+                    "**Admins can set roles using the command below:**\n"
+                    "`...q_roles <@mention role1> <@mention role2> ... etc`"
+                )
+
+            embed = discord.Embed(
+                title="Current Set Roles",
+                description=f"Allows targets to get a random role.\n\n{roles_list}",
+                color=discord.Color.blurple(),
+                timestamp=datetime.now()
+            )
+            embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+            await ctx.reply(embed=embed, mention_author=False)
             return
 
+        # Convert roles to IDs and store them in the database
         role_ids = [str(role.id) for role in role_mentions]
+        await self.quest_data.store_roles_for_guild(guild_id, role_ids)
 
-        # Store the roles in the database
-        await self.quest_data.store_roles_for_guild(str(ctx.guild.id), role_ids)
+        # Success response embed
+        embed = discord.Embed(
+            title="Roles Set Successfully",
+            description="Allows targets to get a random role.\n\nThe following roles have been set for this guild:",
+            color=discord.Color.green(),
+            timestamp=datetime.now()
+        )
+        embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
+        
+        # Add roles to the embed
+        roles_list = "\n".join([f"{role.mention}" for role in role_mentions])
+        embed.add_field(name="Roles", value=roles_list, inline=False)
 
-        await ctx.reply(f"Roles have been set for this guild: {', '.join([role.name for role in role_mentions])}", mention_author=False)
-
+        await ctx.reply(embed=embed, mention_author=False)
+ 
     @commands.command(name="inventory", aliases=["inv"]) 
     async def inventory(self, ctx):
      """Displays the user's tool inventory."""
