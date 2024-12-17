@@ -2412,8 +2412,10 @@ class SpyToolSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         try:
             # Check if the user who clicked the select is the same as the author
-            if interaction.user.id != self.user_id:
-                await interaction.response.send_message("Hey, back off! This is not your selection.", ephemeral=True)
+            id_1 = int(self.user_id)
+            id_2 = int(interaction.user.id)
+            if id_1 != id_2:
+                await interaction.response.send_message("This is not your section.", ephemeral=True)
                 return
 
             selected_tool_name = self.values[0]
