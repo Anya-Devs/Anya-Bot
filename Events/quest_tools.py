@@ -300,7 +300,7 @@ class ToolHandler:
             if target:
                 # Add the random role to the target user
                 await target.add_roles(random_role)
-                await channel.send(f"{target.mention} has been assigned the role {random_role.name}.")
+                await channel.send(f"<:keychain_sheep:1318415294758129692> Assigned the role **{random_role.name}** to {target.name}.")
                 logger.info(f"<:keychain_sheep:1318415294758129692> Assigned the role **{random_role.name}** to {target.name}.")
             else:
                 logger.warning(f"Target user {user_id} not found in the guild.")
