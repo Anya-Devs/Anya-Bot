@@ -177,8 +177,8 @@ class Quest(commands.Cog):
                 )
 
             embed = discord.Embed(
-                title="Current Set Roles",
-                description=f"**Needed Tool:** `Key Chain Sheep`\n> Grants the target user a random role from the list of available roles in the server.\n\n{roles_list}.",
+                title="",
+                description=f"**Needed Tool:** `Key Chain Sheep`\n> Grants the target user a random role from the list of available roles in the server.\n\n- **Current Set Roles:**\n{roles_list}.",
                 color=primary_color(),
                 timestamp=datetime.now()
             )
