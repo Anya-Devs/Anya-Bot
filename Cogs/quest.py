@@ -254,10 +254,11 @@ class Quest(commands.Cog):
      
 
                 emoji = self.get_tool_emoji(tool) or ""  # Default to empty string if emoji not found
-
+                
+                tool = str(tool)
                 # Add field to embed
                 embed.add_field(
-                    name=f"{tool.tilte()}",
+                    name=f"{tool.title()}",
                     value=f"`{un_tool_id}` : \t{emoji}\t`x{quantity}`",
                     inline=False
                 )
