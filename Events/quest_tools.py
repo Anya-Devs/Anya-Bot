@@ -1,5 +1,4 @@
-import discord
-from discord.ext import commands
+
 import re
 import logging
 import os
@@ -9,6 +8,7 @@ import motor.motor_asyncio
 from pymongo.errors import PyMongoError
 import redis
 from Cogs.quest import Quest_Data
+from Imports.discord_imports import * 
 from datetime import datetime, timedelta, timezone
 
 # Initialize logger
