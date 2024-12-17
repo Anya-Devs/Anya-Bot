@@ -46,3 +46,143 @@ Hello {member}
 Hey {member} favorite way to unwind
 Hi {member} talk about funny topic
 Hey {member} how do you stay positive
+Hey {member}, what's new?
+What's on your mind, {member}?
+How's your week going, {member}?
+What's your favorite thing about [current season], {member}?
+Any exciting plans for the weekend, {member}?
+What's one thing you're grateful for today, {member}?
+What's your go-to stress reliever, {member}?
+What's something interesting you learned recently, {member}?
+If you could have any superpower, what would it be, {member}?
+What's your favorite way to spend a rainy day, {member}?
+What's your favorite childhood memory, {member}?
+What's one thing you're looking forward to, {member}?
+What's your favorite quote or saying, {member}?
+What's your biggest pet peeve, {member}?
+What's the best advice you've ever received, {member}?
+What's your favorite way to stay active, {member}?
+What's your favorite thing about your job/school, {member}?
+What's your favorite hobby or pastime, {member}?
+What's the best book you've read recently, {member}?
+What's your favorite way to travel, {member}?
+What's your favorite thing about living in [your city/state], {member}?
+What's your favorite way to start your day, {member}?
+What's your favorite way to end your day, {member}?
+What's your favorite thing about your family, {member}?
+What's your favorite thing about your friends, {member}?
+What's your favorite thing about yourself, {member}?
+What's your biggest dream or goal, {member}?
+What's your biggest fear, {member}?
+What's your biggest regret, {member}?
+What's your biggest accomplishment, {member}?
+What's your biggest challenge, {member}?
+What's your biggest hope for the future, {member}?
+What's your biggest disappointment, {member}?
+What's your biggest surprise, {member}?
+What's your biggest inspiration, {member}?
+What's your biggest motivation, {member}?
+What's your biggest passion, {member}?
+What's your biggest weakness, {member}?
+What's your biggest strength, {member}?
+What's your biggest talent, {member}?
+What's your biggest secret, {member}?
+What's your biggest question, {member}?
+What's your biggest worry, {member}?
+What's your biggest joy, {member}?
+What's your biggest love, {member}?
+What's your biggest hate, {member}?
+What's your biggest need, {member}?
+What's your biggest want, {member}?
+What's your biggest belief, {member}?
+What's your biggest doubt, {member}?
+What's your biggest risk, {member}?
+What's your biggest reward, {member}?
+What's your biggest sacrifice, {member}?
+What's your favorite season?
+What's your favorite color?
+What's your favorite animal?
+What's your favorite music genre?
+What's your favorite movie?
+What's your favorite TV show?
+What's your favorite book?
+What's your favorite food?
+What's your favorite drink?
+What's your favorite hobby?
+What's your favorite sport?
+What's your favorite game?
+What's your favorite holiday?
+What's your favorite memory?
+What's your favorite place?
+What's your favorite thing about yourself?
+What's your favorite thing about others?
+What's your favorite thing about life?
+What's your favorite thing about love?
+What's your favorite thing about friendship?
+What's your favorite thing about family?
+What's your favorite thing about work?
+What's your favorite thing about school?
+What's your favorite thing about the future?
+What's your favorite thing about the past?
+What's your favorite thing about the present?
+What's your favorite thing about today?
+What's your favorite thing about tomorrow?
+What's your favorite color?
+What's your favorite animal?
+What's your favorite music genre?
+What's your favorite movie?
+What's your favorite book?
+What's your favorite food?
+What's your favorite drink?
+What's your favorite season?
+What's your favorite holiday?
+What's your favorite thing to do on a weekend?
+What's your favorite thing to do on a rainy day?
+What's your favorite thing to do on a sunny day?
+What's your favorite thing to do with friends?
+What's your favorite thing to do alone?
+What's your favorite thing about yourself?
+What's your favorite thing about others?
+What's your favorite thing about life?
+What's your favorite thing about the world?
+What's your favorite thing about the future?
+What's your favorite thing about the past?
+What's your favorite thing about the present?
+What's your favorite thing about technology?
+What's your favorite thing about nature?
+What's your favorite thing about art?
+What's your favorite thing about music?
+What's your favorite thing about literature?
+What's your favorite thing about history?
+What's your favorite thing about science?
+What's your favorite thing about math?
+What's your favorite thing about language?
+What's your favorite thing about philosophy?
+What's your favorite thing about religion?
+What's your favorite thing about politics?
+What's your favorite thing about sports?
+What's your favorite thing about games?
+What's your favorite thing about travel?
+What's your favorite thing about food?
+What's your favorite thing about drink?
+What's your favorite thing about fashion?
+What's your favorite thing about beauty?
+What's your favorite thing about health?
+What's your favorite thing about fitness?
+What's your favorite thing about money?
+What's your favorite thing about work?
+What's your favorite thing about school?
+What's your favorite thing about learning?
+What's your favorite thing about teaching?
+What's your favorite thing about helping others?
+What's your favorite thing about making a difference?
+What's your favorite thing about being yourself?
+What's your favorite thing about being human?
+What's your favorite thing about being alive?
+What's your favorite thing about love?
+What's your favorite thing about friendship?
+What's your favorite thing about family?
+What's your favorite thing about community?
+What's your favorite thing about the world?
+What's your favorite thing about the universe?
+What's your favorite thing about life, the universe, and everything?

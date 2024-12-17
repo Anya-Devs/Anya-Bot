@@ -334,7 +334,6 @@ class Quest(commands.Cog):
         return shop_data
     
         
-        
 class Quest_View(View):
     def __init__(self, bot, quests, ctx, page=0, filtered_quests=None):
         super().__init__(timeout=None)
@@ -362,16 +361,6 @@ class Quest_View(View):
         end_index = start_index + 3
         quests_to_display = self.filtered_quests[start_index:end_index]
 
-        # Filter out quests where the user cannot view the channel
-        quests_to_display = [
-            quest for quest in quests_to_display
-            if await self.user_can_view_channel(quest['channel_id'])
-        ]
-
-        # If there are no quests to display, return None
-        if not quests_to_display:
-            return None
-
         # Create a single embed for the current page
         embed = discord.Embed(
             color=primary_color()
@@ -393,7 +382,6 @@ class Quest_View(View):
             # Generate instructions based on method
             if method == 'message':
                 instruction = "Send: {0}".format(content.replace('\n', ' '))
-
             elif method == 'emoji':
                 instruction = f"Send emoji: {content}"
             elif method == 'reaction':
@@ -416,31 +404,37 @@ class Quest_View(View):
 
             message = (
                 f"✦ Quest {quest_id} | {progress_bar} `{progress}/{times}`\n"  # Progress info
-                f"├ {instructions_emoji} {channel_link} | **{instruction}**\n" 
+                f"├ {instructions_emoji} {channel_link} | **{instruction}**\n"
                 f"└ {reward_emoji} Reward: `{reward} stp`"  # Reward and instruction
                 f"\n\n"  # For spacing
             )
 
-            embed.add_field(
-                name="",  # Step 1: Field name
-                value=message,
-                inline=False
-            )
-            file = discord.File("Data/Images/generated_image.png", filename='image.png')
+            # Check if the channel exists and if the member has required roles
+            if channel:
+                # Get the permission overwrites for the channel
+                overwrites = channel.overwrites
 
-            # Set the image in the embed using the attachment URL
-            embed.set_image(url=f"attachment://image.png")
+                # Check if the member has the required role(s)
+                can_view_channel = False
+                for role, overwrite in overwrites.items():
+                    if overwrite.read_messages and any(role in self.ctx.author.roles for role in [role]):
+                        can_view_channel = True
+                        break
+
+                if can_view_channel:
+                    embed.add_field(
+                        name="",  # Step 1: Field name
+                        value=message,
+                        inline=False
+                    )
+                    file = discord.File("Data/Images/generated_image.png", filename='image.png')
+
+                    # Set the image in the embed using the attachment URL
+                    embed.set_image(url=f"attachment://image.png")
 
         return embed
 
-    async def user_can_view_channel(self, channel_id):
-        """Check if the user has permission to view the specified channel."""
-        channel = self.bot.get_channel(channel_id)
-        if not channel:
-            return False
-        # Check if the user has the 'view_channel' permission in the channel
-        permissions = channel.permissions_for(self.ctx.author)
-        return permissions.view_channel 
+    
     
     
     
@@ -556,8 +550,8 @@ class QuestButton(discord.ui.Button):
 
         # Edit the message to include the embed and updated view (even if the view is None)
         await interaction.response.edit_message(embed=embed, view=view)
-
-
+        
+              
 class Quest_Button1(discord.ui.View):
     def __init__(self, bot, ctx):
         super().__init__()
@@ -607,7 +601,7 @@ class Quest_Button1(discord.ui.View):
             await self.quest_data.add_balance(button_user, guild_id, 0)
 
             # Add new quests for the user
-            for _ in range(25):
+            for _ in range(75):
                 logger.debug("Adding new quest")
                 await self.quest_data.add_new_quest(guild_id, button_user, chance=100)
 
