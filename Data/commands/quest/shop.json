@@ -25,7 +25,7 @@
         {
             "name": "Key Chain Sheep",
             "emoji": "<:keychain_sheep:1318415294758129692>",
-            "description": "Allower target to get random role. (`Admin must set this up using ...q_roles <@mention role1> <@mention role2>...ect`)",
+            "description": "Allows the targeted member to be assigned a random role from the server.\n- Setup using: `...q_roles <@mention role1> <@mention role2>... etc`)",
             "materials": [
                 {"material": "Fabric", "quantity": 10},
                 {"material": "Thread", "quantity": 10},

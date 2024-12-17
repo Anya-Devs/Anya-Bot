@@ -2387,11 +2387,16 @@ class SpyToolSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         try:
+            # Check if the user who clicked the select is the same as the author
+            if interaction.user.id != self.user_id:
+                await interaction.response.send_message("Hey, back off! This is not your selection.", ephemeral=True)
+                return
+
             selected_tool_name = self.values[0]
             tool = next((t for t in self.shop_data.get("Spy Tools", []) if t.get("name") == selected_tool_name), None)
 
             if not tool:
-                await interaction.response.send_message("Spy Tool not found.", ephemeral=True)
+                await interaction.response.send_message("hey, that's not yours! go awayyy!", ephemeral=True)
                 return
 
             emoji = tool.get("emoji", "")
@@ -2439,7 +2444,7 @@ class SpyToolSelect(discord.ui.Select):
             indicator_emoji = "<:green:1261639410181476443> "  # Green
 
         return f"{indicator_emoji} : {self.materials_dict.get(material_name, '')} - {user_quantity}/{required_quantity}"
-  
+
     
     
     
