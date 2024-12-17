@@ -12,7 +12,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the .env file (Optional, if you want to use it within Docker build)
-COPY .github/.env ./.env
+# COPY .github/.env ./.env
 
 # Copy the rest of the application code
 COPY . .
