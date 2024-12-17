@@ -4,7 +4,8 @@
         "stars": " View how many stellas you have currently.",
         "shop": "Buy a Spy Tool.",
         "redirect": " ",
-        "inventory": " "
+        "inventory": " ",
+        "q_roles": " "
     },
     "Ai": {
         "vision_model": "Get the current vision model.",

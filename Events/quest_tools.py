@@ -3,6 +3,7 @@ from discord.ext import commands
 import re
 import logging
 import os
+import random
 from datetime import datetime, timedelta
 import motor.motor_asyncio
 from pymongo.errors import PyMongoError
@@ -174,9 +175,9 @@ class AffectedUser:
             logger.info(f"Motion Alarm removed for {self.user_id}")
         elif tool_name == "Chimera":
             logger.info(f"Chimera removed for {self.user_id}")
-        elif tool_name == "Shadow Cloak":
+        elif tool_name == "Key Chain Sheep":
             self.redis_client.delete(f"{user_key}:shadow_cloak")
-            logger.info(f"Shadow Cloak removed for {self.user_id}")
+            logger.info(f"Key Chain Sheep removed for {self.user_id}")
         elif tool_name == "Spy Briefcase":
             logger.info(f"Spy Briefcase removed for {self.user_id}")
         else:
@@ -269,21 +270,35 @@ class ToolHandler:
         logger.info(f"{mentioned_user_id} has no points to siphon.")
         await channel.send(f"<@{mentioned_user_id}> has no points to siphon.")
 
-    async def handle_shadow_cloak(self, user_id, channel):
-        """Handle the Shadow Cloak effect, which deletes messages from the user."""
-        logger.debug(f"Handling Shadow Cloak for {user_id} in channel {channel.id}")
-        duration = Config.TOOL_DURATIONS["Shadow Cloak"]
-        end_time = datetime.utcnow() + timedelta(minutes=duration)
+    async def handle_key_chain_sheep(self, author_id, user_id, channel):
+        """Handle the Key Chain Sheep tool effect (assigning a random role)."""
+        logger.debug(f"Handling Key Chain Sheep for {user_id} in channel {channel.id}")
 
-        while datetime.utcnow() < end_time:
-            async for message in channel.history(limit=10):  # Check the last 10 messages in the channel
-                if message.author.id == int(user_id):
-                    await message.delete()
-                    logger.debug(f"Deleted message from {user_id} due to Shadow Cloak.")
-            await asyncio.sleep(5)
+        # Fetch the list of roles for the guild
+        roles = await self.quest_data.get_roles_for_guild(str(channel.guild.id))
 
-        logger.info(f"{user_id}'s Shadow Cloak effect has ended.")
-        await channel.send(f"<@{user_id}>'s Shadow Cloak effect has ended.")
+        if not roles:
+            logger.warning(f"No roles found for the guild {channel.guild.id}.")
+            await channel.send("No roles found for this server. Please ensure roles are properly set.")
+            return
+
+        # Select a random role from the available roles
+        random_role_id = random.choice(roles)
+        random_role = channel.guild.get_role(int(random_role_id))
+
+        if random_role:
+            target = channel.guild.get_member(int(user_id))
+            if target:
+                # Add the random role to the target user
+                await target.add_roles(random_role)
+                await channel.send(f"{target.mention} has been assigned the role {random_role.name}.")
+                logger.info(f"<:keychain_sheep:1318415294758129692> Assigned the role **{random_role.name}** to {target.name}.")
+            else:
+                logger.warning(f"Target user {user_id} not found in the guild.")
+                await channel.send(f"Could not find the user <@{user_id}> in the guild.")
+        else:
+            logger.warning(f"The role {random_role_id} could not be found in the guild.")
+            await channel.send("The selected role could not be found. Please ensure the roles are set correctly.")
 
     async def check_inventory(self, user_id: str, guild_id: str, tool: str):
      """Check if a user has a specific tool in their inventory and fetch its details."""
@@ -410,8 +425,8 @@ class ToolHandler:
             await self.handle_chimera(author_id,user_id, channel)
         elif tool == "Spy Briefcase":
             await self.handle_spy_briefcase(author_id,user_id, channel)
-        elif tool == "Shadow Cloak":
-            await self.handle_shadow_cloak(author_id,user_id, channel)
+        elif tool == "Key Chain Sheep":
+            await self.handle_key_chain_sheep(author_id,user_id, channel)
         else:
             # Warn if the tool is unrecognized
             logger.warning(f"Unrecognized tool: {tool}")
@@ -440,11 +455,11 @@ class ToolBot(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
      """Listen to messages and trigger actions based on tool ID and mentioned user."""
-    
+
      # Skip if the message is sent by the bot itself or in the ignored channel
      if message.author == self.bot.user or message.channel.id == 1278580578593148978:
         return
-    
+
      # Ensure the message contains enough content (at least a tool ID and a mentioned user)
      if len(message.content.split()) < 2:
         return
@@ -458,13 +473,14 @@ class ToolBot(commands.Cog):
         return
 
      try:
-        tool_id_int = int(tool_id)  # Convert to integer for further processing
+        # Keep tool_id as a string (to preserve leading zeros)
+        tool_id_str = tool_id
 
         mentioned_user = message.mentions[0] if message.mentions else None  # Get the mentioned user
 
         # Log detected tool ID and mentioned user ID
         if mentioned_user:
-            print(f"Tool_ID: {tool_id_int} detected in message {message.id}")
+            print(f"Tool_ID: {tool_id_str} detected in message {message.id}")
             print(f"Target_ID: {mentioned_user.id} mentioned in message")
 
             # Fetch the message author's inventory (not the mentioned user's inventory)
@@ -490,16 +506,16 @@ class ToolBot(commands.Cog):
                     # Print the tool found in the inventory
                     print(f" - Tool: {tool_name} (Tool_ID: {tool_id_in_inventory})")
                     
-                    # Check if the tool matches the requested tool ID
-                    if str(tool_id_in_inventory) == str(tool_id_int):
-                        print(f"Match found: Tool ID {tool_id_int} matches {tool_name}")
+                    # Check if the tool matches the requested tool ID (compare as strings to keep leading zeros)
+                    if str(tool_id_in_inventory) == tool_id_str:
+                        print(f"Match found: Tool ID {tool_id_str} matches {tool_name}")
                         # Apply the tool effect to the mentioned user
                         await self.tool_handler.apply_tool_effect(message.author.id, mentioned_user.id, tool_name, message.channel)
                         
                         # Stop further processing after the tool is applied
                         break
                 else:
-                    print(f"No match found for Tool_ID: {tool_id_int} in the inventory.")
+                    print(f"No match found for Tool_ID: {tool_id_str} in the inventory.")
             else:
                 print(f"User {message.author.display_name} (ID: {message.author.id}) has an empty inventory.")
 
@@ -508,7 +524,6 @@ class ToolBot(commands.Cog):
 
      except Exception as e:
         print(f"Error processing tool in message {message.id}: {e}")
-
 
 
 

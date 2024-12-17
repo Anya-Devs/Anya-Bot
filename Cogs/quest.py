@@ -146,6 +146,24 @@ class Quest(commands.Cog):
             traceback.print_exc()
             await ctx.send(f"{error_message}")
 
+    @commands.command(name='q_roles')
+    async def q_roles(self, ctx, *role_mentions: discord.Role):
+        """Command for admins to set up roles that a target can get randomly."""
+        if not (ctx.author.guild_permissions.manage_roles or discord.utils.get(ctx.author.roles, name="Anya Manager")):
+            await ctx.reply("You need the `Manage Roles` permission or the `Anya Manager` role to use this command.", mention_author=False)
+            return
+
+        if not role_mentions:
+            await ctx.reply("Please mention at least one role to set.", mention_author=False)
+            return
+
+        role_ids = [str(role.id) for role in role_mentions]
+
+        # Store the roles in the database
+        await self.quest_data.store_roles_for_guild(str(ctx.guild.id), role_ids)
+
+        await ctx.reply(f"Roles have been set for this guild: {', '.join([role.name for role in role_mentions])}", mention_author=False)
+
     @commands.command(name="inventory", aliases=["inv"]) 
     async def inventory(self, ctx):
      """Displays the user's tool inventory."""
@@ -809,7 +827,30 @@ class Quest_Data(commands.Cog):
         for key, value in kwargs.items():
             if value is None or value == "":
                 raise ValueError(f"{key} cannot be None or empty")
-               
+            
+    async def store_roles_for_guild(self, guild_id, role_ids):
+        """Store or override the roles for the guild."""
+        collection = self.mongoConnect[self.DB_NAME].roles
+        guild_data = await collection.find_one({"guild_id": guild_id})
+        
+        if guild_data:
+            # Update the existing roles
+            await collection.update_one(
+                {"guild_id": guild_id},
+                {"$set": {"roles": role_ids}}
+            )
+        else:
+            # Insert a new document for the guild if it doesn't exist
+            await collection.insert_one({"guild_id": guild_id, "roles": role_ids})
+    
+    async def get_roles_for_guild(self, guild_id):
+        """Retrieve the stored roles for the guild."""
+        collection = self.mongoConnect[self.DB_NAME].roles
+        guild_data = await collection.find_one({"guild_id": guild_id})
+        if guild_data:
+            return guild_data['roles']
+        return []
+
     async def get_user_inventory_count(self, guild_id: str, user_id: str, material_name: str) -> int:
      try:
         db = self.mongoConnect[self.DB_NAME]
@@ -942,7 +983,7 @@ class Quest_Data(commands.Cog):
     
      # Helper function to generate a short, 6-digit unique ID for the tool
      def generate_short_uuid():
-        return ''.join(random.choices(string.digits, k=6))  # Only digits now
+        return ''.join(random.choices(string.digits, k=6) + 1000)  # Only digits now
 
      db = self.mongoConnect[self.DB_NAME]
      server_collection = db['Servers']

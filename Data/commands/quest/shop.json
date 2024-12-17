@@ -23,13 +23,14 @@
             ]
         },
         {
-            "name": "Shadow Cloak",
-            "emoji": "🧥",
-            "description": "When used, this cloak allows the user to go invisible, hiding their presence and messages in all channels for 45 minutes.",
+            "name": "Key Chain Sheep",
+            "emoji": "<:keychain_sheep:1318415294758129692>",
+            "description": "Allower target to get random role. (`Admin must set this up using ...q_roles <@mention role1> <@mention role2>...ect`)",
             "materials": [
                 {"material": "Fabric", "quantity": 10},
-                {"material": "Thread", "quantity": 5},
-                {"material": "Circuit", "quantity": 2}
+                {"material": "Thread", "quantity": 10},
+                {"material": "Cotton", "quantity": 10},
+                {"material": "Chain",  "quantity": 10}
             ]
         },
         {
@@ -45,7 +46,7 @@
         {
             "name": "Motion Alarm",
             "emoji": "<:motion_sensor:1317345108869513227>",
-            "description": "This single-use alarm triggers a 20-minute timeout for a targeted user if they send any emoji.",
+            "description": "This single-use alarm triggers a 20-minute timeout for a targeted user if they send any emoji. (Fetching last 10 messages in the channel)",
             "materials": [
                 {"material": "Plastic", "quantity": 8},
                 {"material": "Chip", "quantity": 4},
@@ -64,13 +65,13 @@
 
         {
             "name": "Cotton",
-            "emoji": "👕",
+            "emoji": "<:cotton:1318417195512103044>",
             "price": 15
         },
         {
-            "name": "Pencil",
-            "emoji": "📝",
-            "price": 5
+            "name": "Chain",
+            "emoji": "<:chain:1318417784019091506>",
+            "price": 15
         },
         {
             "name": "Fabric",
@@ -101,11 +102,6 @@
             "name": "Thread",
             "emoji": "🧶",
             "price": 15
-        },
-        {
-            "name": "Circuit",
-            "emoji": "🔋",
-            "price": 25
         },
         {
             "name": "Cloth",
