@@ -358,76 +358,73 @@ class Quest_View(View):
         self.add_item(QuestButton("Fresh Start", discord.ButtonStyle.danger, "fresh_start", bot, self.filtered_quests, ctx, self.page))
 
     async def generate_messages(self):
-     start_index = self.page * 3
-     end_index = start_index + 3
-     quests_to_display = self.filtered_quests[start_index:end_index]
+        start_index = self.page * 3
+        end_index = start_index + 3
+        quests_to_display = self.filtered_quests[start_index:end_index]
 
-     # Create a single embed for the current page
-     
-     embed = discord.Embed(
-        color=primary_color()
-     )
-     embed.set_footer(text=f"{self.ctx.author.display_name}'s quests", icon_url=self.ctx.author.avatar)
-     for quest in quests_to_display:
-        quest_id = quest['quest_id']
-        progress = quest['progress']
-        times = quest['times']
-        action = quest['action']
-        method = quest['method']
-        content = quest['content']
-        reward = quest['reward']
-        
-        # Get the channel using the channel ID
-        channel = self.bot.get_channel(int(quest['channel_id']))
-
-        # Generate instructions based on method
-        if method == 'message':
-            instruction = "Send: {0}".format(content.replace('\n', ' '))
-
-        elif method == 'emoji':
-            instruction = f"Send emoji: {content}"
-        elif method == 'reaction':
-            instruction = f"React with: {content}"
-        else:
-            instruction = "Unknown method. Please refer to the quest details."
-
-        # Generate progress bar
-        progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
-        
-        reward_emoji_id = 1247800150479339581
-        reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
-        instructions_emoji = '📋'
-
-        # Construct the channel link based on whether it's the current channel
-        if channel:
-            channel_link = f'[Go here](https://discord.com/channels/{self.ctx.guild.id}/{channel.id})' if channel.id != self.ctx.channel.id else 'In this channel'
-        else:
-            channel_link = f'Channel not found | Recommended: `/quest delete quest_id: {quest_id}`'  # Fallback in case the channel is not found
-
-        message = (
-                 f"✦ Quest {quest_id} | {progress_bar} `{progress}/{times}`\n"  # Progress info
-                 f"├ {instructions_emoji} {channel_link} | **{instruction}**\n" 
-                 f"└ {reward_emoji} Reward: `{reward} stp`"  # Reward and instruction
-                 f"\n\n"  # For spacing
-        
+        # Create a single embed for the current page
+        embed = discord.Embed(
+            color=primary_color()
         )
-        
-        embed.add_field(
-            name="",  # Step 1: Field name
-            value=message,
-            inline=False
-        )
-        file = discord.File("Data/Images/generated_image.png", filename='image.png')
-    
-        # Set the image in the embed using the attachment URL
-        embed.set_image(url=f"attachment://image.png")
-                
+        embed.set_footer(text=f"{self.ctx.author.display_name}'s quests", icon_url=self.ctx.author.avatar)
+        for quest in quests_to_display:
+            quest_id = quest['quest_id']
+            progress = quest['progress']
+            times = quest['times']
+            action = quest['action']
+            method = quest['method']
+            content = quest['content']
+            reward = quest['reward']
+            
+            # Get the channel using the channel ID
+            channel = self.bot.get_channel(int(quest['channel_id']))
 
+            # Skip if the channel is not found or the user doesn't have permission to view it
+            if channel is None or not channel.permissions_for(self.ctx.author).read_messages:
+                continue
 
-    
-     return embed
+            # Generate instructions based on method
+            if method == 'message':
+                instruction = "Send: {0}".format(content.replace('\n', ' '))
 
-    
+            elif method == 'emoji':
+                instruction = f"Send emoji: {content}"
+            elif method == 'reaction':
+                instruction = f"React with: {content}"
+            else:
+                instruction = "Unknown method. Please refer to the quest details."
+
+            # Generate progress bar
+            progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
+            
+            reward_emoji_id = 1247800150479339581
+            reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
+            instructions_emoji = '📋'
+
+            # Construct the channel link based on whether it's the current channel
+            if channel:
+                channel_link = f'[Go here](https://discord.com/channels/{self.ctx.guild.id}/{channel.id})' if channel.id != self.ctx.channel.id else 'In this channel'
+            else:
+                channel_link = f'Channel not found | Recommended: `/quest delete quest_id: {quest_id}`'  # Fallback in case the channel is not found
+
+            message = (
+                f"✦ Quest {quest_id} | {progress_bar} `{progress}/{times}`\n"  # Progress info
+                f"├ {instructions_emoji} {channel_link} | **{instruction}**\n" 
+                f"└ {reward_emoji} Reward: `{reward} stp`"  # Reward and instruction
+                f"\n\n"  # For spacing
+            )
+
+            embed.add_field(
+                name="",  # Step 1: Field name
+                value=message,
+                inline=False
+            )
+            file = discord.File("Data/Images/generated_image.png", filename='image.png')
+
+            # Set the image in the embed using the attachment URL
+            embed.set_image(url=f"attachment://image.png")
+
+        return embed  
     
     
     
@@ -545,8 +542,8 @@ class QuestButton(discord.ui.Button):
 
         # Edit the message to include the embed and updated view (even if the view is None)
         await interaction.response.edit_message(embed=embed, view=view)
-        
-              
+
+
 class Quest_Button1(discord.ui.View):
     def __init__(self, bot, ctx):
         super().__init__()
