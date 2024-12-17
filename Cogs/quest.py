@@ -362,11 +362,22 @@ class Quest_View(View):
         end_index = start_index + 3
         quests_to_display = self.filtered_quests[start_index:end_index]
 
+        # Filter out quests where the user cannot view the channel
+        quests_to_display = [
+            quest for quest in quests_to_display
+            if await self.user_can_view_channel(quest['channel_id'])
+        ]
+
+        # If there are no quests to display, return None
+        if not quests_to_display:
+            return None
+
         # Create a single embed for the current page
         embed = discord.Embed(
             color=primary_color()
         )
         embed.set_footer(text=f"{self.ctx.author.display_name}'s quests", icon_url=self.ctx.author.avatar)
+
         for quest in quests_to_display:
             quest_id = quest['quest_id']
             progress = quest['progress']
@@ -375,13 +386,9 @@ class Quest_View(View):
             method = quest['method']
             content = quest['content']
             reward = quest['reward']
-            
+
             # Get the channel using the channel ID
             channel = self.bot.get_channel(int(quest['channel_id']))
-
-            # Skip if the channel is not found or the user doesn't have permission to view it
-            if channel is None or not channel.permissions_for(self.ctx.author).read_messages:
-                continue
 
             # Generate instructions based on method
             if method == 'message':
@@ -396,7 +403,7 @@ class Quest_View(View):
 
             # Generate progress bar
             progress_bar = await Quest_Progress.generate_progress_bar(progress / times, self.bot)
-            
+
             reward_emoji_id = 1247800150479339581
             reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
             instructions_emoji = '📋'
@@ -424,9 +431,16 @@ class Quest_View(View):
             # Set the image in the embed using the attachment URL
             embed.set_image(url=f"attachment://image.png")
 
-        return embed  
-    
-    
+        return embed
+
+    async def user_can_view_channel(self, channel_id):
+        """Check if the user has permission to view the specified channel."""
+        channel = self.bot.get_channel(channel_id)
+        if not channel:
+            return False
+        # Check if the user has the 'view_channel' permission in the channel
+        permissions = channel.permissions_for(self.ctx.author)
+        return permissions.view_channel 
     
     
     
