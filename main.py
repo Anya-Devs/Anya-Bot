@@ -51,8 +51,7 @@ class BotSetup(commands.AutoShardedBot):
         print(f"\033[92mLogged in as {self.user} (ID: {self.user.id})\033[0m")
 
     async def get_token_from_db(self):
-        # Connect to the MongoDB client
-        mongo_url = os.getenv('MONGO_URI')  # Ensure your MongoDB URI is set as an environment variable
+        mongo_url = os.getenv('MONGO_URI')  
         if not mongo_url:
             raise ValueError("No MONGO_URI found in environment variables")
 
@@ -60,11 +59,10 @@ class BotSetup(commands.AutoShardedBot):
         db = client[self.DB_NAME]
         collection = db[self.COLLECTION_NAME]
 
-        # Search for the document containing the Token field
         token_data = await collection.find_one({"Token": {"$exists": True}})
         
         if token_data:
-            return token_data.get("Token")  # Adjust the field name if needed
+            return token_data.get("Token")
         else:
             raise ValueError("No token found in the database")
 
