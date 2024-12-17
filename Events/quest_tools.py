@@ -119,7 +119,6 @@ class AffectedUser:
 
     async def apply_tool(self, tool_name: str):
         """Apply the effect of the tool."""
-        tool_duration = Config.TOOL_DURATIONS.get(tool_name, 0)
         logger.debug(f"Applying {tool_name} for user {self.user_id} in guild {self.guild_id}")
 
         # Set up the affected user in Redis
@@ -129,19 +128,20 @@ class AffectedUser:
         tool_name = tool_name.title()
 
         if tool_name == "Motion Alarm":
-            await self.apply_motion_alarm(user_key, current_time, tool_duration)
+            await self.apply_motion_alarm(user_key, current_time)
         elif tool_name == "Chimera":
             return await self.apply_chimera(user_key)
-        elif tool_name == "Shadow Cloak":
-            return await self.apply_shadow_cloak(user_key, tool_duration)
+        elif tool_name == "Key Chain Sheep":
+            return await self.apply_key_chain_sheep(user_key)
         elif tool_name == "Spy Briefcase":
             return await self.apply_spy_briefcase(user_key)
         else:
             logger.warning(f"Unknown tool: {tool_name}")
             return None
 
-    async def apply_motion_alarm(self, user_key: str, current_time: datetime, duration: int):
+    async def apply_motion_alarm(self, user_key: str, current_time: datetime):
         """Apply the Motion Alarm effect."""
+        duration = Config.TOOL_DURATIONS.get("Motion Alarm", 0)
         if duration > 0:
             expiration_time = current_time + timedelta(seconds=duration)
             self.redis_client.setex(f"{user_key}:motion_alarm", duration, expiration_time.timestamp())
@@ -154,12 +154,10 @@ class AffectedUser:
         logger.info(f"Chimera applied to {self.user_id} indefinitely.")
         return "Chimera effect applied."
 
-    async def apply_shadow_cloak(self, user_key: str, duration: int):
-        """Apply the Shadow Cloak effect."""
-        expiration_time = datetime.utcnow() + timedelta(minutes=duration)
-        self.redis_client.setex(f"{user_key}:shadow_cloak", duration * 60, expiration_time.timestamp())
-        logger.info(f"Shadow Cloak applied to {self.user_id} for {duration} minutes.")
-        return f"Shadow Cloak triggered until {timestamp_gen(expiration_time.timestamp())}"
+    async def apply_key_chain_sheep(self, user_key: str):
+        """Log the effect of the Key Chain Sheep tool."""
+        logger.info(f"Key Chain Sheep effect logged for {self.user_id} in guild {self.guild_id}.")
+        return "Key Chain Sheep effect applied."
 
     async def apply_spy_briefcase(self, user_key: str):
         """Apply the Spy Briefcase effect (no duration)."""
@@ -176,7 +174,7 @@ class AffectedUser:
         elif tool_name == "Chimera":
             logger.info(f"Chimera removed for {self.user_id}")
         elif tool_name == "Key Chain Sheep":
-            self.redis_client.delete(f"{user_key}:shadow_cloak")
+            self.redis_client.delete(f"{user_key}:key_chain_sheep")
             logger.info(f"Key Chain Sheep removed for {self.user_id}")
         elif tool_name == "Spy Briefcase":
             logger.info(f"Spy Briefcase removed for {self.user_id}")
@@ -273,6 +271,17 @@ class ToolHandler:
     async def handle_key_chain_sheep(self, author_id, user_id, channel):
         """Handle the Key Chain Sheep tool effect (assigning a random role)."""
         logger.debug(f"Handling Key Chain Sheep for {user_id} in channel {channel.id}")
+        
+        guild_id = str(channel.guild.id)
+
+        # Check if user has the tool in their inventory
+        tool_name = "Key Chain Sheep"
+        tool_inventory = await self.check_inventory(author_id, guild_id, tool_name)
+        if not tool_inventory:
+            logger.warning(f"You do not have the {tool_name} in inventory.")
+            await channel.send(f"<@{author_id}>, you do not have the {tool_name} tool in your inventory.")
+            return
+
 
         # Fetch the list of roles for the guild
         roles = await self.quest_data.get_roles_for_guild(str(channel.guild.id))

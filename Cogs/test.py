@@ -1,10 +1,11 @@
-import discord
-from discord.ext import commands
+
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
 import requests
 from io import BytesIO
 import os
+
+from Imports.discord_imports import *
 
 class DiscordMessageConfig:
     """Configuration for a simulated Discord-style message display."""

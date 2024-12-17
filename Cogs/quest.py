@@ -179,7 +179,7 @@ class Quest(commands.Cog):
             embed = discord.Embed(
                 title="Current Set Roles",
                 description=f"Allows targets to get a random role.\n\n{roles_list}",
-                color=discord.Color.blurple(),
+                color=primary_color(),
                 timestamp=datetime.now()
             )
             embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
