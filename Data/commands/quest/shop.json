@@ -8,7 +8,6 @@
                 {"material": "Cotton", "quantity": 5},
                 {"material": "Fabric", "quantity": 5},
                 {"material": "Thread", "quantity": 10}
-
             ]
         },
         {
@@ -16,21 +15,20 @@
             "emoji": "<:spy_briefcase:1317341084833284157>",
             "description": "This briefcase allows you to discreetly siphon off 30% of another member's points.",
             "materials": [
-                {"material": "Silicon", "quantity": 3},
+                {"material": "Metal", "quantity": 3},
                 {"material": "Leather", "quantity": 5},
                 {"material": "Wire", "quantity": 5}
-
             ]
         },
         {
             "name": "Key Chain Sheep",
             "emoji": "<:keychain_sheep:1318415294758129692>",
-            "description": "Allows the targeted member to be assigned a random role from the server.\n- Setup using: `...q_roles <@mention role1> <@mention role2>... etc`)",
+            "description": "Allows the targeted member to be assigned a random role from the server.\n- Setup using: `...q_roles <@mention role1> <@mention role2>...`",
             "materials": [
                 {"material": "Fabric", "quantity": 5},
                 {"material": "Thread", "quantity": 6},
                 {"material": "Cotton", "quantity": 10},
-                {"material": "Chain",  "quantity": 5}
+                {"material": "Chain", "quantity": 5}
             ]
         },
         {
@@ -52,7 +50,6 @@
                 {"material": "Chip", "quantity": 4},
                 {"material": "Solder", "quantity": 6},
                 {"material": "CPU", "quantity": 1}
-
             ]
         }
     ],
@@ -62,7 +59,6 @@
             "emoji": "<:leather:1317346727929319475>",
             "price": 15
         },
-
         {
             "name": "Cotton",
             "emoji": "<:cotton:1318417195512103044>",
@@ -74,24 +70,19 @@
             "price": 15
         },
         {
+            "name": "Metal",
+            "emoji": "<:metal:1318666800350892142>",
+            "price": 15
+        },
+        {
             "name": "Fabric",
-            "emoji": "🧵",
+            "emoji": "<:fabric:1318668051335348294>",
             "price": 15
         },
         {
             "name": "CPU",
-            "emoji": "💻",
+            "emoji": "<:cpu:1318667759667646504>",
             "price": 90
-        },
-        {
-            "name": "Glass",
-            "emoji": "🪟",
-            "price": 60
-        },
-        {
-            "name": "Silicon",
-            "emoji": "💾",
-            "price": 10
         },
         {
             "name": "Wire",
@@ -100,13 +91,8 @@
         },
         {
             "name": "Thread",
-            "emoji": "🧶",
+            "emoji": "<:thread:1318668493960511520>",
             "price": 15
-        },
-        {
-            "name": "Cloth",
-            "emoji": "🧥",
-            "price": 10
         },
         {
             "name": "Soundproofing Material",
