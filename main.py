@@ -14,7 +14,8 @@ from dotenv import load_dotenv
  
 
 # Load environment variables (still necessary for other environment-related settings)
-load_dotenv(dotenv_path=os.path.join('.github', '.env'))
+# load_dotenv(dotenv_path=os.path.join('.github', '.env'))
+load_dotenv()
 
 # Print loaded environment variables
 print("\033[93mLoaded Environment Variables:\033[0m")
