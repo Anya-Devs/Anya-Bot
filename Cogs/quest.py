@@ -178,10 +178,11 @@ class Quest(commands.Cog):
 
             embed = discord.Embed(
                 title="",
-                description=f"**Needed Tool:** `Key Chain Sheep`\n> Grants the target user a random role from the list of available roles in the server.\n\n- **Current Set Roles:**\n{roles_list}.",
+                description=f"Grants the target user a random role from the list of available roles in the server.\n\n**Current Set Roles:**\n{roles_list}.",
                 color=primary_color(),
                 timestamp=datetime.now()
             )
+            embed.set_footer(text="Needed Tool: Key Chain Sheep")
             embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
             await ctx.reply(embed=embed, mention_author=False)
             return
