@@ -1,10 +1,16 @@
 import asyncio
 import datetime
+import re
+import time
+import os
+import requests
+
 from discord import Embed
 from discord.ext import commands
+
+# Custom imports
 from Imports.discord_imports import *
 from Data.const import primary_color
-import re
 
 # Timestamp function
 def timestamp_gen(timestamp: int) -> str:
@@ -14,11 +20,11 @@ def timestamp_gen(timestamp: int) -> str:
 class Anti_Thief(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.bot_id = 874910942490677270
+        self.bot_id = 874910942490677270  # ID of the bot sending shiny hunt messages
         self.shiny_hunters = []
-        self.shiny_ping_phrase = "**✨ Shiny Hunt Pings:**"
+        self.shiny_ping_phrase = "**Shiny Hunt Pings:**"
         self.shiny_regex = r"<@(\d+)>"
-
+        self.primary_color = primary_color
 
     async def process_pings(self, guild, message_content):
         shiny_hunters = []
@@ -49,149 +55,131 @@ class Anti_Thief(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        # Ensure this is a message from the bot you are tracking (Pokétwo or similar)
         if message.author.id == self.bot_id:
             self.shiny_hunters = await self.process_pings(message.guild, message.content)
-            print("self.shiny_hunters: ", self.shiny_hunters)
             channel = message.channel
-            
-            # Send shiny hunt embed to the channel
-            await self.bot.get_cog('EventGate').send_shiny_hunt_embed(channel, self.shiny_hunters, reference_message=message)
-
-            # Handle congratulatory messages and possible timeout for non-hunters
-            if await self.bot.get_cog('EventGate').handle_congratulations(message, channel, self.shiny_hunters):
-                print("Shiny hunter caught the Pokémon!")
-            else:
-                print("Non-hunter")
-
+            if len(self.shiny_hunters) > 0:
+                await self.bot.get_cog('EventGate').send_shiny_hunt_embed(channel, self.shiny_hunters, reference_message=message)
 
 class EventGate(commands.Cog):
     def __init__(self, bot, anti_thief=None):
         self.bot = bot
-        self.anti_thief = anti_thief  # Store the Anti_Thief cog instance
+        self.anti_thief = anti_thief  # Link to Anti_Thief cog
         self.timeout_duration = datetime.timedelta(hours=3)  # Timeout duration (3 hours)
-        self.detect_bot_id = 874910942490677270  # Bot ID for detection
+        self.detect_bot_id = 716390085896962058  # Bot ID for detection
+        self.wait_time = 30  # Timer for shiny event in seconds
+        self.primary_color = primary_color()  # Example primary color
+        self.active_events = {}  # Track active shiny events per channel
+        self.handled_congrats = set()  # Track handled congratulatory messages
+
+    def timestamp_gen(self, timestamp: int) -> str:
+        dt = datetime.datetime.utcfromtimestamp(timestamp).replace(tzinfo=datetime.timezone.utc)
+        return f'<t:{int(dt.timestamp())}:R>'  # Returns relative time format (e.g., "in 30 seconds")
 
     async def send_shiny_hunt_embed(self, channel, shiny_hunters, reference_message=None):
-        # Get current time and generate the time to wait
+        if channel.id in self.active_events:
+            return  # Avoid multiple shiny hunt events in the same channel
+
         timestamp = datetime.datetime.utcnow().timestamp()
-        wait_until = timestamp + 30  # 30 seconds from now
+        wait_until = timestamp + self.wait_time  # Event end time
+        self.active_events[channel.id] = wait_until  # Mark the event as active
 
         embed = Embed(
-            title="",
-            description=f"✨ Shiny hunters: {'\t'.join([hunter.mention for hunter in shiny_hunters])}\n\n> Waiting for shiny hunters... {timestamp_gen(wait_until)}",
-            color=primary_color()
+            description=f"{self.timestamp_gen(wait_until)} | ✨ Shiny hunters: {' '.join([hunter.mention for hunter in shiny_hunters])}",
+            color=self.primary_color
         )
-        
-        # Reference the message if provided
-        if reference_message:
-            message = await channel.send(embed=embed, reference=reference_message)
+        message = await channel.send(embed=embed, reference=reference_message)
+        await self.start_countdown(message, wait_until)
+
+    async def start_countdown(self, message, wait_until):
+        try:
+            await asyncio.wait_for(self.wait_for_congratulations(message, wait_until), timeout=self.wait_time)
+        except asyncio.TimeoutError:
+            await self.allow_all_to_catch(message)
+        finally:
+            self.active_events.pop(message.channel.id, None)
+
+    async def wait_for_congratulations(self, message, wait_until):
+        def check(m):
+            if m.author.id == self.detect_bot_id and m.id not in self.handled_congrats:
+                match = re.match(r"Congratulations <@(\d+)>! You caught a Level \d+ .+", m.content)
+                if match:
+                    return True
+            return False
+
+        congrats_message = await self.bot.wait_for('message', check=check, timeout=wait_until - time.time())
+        self.handled_congrats.add(congrats_message.id)
+        await self.process_congratulations(congrats_message, message)
+
+    async def process_congratulations(self, congrats_message, original_message):
+        mentioned_user_id = re.search(r"<@(\d+)>", congrats_message.content).group(1)
+        shiny_hunters = await self.bot.get_cog('Anti_Thief').process_pings(original_message.guild, original_message.content)
+
+        shiny_hunter = next((hunter for hunter in shiny_hunters if str(hunter.id) == mentioned_user_id), None)
+        if shiny_hunter:
+            embed = Embed(
+                title="Congratulations!",
+                description=f"Well done, {shiny_hunter.mention}, good luck on your streak!",
+                color=self.primary_color
+            )
+            await original_message.channel.send(embed=embed, reference=original_message)
         else:
-            message = await channel.send(embed=embed)
+            non_hunter = await self.bot.fetch_user(mentioned_user_id)
+            await self.timeout_user(non_hunter, original_message)
+            embed = Embed(
+                title="Shiny Thief Detected!",
+                description=f"{non_hunter.mention} tried to steal the shiny Pokémon. They've been timed out for 3 hours.",
+                color=self.primary_color
+            )
+            await original_message.channel.send(embed=embed, reference=original_message)
 
-        # Run the countdown asynchronously without blocking the bot
-        await self._wait_and_update_embed(message, wait_until)
-
-    async def _wait_and_update_embed(self, message, wait_until):
-        # Wait for 30 seconds, while other tasks run
-        await asyncio.sleep(30)
-        
-        # Update embed after the wait period
+    async def allow_all_to_catch(self, message):
         embed = message.embeds[0]
-        embed.title = ""
-        embed.description = "Everyone may catch the Pokémon now! No restrictions."
+        embed.description = "✅ Everyone may catch the Pokémon now! No restrictions."
+        embed.color = 0x00FF00  # Green color for success
         await message.edit(embed=embed)
 
-    async def handle_congratulations(self, message, channel, shiny_hunters):
-        # Check if message is a congratulations message
-        if "Congratulations" in message.content:
-            mentioned_user = re.findall(r"<@(\d+)>", message.content)
-            if mentioned_user:
-                mentioned_user = mentioned_user[0]
-                shiny_hunter = next((hunter for hunter in shiny_hunters if str(hunter.id) == mentioned_user), None)
+    async def timeout_user(self, user, message):
+        BOT_TOKEN = os.getenv("TOKEN")  # Replace with your bot token
+        GUILD_ID = message.guild.id  # Use the guild ID of the user
+        USER_ID = user.id  # Use the ID of the user to be timed out
 
-                if shiny_hunter:  # If shiny hunter, send congrats
-                    embed = Embed(
-                        title="Congratulations!",
-                        description=f"Well done, {shiny_hunter.mention}, Good luck on your streak!",
-                        color=primary_color()
-                    )
-                    await channel.send(embed=embed, reference=message)
-                    return True  # End event after congrats
-                else:  # If non-hunter, timeout and warn
-                    non_hunter = await self.bot.fetch_user(mentioned_user)
-                    await non_hunter.timeout(self.timeout_duration, reason=f"Shiny thief detected")
-                    embed = Embed(
-                        title="Shiny Thief Detected!",
-                        description=f"{non_hunter.mention} tried to steal the shiny Pokémon. They've been timed out for 3 hours.",
-                        color=primary_color()
-                    )
-                    await channel.send(embed=embed, reference=message)
-                    return False
-        return False
+        # Calculate the timeout end time
+        timeout_duration = 180  # Timeout duration in minutes (3 hours)
+        timeout_end = datetime.datetime.utcnow() + datetime.timedelta(minutes=timeout_duration)
+
+        # API request headers
+        headers = {
+            "Authorization": f"Bot {BOT_TOKEN}",
+            "Content-Type": "application/json",
+        }
+
+        # API request payload
+        payload = {
+            "communication_disabled_until": timeout_end.isoformat() + "Z"  # UTC timestamp
+        }
+
+        # Send the request to timeout the user
+        url = f"https://discord.com/api/v10/guilds/{GUILD_ID}/members/{USER_ID}"
+        response = requests.patch(url, json=payload, headers=headers)
+        if response.status_code == 200:
+            print(f"User {USER_ID} has been timed out successfully.")
+        else:
+            print(f"Failed to timeout user {USER_ID}: {response.status_code}, {response.text}")
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        # Check if the message is from the Pokétwo bot
-        if message.author.id == 716390085896962058:  # Pokétwo message
-            # Dynamically fetch shiny hunters from the Anti_Thief cog
+        if message.author.id == self.detect_bot_id and "Congratulations" in message.content:
+            if message.id not in self.handled_congrats:
+                await self.wait_for_congratulations(message, time.time() + self.wait_time)
+                self.handled_congrats.add(message.id)
+        else:
             shiny_hunters = await self.bot.get_cog('Anti_Thief').process_pings(message.guild, message.content)
-            
-            if len(shiny_hunters) > 0:  # If there are shiny hunters
-                channel = message.channel
-                await self.send_shiny_hunt_embed(channel, shiny_hunters, reference_message=message)
-                if await self.handle_congratulations(message, channel, shiny_hunters):
-                    print("Shiny hunter caught the pokemon!")
-                    return  # End the event
-                else:
-                    # If non-shiny catcher, inform them how long they need to wait
-                    non_hunter_mention = re.findall(r"<@(\d+)>", message.content)
-                    if non_hunter_mention:
-                        non_hunter = await self.bot.fetch_user(non_hunter_mention[0])
-                        await channel.send(f"{non_hunter.mention}, you need to wait for 3 hours before you can participate again.")
-        
-        # Check for reference to the bot's shiny hunt message and simulate the same behavior as the command
-        if message.author.id == self.detect_bot_id and message.reference:
-            reference_message = await message.channel.fetch_message(message.reference.message_id)
-            if reference_message.author.id == self.detect_bot_id:
-                # Dynamically fetch shiny hunters from the referenced message content
-                shiny_hunters = await self.bot.get_cog('Anti_Thief').process_pings(message.guild, reference_message.content)
-                # await message.channel.send(f"Shiny hunters: {', '.join([hunter.mention for hunter in shiny_hunters])}")
-                
-                # Trigger EventManually by simulating an on_message call
+            if shiny_hunters:
                 await self.send_shiny_hunt_embed(message.channel, shiny_hunters, reference_message=message)
-                await self.handle_congratulations(reference_message, message.channel, shiny_hunters)
-
-
-
-
-class ShinyBot(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-        self.detect_bot_id = 874910942490677270
-    @commands.command(name="s_t", aliases=['t_s', 'ts'])
-    async def test_shiny_extraction(self, ctx):
-        if ctx.message.reference:
-            reference_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-            if reference_message.author.id == self.detect_bot_id:
-                shiny_hunters = await self.bot.get_cog('Anti_Thief').process_pings(ctx.guild, reference_message.content)
-                # await ctx.send(f"Shiny hunters: {', '.join([hunter.mention for hunter in shiny_hunters])}")
-                
-                # Trigger EventManually by simulating an on_message call
-                channel = ctx.channel
-                await self.bot.get_cog('EventGate').send_shiny_hunt_embed(channel, shiny_hunters)
-                await self.bot.get_cog('EventGate').handle_congratulations(reference_message, channel, shiny_hunters)
-
-            else:
-                await ctx.send("This message isn't a valid reference from the bot.")
 
 async def setup(bot):
-    # Initialize Anti_Thief with the bot instance
     anti_thief = Anti_Thief(bot)
-    
-    # Initialize EventGate with the Anti_Thief cog instance
     event_gate = EventGate(bot, anti_thief)
-    
-    # Add the cogs to the bot
     bot.add_cog(anti_thief)
     bot.add_cog(event_gate)

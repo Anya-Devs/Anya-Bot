@@ -14,7 +14,6 @@ from dotenv import load_dotenv
  
 
 # Load environment variables (still necessary for other environment-related settings)
-# load_dotenv(dotenv_path=os.path.join('.github', '.env'))
 load_dotenv()
 
 # Print loaded environment variables
@@ -36,7 +35,7 @@ class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         intents.members = True
-        self.prefix = "..."
+        self.prefix = ">"
         super().__init__(
             command_prefix=commands.when_mentioned_or(self.prefix),
             intents=intents,
@@ -47,7 +46,7 @@ class BotSetup(commands.AutoShardedBot):
         self.mongoConnect = None
         self.DB_NAME = 'Bot'
         self.COLLECTION_NAME = 'information'
-        self.token_type = "Token"
+        self.token_type = "Test_Token"
 
     async def on_ready(self):
         print(f"\033[92mLogged in as {self.user} (ID: {self.user.id})\033[0m")
@@ -71,10 +70,14 @@ class BotSetup(commands.AutoShardedBot):
     async def start_bot(self):
         await self.setup()
         token = await self.get_token_from_db()
+        
         if not token:
             logger.error("No token found. Please check the database.")
             return
-
+        
+        # Set the token in the environment for use
+        os.environ["TOKEN"] = token  # Correct way to set an environment variable
+        
         try:
             await self.start(token)
         except KeyboardInterrupt:
