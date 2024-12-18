@@ -78,7 +78,7 @@ class EventGate(commands.Cog):
         wait_until = timestamp + 30  # 30 seconds from now
 
         embed = Embed(
-            title="Shiny Protection",
+            title="",
             description=f"✨ Shiny hunters: {'\t'.join([hunter.mention for hunter in shiny_hunters])}\n\n> Waiting for shiny hunters... {timestamp_gen(wait_until)}",
             color=primary_color()
         )
@@ -98,6 +98,7 @@ class EventGate(commands.Cog):
         
         # Update embed after the wait period
         embed = message.embeds[0]
+        embed.title = ""
         embed.description = "Everyone may catch the Pokémon now! No restrictions."
         await message.edit(embed=embed)
 
@@ -174,7 +175,7 @@ class ShinyBot(commands.Cog):
             reference_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
             if reference_message.author.id == self.detect_bot_id:
                 shiny_hunters = await self.bot.get_cog('Anti_Thief').process_pings(ctx.guild, reference_message.content)
-                await ctx.send(f"Shiny hunters: {', '.join([hunter.mention for hunter in shiny_hunters])}")
+                # await ctx.send(f"Shiny hunters: {', '.join([hunter.mention for hunter in shiny_hunters])}")
                 
                 # Trigger EventManually by simulating an on_message call
                 channel = ctx.channel
