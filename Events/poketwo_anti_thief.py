@@ -19,6 +19,7 @@ class Anti_Thief(commands.Cog):
         self.shiny_ping_phrase = "**✨ Shiny Hunt Pings:**"
         self.shiny_regex = r"<@(\d+)>"
 
+
     async def process_pings(self, guild, message_content):
         shiny_hunters = []
         if self.shiny_ping_phrase in message_content:
@@ -42,19 +43,26 @@ class Anti_Thief(commands.Cog):
     async def get_member(self, guild, user_id):
         try:
             return await guild.fetch_member(user_id)
-        except:
+        except Exception as e:
+            print(f"Error fetching member {user_id}: {e}")
             return None
 
     @commands.Cog.listener()
     async def on_message(self, message):
+        # Ensure this is a message from the bot you are tracking (Pokétwo or similar)
         if message.author.id == self.bot_id:
             self.shiny_hunters = await self.process_pings(message.guild, message.content)
+            print("self.shiny_hunters: ", self.shiny_hunters)
+            channel = message.channel
+            
+            # Send shiny hunt embed to the channel
+            await self.bot.get_cog('EventGate').send_shiny_hunt_embed(channel, self.shiny_hunters, reference_message=message)
 
-import asyncio
-import datetime
-import re
-from discord import Embed
-from discord.ext import commands
+            # Handle congratulatory messages and possible timeout for non-hunters
+            if await self.bot.get_cog('EventGate').handle_congratulations(message, channel, self.shiny_hunters):
+                print("Shiny hunter caught the Pokémon!")
+            else:
+                print("Non-hunter")
 
 
 class EventGate(commands.Cog):
@@ -71,7 +79,7 @@ class EventGate(commands.Cog):
 
         embed = Embed(
             title="Shiny Protection",
-            description=f"✨ Shiny hunters: {', '.join([hunter.mention for hunter in shiny_hunters])}\n> Waiting for shiny hunters... {timestamp_gen(wait_until)}",
+            description=f"✨ Shiny hunters: {'\t'.join([hunter.mention for hunter in shiny_hunters])}\n\n> Waiting for shiny hunters... {timestamp_gen(wait_until)}",
             color=primary_color()
         )
         
