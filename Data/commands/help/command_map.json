@@ -54,5 +54,8 @@
     "Aesthetic": {
         "embed": "Description to fill out",
         "reload_aesthetic": "Description to fill out"
+    },
+    "Anti_Theif": {
+        "s_t": " "
     }
 }

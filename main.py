@@ -36,8 +36,9 @@ class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         intents.members = True
+        self.prefix = ">"
         super().__init__(
-            command_prefix=commands.when_mentioned_or('...'),
+            command_prefix=commands.when_mentioned_or(self.prefix),
             intents=intents,
             help_command=None,
             shard_count=1,
@@ -46,6 +47,7 @@ class BotSetup(commands.AutoShardedBot):
         self.mongoConnect = None
         self.DB_NAME = 'Bot'
         self.COLLECTION_NAME = 'information'
+        self.token_type = "Test_Token"
 
     async def on_ready(self):
         print(f"\033[92mLogged in as {self.user} (ID: {self.user.id})\033[0m")
@@ -59,10 +61,10 @@ class BotSetup(commands.AutoShardedBot):
         db = client[self.DB_NAME]
         collection = db[self.COLLECTION_NAME]
 
-        token_data = await collection.find_one({"Token": {"$exists": True}})
+        token_data = await collection.find_one({self.token_type: {"$exists": True}})
         
         if token_data:
-            return token_data.get("Token")
+            return token_data.get(self.token_type)
         else:
             raise ValueError("No token found in the database")
 
@@ -95,6 +97,7 @@ class BotSetup(commands.AutoShardedBot):
         print("\n\033[94m===== Setup Completed =====\033[0m")
 
     async def import_cogs(self, dir_name):
+        
         for filename in os.listdir(dir_name):
             if filename.endswith(".py"):
                 print(f"\033[94m|   ├── {filename}\033[0m")

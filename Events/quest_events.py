@@ -1,11 +1,10 @@
 import re
-import discord
-from discord.ext import commands, tasks
 from fuzzywuzzy import fuzz
 import logging
 from datetime import datetime, timedelta
 
 from Cogs.quest import Quest_Data
+from Imports.discord_imports import *
 from Data.const import Quest_Progress, error_custom_embed, primary_color, QuestEmbed, Quest_Prompt, Quest_Completed_Embed
 
 logger = logging.getLogger('Quest_Checker')
