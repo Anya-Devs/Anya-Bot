@@ -1,6 +1,7 @@
 import asyncio
 import datetime
-
+from discord import Embed
+from discord.ext import commands
 from Imports.discord_imports import *
 from Data.const import primary_color
 import re
