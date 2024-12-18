@@ -50,6 +50,13 @@ class Anti_Thief(commands.Cog):
         if message.author.id == self.bot_id:
             self.shiny_hunters = await self.process_pings(message.guild, message.content)
 
+import asyncio
+import datetime
+import re
+from discord import Embed
+from discord.ext import commands
+
+
 class EventGate(commands.Cog):
     def __init__(self, bot, anti_thief=None):
         self.bot = bot
@@ -57,17 +64,22 @@ class EventGate(commands.Cog):
         self.timeout_duration = datetime.timedelta(hours=3)  # Timeout duration (3 hours)
         self.detect_bot_id = 874910942490677270  # Bot ID for detection
 
-    async def send_shiny_hunt_embed(self, channel, shiny_hunters):
+    async def send_shiny_hunt_embed(self, channel, shiny_hunters, reference_message=None):
         # Get current time and generate the time to wait
         timestamp = datetime.datetime.utcnow().timestamp()
         wait_until = timestamp + 30  # 30 seconds from now
 
         embed = Embed(
-            title="Shiny Detection",
-            description=f"Shiny hunters, get ready! Waiting for the catch... {timestamp_gen(wait_until)}",
+            title="Shiny Protection",
+            description=f"✨ Shiny hunters: {', '.join([hunter.mention for hunter in shiny_hunters])}\n> Waiting for shiny hunters... {timestamp_gen(wait_until)}",
             color=primary_color()
         )
-        message = await channel.send(embed=embed)
+        
+        # Reference the message if provided
+        if reference_message:
+            message = await channel.send(embed=embed, reference=reference_message)
+        else:
+            message = await channel.send(embed=embed)
 
         # Run the countdown asynchronously without blocking the bot
         await self._wait_and_update_embed(message, wait_until)
@@ -95,7 +107,7 @@ class EventGate(commands.Cog):
                         description=f"Well done, {shiny_hunter.mention}, Good luck on your streak!",
                         color=primary_color()
                     )
-                    await channel.send(embed=embed)
+                    await channel.send(embed=embed, reference=message)
                     return True  # End event after congrats
                 else:  # If non-hunter, timeout and warn
                     non_hunter = await self.bot.fetch_user(mentioned_user)
@@ -105,7 +117,7 @@ class EventGate(commands.Cog):
                         description=f"{non_hunter.mention} tried to steal the shiny Pokémon. They've been timed out for 3 hours.",
                         color=primary_color()
                     )
-                    await channel.send(embed=embed)
+                    await channel.send(embed=embed, reference=message)
                     return False
         return False
 
@@ -118,7 +130,7 @@ class EventGate(commands.Cog):
             
             if len(shiny_hunters) > 0:  # If there are shiny hunters
                 channel = message.channel
-                await self.send_shiny_hunt_embed(channel, shiny_hunters)
+                await self.send_shiny_hunt_embed(channel, shiny_hunters, reference_message=message)
                 if await self.handle_congratulations(message, channel, shiny_hunters):
                     print("Shiny hunter caught the pokemon!")
                     return  # End the event
@@ -135,11 +147,12 @@ class EventGate(commands.Cog):
             if reference_message.author.id == self.detect_bot_id:
                 # Dynamically fetch shiny hunters from the referenced message content
                 shiny_hunters = await self.bot.get_cog('Anti_Thief').process_pings(message.guild, reference_message.content)
-                await message.channel.send(f"Shiny hunters: {', '.join([hunter.mention for hunter in shiny_hunters])}")
+                # await message.channel.send(f"Shiny hunters: {', '.join([hunter.mention for hunter in shiny_hunters])}")
                 
                 # Trigger EventManually by simulating an on_message call
-                await self.send_shiny_hunt_embed(message.channel, shiny_hunters)
+                await self.send_shiny_hunt_embed(message.channel, shiny_hunters, reference_message=message)
                 await self.handle_congratulations(reference_message, message.channel, shiny_hunters)
+
 
 
 
