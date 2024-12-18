@@ -78,7 +78,7 @@ class EventGate(commands.Cog):
         
         # Update embed after the wait period
         embed = message.embeds[0]
-        embed.description = "Everyone may catch the shiny Pokémon now! No restrictions."
+        embed.description = "Everyone may catch the Pokémon now! No restrictions."
         await message.edit(embed=embed)
 
     async def handle_congratulations(self, message, channel, shiny_hunters):
@@ -92,7 +92,7 @@ class EventGate(commands.Cog):
                 if shiny_hunter:  # If shiny hunter, send congrats
                     embed = Embed(
                         title="Congratulations!",
-                        description=f"Well done, {shiny_hunter.mention}! You've caught the shiny Pokémon!",
+                        description=f"Well done, {shiny_hunter.mention}, Good luck on your streak!",
                         color=primary_color()
                     )
                     await channel.send(embed=embed)
@@ -120,7 +120,7 @@ class EventGate(commands.Cog):
                 channel = message.channel
                 await self.send_shiny_hunt_embed(channel, shiny_hunters)
                 if await self.handle_congratulations(message, channel, shiny_hunters):
-                    print("Shiny hunter caught the shiny!")
+                    print("Shiny hunter caught the pokemon!")
                     return  # End the event
                 else:
                     # If non-shiny catcher, inform them how long they need to wait
