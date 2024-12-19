@@ -1,5 +1,6 @@
 # Discord Imports
 import discord
+from discord import Embed
 from discord.ext import tasks, commands
 from discord.ext.commands import (
     BucketType, Context, Greedy, bot_has_permissions, check, cooldown, group, has_permissions, has_role
