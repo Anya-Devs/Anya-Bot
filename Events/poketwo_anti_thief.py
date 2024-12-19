@@ -52,31 +52,31 @@ class Anti_Thief(commands.Cog):
         self.primary_color = primary_color()  # Example primary color
 
     async def process_pings(self, guild, message_content):
-        shiny_hunters = []
-        if isinstance(guild, int):
-            guild = self.bot.get_guild(guild)
-        
-        if not guild:
-            logger.warning("Guild not found!")
-            return shiny_hunters
-
-        if self.shiny_ping_phrase in message_content:
-            mention_start_index = message_content.find(self.shiny_ping_phrase) + len(self.shiny_ping_phrase)
-            mention_part = message_content[mention_start_index:].strip()
-
-            if mention_part:
-                try:
-                    shiny_match = re.findall(self.shiny_regex, mention_part)
-                    if shiny_match:
-                        shiny_hunters = [
-                            member for member in [
-                                await self.get_member(guild, int(user_id)) for user_id in shiny_match
-                                ] if member]
-                except re.error as e:
-                    logger.error(f"Regex error: {e}")
-
+     shiny_hunters = []
+     if isinstance(guild, int):
+        guild = self.bot.get_guild(guild)
+    
+     if not guild:
+        logger.warning("Guild not found!")
         return shiny_hunters
 
+     if self.shiny_ping_phrase in message_content:
+        mention_start_index = message_content.find(self.shiny_ping_phrase) + len(self.shiny_ping_phrase)
+        mention_part = message_content[mention_start_index:].split("\n")[0].strip()  # Split at newline and take the first part
+
+        if mention_part:
+            try:
+                shiny_match = re.findall(self.shiny_regex, mention_part)
+                if shiny_match:
+                    shiny_hunters = [
+                        member for member in [
+                            await self.get_member(guild, int(user_id)) for user_id in shiny_match
+                            ] if member]
+            except re.error as e:
+                logger.error(f"Regex error: {e}")
+
+     return shiny_hunters
+    
     async def get_member(self, guild, user_id):
         try:
             if isinstance(guild, int):
