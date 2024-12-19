@@ -25,7 +25,7 @@ class Anti_Thief(commands.Cog):
         self.bot = bot
         self.bot_id = 874910942490677270  # ID of the bot sending shiny hunt messages
         self.shiny_hunters = []
-        self.shiny_ping_phrase = "**✨ Shiny Hunt Pings:**"
+        self.shiny_ping_phrase = "**:sparkles: Shiny Hunt Pings:**"
         self.shiny_regex = r"<@(\d+)>"
         self.primary_color = primary_color()  # Example primary color
 
@@ -85,6 +85,8 @@ class EventGate(commands.Cog):
         self.primary_color = primary_color()  # Example primary color
         self.active_events = {}  # Track active shiny events per channel
         self.handled_congrats = set()  # Track handled congratulatory messages
+        self.shiny_ping_phrase = "**:sparkles: Shiny Hunt Pings:**"
+
 
     def timestamp_gen(self, timestamp: int) -> str:
         dt = datetime.datetime.utcfromtimestamp(timestamp).replace(tzinfo=datetime.timezone.utc)
@@ -147,52 +149,109 @@ class EventGate(commands.Cog):
 
     async def process_congratulations(self, congrats_message, original_message, reference_message):
      try:
-        mentioned_user_id = re.search(r"<@(\d+)>", congrats_message.content).group(1)
-        x = await original_message.delete()
+        # Initialize the list at the start of the function
+        quest_user_ids = []
 
-        # Ensure original_message is still valid before referencing it
-        if not x:
-            logger.warning(f"Original message is no longer available for reference.")
-            embed = Embed(
-                title="Congratulations!",
-                description=f"✅ Good luck on your shiny hunt, <@{mentioned_user_id}>! Keep up the great work!",
-                color=0x00FF00  # Green color for success
-            )
-            await congrats_message.channel.send(embed=embed)
-            return
+        # Corrected logging statement
+        logger.info(f"Content for reference message: {reference_message.content}")
 
-        is_shiny_hunter = await self.bot.get_cog('Anti_Thief').is_shiny_hunter(int(mentioned_user_id))
-        logger.info(f"is_shiny_hunter for user {mentioned_user_id}: {is_shiny_hunter}")
+        # Extract the mentioned user ID from the congrats message and the original reference message
+        mentioned_user_id = re.search(r"<@(\d+)>", reference_message.content).group(1)
+        who_caught_pokemon_user_id = re.search(r"<@(\d+)>", congrats_message.content).group(1)
+        logger.info(f"Mentioned user ID extracted: {mentioned_user_id}")
 
-        if is_shiny_hunter:
-            shiny_hunters = await self.bot.get_cog('Anti_Thief').process_pings(reference_message.guild.id, reference_message.content)
-            shiny_hunter = next((hunter for hunter in shiny_hunters if str(hunter.id) == mentioned_user_id), None)
+        # Extract Quest Pings from the reference message content
+        quest_ping_phrase = self.shiny_ping_phrase
+        if quest_ping_phrase in reference_message.content:
+            quest_pings_content = reference_message.content.split(quest_ping_phrase)[1].strip()
+            # Extract all user IDs mentioned in the Quest Pings
+            quest_user_ids = re.findall(r"<@(\d+)>", quest_pings_content)
+            logger.info(f"Extracted Quest Pings user IDs: {quest_user_ids}")
+            
+            # First, delete the original message
+            logger.info(f"Attempting to delete original message {original_message.id} in channel {original_message.channel.id}")
+            x = await original_message.delete()
 
-            if shiny_hunter:
-                self.active_events[original_message.channel.id] = 0  # Stop countdown
+            # Check if the original message is still available
+            if not x:
+                logger.warning(f"Original message {original_message.id} is no longer available for reference.")
+            
+            # Check if who_caught_pokemon_user_id is in the Quest Pings list
+            if who_caught_pokemon_user_id not in quest_user_ids:
+                logger.warning(f"{who_caught_pokemon_user_id} is not in the Quest Pings list. Triggering Shiny Thief.")
+                # Trigger shiny thief logic
+                non_hunter = await self.bot.fetch_user(who_caught_pokemon_user_id)
+                p_match = re.search(r"Level \d+ (\w+)", congrats_message.content)
+                if p_match:
+                        pokemon_name = p_match.group(1)
+
+                
+                # Timeout the non-hunter user for stealing the shiny Pokémon
+                await self.timeout_user(non_hunter, original_message)
                 embed = Embed(
-                    title="Congratulations!",
-                    description=f"✅ Good luck on your shiny hunt, {shiny_hunter.mention}! Keep up the great work!",
-                    color=0x00FF00  # Green color for success
+                    title="Shiny Thief Detected!",
+                    description=f"{non_hunter.mention} stole **{pokemon_name}**. They've been timed out for 3 hours.",
+                    color=self.primary_color  # Color for non-hunter detection
                 )
-                await original_message.channel.send(embed=embed, reference=original_message)
-                logger.info(f"Congratulations sent to {shiny_hunter.mention}.")
-                await self.delete_embed_on_catch(original_message)
-        else:
-            non_hunter = await self.bot.fetch_user(mentioned_user_id)
-            await self.timeout_user(non_hunter, original_message)
-            embed = Embed(
-                title="Shiny Thief Detected!",
-                description=f"{non_hunter.mention} tried to steal the shiny Pokémon. They've been timed out for 3 hours.",
-                color=self.primary_color
-            )
-            await original_message.channel.send(embed=embed, reference=original_message)
-            logger.info(f"Non-hunter {non_hunter.mention} detected and timed out.")
+                # Send a warning embed with reference to the original message
+                await reference_message.channel.send(embed=embed)  # Removed the reference
+                logger.info(f"Non-hunter {non_hunter.mention} detected and timed out.")
+                return  # Exit early if thief is detected
+
+            # If the user is in the Quest Pings list, process further
+            else:
+                logger.info(f"User {mentioned_user_id} is in the Quest Pings list. Proceeding with congratulations.")
+
+                # Check if the mentioned user is a shiny hunter
+                logger.info(f"Checking if user {mentioned_user_id} is a shiny hunter...")
+                is_shiny_hunter = await self.bot.get_cog('Anti_Thief').is_shiny_hunter(int(mentioned_user_id))
+                logger.info(f"Is user {mentioned_user_id} a shiny hunter? {is_shiny_hunter}")
+
+                if is_shiny_hunter:
+                    # If they are a shiny hunter, process shiny hunter logic
+                    logger.info(f"Processing shiny hunters for the reference message {reference_message.id}.")
+                    shiny_hunters = await self.bot.get_cog('Anti_Thief').process_pings(reference_message.guild.id, reference_message.content)
+                    shiny_hunter = next((hunter for hunter in shiny_hunters if str(hunter.id) == mentioned_user_id), None)
+
+                    if shiny_hunter:
+                        logger.info(f"Shiny hunter {shiny_hunter.mention} found. Stopping countdown.")
+                        self.active_events[original_message.channel.id] = 0  # Stop countdown
+                        embed = Embed(
+                            title="Congratulations!",
+                            description=f"✅ Good luck on your shiny hunt, {shiny_hunter.mention}! Keep up the great work!",
+                            color=0x00FF00  # Green color for success
+                        )
+                        # Send a congratulatory embed with reference to the original message
+                        await reference_message.channel.send(embed=embed)  # Removed the reference here as well
+                        logger.info(f"Sent congratulatory message to {shiny_hunter.mention}.")
+                        await self.delete_embed_on_catch(original_message)
+                    else:
+                        logger.warning(f"Shiny hunter {mentioned_user_id} not found in the list of shiny hunters.")
+                else:
+                    # If the user is not a shiny hunter, treat them as a non-hunter
+                    logger.warning(f"User {mentioned_user_id} is not a shiny hunter. Initiating timeout.")
+                    non_hunter = await self.bot.fetch_user(mentioned_user_id)
+                    
+                    # Timeout the non-hunter user for stealing the shiny Pokémon
+                    await self.timeout_user(non_hunter, original_message)
+                    p_match = re.search(r"Level \d+ (\w+)", congrats_message)
+                    if p_match:
+                        pokemon_name = p_match.group(1)
+
+                    embed = Embed(
+                        title="Shiny Thief Detected!",
+                        description=f"{non_hunter.mention} stole **{pokemon_name}**. They've been timed out for 3 hours.",
+                        color=self.primary_color  # Color for non-hunter detection
+                    )
+                    # Send a warning embed with reference to the original message
+                    await reference_message.channel.send(embed=embed)  # Removed the reference
+                    logger.info(f"Non-hunter {non_hunter.mention} detected and timed out.")
+
      except Exception as e:
+        # Log any unexpected errors
         logger.error(f"Unexpected error in process_congratulations: {e}")
         logger.error("Traceback:")
         traceback.print_exc()
-
     async def allow_all_to_catch(self, message):
         embed = message.embeds[0]
         embed.description = "✅ Everyone may catch the Pokémon now! No restrictions."
