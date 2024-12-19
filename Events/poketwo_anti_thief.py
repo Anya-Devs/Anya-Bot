@@ -6,6 +6,7 @@ import os
 import requests
 import traceback
 import logging
+import json
 
 # Custom imports
 from Imports.discord_imports import *
@@ -20,12 +21,33 @@ def timestamp_gen(timestamp: int) -> str:
     dt = datetime.datetime.utcfromtimestamp(timestamp).replace(tzinfo=datetime.timezone.utc)
     return f'<t:{int(dt.timestamp())}:R>'  # Returns relative time format (e.g., "in 30 seconds")
 
+# Load shiny ping phrase from config file
+def load_ping_phrase():
+    config_path = "Data/commands/poketwo_anti_thief/shiny_ping_config.json"
+    if os.path.exists(config_path):
+        with open(config_path, 'r') as file:
+            config = json.load(file)
+        return config.get("shiny_ping_phrase", "**:sparkles: Shiny Hunt Pings:**")
+    else:
+        return "**:sparkles: Shiny Hunt Pings:**"
+
+# Save shiny ping phrase to config file
+def save_ping_phrase(new_phrase):
+    config_path = "Data/commands/poketwo_anti_thief/shiny_ping_config.json"
+    if not os.path.exists(os.path.dirname(config_path)):
+        os.makedirs(os.path.dirname(config_path))
+    
+    config = {"shiny_ping_phrase": new_phrase}
+    with open(config_path, 'w') as file:
+        json.dump(config, file, indent=4)
+
+
 class Anti_Thief(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.bot_id = 874910942490677270  # ID of the bot sending shiny hunt messages
         self.shiny_hunters = []
-        self.shiny_ping_phrase = "**:sparkles: Shiny Hunt Pings:**"
+        self.shiny_ping_phrase = load_ping_phrase()  # Load shiny ping phrase from file
         self.shiny_regex = r"<@(\d+)>"
         self.primary_color = primary_color()  # Example primary color
 
@@ -67,6 +89,18 @@ class Anti_Thief(commands.Cog):
 
     async def is_shiny_hunter(self, user_id):
         return any(hunter.id == user_id for hunter in self.shiny_hunters)
+    
+    @commands.command(name='set_phrase')
+    async def set_ping_phrase(self, ctx, *, new_phrase: str):
+        """
+        Update the shiny ping phrase used for detecting shiny hunt messages.
+        """
+        if ctx.author.id != 1124389055598170182:
+            return
+        
+        self.shiny_ping_phrase = new_phrase
+        save_ping_phrase(new_phrase)  # Save new phrase to the config file
+        await ctx.reply(f"Shiny hunt ping phrase updated to: {new_phrase}", mention_author=False)
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -85,7 +119,7 @@ class EventGate(commands.Cog):
         self.primary_color = primary_color()  # Example primary color
         self.active_events = {}  # Track active shiny events per channel
         self.handled_congrats = set()  # Track handled congratulatory messages
-        self.shiny_ping_phrase = "**:sparkles: Shiny Hunt Pings:**"
+        self.shiny_ping_phrase = load_ping_phrase()  # Load shiny ping phrase from file
 
 
     def timestamp_gen(self, timestamp: int) -> str:
@@ -291,3 +325,8 @@ class EventGate(commands.Cog):
             logger.info("Embed deleted after successful catch.")
         except Exception as e:
             logger.error(f"Error deleting embed: {e}")
+
+
+def setup(bot):
+    bot.add_cog(Anti_Thief(bot))
+    bot.add_cog(EventGate(bot))
