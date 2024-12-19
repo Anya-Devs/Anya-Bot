@@ -196,6 +196,7 @@ class EventGate(commands.Cog):
 
         # Extract Quest Pings from the reference message content
         quest_ping_phrase = self.shiny_ping_phrase
+        logger.debug("Phrase Detected: ", quest_ping_phrase)
         if quest_ping_phrase in reference_message.content:
             quest_pings_content = reference_message.content.split(quest_ping_phrase)[1].strip()
             # Extract all user IDs mentioned in the Quest Pings
