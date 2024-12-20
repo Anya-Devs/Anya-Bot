@@ -240,16 +240,17 @@ class EventGate(commands.Cog):
                 # Log the incident details to the logger channel
                 logger_channel = self.bot.get_channel(self.logger_channel_id)
                 log_embed = Embed(
-                    title="Shiny Theft Logged",
+                    title="Shiny Theft",
                     description=(
                         f"**User:** {non_hunter.mention} (`{non_hunter.id}`)\n"
                         f"**Pokémon:** {pokemon_name}\n"
-                        f"**Channel:** {catch_channel.mention}\n"
-                        f"**Action Taken:** Timeout"
+                        f"**Location** [{catch_channel.name}]({original_message.jump_url})\n"  # Added message link
+                        f"**Action Taken:** :hourglass:  Timeout - 3 hours"
                     ),
-                    color=0xFF0000
+                    color=primary_color()
                 )
                 log_embed.set_thumbnail(url=non_hunter.avatar)
+                log_embed.set_footer(icon_url=self.bot.user.avatar, text='Anya Logger')
                 await logger_channel.send(embed=log_embed)
                 return
 
@@ -261,7 +262,7 @@ class EventGate(commands.Cog):
         if shiny_hunter:
             embed = Embed(
                 title="Congratulations!",
-                description=f"✅ Good luck on your shiny hunt, {shiny_hunter.mention}! Keep up the great work!",
+                description=f"✅ Good luck on your shiny hunt, <@{who_caught_pokemon_user_id}>! Keep up the great work!",
                 color=0x00FF00
             )
             await catch_channel.send(embed=embed)
