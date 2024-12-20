@@ -288,7 +288,7 @@ class EventGate(commands.Cog):
                     f"**User:** {non_hunter.mention} (`{non_hunter.id}`)\n"
                     f"**Pokémon:** {pokemon_name}\n"
                     f"**Channel:** {catch_channel.mention}\n"
-                    f"**Timestamp:** {datetime.utcnow().isoformat()}\n"
+                    f"**Timestamp:** {datetime.datetime.utcnow().isoformat()}\n"
                     f"**Action Taken:** Timeout"
                 ),
                 color=0xFF0000
