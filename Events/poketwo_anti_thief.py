@@ -159,29 +159,34 @@ class EventGate(commands.Cog):
             self.active_events.pop(message.channel.id, None)
 
     async def wait_for_congratulations(self, message, wait_until, reference_message):
-        def check(m):
-            if m.author.id == self.detect_bot_id and m.id not in self.handled_congrats:
-                match = re.match(r"Congratulations <@(\d+)>! You caught a Level \d+ .+", m.content)
-                if match:
-                    return True
+     def check(m):
+        # Ensure the message is from the correct channel
+        if m.channel.id != message.channel.id:
             return False
+        
+        if m.author.id == self.detect_bot_id and m.id not in self.handled_congrats:
+            match = re.match(r"Congratulations <@(\d+)>! You caught a Level \d+ .+", m.content)
+            if match:
+                return True
+        return False
 
-        try:
-            congrats_message = await self.bot.wait_for(
-                'message',
-                check=check,
-                timeout=max(0, wait_until - time.time())
-            )
-            self.handled_congrats.add(congrats_message.id)
-            await self.process_congratulations(congrats_message, message, reference_message)
-        except asyncio.TimeoutError:
-            logger.warning("Timeout: No congratulatory message detected.")
-            await self.allow_all_to_catch(message)
-        except Exception as e:
-            logger.error(f"Unexpected error in wait_for_congratulations: {e}")
-            logger.error("Traceback:")
-            traceback.print_exc()
-
+     try:
+        # Wait for the congratulatory message in the correct channel only
+        congrats_message = await self.bot.wait_for(
+            'message',
+            check=check,
+            timeout=max(0, wait_until - time.time())
+        )
+        self.handled_congrats.add(congrats_message.id)
+        await self.process_congratulations(congrats_message, message, reference_message)
+     except asyncio.TimeoutError:
+        logger.warning(f"Timeout: No congratulatory message detected in channel {message.channel.id}.")
+        await self.allow_all_to_catch(message)
+     except Exception as e:
+        logger.error(f"Unexpected error in wait_for_congratulations: {e}")
+        logger.error("Traceback:")
+        traceback.print_exc()
+        
     async def process_congratulations(self, congrats_message, original_message, reference_message):
      try:
         # Load the shiny ping phrase
