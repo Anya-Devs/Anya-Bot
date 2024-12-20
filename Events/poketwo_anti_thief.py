@@ -197,7 +197,7 @@ class EventGate(commands.Cog):
         who_caught_pokemon_user_id = re.search(r"<@(\d+)>", congrats_message.content).group(1)
 
         # Validate that the shiny ping phrase exists in the congratulatory message
-        if self.who_caught_pokemon_user_id not in congrats_message.content:
+        if who_caught_pokemon_user_id not in congrats_message.content:
             logger.warning(f"Something weird happened in {catch_channel.channel.name}.")
             report_channel = "https://discord.com/channels/1278580577104040018/1307894465440256100"
             await catch_channel.send(
