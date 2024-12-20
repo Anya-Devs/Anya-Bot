@@ -8,20 +8,20 @@ import traceback
 import logging
 import json
 
-# Custom imports
+                
 from Imports.discord_imports import *
 from Data.const import primary_color
 
-# Set up logging configuration
+                              
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Timestamp function
+                    
 def timestamp_gen(timestamp: int) -> str:
     dt = datetime.datetime.utcfromtimestamp(timestamp).replace(tzinfo=datetime.timezone.utc)
-    return f'<t:{int(dt.timestamp())}:R>'  # Returns relative time format (e.g., "in 30 seconds")
+    return f'<t:{int(dt.timestamp())}:R>'                                                        
 
-# Load shiny ping phrase from config file
+                                         
 def load_ping_phrase():
     config_path = "Data/commands/poketwo_anti_thief/shiny_ping_config.json"
     if os.path.exists(config_path):
@@ -31,7 +31,7 @@ def load_ping_phrase():
     else:
         return "**:sparkles: Shiny Hunt Pings:**"
 
-# Save shiny ping phrase to config file
+                                       
 def save_ping_phrase(new_phrase):
     config_path = "Data/commands/poketwo_anti_thief/shiny_ping_config.json"
     if not os.path.exists(os.path.dirname(config_path)):
@@ -45,11 +45,11 @@ def save_ping_phrase(new_phrase):
 class Anti_Thief(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.bot_id = 874910942490677270  # ID of the bot sending shiny hunt messages
+        self.bot_id = 874910942490677270                                             
         self.shiny_hunters = []
-        self.shiny_ping_phrase = load_ping_phrase()  # Load shiny ping phrase from file
+        self.shiny_ping_phrase = load_ping_phrase()                                    
         self.shiny_regex = r"<@(\d+)>"
-        self.primary_color = primary_color()  # Example primary color
+        self.primary_color = primary_color()                         
 
     async def process_pings(self, guild, message_content):
      shiny_hunters = []
@@ -62,7 +62,7 @@ class Anti_Thief(commands.Cog):
 
      if self.shiny_ping_phrase in message_content:
         mention_start_index = message_content.find(self.shiny_ping_phrase) + len(self.shiny_ping_phrase)
-        mention_part = message_content[mention_start_index:].split("\n")[0].strip()  # Split at newline and take the first part
+        mention_part = message_content[mention_start_index:].split("\n")[0].strip()                                            
 
         if mention_part:
             try:
@@ -99,12 +99,12 @@ class Anti_Thief(commands.Cog):
             return
         
         self.shiny_ping_phrase = new_phrase
-        save_ping_phrase(new_phrase)  # Save new phrase to the config file
+        save_ping_phrase(new_phrase)                                      
         await ctx.reply(f"Shiny hunt ping phrase updated to: {new_phrase}", mention_author=False)
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.id == self.bot_id and message.guild:  # Ensure message has a valid guild
+        if message.author.id == self.bot_id and message.guild:                                    
             self.shiny_hunters = await self.process_pings(message.guild, message.content)
             if self.shiny_hunters:
                 await self.bot.get_cog('EventGate').send_shiny_hunt_embed(message.channel, self.shiny_hunters, reference_message=message)
@@ -112,29 +112,29 @@ class Anti_Thief(commands.Cog):
 class EventGate(commands.Cog):
     def __init__(self, bot, anti_thief=None):
         self.bot = bot
-        self.anti_thief = anti_thief  # Link to Anti_Thief cog
+        self.anti_thief = anti_thief                          
         self.timeout_duration = datetime.timedelta(hours=3)
-        self.detect_bot_id = 716390085896962058  # Bot ID for detection
+        self.detect_bot_id = 716390085896962058                        
         self.logger_channel_id = 1278580578593148976
-        self.wait_time = 30  # Timer for shiny event in seconds
-        self.primary_color = primary_color()  # Example primary color
-        self.active_events = {}  # Track active shiny events per channel
-        self.handled_congrats = set()  # Track handled congratulatory messages
-        self.shiny_ping_phrase = load_ping_phrase()  # Load shiny ping phrase from file
+        self.wait_time = 30                                    
+        self.primary_color = primary_color()                         
+        self.active_events = {}                                         
+        self.handled_congrats = set()                                         
+        self.shiny_ping_phrase = load_ping_phrase()                                    
 
 
     def timestamp_gen(self, timestamp: int) -> str:
         dt = datetime.datetime.utcfromtimestamp(timestamp).replace(tzinfo=datetime.timezone.utc)
-        return f'<t:{int(dt.timestamp())}:R>'  # Returns relative time format (e.g., "in 30 seconds")
+        return f'<t:{int(dt.timestamp())}:R>'                                                        
 
     async def send_shiny_hunt_embed(self, channel, shiny_hunters, reference_message=None):
         if channel.id in self.active_events:
             logger.info(f"Shiny hunt already active in channel {channel.id}. Skipping new event.")
-            return  # Avoid multiple shiny hunt events in the same channel
+            return                                                        
 
         timestamp = datetime.datetime.utcnow().timestamp()
-        wait_until = timestamp + self.wait_time  # Event end time
-        self.active_events[channel.id] = wait_until  # Mark the event as active
+        wait_until = timestamp + self.wait_time                  
+        self.active_events[channel.id] = wait_until                            
 
         wait_embed = Embed(
             description=f"{self.timestamp_gen(wait_until)} | ✨ Shiny hunters: {' '.join([hunter.mention for hunter in shiny_hunters])}",
@@ -160,7 +160,7 @@ class EventGate(commands.Cog):
 
     async def wait_for_congratulations(self, message, wait_until, reference_message):
      def check(m):
-        # Ensure the message is from the correct channel
+                                                        
         if m.channel.id != message.channel.id:
             return False
         
@@ -171,7 +171,7 @@ class EventGate(commands.Cog):
         return False
 
      try:
-        # Wait for the congratulatory message in the correct channel only
+                                                                         
         congrats_message = await self.bot.wait_for(
             'message',
             check=check,
@@ -189,19 +189,19 @@ class EventGate(commands.Cog):
         
     async def process_congratulations(self, congrats_message, original_message, reference_message):
      try:
-        # Load the shiny ping phrase
+                                    
         self.shiny_ping_phrase = load_ping_phrase()
 
-        # Initialize variables
+                              
         quest_user_ids = []
         catch_channel = reference_message.channel
         logger.info(f"Reference message content: {reference_message.content}")
 
-        # Extract user IDs from messages
+                                        
         mentioned_user_id = re.search(r"<@(\d+)>", reference_message.content).group(1)
         who_caught_pokemon_user_id = re.search(r"<@(\d+)>", congrats_message.content).group(1)
 
-        # Validate that the shiny ping phrase exists in the congratulatory message
+                                                                                  
         if who_caught_pokemon_user_id not in congrats_message.content:
             logger.warning(f"Something weird happened in {catch_channel.channel.name}.")
             report_channel = "https://discord.com/channels/1278580577104040018/1307894465440256100"
@@ -210,46 +210,46 @@ class EventGate(commands.Cog):
             )
             return
 
-        # Extract quest pings from the reference message
+                                                        
         if self.shiny_ping_phrase in reference_message.content:
             quest_pings_content = reference_message.content.split(self.shiny_ping_phrase)[1].strip()
             quest_user_ids = re.findall(r"<@(\d+)>", quest_pings_content)
             logger.info(f"Extracted Shiny Pings user IDs: {quest_user_ids}")
 
-        # Verify the catcher against quest pings and shiny hunter status
+                                                                        
         if who_caught_pokemon_user_id not in quest_user_ids:
             logger.warning(f"User {who_caught_pokemon_user_id} is not in the quest pings list.")
             is_shiny_hunter = await self.bot.get_cog('Anti_Thief').is_shiny_hunter(int(who_caught_pokemon_user_id))
 
             if not is_shiny_hunter:
-                # Log potential theft and notify channel
+                                                        
                 logger.info(f"User {who_caught_pokemon_user_id} is not a shiny hunter. Logging incident.")
                 non_hunter = await self.bot.fetch_user(who_caught_pokemon_user_id)
 
-                # Extract Pokémon name
+                                      
                 p_match = re.search(r"Level \d+ (\w+)", congrats_message.content)
                 pokemon_name = p_match.group(1) if p_match else "Unknown Pokémon"
 
-                # Timeout the non-hunter user for stealing the shiny Pokémon
+                                                                            
                 await self.timeout_user(non_hunter, original_message)
 
-                # Send a warning embed to the channel
+                                                     
                 embed = Embed(
                     title="Shiny Thief Detected!",
                     description=f"🚨 {non_hunter.mention} stole **{pokemon_name}**. They've been timed out for 3 hours.",
-                    color=self.primary_color  # Color for non-hunter detection
+                    color=self.primary_color                                  
                 )
                 await catch_channel.send(embed=embed)
                 logger.info(f"Non-hunter {non_hunter.mention} detected and timed out.")
 
-                # Log the incident details to the logger channel
+                                                                
                 logger_channel = self.bot.get_channel(self.logger_channel_id)
                 log_embed = Embed(
                     title="Shiny Theft",
                     description=(
                         f"**User:** {non_hunter.mention} (`{non_hunter.id}`)\n"
                         f"**Pokémon:** {pokemon_name}\n"
-                        f"**Location** [{catch_channel.name}]({original_message.jump_url})\n"  # Added message link
+                        f"**Location** [{catch_channel.name}]({original_message.jump_url})\n"                      
                         f"**Action Taken:** :hourglass:  Timeout - 3 hours"
                     ),
                     color=primary_color()
@@ -259,7 +259,7 @@ class EventGate(commands.Cog):
                 await logger_channel.send(embed=log_embed)
                 return
 
-        # If the catcher is valid, send congratulations
+                                                       
         logger.info(f"User {who_caught_pokemon_user_id} is valid. Proceeding with congratulations.")
         shiny_hunters = await self.bot.get_cog('Anti_Thief').process_pings(reference_message.guild.id, reference_message.content)
         shiny_hunter = next((hunter for hunter in shiny_hunters if str(hunter.id) == mentioned_user_id), None)
@@ -292,7 +292,7 @@ class EventGate(commands.Cog):
         GUILD_ID = message.guild.id
         USER_ID = user.id
 
-        timeout_duration = 180  # 3 hours
+        timeout_duration = 180           
         timeout_end = datetime.datetime.utcnow() + datetime.timedelta(minutes=timeout_duration)
 
         headers = {
