@@ -35,7 +35,7 @@ class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         intents.members = True
-        self.prefix = "..."
+        self.prefix = ">"
         super().__init__(
             command_prefix=commands.when_mentioned_or(self.prefix),
             intents=intents,
@@ -46,7 +46,7 @@ class BotSetup(commands.AutoShardedBot):
         self.mongoConnect = None
         self.DB_NAME = 'Bot'
         self.COLLECTION_NAME = 'information'
-        self.token_type = "Token"
+        self.token_type = "Test_Token"
         
 
     async def on_ready(self):
@@ -59,7 +59,7 @@ class BotSetup(commands.AutoShardedBot):
 
         client = AsyncIOMotorClient(mongo_url)
         db = client[self.DB_NAME]
-        collection = db[self.COLLECTION_NAME]
+        collection = db[sel.f.COLLECTION_NAME]
 
         token_data = await collection.find_one({self.token_type: {"$exists": True}})
         

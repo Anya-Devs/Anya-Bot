@@ -33,8 +33,8 @@ class HelpEmbedImagesManager:
             with open(self.json_file_path, 'r') as f:
                 data = json.load(f)
                 return data.get('help_embed', {})
-        except FileNotFoundError:
-            # In case the file does not exist, return a default structure
+        except (FileNotFoundError, json.JSONDecodeError):
+            # If the file is missing or corrupted, return a default structure
             return {
                 "anime": {"thumbnail_url": None},
                 "information": {"thumbnail_url": None},
@@ -46,6 +46,7 @@ class HelpEmbedImagesManager:
 
     def save_images(self):
         """Saves the current help_embed images data back to the JSON file."""
+        os.makedirs(os.path.dirname(self.json_file_path), exist_ok=True)
         with open(self.json_file_path, 'w') as f:
             json.dump({"help_embed": self.help_embed}, f, indent=4)
 
@@ -62,8 +63,9 @@ class HelpEmbedImagesManager:
     def get_image_url(self, cog_name):
         """Returns the image URL for the given cog."""
         cog_name = cog_name.lower()
-        return self.help_embed.get(cog_name, {}).get("thumbnail_url", "No URL found.")
-    
+        return self.help_embed.get(cog_name, {}).get("thumbnail_url", None)
+
+
 class Select(discord.ui.Select):
     def __init__(self, cog_commands, bot, primary_color):
         options = [
@@ -85,23 +87,25 @@ class Select(discord.ui.Select):
         self.set_thumbnail_file = "Data/commands/help/help_embed_images.json"
 
     def _ensure_file_exists(self):
-        # Ensure the directory exists
+        """Ensures the command mapping file exists."""
         os.makedirs(os.path.dirname(self.command_mapping_file), exist_ok=True)
-        # Ensure the file exists
         if not os.path.exists(self.command_mapping_file):
             with open(self.command_mapping_file, 'w') as f:
                 json.dump({}, f, indent=4)
 
     def _load_command_mapping(self):
+        """Loads the command mapping JSON."""
         self._ensure_file_exists()
         with open(self.command_mapping_file, 'r') as f:
             return json.load(f)
 
     def _save_command_mapping(self, mapping):
+        """Saves the updated command mapping JSON."""
         with open(self.command_mapping_file, 'w') as f:
             json.dump(mapping, f, indent=4)
 
     def _update_command_mapping(self):
+        """Updates the command mapping by syncing with cog commands."""
         mapping = self._load_command_mapping()
         for cog_name in self.cog_commands.keys():
             if cog_name not in mapping:
@@ -135,27 +139,18 @@ class Select(discord.ui.Select):
             )
             self.cog_embed2 = discord.Embed(description='', color=color)
 
-            # Generate the image using Options_ImageGenerator
-            image_generator = Options_ImageGenerator(cog_name)
-            image_path = 'Data/commands/help/set_image/cog_image.png'
-            image_generator.save_image(image_path)
+            # Use HelpEmbedImagesManager to get the image URL
+            help_embed_manager = HelpEmbedImagesManager(self.set_thumbnail_file)
+            thumbnail_url = help_embed_manager.get_image_url(cog_name)
 
-            file = None
-            if 'ai' in Help_Select_Embed_Mapping.embeds and cog_name.lower() == 'ai':
-                file_path = 'Data/commands/help/set_image/ai.png'
-                if os.path.exists(file_path):
-                    file = discord.File(file_path, filename='thumbnail.png')
-                    self.cog_embed2.set_thumbnail(url='attachment://thumbnail.png')
-                else:
-                    logger.error(f"Thumbnail file '{file_path}' not found.")
+            if thumbnail_url:
+                self.cog_embed2.set_thumbnail(url=thumbnail_url)
             else:
-                #self.cog_embed2.set_thumbnail(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["thumbnail_url"])
-                help_embed_manager = HelpEmbedImagesManager(self.set_thumbnail_file)
-                current_url = help_embed_manager.get_image_url(Help_Select_Embed_Mapping.embeds[cog_name.lower()])
-                self.cog_embed2.set_thumbnail(url=current_url)
+                logger.warning(f"No thumbnail URL found for cog '{cog_name}'.")
 
-
-            # Attach the generated image
+            # Attach the generated image if it exists
+            image_path = 'Data/commands/help/set_image/cog_image.png'
+            file = None
             if os.path.exists(image_path):
                 with open(image_path, 'rb') as f:
                     file = discord.File(f, filename='cog_image.png')
@@ -196,9 +191,8 @@ class Select(discord.ui.Select):
             traceback_str = traceback.format_exc()
             print(traceback_str)
             logger.debug(f"An error occurred: {traceback_str}")
-            pass
-        
-        
+            pass           
+
 class HelpMenu(discord.ui.View):
     def __init__(self, bot, primary_color, select_view, *, timeout=None):
         super().__init__(timeout=timeout)

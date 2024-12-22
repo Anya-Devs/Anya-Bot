@@ -20,7 +20,9 @@
     "System": {
         "ping": "Check the bot's response time.",
         "credit": " ",
-        "uptime": " "
+        "uptime": " ",
+        "set_image": " ",
+        "get_image": " "
     },
     "Pokemon": {
         "predict": "Predict Pok\u00e9mon details.",
