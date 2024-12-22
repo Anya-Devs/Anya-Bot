@@ -149,7 +149,7 @@ class Help_Select_Embed_Mapping:
         "quest": "<:anyasus:1258563706518765669> ",
         "ai": '<:ai:1258206841737973842> ',
         'pokemon': '<:Pokeball:1261208239891156992>',
-        'anime': '<a:ora_anya:1320293949625073664>',
+        'anime': '<:neko_lurk:1320306198075015201>',
         'information': '<:help_info:1268971820988764272>',
         # Add more emoji mappings for other cogs as needed
     }

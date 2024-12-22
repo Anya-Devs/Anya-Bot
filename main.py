@@ -47,6 +47,7 @@ class BotSetup(commands.AutoShardedBot):
         self.DB_NAME = 'Bot'
         self.COLLECTION_NAME = 'information'
         self.token_type = "Token"
+        
 
     async def on_ready(self):
         print(f"\033[92mLogged in as {self.user} (ID: {self.user.id})\033[0m")

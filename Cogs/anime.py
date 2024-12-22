@@ -1,10 +1,10 @@
 import asyncio
 import requests
 import aiohttp
-import discord
-from discord.ext import commands
-
 import logging
+
+from Imports.discord_imports import *
+from Data.const import create_and_send_embed
 
 # Set up logging configuration
 logging.basicConfig(
@@ -173,6 +173,8 @@ class Anime(commands.Cog):
         except Exception as e:
             logging.error(f"An unexpected error occurred: {e}")
             await ctx.send(f"An unexpected error occurred: {e}")
+
+            
     class AnimeButton(discord.ui.Button):
         def __init__(self, label, style, custom_id, anime_data, current_index, current_page, max_pages):
             super().__init__(label=label, style=style, custom_id=custom_id)
