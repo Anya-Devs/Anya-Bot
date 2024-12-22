@@ -1,18 +1,23 @@
-# Imports
-import os
-import io
-import re
-import json
-import aiohttp
+# Standard Library Imports
 import asyncio
-import traceback
-from datetime import datetime, timezone
-from PIL import Image 
-from openai import AsyncOpenAI  # Assuming AsyncOpenAI is the correct import from your module
-from Imports.discord_imports import *
+import io
+import json
+import os
 import platform
 import random
-import psutil
+import re
+from datetime import datetime, timezone
+from traceback import print_exc
+
+# Third-Party Imports
+import aiohttp
+from PIL import Image
+from psutil import *  # Import all functions from psutil
+
+# Custom Imports
+from Imports.discord_imports import *  # Import all necessary Discord-related classes/functions
+from openai import AsyncOpenAI  # Assuming AsyncOpenAI is the correct import from your module 
+
 
 # Constants
 class AnyaImages:
@@ -32,7 +37,7 @@ class AnyaImages:
     help_system_thumbnail = "https://i.pinimg.com/564x/f4/38/ef/f438ef92875df915c8d019780a76a346.jpg"
     help_quest_thumbnail = 'https://i.pinimg.com/474x/d9/af/95/d9af956f06d0de95689e2094f753aa2f.jpg' 
     help_pokemon_thumbnail = 'https://pbs.twimg.com/media/FRaJipkWUAADmt-?format=jpg&name=4096x4096'
-    help_anime_thumbnail = 'https://i.pinimg.com/564x/2b/d0/0e/2bd00e086802fdd7bd27f2fdad3ec4fe.jpg'
+    help_anime_thumbnail = 'https://anime.astronerdboy.com/wp-content/uploads/2022/06/x03-reading-manga-goofing-off-not-working.jpg'
     help_information_thumbnail = 'https://i.pinimg.com/474x/ae/95/91/ae9591cf2700cedc2ca63c2b5eb85990.jpg'
     quest_completed_anya = 'https://i.pinimg.com/236x/26/3b/90/263b90473c3651b4fc3d30b462152c0b.jpg'
     
