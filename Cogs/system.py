@@ -7,6 +7,7 @@ import psutil
 import sys
 import subprocess
 import time
+import json
 from datetime import datetime, timedelta
 
 import aiohttp
@@ -19,12 +20,15 @@ from Imports.log_imports import *
 import Data.const as const 
 from Data.const import primary_color, timestamp_gen
 
+
 class System(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.start_time = time.time()  # Store the bot's start time
+        self.start_time = time.time()                              
+        self.image_file = 'Data/commands/help/help_embed_images.json'
 
-        # logger.info(f"{Fore.GREEN}[System cog] Initialized{Style.RESET_ALL}")
+
+                                                                               
 
     async def get_latest_python_version(self):
         latest_version = subprocess.check_output(['python', '-c', 'import sys; print("{}.{}.{}".format(sys.version_info.major, sys.version_info.minor, sys.version_info.micro))']).decode().strip()
@@ -58,13 +62,13 @@ class System(commands.Cog):
             embed = discord.Embed(title='', description=f"```diff\n{pos_neg} Pong: {gateway_latency}```", color=color, timestamp=datetime.now())
             embed.set_footer(text=f'Requested by {ctx.author}', icon_url=ctx.author.avatar)
 
-            # embed.add_field(name="\u200b", value=f"```diff\nCPU: {cpu_usage_value}% {cpu_status}\n```", inline=True)
-            # embed.add_field(name="\u200b", value=f"```diff\nMemory: {mem_usage_value}% {mem_status}\n```", inline=True)
-            # embed.add_field(name="\u200b", value=f"```diff\nSystem: {system_info}\n```", inline=True)
-            # embed.add_field(name="\u200b", value=f"```diff\nPython: {python_version_info}\n```", inline=True)
-            # embed.add_field(name="\u200b", value=f"```diff\nDiscord Library: {const.PingConstants.language_info['Discord Library']}\n```", inline=True)
+                                                                                                                      
+                                                                                                                         
+                                                                                                       
+                                                                                                               
+                                                                                                                                                         
 
-            # embed.set_thumbnail(url=ctx.author.avatar.url)
+                                                            
             await ctx.reply(f"{ctx.message.author.mention}",embed=embed, mention_author=False)
 
         except Exception as e:
@@ -77,7 +81,7 @@ class System(commands.Cog):
     @commands.command(name='uptime')
     async def uptime(self, ctx):
         """Shows how long the bot has been running."""
-        bot_uptime = timestamp_gen(self.start_time)  # Assuming `bot.start_time` is the timestamp of when the bot started
+        bot_uptime = timestamp_gen(self.start_time)                                                                      
 
 
         embed = discord.Embed(
@@ -93,18 +97,18 @@ class System(commands.Cog):
     @commands.command(name='credit')
     async def credit(self, ctx):
         try:
-            # Load the JSON file
+                                
             with open('Data/commands/system/credits.json', 'r') as f:
                 credit_data = json.load(f)
 
-            # Create the embed using the JSON data
+                                                  
             embed = discord.Embed(
                 title=f'{credit_data["title"]}',
                 timestamp=datetime.now(),
                 color=primary_color()
             )
 
-            # Add developer fields
+                                  
             emoji = '<:ty:1285850367065587762>'
             reply = '<:reply:1285852466704809984>'
             image_url = 'https://static1.cbrimages.com/wordpress/wp-content/uploads/2022/11/Spy-x-family-ep-18-Loid-and-Anya-studying.jpg?q=50&fit=crop&w=1100&h=618&dpr=1.5'
@@ -113,15 +117,98 @@ class System(commands.Cog):
                 
             embed.set_image(url=image_url)
               
-            # Add footer
+                        
             embed.set_footer(text='- w - thanks for using our bot')
 
-            # Send the embed
+                            
             await ctx.reply(embed=embed, mention_author=False)
 
         except Exception as e:
-            # Handle any errors and send a message to the user
+                                                              
             await ctx.send(f"An error occurred while trying to load the credits: {e}")
+
+
+    @commands.command(name="set_image")
+    async def set_image(self, ctx, cog_name: str):
+        """Command to change the image URL of a specific cog. Accepts attachments or image URLs."""
+        cog_name = cog_name.lower()
+
+                               
+        valid_cogs = ['anime', 'information', 'system', 'quest', 'ai', 'pokemon']
+        if cog_name not in valid_cogs:
+            await ctx.send(f"Invalid cog name. Valid cogs are: {', '.join(valid_cogs)}.")
+            return
+
+                              
+        if len(ctx.message.attachments) > 0:
+                                                          
+            image_url = ctx.message.attachments[0].url
+        elif len(ctx.message.content.split()) > 1:
+                                                                                 
+            image_url = ctx.message.content.split()[1]
+        else:
+            await ctx.send("No image URL or attachment found. Please attach an image or provide an image URL.")
+            return
+        
+                                            
+        if os.path.exists(self.image_file):
+            with open(self.image_file, 'r') as f:
+                help_embed = json.load(f)
+        else:
+            help_embed = {}
+
+                                                    
+        if cog_name not in help_embed:
+            help_embed[cog_name] = {}
+
+        help_embed[cog_name]['thumbnail_url'] = image_url
+
+                                                      
+        with open(self.image_file, 'w') as f:
+            json.dump(help_embed, f, indent=4)
+
+                                                             
+        embed = discord.Embed(
+            title=f"Thumbnail for `{cog_name}` Updated",
+            description=f"The thumbnail for `{cog_name}` has been successfully updated!",
+            color=discord.Color.green()
+        )
+        embed.set_thumbnail(url=image_url)
+        await ctx.reply(embed=embed, mention_author=False)
+
+    @commands.command(name="get_image")
+    async def get_image(self, ctx, cog_name: str):
+        """Command to retrieve the image URL of a specific cog."""
+        cog_name = cog_name.lower()
+
+                               
+        valid_cogs = ['anime', 'information', 'system', 'quest', 'ai', 'pokemon']
+        if cog_name not in valid_cogs:
+            await ctx.send(f"Invalid cog name. Valid cogs are: {', '.join(valid_cogs)}.")
+            return
+
+                                                       
+        if os.path.exists(self.image_file):
+            with open(self.image_file, 'r') as f:
+                help_embed = json.load(f)
+        else:
+            await ctx.send("No images have been set yet.")
+            return
+        
+                                                                          
+        if cog_name in help_embed and 'thumbnail_url' in help_embed[cog_name]:
+            image_url = help_embed[cog_name]['thumbnail_url']
+                                                               
+            embed = discord.Embed(
+                title=f"Thumbnail for `{cog_name}`",
+                description=f"The current thumbnail for `{cog_name}` is:",
+                color=discord.Color.blue()
+            )
+            embed.set_thumbnail(url=image_url)
+            await ctx.reply(embed=embed, mention_author=False)
+        else:
+            await ctx.reply(embed=embed, mention_author=False)
+
 
 
 def setup(bot):

@@ -22,7 +22,48 @@ from Imports.log_imports import logger
 
 import textwrap
 
+class HelpEmbedImagesManager:
+    def __init__(self, json_file_path):
+        self.json_file_path = json_file_path
+        self.help_embed = self.load_images()
 
+    def load_images(self):
+        """Loads the images from the JSON file."""
+        try:
+            with open(self.json_file_path, 'r') as f:
+                data = json.load(f)
+                return data.get('help_embed', {})
+        except FileNotFoundError:
+            # In case the file does not exist, return a default structure
+            return {
+                "anime": {"thumbnail_url": None},
+                "information": {"thumbnail_url": None},
+                "system": {"thumbnail_url": None, "image_url": None},
+                "quest": {"thumbnail_url": None},
+                "ai": {"thumbnail_url": None},
+                "pokemon": {"thumbnail_url": None}
+            }
+
+    def save_images(self):
+        """Saves the current help_embed images data back to the JSON file."""
+        with open(self.json_file_path, 'w') as f:
+            json.dump({"help_embed": self.help_embed}, f, indent=4)
+
+    def update_image_url(self, cog_name, url):
+        """Updates the image URL for a specific cog in the help_embed."""
+        cog_name = cog_name.lower()
+        if cog_name in self.help_embed:
+            self.help_embed[cog_name]["thumbnail_url"] = url
+            self.save_images()
+            return f"Updated {cog_name} thumbnail URL successfully."
+        else:
+            return f"Cog '{cog_name}' not found."
+
+    def get_image_url(self, cog_name):
+        """Returns the image URL for the given cog."""
+        cog_name = cog_name.lower()
+        return self.help_embed.get(cog_name, {}).get("thumbnail_url", "No URL found.")
+    
 class Select(discord.ui.Select):
     def __init__(self, cog_commands, bot, primary_color):
         options = [
@@ -41,6 +82,7 @@ class Select(discord.ui.Select):
         self.page = 0  # Track the current page
         self.primary_color = primary_color
         self.command_mapping_file = 'Data/commands/help/command_map.json'
+        self.set_thumbnail_file = "Data/commands/help/help_embed_images.json"
 
     def _ensure_file_exists(self):
         # Ensure the directory exists
@@ -107,9 +149,11 @@ class Select(discord.ui.Select):
                 else:
                     logger.error(f"Thumbnail file '{file_path}' not found.")
             else:
-                self.cog_embed2.set_thumbnail(
-                    url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["thumbnail_url"]
-                )
+                #self.cog_embed2.set_thumbnail(url=Help_Select_Embed_Mapping.embeds[cog_name.lower()]["thumbnail_url"])
+                help_embed_manager = HelpEmbedImagesManager(self.set_thumbnail_file)
+                current_url = help_embed_manager.get_image_url(Help_Select_Embed_Mapping.embeds[cog_name.lower()])
+                self.cog_embed2.set_thumbnail(url=current_url)
+
 
             # Attach the generated image
             if os.path.exists(image_path):
