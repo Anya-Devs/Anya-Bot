@@ -90,7 +90,7 @@ class Anti_Thief(commands.Cog):
     async def is_shiny_hunter(self, user_id):
         return any(hunter.id == user_id for hunter in self.shiny_hunters)
     
-    @commands.command(name='set_phrase')
+    @commands.command(name='set_phrase', hidden=True)
     async def set_ping_phrase(self, ctx, *, new_phrase: str):
         """
         Update the shiny ping phrase used for detecting shiny hunt messages.
