@@ -4,7 +4,6 @@ import aiohttp
 import logging
 
 from Imports.discord_imports import *
-from Data.const import create_and_send_embed
 
 # Set up logging configuration
 logging.basicConfig(
