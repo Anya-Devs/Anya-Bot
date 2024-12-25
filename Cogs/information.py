@@ -245,7 +245,8 @@ class Information(commands.Cog):
                     f"{emoji} : `{emoji}`" for emoji in pages[page_index]
                 ),
                 color=primary_color()
-            )
+            )            
+            embed.set_thumbnail(url=ctx.guild.icon.url if ctx.guild.icon else None)
             embed.set_footer(text=f"Page {page_index + 1}/{len(pages)}")
             return embed
 
@@ -262,13 +263,13 @@ class Information(commands.Cog):
             async def previous_page(self, button, interaction):
                 if self.current_page > 0:
                     self.current_page -= 1
-                    await self.update_embed(interaction)
+                    await self.update_embed(button)
 
             @discord.ui.button(label="Next", style=discord.ButtonStyle.primary)
             async def next_page(self, button, interaction):
                 if self.current_page < len(pages) - 1:
                     self.current_page += 1
-                    await self.update_embed(interaction)
+                    await self.update_embed(button)
 
         embed = create_embed(0)
         view = PaginationView()
