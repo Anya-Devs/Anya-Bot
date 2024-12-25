@@ -224,6 +224,57 @@ class Information(commands.Cog):
      await ctx.reply(embed=embed, view=view, mention_author=False)
 
 
+
+    @commands.command(name='emojis')
+    async def list_emojis(self, ctx):
+        """Lists all server emojis with pagination."""
+        emojis = ctx.guild.emojis
+        if not emojis:
+            await ctx.reply("This server has no custom emojis!", mention_author=False)
+            return
+
+        emojis_per_page = 10
+        pages = [
+            emojis[i:i + emojis_per_page] for i in range(0, len(emojis), emojis_per_page)
+        ]
+
+        def create_embed(page_index):
+            embed = discord.Embed(
+                title="Server Emojis",
+                description="\n".join(
+                    f"{emoji} : `{emoji}`" for emoji in pages[page_index]
+                ),
+                color=primary_color()
+            )
+            embed.set_footer(text=f"Page {page_index + 1}/{len(pages)}")
+            return embed
+
+        class PaginationView(View):
+            def __init__(self):
+                super().__init__(timeout=60)
+                self.current_page = 0
+
+            async def update_embed(self, interaction):
+                embed = create_embed(self.current_page)
+                await interaction.response.edit_message(embed=embed, view=self)
+
+            @discord.ui.button(label="Previous", style=discord.ButtonStyle.primary)
+            async def previous_page(self, button, interaction):
+                if self.current_page > 0:
+                    self.current_page -= 1
+                    await self.update_embed(interaction)
+
+            @discord.ui.button(label="Next", style=discord.ButtonStyle.primary)
+            async def next_page(self, button, interaction):
+                if self.current_page < len(pages) - 1:
+                    self.current_page += 1
+                    await self.update_embed(interaction)
+
+        embed = create_embed(0)
+        view = PaginationView()
+        await ctx.reply(embed=embed, view=view, mention_author=False)
+
+
 class PermissionsView(discord.ui.View):
     GENERAL_PERMISSIONS = [
         "administrator", "manage_guild", "manage_roles", "manage_channels", "kick_members", 
