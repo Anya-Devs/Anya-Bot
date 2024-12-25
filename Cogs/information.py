@@ -247,7 +247,7 @@ class Information(commands.Cog):
                 color=primary_color()
             )            
             embed.set_thumbnail(url=ctx.guild.icon.url if ctx.guild.icon else None)
-            embed.set_footer(text=f"Page {page_index + 1}/{len(pages)}")
+            embed.set_footer(text=f"{ctx.guild.name} • Page {page_index + 1}/{len(pages)}")
             return embed
 
         class PaginationView(View):
