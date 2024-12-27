@@ -94,51 +94,37 @@ class System(commands.Cog):
         embed.set_footer(text="Uptime", icon_url=self.bot.user.avatar)
         await ctx.reply(embed=embed, mention_author=False)     
         
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        """Ensures the bot processes commands only when it is ready."""
-        if self.bot.user is None:  # Avoid AttributeError if self.user is None
-            return
-        if message.author.id == self.bot.user.id:  # Ignore messages from itself
-            return
-        await self.bot.process_commands(message)
-
-    @tasks.loop(minutes=5)
+    @tasks.loop(minutes=10)
     async def memory_check(self):
         """Periodically checks and optimizes memory usage."""
-        await self.bot.wait_until_ready()  # Ensure the bot is ready before executing
-        self.force_garbage_collection()
-        self.clear_bot_cache()
+        await self.bot.wait_until_ready()
+        self.optimize_memory()
         self.log_memory_usage()
 
     @memory_check.before_loop
     async def before_memory_check(self):
         await self.bot.wait_until_ready()
 
-    def force_garbage_collection(self):
-        """Forces garbage collection to free up unused memory."""
+    def optimize_memory(self):
+        """Optimize memory usage by clearing cache and running garbage collection."""
+        # Force garbage collection
         collected = gc.collect()
-        print(f"Garbage collection executed. {collected} objects collected.")
-
-    def clear_bot_cache(self):
-        """Clears the bot's internal caches to reduce memory usage."""
-        # Clears user cache, guild cache, and other internal data caches
+        # Clear internal cache
         self.bot._connection.clear()
-        print("Bot internal caches cleared.")
+        print(f"Optimized memory. Garbage collected: {collected} objects.")
 
     def log_memory_usage(self):
         """Logs the bot's current memory usage."""
         process = psutil.Process(os.getpid())
         memory_info = process.memory_info()
-        memory_usage = memory_info.rss / (1024 ** 2)  # Memory in MB
+        memory_usage = memory_info.rss / (1024 ** 2)  # Convert bytes to MB
         print(f"Current memory usage: {memory_usage:.2f} MB")
 
     @commands.command()
     @commands.is_owner()
     async def optimize(self, ctx):
         """Manually triggers memory optimization."""
-        self.force_garbage_collection()
-        self.clear_bot_cache()
+        self.optimize_memory()
         memory_usage = self.get_memory_usage()
         await ctx.send(f"Memory optimization completed. Current usage: {memory_usage:.2f} MB")
 
@@ -153,9 +139,7 @@ class System(commands.Cog):
         """Returns the current memory usage of the bot."""
         process = psutil.Process(os.getpid())
         memory_info = process.memory_info()
-        memory_usage = memory_info.rss / (1024 ** 2)  # Memory in MB
-        return memory_usage    
-    
+        return memory_info.rss / (1024 ** 2)  # Convert bytes to MB    
     @commands.command(name='credit')
     async def credit(self, ctx):
         try:
