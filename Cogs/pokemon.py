@@ -490,7 +490,7 @@ class Pokemon(commands.Cog):
     def __init__(self, bot, dataset_folder="Data/pokemon/pokemon_images"):
         self.bot = bot
         self.author_id = 716390085896962058
-        self.detect_bot_id = 854233015475109888  # ID of the bot you're waiting for
+        self.detect_bot_id = [854233015475109888, 874910942490677270]  # ID of the bot you're waiting for
         self.phrase = "Shiny hunt pings:"
         self.predictor = PokemonPredictor()
         self.data_handler = PokemonData()  # PokemonData instance
@@ -695,7 +695,7 @@ class Pokemon(commands.Cog):
     async def wait_for_bot_response(self, channel):
         # Wait for a message from the specific bot within 3 seconds
         def check(msg):
-            return msg.author.id == self.detect_bot_id and msg.channel == channel
+            return msg.author.id in self.detect_bot_id and msg.channel == channel
 
         try:
             # Wait for 3 seconds for the bot to reply
