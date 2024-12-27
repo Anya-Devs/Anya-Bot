@@ -24,7 +24,8 @@ from Data.const import primary_color, timestamp_gen
 class System(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.start_time = time.time()                              
+        self.start_time = time.time()
+        self.memory_check.start()
         self.image_file = 'Data/commands/help/help_embed_images.json'
 
 
@@ -74,7 +75,7 @@ class System(commands.Cog):
         except Exception as e:
             await const.error_custom_embed(self.bot, ctx, e, title="Ping")
             logger.error(f"[System cog] Error occurred while sending ping embed: {e}")
-
+   
     def cog_unload(self):
         logger.info(f"{Fore.RED}[System cog] Unloaded{Style.RESET_ALL}")
         
