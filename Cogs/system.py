@@ -94,9 +94,19 @@ class System(commands.Cog):
         embed.set_footer(text="Uptime", icon_url=self.bot.user.avatar)
         await ctx.reply(embed=embed, mention_author=False)     
         
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        """Ensures the bot processes commands only when it is ready."""
+        if self.bot.user is None:  # Avoid AttributeError if self.user is None
+            return
+        if message.author.id == self.bot.user.id:  # Ignore messages from itself
+            return
+        await self.bot.process_commands(message)
+
     @tasks.loop(minutes=5)
     async def memory_check(self):
         """Periodically checks and optimizes memory usage."""
+        await self.bot.wait_until_ready()  # Ensure the bot is ready before executing
         self.force_garbage_collection()
         self.clear_bot_cache()
         self.log_memory_usage()
@@ -144,8 +154,8 @@ class System(commands.Cog):
         process = psutil.Process(os.getpid())
         memory_info = process.memory_info()
         memory_usage = memory_info.rss / (1024 ** 2)  # Memory in MB
-        return memory_usage
-            
+        return memory_usage    
+    
     @commands.command(name='credit')
     async def credit(self, ctx):
         try:
