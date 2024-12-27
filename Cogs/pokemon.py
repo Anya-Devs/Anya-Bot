@@ -640,42 +640,56 @@ class Pokemon(commands.Cog):
          
     @commands.Cog.listener()
     async def on_message(self, message):
+        # Check if the message is from the specified author and contains an embed
         if message.author.id == self.author_id and message.embeds:
             embed = message.embeds[0]
             if embed.description and 'Guess the pokémon' in embed.description:
                 image_url = embed.image.url
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(image_url) as response:
-                        if response.status == 200:
-                            loop = asyncio.get_event_loop()
-                            img_bytes = await loop.run_in_executor(
-                                       self.executor, lambda: bytearray(requests.get(image_url).content)
-                            )
-                            img = np.asarray(img_bytes, dtype=np.uint8)
-                            img = cv.imdecode(img, cv.IMREAD_COLOR)
-                            # Get all users who have this Pokémon in their list
-                            prediction, time_taken, predicted_name = await self.predictor.predict_pokemon(img)
-                            hunters = await self.data_handler.get_hunters_for_pokemon(predicted_name)
-
-                            if hunters:
-                                # Create a mention string for the hunters
-                                hunter_mentions = " ".join([f"||<@{hunter_id}>||" for hunter_id in hunters])  # Updated format for mentions
-                                ping_message = f"{prediction}\n\n{hunter_mentions}"
-                                await message.channel.send(f"{ping_message}", reference=message)
-
-
-                            # Use the predictor to predict the Pokémon
-                            else:
-                             await message.channel.send(prediction, reference=message)
-                             predicted_pokemon = prediction.lower()
- 
-                            
-
                 
-                        else:
-                            await message.channel.send(f"Failed to download image. Status code: {response.status}", reference=message)
-                            return
-  
+                # Wait for 3 seconds for the bot's reply
+                bot_response = await self.wait_for_bot_response(message.channel)
+                
+                if bot_response:
+                    # If the bot responds, you can handle this case here
+                    await message.channel.send("Bot responded within 3 seconds!")
+                else:
+                    # If no response, proceed with image processing
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(image_url) as response:
+                            if response.status == 200:
+                                loop = asyncio.get_event_loop()
+                                img_bytes = await loop.run_in_executor(
+                                           self.executor, lambda: bytearray(requests.get(image_url).content)
+                                )
+                                img = np.asarray(img_bytes, dtype=np.uint8)
+                                img = cv.imdecode(img, cv.IMREAD_COLOR)
+
+                                # Get prediction for the Pokémon
+                                prediction, time_taken, predicted_name = await self.predictor.predict_pokemon(img)
+                                hunters = await self.data_handler.get_hunters_for_pokemon(predicted_name)
+
+                                if hunters:
+                                    # Mention hunters
+                                    hunter_mentions = " ".join([f"||<@{hunter_id}>||" for hunter_id in hunters])
+                                    ping_message = f"{prediction}\n\n{hunter_mentions}"
+                                    await message.channel.send(f"{ping_message}", reference=message)
+                                else:
+                                    await message.channel.send(prediction, reference=message)
+                            else:
+                                await message.channel.send(f"Failed to download image. Status code: {response.status}", reference=message)
+
+    async def wait_for_bot_response(self, channel):
+        # Wait for a message from the specific bot within 3 seconds
+        def check(msg):
+            return msg.author.id == self.detect_bot_id and msg.channel == channel
+
+        try:
+            # Wait for 3 seconds for the bot to reply
+            msg = await self.bot.wait_for('message', timeout=3.0, check=check)
+            return msg
+        except asyncio.TimeoutError:
+            # If no response within 3 seconds, return None
+            return None
 
     @commands.command(name="hunt")
     @commands.cooldown(1, 6, commands.BucketType.user) 
