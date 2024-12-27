@@ -3,7 +3,7 @@ from datetime import datetime
 from Imports.discord_imports import *
 
 from Data.const import *
-from Data.const import error_custom_embed, primary_color
+from Data.const import error_custom_embed, primary_color, Information_Embed
 
 # Constants for permission categories
 GENERAL_PERMISSIONS = [
