@@ -1,4 +1,4 @@
-.# Standard library imports
+# Standard library imports
 import re
 import json
 import csv
