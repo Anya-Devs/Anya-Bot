@@ -94,7 +94,58 @@ class System(commands.Cog):
         embed.set_footer(text="Uptime", icon_url=self.bot.user.avatar)
         await ctx.reply(embed=embed, mention_author=False)     
         
-        
+    @tasks.loop(minutes=5)
+    async def memory_check(self):
+        """Periodically checks and optimizes memory usage."""
+        self.force_garbage_collection()
+        self.clear_bot_cache()
+        self.log_memory_usage()
+
+    @memory_check.before_loop
+    async def before_memory_check(self):
+        await self.bot.wait_until_ready()
+
+    def force_garbage_collection(self):
+        """Forces garbage collection to free up unused memory."""
+        collected = gc.collect()
+        print(f"Garbage collection executed. {collected} objects collected.")
+
+    def clear_bot_cache(self):
+        """Clears the bot's internal caches to reduce memory usage."""
+        # Clears user cache, guild cache, and other internal data caches
+        self.bot._connection.clear()
+        print("Bot internal caches cleared.")
+
+    def log_memory_usage(self):
+        """Logs the bot's current memory usage."""
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        memory_usage = memory_info.rss / (1024 ** 2)  # Memory in MB
+        print(f"Current memory usage: {memory_usage:.2f} MB")
+
+    @commands.command()
+    @commands.is_owner()
+    async def optimize(self, ctx):
+        """Manually triggers memory optimization."""
+        self.force_garbage_collection()
+        self.clear_bot_cache()
+        memory_usage = self.get_memory_usage()
+        await ctx.send(f"Memory optimization completed. Current usage: {memory_usage:.2f} MB")
+
+    @commands.command()
+    @commands.is_owner()
+    async def memory_info(self, ctx):
+        """Displays current memory usage statistics."""
+        memory_usage = self.get_memory_usage()
+        await ctx.send(f"Current memory usage: {memory_usage:.2f} MB")
+
+    def get_memory_usage(self):
+        """Returns the current memory usage of the bot."""
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        memory_usage = memory_info.rss / (1024 ** 2)  # Memory in MB
+        return memory_usage
+            
     @commands.command(name='credit')
     async def credit(self, ctx):
         try:
