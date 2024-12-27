@@ -80,6 +80,7 @@ class PokemonPredictor:
         self.load_dataset()
 
     def load_dataset(self):
+        """Loads the dataset from a file or creates a new one."""
         if os.path.exists(self.dataset_file):
             self.cache = np.load(self.dataset_file, allow_pickle=True).item()
             print(f"Dataset loaded with {len(self.cache)} images.")
@@ -88,39 +89,50 @@ class PokemonPredictor:
             self.create_dataset()
 
     def create_dataset(self):
+        """Creates the dataset by processing all images in the folder."""
         for filename in os.listdir(self.dataset_folder):
             if filename.endswith(".png"):
                 path = os.path.join(self.dataset_folder, filename)
                 self.process_image(path, filename)
-        
+
         # Save the created dataset
         if self.cache:
             np.save(self.dataset_file, self.cache)
             print(f"Dataset saved with {len(self.cache)} images.")
 
     def process_image(self, path, filename):
+        """Processes an image to extract descriptors and metadata."""
         img = cv.imread(path)
         if img is None:
+            print(f"Failed to load {filename}")
             return
-        
+
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         _, descriptors = self.orb.detectAndCompute(gray, None)
-        
+
         if descriptors is not None and len(descriptors) > 0:
-            self.cache[filename] = {'descriptors': descriptors.astype(np.uint8)}
+            # Extract metadata
+            metadata = {
+                'descriptors': descriptors.astype(np.uint8),
+                'dimensions': img.shape[:2],  # Height, Width
+                'avg_color': img.mean(axis=(0, 1)).tolist(),  # BGR average
+                'hash': hash(filename),  # Simple hash based on the filename
+            }
+            self.cache[filename] = metadata
 
     def evaluate_image_quality(self, image):
-        # Simple sharpness evaluation using Laplacian variance
+        """Evaluates image quality based on sharpness."""
         sharpness = cv.Laplacian(image, cv.CV_64F).var()
         return sharpness
 
     def cross_match(self, descriptors, image, k=2):
+        """Matches the descriptors against the dataset and finds the best match."""
         sharpness = self.evaluate_image_quality(image)
 
         # Only consider sharp images for matching
         if sharpness < 0.2:
             return None, 0
-        
+
         best_match, max_accuracy = None, 0
         for filename, data in self.cache.items():
             matches = self.flann.knnMatch(descriptors, data['descriptors'], k)
@@ -131,12 +143,13 @@ class PokemonPredictor:
         return best_match, max_accuracy
 
     def evaluate_accuracy(self, matches):
+        """Evaluates accuracy based on good matches."""
         good_matches = sum(1 for match in matches if len(match) >= 2 and match[0].distance < 0.75 * match[1].distance)
         accuracy = (good_matches / len(matches)) * 100 if matches else 0
         return accuracy
 
     async def predict_pokemon(self, img):
-        # Predict Pokémon by comparing descriptors with precomputed dataset.
+        """Predicts the Pokémon by comparing descriptors with the precomputed dataset."""
         start_time = time.time()
         gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         _, descriptors = self.orb.detectAndCompute(gray_img, None)
@@ -144,14 +157,26 @@ class PokemonPredictor:
         if descriptors is None:
             return "No descriptors found", time.time() - start_time
 
-        best_match, accuracy =  self.cross_match(descriptors, img)
+        best_match, accuracy = self.cross_match(descriptors, img)
         elapsed_time = time.time() - start_time
+
         if best_match:
             predicted_name = best_match.replace(".png", "").replace("_flipped", "")
             return f"{predicted_name.title()}: {round(accuracy, 2)}%", elapsed_time, predicted_name
         else:
             return "No match found", elapsed_time
-        
+
+    def get_metadata(self, filename):
+        """Retrieves metadata for a given image in the dataset."""
+        metadata = self.cache.get(filename)
+        if metadata:
+            dimensions = metadata['dimensions']
+            avg_color = metadata['avg_color']
+            hash_value = metadata['hash']
+            return f"Dimensions: {dimensions}, Avg Color: {avg_color}, Hash: {hash_value}"
+        return "Metadata not found for the given image."
+
+       
         
         
         

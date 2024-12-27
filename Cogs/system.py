@@ -140,6 +140,7 @@ class System(commands.Cog):
         process = psutil.Process(os.getpid())
         memory_info = process.memory_info()
         return memory_info.rss / (1024 ** 2)  # Convert bytes to MB    
+    
     @commands.command(name='credit')
     async def credit(self, ctx):
         try:
