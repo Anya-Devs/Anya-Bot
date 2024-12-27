@@ -610,9 +610,9 @@ class Pokemon(commands.Cog):
                     await ctx.reply(f"Failed to download image. Status code: {response.status}", mention_author=False)
      else:
         await ctx.send("No image found to predict.")
-    """
-     @commands.Cog.listener()
-     async def on_message(self, message):
+         
+    @commands.Cog.listener()
+    async def on_message(self, message):
         if message.author.id == self.author_id and message.embeds:
             embed = message.embeds[0]
             if embed.description and 'Guess the pokémon' in embed.description:
@@ -650,7 +650,6 @@ class Pokemon(commands.Cog):
                             return
   
 
-    """
     @commands.command(name="hunt")
     @commands.cooldown(1, 6, commands.BucketType.user) 
     async def hunt(self, ctx, action="list", *pokemon_names):
