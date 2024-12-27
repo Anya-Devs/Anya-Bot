@@ -1,4 +1,4 @@
-# Standard library imports
+.# Standard library imports
 import re
 import json
 import csv
@@ -685,7 +685,7 @@ class Pokemon(commands.Cog):
                                             hunter_mentions.append(f"<@{hunter_id}>")
 
                                     if hunter_mentions:
-                                        ping_message = f"{prediction}\n\n{self.phrase}{' '.join(hunter_mentions)}"
+                                        ping_message = f"{prediction}\n\n{self.phrase} {' '.join(hunter_mentions)}"
                                         await message.channel.send(f"{ping_message}", reference=message)
                                 else:
                                     await message.channel.send(prediction, reference=message)
