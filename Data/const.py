@@ -12,7 +12,9 @@ from traceback import print_exc
 # Third-Party Imports
 import aiohttp
 from PIL import Image
+import psutil
 from psutil import *  # Import all functions from psutil
+
 
 # Custom Imports
 from Imports.discord_imports import *  # Import all necessary Discord-related classes/functions
