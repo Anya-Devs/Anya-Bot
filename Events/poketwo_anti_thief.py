@@ -45,7 +45,7 @@ def save_ping_phrase(new_phrase):
 class Anti_Thief(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.bot_id = 874910942490677270                                             
+        self.bot_id = [874910942490677270, 1234247716243112100, 854233015475109888]                                            
         self.shiny_hunters = []
         self.shiny_ping_phrase = load_ping_phrase()                                    
         self.shiny_regex = r"<@(\d+)>"
@@ -104,7 +104,7 @@ class Anti_Thief(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.id == self.bot_id and message.guild:                                    
+        if message.author.id in self.bot_id and message.guild:                                    
             self.shiny_hunters = await self.process_pings(message.guild, message.content)
             if self.shiny_hunters:
                 await self.bot.get_cog('EventGate').send_shiny_hunt_embed(message.channel, self.shiny_hunters, reference_message=message)
@@ -115,7 +115,6 @@ class EventGate(commands.Cog):
         self.anti_thief = anti_thief                          
         self.timeout_duration = datetime.timedelta(hours=3)
         self.detect_bot_id = 716390085896962058   
-        self.detect_2_bot_id = 854233015475109888
         self.logger_channel_id = 1278580578593148976
         self.wait_time = 30                                    
         self.primary_color = primary_color()                         
@@ -165,7 +164,7 @@ class EventGate(commands.Cog):
         if m.channel.id != message.channel.id:
             return False
         
-        if m.author.id == self.detect_bot_id or detect_2_bot_id and m.id not in self.handled_congrats:
+        if m.author.id == self.detect_bot_id and m.id not in self.handled_congrats:
             match = re.match(r"Congratulations <@(\d+)>! You caught a Level \d+ .+", m.content)
             if match:
                 return True

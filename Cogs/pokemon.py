@@ -491,7 +491,7 @@ class Pokemon(commands.Cog):
         self.bot = bot
         self.author_id = 716390085896962058
         self.detect_bot_id = 854233015475109888  # ID of the bot you're waiting for
-
+        self.phrase = "Shiny hunt pings:"
         self.predictor = PokemonPredictor()
         self.data_handler = PokemonData()  # PokemonData instance
         self.primary_color = primary_color
@@ -682,10 +682,10 @@ class Pokemon(commands.Cog):
                                             await self.data_handler.remove_pokemon_from_user(hunter_id, predicted_name)
                                         else:
                                             # Otherwise, mention the hunter
-                                            hunter_mentions.append(f"||<@{hunter_id}>||")
+                                            hunter_mentions.append(f"<@{hunter_id}>")
 
                                     if hunter_mentions:
-                                        ping_message = f"{prediction}\n\n{' '.join(hunter_mentions)}"
+                                        ping_message = f"{prediction}\n\n{self.phrase}{' '.join(hunter_mentions)}"
                                         await message.channel.send(f"{ping_message}", reference=message)
                                 else:
                                     await message.channel.send(prediction, reference=message)
@@ -735,8 +735,8 @@ class Pokemon(commands.Cog):
         user_pokemon = await self.data_handler.get_user_pokemon(user_id)
 
         # Check if the user has already reached the maximum Pokémon count
-        if len(user_pokemon) + len(pokemon_names) > 10:
-            await ctx.reply("You already have 10 Pokémon in your hunt list. Please **remove** one to add new ones.", mention_author=False)
+        if len(user_pokemon) + len(pokemon_names) > 1:
+            await ctx.reply("You already have 1 Pokémon in your hunt list. Please **remove** one to add new ones.", mention_author=False)
             return
 
         added_pokemon = []
