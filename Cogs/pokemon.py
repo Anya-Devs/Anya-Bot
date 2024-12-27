@@ -699,7 +699,7 @@ class Pokemon(commands.Cog):
 
         try:
             # Wait for 3 seconds for the bot to reply
-            msg = await self.bot.wait_for('message', timeout=5.0, check=check)
+            msg = await self.bot.wait_for('message', timeout=10.0, check=check)
             return msg
         except asyncio.TimeoutError:
             # If no response within 3 seconds, return None
