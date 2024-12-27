@@ -490,6 +490,8 @@ class Pokemon(commands.Cog):
     def __init__(self, bot, dataset_folder="Data/pokemon/pokemon_images"):
         self.bot = bot
         self.author_id = 716390085896962058
+        self.detect_bot_id = 854233015475109888  # ID of the bot you're waiting for
+
         self.predictor = PokemonPredictor()
         self.data_handler = PokemonData()  # PokemonData instance
         self.primary_color = primary_color
