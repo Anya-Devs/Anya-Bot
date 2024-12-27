@@ -44,6 +44,8 @@ import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from multiprocessing import Pool
 from sklearn.cluster import KMeans
+from scipy.spatial.distance import euclidean
+
 
 
 # Custom imports
@@ -133,17 +135,12 @@ class PokemonPredictor:
         if sharpness < 0.2:
             return None, 0
 
-        best_match, max_accuracy, best_color_similarity = None, 0, float('inf')
+        best_match, max_accuracy = None, 0
         for filename, data in self.cache.items():
             matches = self.flann.knnMatch(descriptors, data['descriptors'], k)
             accuracy = self.evaluate_accuracy(matches)
-
-            # Calculate color similarity using Euclidean distance between avg_color values
-            color_similarity = self.calculate_color_similarity(data['avg_color'], image)
-
-            # Combine accuracy and color similarity (you can adjust weights as needed)
-            if accuracy > max_accuracy and color_similarity < best_color_similarity:
-                best_match, max_accuracy, best_color_similarity = filename, accuracy, color_similarity
+            if accuracy > max_accuracy:
+                best_match, max_accuracy = filename, accuracy
 
         return best_match, max_accuracy
 
@@ -152,11 +149,6 @@ class PokemonPredictor:
         good_matches = sum(1 for match in matches if len(match) >= 2 and match[0].distance < 0.75 * match[1].distance)
         accuracy = (good_matches / len(matches)) * 100 if matches else 0
         return accuracy
-
-    def calculate_color_similarity(self, avg_color, image):
-        """Calculates the color similarity using Euclidean distance."""
-        image_avg_color = image.mean(axis=(0, 1)).tolist()
-        return np.linalg.norm(np.array(avg_color) - np.array(image_avg_color))
 
     async def predict_pokemon(self, img):
         """Predicts the Pokémon by comparing descriptors with the precomputed dataset."""
@@ -185,6 +177,7 @@ class PokemonPredictor:
             hash_value = metadata['hash']
             return f"Dimensions: {dimensions}, Avg Color: {avg_color}, Hash: {hash_value}"
         return "Metadata not found for the given image."
+
        
         
         
