@@ -653,7 +653,8 @@ class Pokemon(commands.Cog):
                 
                 if bot_response:
                     # If the bot responds, you can handle this case here
-                    await message.channel.send("Bot responded within 3 seconds!")
+                    #await message.channel.send("Bot responded within 3 seconds!")
+                    pass
                 else:
                     # If no response, proceed with image processing
                     async with aiohttp.ClientSession() as session:
@@ -671,10 +672,21 @@ class Pokemon(commands.Cog):
                                 hunters = await self.data_handler.get_hunters_for_pokemon(predicted_name)
 
                                 if hunters:
-                                    # Mention hunters
-                                    hunter_mentions = " ".join([f"||<@{hunter_id}>||" for hunter_id in hunters])
-                                    ping_message = f"{prediction}\n\n{hunter_mentions}"
-                                    await message.channel.send(f"{ping_message}", reference=message)
+                                    # Mention hunters and check if they're still in the guild
+                                    hunter_mentions = []
+                                    for hunter_id in hunters:
+                                        # Get the guild member object
+                                        member = message.guild.get_member(hunter_id)
+                                        if member is None:
+                                            # If the hunter is not in the guild, remove their Pokémon from the user's list
+                                            await self.data_handler.remove_pokemon_from_user(hunter_id, predicted_name)
+                                        else:
+                                            # Otherwise, mention the hunter
+                                            hunter_mentions.append(f"||<@{hunter_id}>||")
+
+                                    if hunter_mentions:
+                                        ping_message = f"{prediction}\n\n{' '.join(hunter_mentions)}"
+                                        await message.channel.send(f"{ping_message}", reference=message)
                                 else:
                                     await message.channel.send(prediction, reference=message)
                             else:
@@ -692,7 +704,7 @@ class Pokemon(commands.Cog):
         except asyncio.TimeoutError:
             # If no response within 3 seconds, return None
             return None
-
+        
     @commands.command(name="hunt")
     @commands.cooldown(1, 6, commands.BucketType.user) 
     async def hunt(self, ctx, action="list", *pokemon_names):
