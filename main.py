@@ -31,6 +31,7 @@ from Imports.discord_imports import *
 from Imports.log_imports import logger
 from Cogs.pokemon import PokemonPredictor
 
+
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
