@@ -1,0 +1,167 @@
+# Node.js related files:
+## Grunt intermediate storage
+.grunt
+
+## Dependency directory (node_modules)
+node_modules
+
+# Book build output
+_book
+
+# eBook build output (formats: epub, mobi, pdf)
+*.epub
+*.mobi
+*.pdf
+
+# Python related files:
+## Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+## C extensions
+*.so
+
+## Distribution / packaging files
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+## PyInstaller files (manifest and spec)
+*.manifest
+*.spec
+
+## Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+## Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+## Translations (mo, pot files)
+*.mo
+*.pot
+
+## Django related files
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+## Flask related files
+instance/
+.webassets-cache
+
+## Scrapy related files
+.scrapy
+
+## Sphinx documentation build output
+docs/_build/
+
+## PyBuilder files
+.pybuilder/
+target/
+
+## Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+## IPython configuration files
+profile_default/
+ipython_config.py
+
+## pyenv (Python version manager)
+# .python-version (typically used for environment-specific versions)
+
+## pipenv files
+# Pipfile.lock (may be included in version control for certain use cases)
+
+## poetry files
+# poetry.lock (generally recommended to include for binary packages)
+
+## pdm files (Python Dependency Manager)
+.pdm.toml
+.pdm-python
+.pdm-build/
+
+## PEP 582 (local project packages)
+__pypackages__/
+
+## Celery files (task scheduler)
+celerybeat-schedule
+celerybeat.pid
+
+## SageMath parsed files
+*.sage.py
+
+## Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE related files:
+## Spyder project settings
+.spyderproject
+.spyproject
+
+## Rope project settings
+.ropeproject
+
+## mkdocs documentation build output
+/site
+
+## Type checkers
+### mypy cache
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+### Pyre type checker
+.pyre/
+
+### pytype static type analyzer
+.pytype/
+
+## Cython debug symbols
+cython_debug/
+
+## JetBrains IDEs (e.g., PyCharm, IntelliJ)
+# Uncomment if you don't have the global JetBrains.gitignore
+# .idea/
+
+# Ignore .env files in the root and subdirectories
+.env
+*.env
+**/.env
+.github/.env
+

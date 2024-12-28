@@ -1,0 +1,21 @@
+{
+  "title": "Credits",
+  "description": "This bot was developed by the following amazing contributors:",
+  "developers": [
+    {
+      "name": "<@776865099817418793>",
+      "role": "Contributed to `...predict` and was the inspiration for `...pokemon`"
+    },
+    {
+      "name": "<@1026388699203772477>",
+      "role": "Contributed to commands: `about`, `help`, and is the inspiration for  `vision`."
+    },
+    {
+      "name": "<@412759902394777634>",
+      "role": "Bot Tester: `quest`."
+    }
+  ],
+  "footer": {
+    "text": "Thank you for using our bot!"
+  }
+}

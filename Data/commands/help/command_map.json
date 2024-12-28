@@ -1,0 +1,63 @@
+{
+    "Quest": {
+        "quest": " View server quest in order to complete them.",
+        "stars": " View how many stellas you have currently.",
+        "shop": "Buy a Spy Tool.",
+        "redirect": " ",
+        "inventory": " ",
+        "q_roles": " "
+    },
+    "Ai": {
+        "vision_model": "Get the current vision model.",
+        "imagine": "Generate an image based on a prompt.",
+        "vision": "Show Anya a image and get her response."
+    },
+    "Anime": {
+        "anime": "Get information about an anime.",
+        "character": " ",
+        "manga": " "
+    },
+    "System": {
+        "ping": "Check the bot's response time.",
+        "credit": " ",
+        "uptime": " ",
+        "set_image": " ",
+        "get_image": " "
+    },
+    "Pokemon": {
+        "predict": "Predict Pok\u00e9mon details.",
+        "pokemon": "Get information about a Pok\u00e9mon.",
+        "hunt": " "
+    },
+    "Information": {
+        "about": "Get details about users or bot.",
+        "server": " ",
+        "pfp": " ",
+        "role": " ",
+        "banner": " ",
+        "joined": " ",
+        "roles": " ",
+        "invite": " ",
+        "perms": " "
+    },
+    "PokemonBot": {
+        "predict": " "
+    },
+    "Quest_Data": {},
+    "Quest_Slash": {},
+    "Help": {},
+    "Sync": {},
+    "FileSender": {},
+    "TestCog": {},
+    "AvatarChanger": {},
+    "Logs": {},
+    "Permission": {},
+    "Quest_Checker": {},
+    "Aesthetic": {
+        "embed": "Description to fill out",
+        "reload_aesthetic": "Description to fill out"
+    },
+    "Anti_Theif": {
+        "s_t": " "
+    }
+}
