@@ -250,7 +250,6 @@ class EventGate(commands.Cog):
                         f"**User:** {non_hunter.mention} (`{non_hunter.id}`)\n"
                         f"**Pokémon:** {pokemon_name}\n"
                         f"**Location** [{catch_channel.name}]({original_message.jump_url})\n"                      
-                        f"**Action Taken:** :hourglass:  Timeout - 3 hours"
                     ),
                     color=primary_color()
                 )
