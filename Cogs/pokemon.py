@@ -505,6 +505,7 @@ class Pokemon(commands.Cog):
         self.orb = cv.ORB_create()  # Initialize ORB descriptor extractor
         self.executor = concurrent.futures.ThreadPoolExecutor()  # For async image loading
         self.dataset_folder = dataset_folder  # Set dataset folder
+        self.wait_time = 15
 
  
     async def fetch_all_pokemon_names(self):
@@ -699,7 +700,7 @@ class Pokemon(commands.Cog):
 
         try:
             # Wait for 3 seconds for the bot to reply
-            msg = await self.bot.wait_for('message', timeout=10.0, check=check)
+            msg = await self.bot.wait_for('message', timeout=self.wait_time, check=check)
             return msg
         except asyncio.TimeoutError:
             # If no response within 3 seconds, return None
