@@ -137,7 +137,7 @@ class EventGate(commands.Cog):
         self.active_events[channel.id] = wait_until                            
 
         wait_embed = Embed(
-            description=f"{self.timestamp_gen(wait_until)} | ✨ Shiny hunters: {' '.join([hunter.mention for hunter in shiny_hunters])}",
+            description=f"{self.timestamp_gen(wait_until)} | wating for {' '.join([hunter.mention for hunter in shiny_hunters])}",
             color=self.primary_color
         )
         try:
