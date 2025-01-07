@@ -505,7 +505,7 @@ class Pokemon(commands.Cog):
         self.orb = cv.ORB_create()  # Initialize ORB descriptor extractor
         self.executor = concurrent.futures.ThreadPoolExecutor()  # For async image loading
         self.dataset_folder = dataset_folder  # Set dataset folder
-        self.wait_time = 15
+        self.wait_time = 20
 
  
     async def fetch_all_pokemon_names(self):
