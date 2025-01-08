@@ -429,7 +429,7 @@ class PokemonPredictor:
         
         
         
-        
+# Pokemon Hunt Data        
 class PokemonData:
     def __init__(self):
         self.DB_NAME = 'Pokemon_SH'
