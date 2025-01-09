@@ -36,7 +36,7 @@ class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         intents.members = True
-        self.prefix = ">"
+        self.prefix = "..."
         super().__init__(
             command_prefix=commands.when_mentioned_or(self.prefix),
             intents=intents,
@@ -48,7 +48,7 @@ class BotSetup(commands.AutoShardedBot):
         self.mongoConnect = None
         self.DB_NAME = 'Bot'
         self.COLLECTION_NAME = 'information'
-        self.token_type = "Test_Token"
+        self.token_type = "Token"
         
 
     async def on_ready(self):
