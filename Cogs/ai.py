@@ -1,28 +1,29 @@
+# Standard Libraries
 import os
+import io
 import asyncio
-import aiohttp
-
-
-from PIL import Image
-from io import BytesIO
-from pathlib import Path
-
-
-from openai import OpenAI
-from openai import AsyncOpenAI  # Assuming AsyncOpenAI is the correct import from your module
-
-
-import aiohttp
 import logging
 import traceback
+import concurrent.futures
+from io import BytesIO
+from urllib.request import urlopen, urlretrieve
+from pathlib import Path
+from datetime import datetime
 
+# Third-Party Libraries
+import aiohttp
+import torch
+from PIL import Image
+from tqdm import tqdm 
+from openai import OpenAI
+from openai import AsyncOpenAI  # Assuming AsyncOpenAI is the correct import
 
+from huggingface_hub import InferenceClient
+
+# Local Imports
 from Imports.discord_imports import *
 from Imports.log_imports import logger
 from Data.const import error_custom_embed, sdxl, primary_color
-
-from urllib.request import urlopen, urlretrieve
-
 
 
 
@@ -38,9 +39,11 @@ class Ai(commands.Cog):
             raise ValueError("API key is not set in environment variables.")
 
         self.openai_client =  AsyncOpenAI(api_key = 'ng-YgkaT8abn2sWaqZRUmVPzs07BdtrE', base_url = "https://api.naga.ac/v1")
-        
-        self.huggingface_url = 'https://api-inference.huggingface.co/models/ehristoforu/dalle-3-xl-v2'
         self.api_key = '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'
+
+        self.image_gen =  ImageGenerator("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")  # Instantiate your ImageGenerator class
+
+        self.huggingface_url = 'https://api-inference.huggingface.co/models/cagliostrolab/animagine-xl-3.1'
         self.vision_model_file = 'Data/commands/ai/vision_model.txt'
         self.options = VisionModelOptions(self.vision_model_file)
         self.error_custom_embed = error_custom_embed
@@ -134,51 +137,31 @@ class Ai(commands.Cog):
                 await ctx.send("Invalid input. Please respond with a number.")
                 
                 
-    async def generate_image(self, prompt: str) -> str:
-     headers = {"Authorization": f"Bearer {self.api_key}"}
-     payload = {"inputs": prompt, "options": {"wait_for_model": True}}
-
-     max_retries = 3
-     output_dir = Path("Data/commands/ai/images")
-     output_dir.mkdir(parents=True, exist_ok=True)
-
-     for attempt in range(max_retries):
-        async with aiohttp.ClientSession() as session:
-            async with session.post(self.huggingface_url, headers=headers, json=payload) as response:
-                if response.status == 200:
-                    image_bytes = await response.read()
-                    output_path = output_dir / f"generated_image_{attempt}.png"
-                    with open(output_path, "wb") as image_file:
-                        image_file.write(image_bytes)
-                    return str(output_path)
-                elif response.status == 500:
-                    error_message = await response.text()
-                    if "CUDA out of memory" in error_message and attempt < max_retries - 1:
-                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                    else:
-                        raise Exception(f"Failed to generate image: {response.status} - {error_message}")
-                else:
-                    raise Exception(f"Failed to generate image: {response.status} - {await response.text()}")
 
     @commands.command(name='imagine', description="Generate an image", aliases=['i'])
     async def imagine(self, ctx: commands.Context, *, prompt: str):
-     try:
-        async with ctx.typing():
-            message = await ctx.reply('> **Please wait while I generate your prompt...**', mention_author=False)
-            image_path = await self.generate_image(prompt)
-            image_file = discord.File(image_path, filename="generated_image.png")
-            
-            # Create a description string properly
-            description = f'**Prompt:** ```{prompt}```\n**Prompt Length:** {len(prompt)} characters'
-            embed = discord.Embed(description=description, color=primary_color())
-            embed.set_image(url="attachment://generated_image.png")
-            embed.set_footer(icon_url=ctx.author.avatar, text=f'Requested by {ctx.author}')
-            
-            await message.delete()
-            await ctx.reply(embed=embed, file=image_file)
-     except Exception as e:
-        await ctx.send(f"An error occurred: {e}")
+        try:
+            async with ctx.typing():
+                message = await ctx.reply('> **Please wait while I generate your prompt...**', mention_author=False)
+
+                # Generate image using the generate_image method
+                image_path = await self.image_gen.generate_image(prompt)
+
+                if image_path:
+                    image_file = discord.File(image_path, filename="generated_image.png")
+                    description = f'**Prompt:** ```{prompt}```'
+                    embed = discord.Embed(description=description, color=discord.Color.blurple(), timestamp=datetime.now())
+                    embed.set_image(url="attachment://generated_image.png")
+                    embed.set_footer(icon_url=ctx.author.avatar, text=f'Requested by {ctx.author}')
+                    
+                    await message.delete()
+                    await ctx.reply(embed=embed, file=image_file)
+                else:
+                    await ctx.reply("Failed to generate image after multiple attempts.")
         
+        except Exception as e:
+            await ctx.send(f"An error occurred: {e}")
+
     @commands.command(name='vision', description="Generate a vision-based response", aliases=['v'])
     async def vision_command(self, ctx, image_url: str = None):
          async def vision(image_link: str, prompt: str = ' ') -> str:
@@ -250,8 +233,45 @@ class Ai(commands.Cog):
 
             
             
-            
 
+class ImageGenerator:
+    def __init__(self, api_key: str):
+        # Use Hugging Face InferenceClient for faster image generation
+        self.client = InferenceClient("ehristoforu/dalle-3-xl-v2", token=api_key)
+        self.output_dir = Path("Data/commands/ai/images")
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        print("Using Hugging Face model via InferenceClient...")
+
+    def generate_image_sync(self, prompt: str, width: int = 1344, height: int = 768) -> Path:
+        """Generates an image synchronously using Hugging Face InferenceClient."""
+        try:
+            print(f"Generating image for prompt: {prompt}")
+            negative_prompt = "longbody, lowres, bad anatomy, bad hands, missing fingers, pubic hair, extra digit, fewer digits, cropped, worst quality, low quality, very displeasing"
+
+
+            # Send the prompt to the Hugging Face API for image generation
+            image = self.client.text_to_image(prompt)  
+            
+            print(image)
+            # Save the image to the output directory
+            output_path = self.output_dir / f"generated_image.png"
+            image.save(output_path)
+            print(f"Image saved at: {output_path}")
+            return output_path
+        
+        except Exception as e:
+            print(f"Error during image generation: {e}")
+            raise e
+
+    async def generate_image(self, prompt: str) -> str:
+        """Generates an image asynchronously."""
+        try:
+            output_path = await asyncio.to_thread(self.generate_image_sync, prompt)
+            return str(output_path)
+        except Exception as e:
+            print(f"Failed to generate image: {e}")
+            raise Exception(f"Failed to generate image: {e}")
+        
 class VisionModelOptions:
     """Class to manage vision model options."""
 

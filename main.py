@@ -36,18 +36,19 @@ class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         intents.members = True
-        self.prefix = "..."
+        self.prefix = ">"
         super().__init__(
             command_prefix=commands.when_mentioned_or(self.prefix),
             intents=intents,
             help_command=None,
-            shard_count=1,
-            shard_reconnect_interval=10
+            shard_count=5,
+            shard_reconnect_interval=10,
+            heartbeat_timeout=120
         )
         self.mongoConnect = None
         self.DB_NAME = 'Bot'
         self.COLLECTION_NAME = 'information'
-        self.token_type = "Token"
+        self.token_type = "Test_Token"
         
 
     async def on_ready(self):
@@ -79,7 +80,6 @@ class BotSetup(commands.AutoShardedBot):
         
         # Set the token in the environment for use
         os.environ["TOKEN"] = token  # Correct way to set an environment variable
-        
         try:
             await self.start(token)
         except KeyboardInterrupt:
