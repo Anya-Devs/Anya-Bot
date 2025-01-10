@@ -393,7 +393,7 @@ class Guide(commands.Cog):
         for file_path in temp_files:
             os.unlink(file_path)  # Remove temporary files
             
-      await guild.text_channels[6].send(f"Embed Completed with {total_pages} pages",delete_after=180)
+      await log_channel.send(f"Embed Completed with {total_pages} pages",delete_after=180)
       return embeds
      except discord.errors.InteractionResponded:
         pass  # Interaction already responded to
