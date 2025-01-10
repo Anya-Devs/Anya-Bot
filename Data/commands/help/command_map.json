@@ -22,7 +22,9 @@
         "credit": " ",
         "uptime": " ",
         "set_image": " ",
-        "get_image": " "
+        "get_image": " ",
+        "optimize": " ",
+        "memory_info": " "
     },
     "Pokemon": {
         "predict": "Predict Pok\u00e9mon details.",
@@ -38,7 +40,8 @@
         "joined": " ",
         "roles": " ",
         "invite": " ",
-        "perms": " "
+        "perms": " ",
+        "emojis": " "
     },
     "PokemonBot": {
         "predict": " "
@@ -59,5 +62,11 @@
     },
     "Anti_Theif": {
         "s_t": " "
+    },
+    "Guide": {
+        "afk": " "
+    },
+    "Memo_Game": {
+        "memo": " "
     }
 }

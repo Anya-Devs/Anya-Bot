@@ -3,6 +3,7 @@ from datetime import datetime
 from Imports.discord_imports import *
 
 from Data.const import *
+from Subcogs.information import Guide
 from Data.const import error_custom_embed, primary_color, Information_Embed
 
 # Constants for permission categories
@@ -384,4 +385,5 @@ class PermissionsView(discord.ui.View):
         
         
 def setup(bot):
+    bot.add_cog(Guide(bot))
     bot.add_cog(Information(bot))
