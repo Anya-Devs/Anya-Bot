@@ -1,6 +1,3 @@
-from Imports.log_imports import logger
-from Imports.discord_imports import *
-from Imports.depend_imports import *
 import os
 import traceback
 import asyncio
@@ -8,6 +5,12 @@ import requests
 from aiohttp import web
 from motor.motor_asyncio import AsyncIOMotorClient
 
+
+# Custom Imports
+from Imports.log_imports import logger
+from Imports.discord_imports import *
+from discord.ext import commands
+from Imports.depend_imports import *
 from dotenv import load_dotenv
 
 
@@ -27,7 +30,7 @@ for key, value in os.environ.items():
     else:
         print(f"{key} = {value}")
 
-# Custom Imports
+
 
 
 class BotSetup(commands.AutoShardedBot):
