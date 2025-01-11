@@ -1,8 +1,4 @@
 # Standard Library Imports
-import base64
-import io
-import json
-import logging
 import os
 import tempfile
 import traceback
@@ -17,7 +13,6 @@ from PIL import Image
 
 # Discord Library Imports
 import discord
-from discord import Embed
 from discord.ext import commands
 from discord.ui import View, Button, Select
 

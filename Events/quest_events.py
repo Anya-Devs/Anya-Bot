@@ -3,7 +3,6 @@ import asyncio
 import logging
 import re
 import traceback
-from datetime import datetime, timedelta
 
 # Third-party library imports
 from fuzzywuzzy import fuzz
@@ -11,11 +10,6 @@ from fuzzywuzzy import fuzz
 # Local imports
 from Cogs.quest import Quest_Data
 from Data.const import (
-    Quest_Progress, 
-    error_custom_embed, 
-    primary_color, 
-    QuestEmbed, 
-    Quest_Prompt, 
     Quest_Completed_Embed
 )
 from Imports.discord_imports import *
