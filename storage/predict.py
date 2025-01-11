@@ -121,7 +121,8 @@ class PokemonPredictor:
                 descriptors  # Store distances for future use
             )
 
-    def compute_roi_density(self, img):
+    @staticmethod
+    def compute_roi_density(img):
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         density = cv.countNonZero(gray) / (gray.shape[0] * gray.shape[1])
         return density
@@ -190,7 +191,8 @@ class PokemonPredictor:
 
         return "No match found", time.time() - start_time
 
-    def load_image_from_url(self, url):
+    @staticmethod
+    def load_image_from_url(url):
         try:
             img = np.asarray(
                 bytearray(requests.get(url).content), dtype=np.uint8)
@@ -199,7 +201,8 @@ class PokemonPredictor:
             print(f"Error fetching image from URL: {e}")
             return None
 
-    def evaluate_matches(self, matches, filename):
+    @staticmethod
+    def evaluate_matches(matches, filename):
         """Evaluate the matches and return the accuracy."""
         if not matches:
             return 0  # No matches found, accuracy is 0
@@ -351,7 +354,8 @@ class Pokemon(commands.Cog):
                     f"Image for {pokemon_name} already exists, skipping download."
                 )
 
-    def remove_srgb_profile(self, img_path):
+    @staticmethod
+    def remove_srgb_profile(img_path):
         try:
             with Image.open(img_path) as img:
                 img.save(img_path, icc_profile=None)
@@ -359,7 +363,8 @@ class Pokemon(commands.Cog):
         except Exception as e:
             logger.error(f"Error removing sRGB profile: {e}")
 
-    def ensure_correct_color_format(self, img):
+    @staticmethod
+    def ensure_correct_color_format(img):
         """
         Convert image to RGB format.
         """
@@ -370,7 +375,8 @@ class Pokemon(commands.Cog):
             return cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
         return img
 
-    def download_file(self, url, filename):
+    @staticmethod
+    def download_file(url, filename):
         response = urlopen(url)
         with open(filename, "wb") as f:
             f.write(response.read())
@@ -1779,7 +1785,8 @@ class Pokebuttons(discord.ui.View):
                 f"Error fetching Pokémon evolution chain: {str(e)}", ephemeral=True
             )
 
-    async def get_pokemon_evolution_chain(self, pokemon_name):
+    @staticmethod
+    async def get_pokemon_evolution_chain(pokemon_name):
         async with aiohttp.ClientSession() as session:
             species_url = (
                 f"https://pokeapi.co/api/v2/pokemon-species/{pokemon_name.lower()}/"
@@ -1846,8 +1853,9 @@ class Pokebuttons(discord.ui.View):
 
         return embeds
 
+    @staticmethod
     async def determine_evolution_method(
-        self, current_pokemon, evolution_details, next_pokemon
+        current_pokemon, evolution_details, next_pokemon
     ):
         trigger = evolution_details.get("trigger", {}).get("name")
         item = evolution_details.get("item")
@@ -2074,8 +2082,9 @@ class PokeSelect(discord.ui.Select):
     def get_flag(self, lang):
         return self.flag_mapping.get(lang)
 
+    @staticmethod
     def get_pokemon_description(
-        self, pokemon_id, file_path="Data/pokemon/pokemon_description.csv"
+        pokemon_id, file_path="Data/pokemon/pokemon_description.csv"
     ):
         try:
             with open(file_path, mode="r", encoding="utf-8") as csv_file:
@@ -2092,8 +2101,9 @@ class PokeSelect(discord.ui.Select):
             return f"An error occurred: {e}"
         return "Pokémon ID not found"
 
+    @staticmethod
     def get_pokemon_region(
-        self, pokemon_id, file_path="Data/pokemon/pokemon_description.csv"
+        pokemon_id, file_path="Data/pokemon/pokemon_description.csv"
     ):
         try:
             with open(file_path, mode="r", encoding="utf-8") as csv_file:
@@ -2367,7 +2377,8 @@ class Strength_weakness(discord.ui.View):
                 )
         return moves_data
 
-    async def fetch_move_details(self, move_url):
+    @staticmethod
+    async def fetch_move_details(move_url):
         response = requests.get(move_url)
         if response.status_code == 200:
             move_data = response.json()
