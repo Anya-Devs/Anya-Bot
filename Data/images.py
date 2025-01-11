@@ -8,9 +8,10 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class Pokemon_Image_Downloader:
     def __init__(self):
-        self.image_folder = 'Data/pokemon/pokemon_images'
+        self.image_folder = "Data/pokemon/pokemon_images"
         self.local_color_memory = []  # Binary local color comparator memory
         self.pokemon_api_url = "https://pokeapi.co/api/v2/pokemon"
         self.pokemon_info_url = "https://pokeapi.co/api/v2/pokemon/{}/"
@@ -53,17 +54,21 @@ class Pokemon_Image_Downloader:
                         async with session.get(official_artwork_url) as response:
                             if response.status == 200:
                                 image_data = await response.read()
-                                async with aiofiles.open(filepath, 'wb') as f:
+                                async with aiofiles.open(filepath, "wb") as f:
                                     await f.write(image_data)
                                 logger.info(f"Downloaded image for {pokemon_name}.")
                             else:
-                                logger.error(f"Failed to download image for {pokemon_name}.")
+                                logger.error(
+                                    f"Failed to download image for {pokemon_name}."
+                                )
                     except Exception as e:
                         logger.error(f"Error downloading image for {pokemon_name}: {e}")
                 else:
                     logger.error(f"Failed to fetch information for {pokemon_name}.")
             else:
-                logger.info(f"Image for {pokemon_name} already exists, skipping download.")
+                logger.info(
+                    f"Image for {pokemon_name} already exists, skipping download."
+                )
 
     async def download_all_images(self, max_concurrent_tasks=10):
         pokemon_names = await self.fetch_all_pokemon_names()
@@ -76,7 +81,6 @@ class Pokemon_Image_Downloader:
             for pokemon_name in pokemon_names:
                 tasks.append(self.download_image(session, pokemon_name, semaphore))
             await asyncio.gather(*tasks)
-
 
 
 downloader = Pokemon_Image_Downloader()
