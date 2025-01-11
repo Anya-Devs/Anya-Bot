@@ -249,7 +249,7 @@ class Pokemon(commands.Cog):
             concurrent.futures.ThreadPoolExecutor()
         )  # For async image loading
         self.dataset_folder = dataset_folder  # Set dataset folder
-        self.wait_time = 20
+        self.wait_time = 11
 
     async def fetch_all_pokemon_names(self):
         pokemon_names = []
