@@ -10,14 +10,16 @@ from Imports.log_imports import logger
 from Imports.discord_imports import *
 import traceback
 
+
 # Define ANSI escape codes for colors
 class LogColors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    ERROR = '\033[91m'
-    ENDC = '\033[0m'
+    HEADER = "\033[95m"
+    OKBLUE = "\033[94m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    ERROR = "\033[91m"
+    ENDC = "\033[0m"
+
 
 # Set up logging with custom formatting
 class CustomFormatter(logging.Formatter):
@@ -32,11 +34,13 @@ class CustomFormatter(logging.Formatter):
             record.msg = f"{LogColors.ERROR}{record.msg}{LogColors.ENDC}"
         return super().format(record)
 
+
 # Set up logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 for handler in logging.getLogger().handlers:
     handler.setFormatter(CustomFormatter())
-
 
 
 # Configure logging
@@ -67,42 +71,58 @@ class Permission(commands.Cog):
             traceback.print_exc()
 
     async def notify_missing_permissions(self, ctx, error):
-        missing_perms = ', '.join(error.missing_perms)
+        missing_perms = ", ".join(error.missing_perms)
         error_message = f"{ctx.author.mention}, you don't have the necessary permissions to execute this command: {missing_perms}"
         await ctx.send(error_message)
-        self.logger.info(f"User {ctx.author} missing permissions: {missing_perms} in {ctx.guild.name}")
+        self.logger.info(
+            f"User {ctx.author} missing permissions: {missing_perms} in {ctx.guild.name}"
+        )
 
         # List current channel permissions for the user
         user_perms = ctx.channel.permissions_for(ctx.author)
         perms_list = [perm for perm, value in user_perms if value]
-        await ctx.send(f"Your current permissions in this channel: {', '.join(perms_list)}")
+        await ctx.send(
+            f"Your current permissions in this channel: {', '.join(perms_list)}"
+        )
 
     async def notify_bot_missing_permissions(self, ctx, error):
-        missing_perms = ', '.join(error.missing_perms)
+        missing_perms = ", ".join(error.missing_perms)
         invite_link = self.generate_invite_link(error.missing_perms)
-        error_message = f"I don't have the necessary permissions to execute this command: {missing_perms}. " \
-                        f"Please [invite me with the correct permissions]({invite_link})."
+        error_message = (
+            f"I don't have the necessary permissions to execute this command: {missing_perms}. "
+            f"Please [invite me with the correct permissions]({invite_link})."
+        )
         await ctx.send(error_message)
-        self.logger.info(f"Bot missing permissions: {missing_perms} in {ctx.guild.name}")
+        self.logger.info(
+            f"Bot missing permissions: {missing_perms} in {ctx.guild.name}"
+        )
 
         # List current channel permissions for the bot
         bot_perms = ctx.channel.permissions_for(ctx.guild.me)
         perms_list = [perm for perm, value in bot_perms if value]
-        await ctx.send(f"My current permissions in this channel: {', '.join(perms_list)}")
+        await ctx.send(
+            f"My current permissions in this channel: {', '.join(perms_list)}"
+        )
 
     async def notify_forbidden_error(self, ctx, error):
-        await ctx.send(f"Operation forbidden: The bot or user lacks the permission to perform an action. "
-                       f"Please check the channel and role settings to ensure proper permissions.")
-        self.logger.warning(f"Forbidden error in command {ctx.command}: {error}")
+        await ctx.send(
+            f"Operation forbidden: The bot or user lacks the permission to perform an action. "
+            f"Please check the channel and role settings to ensure proper permissions."
+        )
+        self.logger.warning(
+            f"Forbidden error in command {ctx.command}: {error}")
 
         # List current role and channel-specific permissions for the bot
         bot_perms = ctx.channel.permissions_for(ctx.guild.me)
         perms_list = [perm for perm, value in bot_perms if value]
-        await ctx.send(f"My current permissions in this channel: {', '.join(perms_list)}")
+        await ctx.send(
+            f"My current permissions in this channel: {', '.join(perms_list)}"
+        )
 
     async def notify_error(self, ctx, error):
         await self.error_custom_embed(self.bot, ctx, error)
-        self.logger.error(f"Unexpected error in command {ctx.command}: {error}")
+        self.logger.error(
+            f"Unexpected error in command {ctx.command}: {error}")
 
     def generate_invite_link(self, missing_perms):
         permissions = discord.Permissions()
@@ -112,16 +132,19 @@ class Permission(commands.Cog):
 
     async def suggest_command(self, ctx, error):
         all_commands = [command.name for command in self.bot.commands]
-        closest_matches = get_close_matches(ctx.invoked_with, all_commands, n=3, cutoff=0.5)
+        closest_matches = get_close_matches(
+            ctx.invoked_with, all_commands, n=3, cutoff=0.5
+        )
         if closest_matches:
             suggestion = f"Did you mean: `{', '.join(closest_matches)}`?"
         else:
             suggestion = "No similar commands found."
-        
+
         error_message = f"Command `{ctx.invoked_with}` not found. {suggestion}"
-        
+
         embed = discord.Embed(description=error_message)
         await ctx.reply(embed=embed, mention_author=False)
+
 
 # Define the Logs cog
 class Logs(commands.Cog):
@@ -143,7 +166,12 @@ class Logs(commands.Cog):
                     if len(commands_str) <= 2000:  # Check if content fits in embed
                         await self.send_embed(channel, "Updated Files", commands_str)
                     else:
-                        await self.send_file(channel, "Data/uncommitted_changes.py", "Updated Files", commands_str)
+                        await self.send_file(
+                            channel,
+                            "Data/uncommitted_changes.py",
+                            "Updated Files",
+                            commands_str,
+                        )
 
         except Exception as e:
             logger.exception("An error occurred while sending log embed:")
@@ -152,13 +180,15 @@ class Logs(commands.Cog):
     # Method to send an embed message
     async def send_embed(self, channel, title, description):
         embed = discord.Embed(
-            title=title,
-            description=description,
-            color=const.LogConstants.embed_color
+            title=title, description=description, color=const.LogConstants.embed_color
         )
         embed.set_thumbnail(url=const.LogConstants.start_log_thumbnail)
-        embed.set_footer(text=const.LogConstants.footer_text, icon_url=const.LogConstants.footer_icon)
-        embed.set_author(name=const.LogConstants.author_name, icon_url=const.LogConstants.author_icon)
+        embed.set_footer(
+            text=const.LogConstants.footer_text, icon_url=const.LogConstants.footer_icon
+        )
+        embed.set_author(
+            name=const.LogConstants.author_name, icon_url=const.LogConstants.author_icon
+        )
         embed.timestamp = datetime.now()  # Set current timestamp
         await channel.send(embed=embed)
 
@@ -176,9 +206,9 @@ class Logs(commands.Cog):
         updated_commands = []
 
         for d in diff:
-            if d.a_path.endswith('.py') and '__pycache__' not in d.a_path:
-                content = d.a_blob.data_stream.read().decode('utf-8')
-                x = '----------------------------------------------------------------------------'
+            if d.a_path.endswith(".py") and "__pycache__" not in d.a_path:
+                content = d.a_blob.data_stream.read().decode("utf-8")
+                x = "----------------------------------------------------------------------------"
                 entry = f"\n\n{x}\nFile: {d.a_path}\nLocation: {os.path.abspath(d.a_path)}\n{x}\n\n{content}"
                 updated_commands.append(entry)
 
@@ -187,8 +217,11 @@ class Logs(commands.Cog):
     # Listener for when the bot is ready
     @commands.Cog.listener()
     async def on_ready(self):
-        logger.info("Log cog is ready. This cog tells the server what updates are in the code.")
+        logger.info(
+            "Log cog is ready. This cog tells the server what updates are in the code."
+        )
         # await self.send_log_embed("Bot is online")
+
 
 # Setup function to add the Logs cog to the bot
 def setup(bot):

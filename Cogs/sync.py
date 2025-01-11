@@ -1,16 +1,20 @@
 from Imports.discord_imports import *
 import traceback
 
+
 class Sync(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name='sync', hidden=True)
+    @commands.command(name="sync", hidden=True)
     @commands.guild_only()
     @commands.is_owner()
-    async def sync(self, ctx: Context, spec: Optional[Literal["~", "*", "^"]] = None) -> None:
+    async def sync(
+        self, ctx: Context, spec: Optional[Literal["~", "*", "^"]] = None
+    ) -> None:
         try:
-            print(f"[DEBUG] Sync command called by {ctx.author} in guild {ctx.guild}")
+            print(
+                f"[DEBUG] Sync command called by {ctx.author} in guild {ctx.guild}")
             print(f"[DEBUG] Spec: {spec}")
 
             # Determine the guilds to sync
@@ -25,7 +29,9 @@ class Sync(commands.Cog):
 
             for guild in guilds:
                 try:
-                    print(f"[DEBUG] Syncing commands for guild: {guild.name} (ID: {guild.id})")
+                    print(
+                        f"[DEBUG] Syncing commands for guild: {guild.name} (ID: {guild.id})"
+                    )
 
                     if spec == "~":
                         # Sync global commands to the specific guild
@@ -44,36 +50,59 @@ class Sync(commands.Cog):
 
                     # Send feedback for each guild
                     message = f"Synced {synced_count} commands in guild: {guild.name} (ID: {guild.id})."
-                    await ctx.send(embed=discord.Embed(description=message, color=discord.Color.green()))
+                    await ctx.send(
+                        embed=discord.Embed(
+                            description=message, color=discord.Color.green()
+                        )
+                    )
 
                 except discord.HTTPException as e:
                     error_message = f"Error syncing guild {guild.id}: {e}"
                     print(f"[ERROR] {error_message}")
                     failed_guilds.append(guild)
-                    await ctx.send(embed=discord.Embed(description=error_message, color=discord.Color.red()))
+                    await ctx.send(
+                        embed=discord.Embed(
+                            description=error_message, color=discord.Color.red()
+                        )
+                    )
 
             # Send final feedback
             success_message = f"Successfully synced commands in {total_guilds} guild(s). Total commands synced: {total_synced_commands}."
-            await ctx.send(embed=discord.Embed(description=success_message, color=discord.Color.green()))
+            await ctx.send(
+                embed=discord.Embed(
+                    description=success_message, color=discord.Color.green()
+                )
+            )
 
             if failed_guilds:
                 failed_message = f"Failed to sync commands in the following guilds: {', '.join(guild.name for guild in failed_guilds)}."
-                await ctx.send(embed=discord.Embed(description=failed_message, color=discord.Color.red()))
+                await ctx.send(
+                    embed=discord.Embed(
+                        description=failed_message, color=discord.Color.red()
+                    )
+                )
 
         except Exception as e:
             error_message = f"An error occurred: {e}"
             print(f"[ERROR] {error_message}")
             traceback.print_exc()
-            await ctx.send(embed=discord.Embed(description=error_message, color=discord.Color.red()))
+            await ctx.send(
+                embed=discord.Embed(
+                    description=error_message, color=discord.Color.red()
+                )
+            )
 
     @sync.error
     async def sync_error(self, ctx: Context, error: commands.CommandError):
         if isinstance(error, commands.MissingPermissions):
             await ctx.send("You don't have permission to use this command.")
         elif isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send("Missing required arguments. Please check the command syntax.")
+            await ctx.send(
+                "Missing required arguments. Please check the command syntax."
+            )
         else:
             await ctx.send(f"An error occurred: {error}")
+
 
 def setup(bot):
     bot.add_cog(Sync(bot))
