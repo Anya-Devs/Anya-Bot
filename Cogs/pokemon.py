@@ -1454,10 +1454,7 @@ class Pokemon(commands.Cog):
     
     
      if gender != None:
-        if gender != "♀️ Female only" or "♂️ Male only" or "Genderless":
-           gender_differ = True
-        else:
-            gender_differ = False
+        gender_differ = bool(gender != "♀️ Female only" or "♂️ Male only" or "Genderless")
      else:
         gender_differ = False
 
