@@ -124,7 +124,8 @@ class Guide(commands.Cog):
 
         self.afk_file_path = "Caster-Bot/Caster-main/afk_members.json"
 
-    async def fetch_invites(self, guild):
+    @staticmethod
+    async def fetch_invites(guild):
         return await guild.invites()
 
     async def update_invites(self, guild):
@@ -156,13 +157,15 @@ class Guide(commands.Cog):
 
         return inviter_mention
 
-    async def get_avatar_emoji(self, ctx, member):
+    @staticmethod
+    async def get_avatar_emoji(ctx, member):
         if member.bot:
             return "🤖"  # Bot emoji
         else:
             return "👤"  # Member emoji
 
-    def timestamp_gen(self, timestamp: int) -> str:
+    @staticmethod
+    def timestamp_gen(timestamp: int) -> str:
         dt = datetime.utcfromtimestamp(timestamp).replace(tzinfo=timezone.utc)
         formatted_timestamp = f"<t:{int(dt.timestamp())}:R>"
         return formatted_timestamp
@@ -661,7 +664,8 @@ class Guide(commands.Cog):
             await ctx.send(error_message)
             print(f"Error encountered: {traceback.format_exc()}")
 
-    def get_usage_guide(self):
+    @staticmethod
+    def get_usage_guide():
         return (
             "Usage: \n"
             ",members --filter <context>\n"
@@ -676,7 +680,8 @@ class Guide(commands.Cog):
             "```"
         )
 
-    def apply_filter(self, all_members, filter_option):
+    @staticmethod
+    def apply_filter(all_members, filter_option):
         if filter_option == FilterOption.NEWEST_TO_OLDEST.value:
             all_members = sorted(
                 all_members, key=lambda member: member.joined_at, reverse=True
@@ -747,7 +752,8 @@ class Guide(commands.Cog):
 
         return embeds
 
-    async def fetch_avatar_data(self, member):
+    @staticmethod
+    async def fetch_avatar_data(member):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(str(member.avatar.with_size(128))) as resp:
@@ -760,7 +766,8 @@ class Guide(commands.Cog):
             print(f"Error fetching avatar for {member.display_name}: {e}")
             return None
 
-    def concatenate_images(self, row_images):
+    @staticmethod
+    def concatenate_images(row_images):
         total_width = sum(img.width for img in row_images)
         max_height = max(img.height for img in row_images)
         concatenated_image = Image.new("RGB", (total_width, max_height))
@@ -775,8 +782,9 @@ class Guide(commands.Cog):
         temp_file.seek(0)  # Reset the position of the file cursor
         return temp_file
 
+    @staticmethod
     def add_member_info_to_embed(
-        self, embed, member, emoji, joined_timestamp, filter_option
+        embed, member, emoji, joined_timestamp, filter_option
     ):
         # Add the member's display name and roles to the embed
         embed.add_field(
