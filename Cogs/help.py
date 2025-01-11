@@ -2,7 +2,6 @@
 import os
 import traceback
 import json
-import io
 
 import cv2
 import numpy as np
@@ -10,17 +9,14 @@ import aiohttp
 import random
 import requests
 from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont, ImageSequence
+from PIL import Image, ImageDraw, ImageFont
 
 
 
 
 from Imports.discord_imports import * 
-from Data.const import primary_color, error_custom_embed, Help_Select_Embed_Mapping, Help_Embed_Mapping, banner_url, get_banner_color
+from Data.const import primary_color, error_custom_embed, Help_Select_Embed_Mapping
 from Imports.log_imports import logger
-
-
-import textwrap
 
 class HelpEmbedImagesManager:
     def __init__(self, json_file_path):

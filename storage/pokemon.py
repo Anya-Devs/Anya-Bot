@@ -3,20 +3,11 @@ import json
 import csv
 import time
 import os
-import sys
-import gc
 import io
-import pickle
 import logging
-import hashlib
-import zlib
-import sqlite3
 import random
-import threading
-import multiprocessing
-from functools import lru_cache
 from typing import List, Tuple, Optional
-from urllib.request import urlopen, urlretrieve
+from urllib.request import urlopen
 
 # Third-party library imports
 import cv2
@@ -24,27 +15,20 @@ import cv2 as cv
 import numpy as np
 import aiohttp
 import requests
-import psutil
-import hnswlib
-import ijson
-import imagehash
-from PIL import Image, ImageChops
+from PIL import Image
 
 
 
 # Concurrent and multiprocessing imports
 from concurrent import *
-import concurrent.futures 
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from multiprocessing import Pool
-from sklearn.cluster import KMeans
+from concurrent.futures import ThreadPoolExecutor
 
 
 # Custom imports
 from Imports.discord_imports import *
 from discord.ext import tasks
 from Imports.log_imports import logger
-from Data.const import error_custom_embed, sdxl, primary_color
+from Data.const import error_custom_embed, primary_color
 
 
 # Configure logging

@@ -1,8 +1,6 @@
 import logging
 import colorlog
 import colorama
-from colorama import Fore, Style
-from datetime import datetime
 
 # Initialize colorama
 colorama.init()

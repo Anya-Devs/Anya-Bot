@@ -1,18 +1,12 @@
 import os
 import gc
 import json
-import logging
 import platform
 import psutil
-import sys
 import subprocess
 import time
 import json
-from datetime import datetime, timedelta
-
-import aiohttp
-import requests
-import colorama
+from datetime import datetime
 from colorama import Fore, Style
 
 from Imports.discord_imports import *

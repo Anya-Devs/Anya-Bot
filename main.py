@@ -1,14 +1,9 @@
 import os
-import sys
-import subprocess
 import traceback
 import asyncio
 import requests
 from aiohttp import web
-
-import pymongo
 from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo.errors import ConfigurationError
 
 from dotenv import load_dotenv
  
@@ -29,7 +24,6 @@ for key, value in os.environ.items():
 from Imports.depend_imports import *
 from Imports.discord_imports import *
 from Imports.log_imports import logger
-from Cogs.pokemon import PokemonPredictor
 
 
 class BotSetup(commands.AutoShardedBot):
