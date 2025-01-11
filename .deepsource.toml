@@ -1,16 +1,13 @@
 version = 1
 
 [[analyzers]]
-name = "python"
-enabled = true
-
-  [analyzers.meta]
-  runtime_version = "3.x.x"  # Specify the Python runtime version
-  run_command = "python main.py"  # Command to run your script
-
-[[analyzers]]
 name = "docker"
-enabled = true
 
   [analyzers.meta]
   dockerfile_paths = ["Dockerfile"]
+
+[[analyzers]]
+name = "python"
+
+  [analyzers.meta]
+  runtime_version = "3.x.x"
