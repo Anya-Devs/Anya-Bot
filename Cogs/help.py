@@ -18,7 +18,7 @@ from Data.const import (
     primary_color,
     error_custom_embed,
     Help_Select_Embed_Mapping,
-    )
+)
 from Imports.log_imports import logger
 
 

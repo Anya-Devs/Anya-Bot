@@ -755,10 +755,11 @@ class Guide(commands.Cog):
     @staticmethod
     async def fetch_avatar_data(member):
         try:
-            async with aiohttp.ClientSession() as session, session.get(str(member.avatar.with_size(128))) as resp:
+            async with aiohttp.ClientSession() as session, session.get(
+                str(member.avatar.with_size(128))
+            ) as resp:
                 if resp.status != 200:
-                    print(
-                        f"Failed to get avatar for {member.display_name}")
+                    print(f"Failed to get avatar for {member.display_name}")
                     return None
                 return await resp.read()
         except Exception as e:

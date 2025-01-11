@@ -412,7 +412,9 @@ class Pokemon(commands.Cog):
                     image_url = embed.image.url
 
         if image_url:
-            async with aiohttp.ClientSession() as session, session.get(image_url) as response:
+            async with aiohttp.ClientSession() as session, session.get(
+                image_url
+            ) as response:
                 if response.status == 200:
                     img_bytes = await response.read()
                     img = Image.open(io.BytesIO(img_bytes))
@@ -437,9 +439,7 @@ class Pokemon(commands.Cog):
                     response_message = prediction
                     if is_hunter:
                         # Mention the user if they are a hunter
-                        response_message = (
-                            f"{ctx.author.mention}, {response_message}"
-                        )
+                        response_message = f"{ctx.author.mention}, {response_message}"
 
                     await ctx.reply(response_message, mention_author=False)
                 else:
@@ -1178,7 +1178,9 @@ class Pokemon(commands.Cog):
 
             for attempt in range(max_retries):
                 try:
-                    async with aiohttp.ClientSession() as session, session.get(url) as response:
+                    async with aiohttp.ClientSession() as session, session.get(
+                        url
+                    ) as response:
                         if response.status == 200:
                             type_chart = {}
                             types_data = (await response.json())["results"]
@@ -1481,7 +1483,6 @@ class Pokemon(commands.Cog):
             f"**Weight:** {weight:.2f} kg",
         ]
         appearance = "\n".join(appearance_info)
-
 
         if region is not None and region in region_mappings:
             region_emoji = region_mappings[region]

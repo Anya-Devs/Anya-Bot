@@ -2247,7 +2247,6 @@ class Quest_Data(commands.Cog):
 
                 # Check if any quest matches the specified quest ID
                 if any(quest.get("quest_id") == quest_id for quest in quests):
-
                     # Remove the quests that match the quest_id
                     new_quests = [
                         quest for quest in quests if quest.get("quest_id") != quest_id
