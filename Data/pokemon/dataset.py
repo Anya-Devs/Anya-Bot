@@ -44,8 +44,7 @@ class Dataset:
             print(f"Initializing processed entries database at {self.processed_file}...")
             self._init_processed_db()
 
-    @staticmethod
-    def _db_connect(db_name):
+    def _db_connect(self, db_name):
         return sqlite3.connect(db_name)
 
     def _init_db(self):
@@ -184,18 +183,15 @@ class Dataset:
             print(f"Error processing image {image_path}: {e}")
         return None
 
-    @staticmethod
-    def serialize_keypoints(keypoints):
+    def serialize_keypoints(self, keypoints):
         """Convert cv2.KeyPoint objects to a serializable format."""
         return [{'pt': kp.pt, 'size': kp.size, 'angle': kp.angle, 'response': kp.response, 'octave': kp.octave, 'class_id': kp.class_id} for kp in keypoints]
 
-    @staticmethod
-    def deserialize_keypoints(serialized_keypoints):
+    def deserialize_keypoints(self, serialized_keypoints):
         """Convert serialized keypoints back to cv2.KeyPoint objects."""
         return [cv2.KeyPoint(kp['pt'][0], kp['pt'][1], kp['size'], kp['angle'], kp['response'], kp['octave'], kp['class_id']) for kp in serialized_keypoints]
 
-    @staticmethod
-    def _clear_console():
+    def _clear_console(self):
         os.system("cls" if os.name == "nt" else "clear")
 
     def _get_cache_items(self):

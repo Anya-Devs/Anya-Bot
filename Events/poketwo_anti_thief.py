@@ -123,8 +123,7 @@ class EventGate(commands.Cog):
         self.shiny_ping_phrase = load_ping_phrase()                                    
 
 
-    @staticmethod
-    def timestamp_gen(timestamp: int) -> str:
+    def timestamp_gen(self, timestamp: int) -> str:
         dt = datetime.datetime.utcfromtimestamp(timestamp).replace(tzinfo=datetime.timezone.utc)
         return f'<t:{int(dt.timestamp())}:R>'                                                        
 
@@ -280,16 +279,14 @@ class EventGate(commands.Cog):
         logger.error(f"Unexpected error in process_congratulations: {e}")
         traceback.print_exc()
         
-    @staticmethod
-    async def allow_all_to_catch(message):
+    async def allow_all_to_catch(self, message):
         embed = message.embeds[0]
         embed.description = "✅ Everyone may catch the Pokémon now! No restrictions."
         embed.color = 0x00FF00
         await message.edit(embed=embed)
         logger.info("Everyone is allowed to catch the Pokémon now.")
 
-    @staticmethod
-    async def timeout_user(user, message):
+    async def timeout_user(self, user, message):
         BOT_TOKEN = os.getenv("TOKEN")
         GUILD_ID = message.guild.id
         USER_ID = user.id
@@ -315,8 +312,7 @@ class EventGate(commands.Cog):
         else:
             logger.error(f"Failed to timeout user {user.mention}: {response.status_code}")
 
-    @staticmethod
-    async def delete_embed_on_catch(message):
+    async def delete_embed_on_catch(self, message):
         try:
             await message.delete()
             logger.info("Embed deleted after successful catch.")

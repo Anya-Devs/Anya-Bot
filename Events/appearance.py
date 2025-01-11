@@ -178,8 +178,7 @@ class AvatarChanger(commands.Cog):
             logger.error(f"An error occurred while updating grid message: {e}")
             raise
 
-    @staticmethod
-    async def update_grid_reactions(message, grid_index, total_pages):
+    async def update_grid_reactions(self, message, grid_index, total_pages):
         try:
             # Add reactions for image selection if there are any images
             if total_pages > 1:
