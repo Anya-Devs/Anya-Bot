@@ -18,10 +18,7 @@ from Data.const import (
     primary_color,
     error_custom_embed,
     Help_Select_Embed_Mapping,
-    Help_Embed_Mapping,
-    banner_url,
-    get_banner_color,
-)
+    )
 from Imports.log_imports import logger
 
 

@@ -106,7 +106,7 @@ class Permission(commands.Cog):
 
     async def notify_forbidden_error(self, ctx, error):
         await ctx.send(
-            f"Operation forbidden: The bot or user lacks the permission to perform an action. "
+            "Operation forbidden: The bot or user lacks the permission to perform an action. "
             f"Please check the channel and role settings to ensure proper permissions."
         )
         self.logger.warning(

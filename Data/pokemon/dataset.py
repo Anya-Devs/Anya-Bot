@@ -176,8 +176,8 @@ class Dataset:
         # Check if the table exists
         try:
             processed_cursor.execute("SELECT filename FROM processed")
-            processed_entries = set(row[0]
-                                    for row in processed_cursor.fetchall())
+            processed_entries = {row[0]
+                                    for row in processed_cursor.fetchall()}
         except sqlite3.OperationalError as e:
             print(f"Error querying processed table: {e}")
             processed_entries = set()

@@ -1,4 +1,3 @@
-# Standard Library Imports
 import asyncio
 import io
 import json
@@ -626,9 +625,9 @@ class Quest_Completed_Embed:
         # embed.add_field(name=f'{check_emoji} Completed', value=f'**You {quest_completed}!**', inline=True)
 
         embed.add_field(
-            name=f"Reward ", value=f"{reward_emoji} {reward_text}", inline=True
+            name="Reward ", value=f"{reward_emoji} {reward_text}", inline=True
         )
-        embed.add_field(name=f"Stella Points:",
+        embed.add_field(name="Stella Points:",
                         value=f"{balance:,}", inline=True)
 
         # Set thumbnail image
@@ -643,7 +642,6 @@ class ShopEmbed:
         embed = discord.Embed(
             title="<:shop:1272249831120965753>    Spy Shop", color=primary_color()
         )
-        # f"*Remember these tools might make or break relshinships, so please be careful.*"
         embed.description = f"```py\nStella Points: {balance}```"
         embed.set_footer(
             text=f"Use the {bot.user.name}'s option menu to acquire your spy tool."
@@ -918,20 +916,19 @@ class Information_Embed:
     @staticmethod
     async def get_bot_owner_id(bot, bot_id):
         # Fetch bot user information
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"https://discord.com/api/v10/users/{bot_id}",
-                headers={"Authorization": f"Bot {os.getenv('TOKEN')}"},
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    print(data)
-                    # The owner ID is stored in the 'id' field
-                    return data.get("id")
-                else:
-                    print(
-                        f"Failed to fetch bot owner. Status code: {response.status}")
-                    return None
+        async with aiohttp.ClientSession() as session, session.get(
+            f"https://discord.com/api/v10/users/{bot_id}",
+            headers={"Authorization": f"Bot {os.getenv('TOKEN')}"},
+        ) as response:
+            if response.status == 200:
+                data = await response.json()
+                print(data)
+                # The owner ID is stored in the 'id' field
+                return data.get("id")
+            else:
+                print(
+                    f"Failed to fetch bot owner. Status code: {response.status}")
+                return None
 
     @staticmethod
     async def get_guild_embed(guild):
@@ -1056,7 +1053,6 @@ def generate_invite_link(bot, missing_perms):
     for perm in text_permissions:
         setattr(permissions, perm, True)
 
-    # return discord.utils.oauth_url(bot.user.id, permissions=permissions)
     return "https://discord.com/oauth2/authorize?client_id=1234247716243112100&permissions=1689934340028480&integration_type=0&scope=bot"
 
 

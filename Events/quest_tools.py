@@ -8,7 +8,7 @@ from pymongo.errors import PyMongoError
 import redis
 from Cogs.quest import Quest_Data
 from Imports.discord_imports import *
-from datetime import datetime, timedelta, timezone
+from datetime import timezone
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -293,7 +293,7 @@ class ToolHandler:
             author_id, guild_id, "Spy Briefcase"
         )
         if not tool_inventory:
-            logger.warning(f"You do not have the Spy Briefcase in inventory.")
+            logger.warning("You do not have the Spy Briefcase in inventory.")
             await channel.send(
                 f"<@{author_id}>, you do not have the Spy Briefcase tool in your inventory."
             )

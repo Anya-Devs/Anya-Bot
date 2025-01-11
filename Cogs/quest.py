@@ -1,4 +1,3 @@
-# Standard Library Imports
 import os
 import datetime
 import random
@@ -1495,7 +1494,6 @@ class Quest_Data(commands.Cog):
                 members_data = guild_document.get("members", {})
                 users_in_server = list(members_data.keys())  # Extract user IDs
 
-                # logger.debug(f"Found {len(users_in_server)} users in server {guild_id}.")
                 return users_in_server
             else:
                 logger.debug(f"No guild found with ID {guild_id}.")
@@ -1529,7 +1527,6 @@ class Quest_Data(commands.Cog):
                     if any(quest["quest_id"] == quest_id for quest in quests):
                         users_with_quest.append(user_id)
 
-                # logger.debug(f"Found {len(users_with_quest)} users with quest ID {quest_id} in guild {guild_id}.")
                 return users_with_quest
             else:
                 logger.debug(f"No guild found with ID {guild_id}.")
@@ -2250,7 +2247,6 @@ class Quest_Data(commands.Cog):
 
                 # Check if any quest matches the specified quest ID
                 if any(quest.get("quest_id") == quest_id for quest in quests):
-                    # logger.debug(f"Found quest with ID {quest_id} for user {member_id} in guild {guild_id}.")
 
                     # Remove the quests that match the quest_id
                     new_quests = [

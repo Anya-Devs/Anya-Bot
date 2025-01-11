@@ -184,7 +184,7 @@ class Guide(commands.Cog):
 
             if role:
                 wait_message = await interaction.response.send_message(
-                    f"Generating embeds for page: `This might take a moment please wait.` ",
+                    "Generating embeds for page: `This might take a moment please wait.` ",
                     ephemeral=True,
                 )
 
@@ -320,7 +320,7 @@ class Guide(commands.Cog):
 
             if role:
                 wait_message = await interaction.response.send_message(
-                    f"Generating embeds for page: `This might take a momment please wait.` ",
+                    "Generating embeds for page: `This might take a momment please wait.` ",
                     ephemeral=True,
                 )
                 embeds = await self.generate_role_members_embed(guild, role)
@@ -400,15 +400,14 @@ class Guide(commands.Cog):
                 temp_files = []
 
                 for member in members_with_role[i: i + members_per_page]:
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(
-                            str(member.avatar.with_size(128))
-                        ) as resp:
-                            if resp.status != 200:
-                                print(
-                                    f"Failed to get avatar for {member.display_name}")
-                                continue
-                            data = await resp.read()
+                    async with aiohttp.ClientSession() as session, session.get(
+                        str(member.avatar.with_size(128))
+                    ) as resp:
+                        if resp.status != 200:
+                            print(
+                                f"Failed to get avatar for {member.display_name}")
+                            continue
+                        data = await resp.read()
 
                     # Save the image to a temporary file
                     temp_file = tempfile.NamedTemporaryFile(
@@ -467,11 +466,11 @@ class Guide(commands.Cog):
                     )  # Fetch invite information
 
                     embed.add_field(
-                        name=f"\n",
+                        name="\n",
                         value=f"{member.mention}```js\n{emoji} {member.display_name} ({member.id})````Other Roles`\n{other_roles if len(other_roles) > 0 else '`None`'}",
                         inline=False,
                     )
-                    embed.add_field(name=f" ", value=f" ", inline=False)
+                    embed.add_field(name=" ", value=" ", inline=False)
 
                 embeds.append(embed)
 
@@ -600,15 +599,14 @@ class Guide(commands.Cog):
                     joined_timestamp = self.timestamp_gen(
                         member.joined_at.timestamp())
 
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(
-                            str(member.avatar.with_size(128))
-                        ) as resp:
-                            if resp.status != 200:
-                                print(
-                                    f"Failed to get avatar for {member.display_name}")
-                                continue
-                            data = await resp.read()
+                    async with aiohttp.ClientSession() as session, session.get(
+                        str(member.avatar.with_size(128))
+                    ) as resp:
+                        if resp.status != 200:
+                            print(
+                                f"Failed to get avatar for {member.display_name}")
+                            continue
+                        data = await resp.read()
 
                     # Save the image to a BytesIO object
                     temp_file = BytesIO()
@@ -666,7 +664,8 @@ class Guide(commands.Cog):
             await ctx.send(error_message)
             print(f"Error encountered: {traceback.format_exc()}")
 
-    def get_usage_guide(self):
+    @staticmethod
+    def get_usage_guide():
         return (
             "Usage: \n"
             ",members --filter <context>\n"
@@ -681,7 +680,8 @@ class Guide(commands.Cog):
             "```"
         )
 
-    def apply_filter(self, all_members, filter_option):
+    @staticmethod
+    def apply_filter(all_members, filter_option):
         if filter_option == FilterOption.NEWEST_TO_OLDEST.value:
             all_members = sorted(
                 all_members, key=lambda member: member.joined_at, reverse=True
@@ -752,20 +752,21 @@ class Guide(commands.Cog):
 
         return embeds
 
-    async def fetch_avatar_data(self, member):
+    @staticmethod
+    async def fetch_avatar_data(member):
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(str(member.avatar.with_size(128))) as resp:
-                    if resp.status != 200:
-                        print(
-                            f"Failed to get avatar for {member.display_name}")
-                        return None
-                    return await resp.read()
+            async with aiohttp.ClientSession() as session, session.get(str(member.avatar.with_size(128))) as resp:
+                if resp.status != 200:
+                    print(
+                        f"Failed to get avatar for {member.display_name}")
+                    return None
+                return await resp.read()
         except Exception as e:
             print(f"Error fetching avatar for {member.display_name}: {e}")
             return None
 
-    def concatenate_images(self, row_images):
+    @staticmethod
+    def concatenate_images(row_images):
         total_width = sum(img.width for img in row_images)
         max_height = max(img.height for img in row_images)
         concatenated_image = Image.new("RGB", (total_width, max_height))

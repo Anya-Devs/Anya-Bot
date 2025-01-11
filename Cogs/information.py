@@ -380,7 +380,7 @@ class PermissionsView(discord.ui.View):
         self, button: discord.ui.Button, interaction: discord.Interaction
     ):
         # Debugging the interaction ID
-        print(f"Interaction received: previous")
+        print("Interaction received: previous")
 
         # Handle previous button press
         if self.page > 0:

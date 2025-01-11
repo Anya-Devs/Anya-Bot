@@ -1,4 +1,3 @@
-# Standard library imports
 from concurrent.futures import ThreadPoolExecutor
 import re
 import json
@@ -18,7 +17,6 @@ import random
 import threading
 import asyncio
 import pandas as pd
-from tqdm import tqdm
 import multiprocessing
 from functools import lru_cache
 from difflib import get_close_matches
@@ -27,7 +25,6 @@ from urllib.request import urlopen, urlretrieve
 
 # Third-party library imports
 import cv2
-import cv2 as cv
 import numpy as np
 import aiohttp
 import requests
@@ -40,7 +37,7 @@ from PIL import Image, ImageChops
 # Concurrent and multiprocessing imports
 from concurrent import *
 import concurrent.futures
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
 from multiprocessing import Pool
 from sklearn.cluster import KMeans
 from scipy.spatial.distance import euclidean
@@ -386,44 +383,43 @@ class Pokemon(commands.Cog):
                     image_url = embed.image.url
 
         if image_url:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(image_url) as response:
-                    if response.status == 200:
-                        loop = asyncio.get_event_loop()
-                        img_bytes = await loop.run_in_executor(
-                            self.executor,
-                            lambda: bytearray(requests.get(image_url).content),
-                        )
-                        img = np.asarray(img_bytes, dtype=np.uint8)
-                        img = cv.imdecode(img, cv.IMREAD_COLOR)
-                        # Use the predictor to predict the Pokémon
-                        (
-                            prediction,
-                            time_taken,
-                            predicted_name,
-                        ) = await self.predictor.predict_pokemon(img)
+            async with aiohttp.ClientSession() as session, session.get(image_url) as response:
+                if response.status == 200:
+                    loop = asyncio.get_event_loop()
+                    img_bytes = await loop.run_in_executor(
+                        self.executor,
+                        lambda: bytearray(requests.get(image_url).content),
+                    )
+                    img = np.asarray(img_bytes, dtype=np.uint8)
+                    img = cv.imdecode(img, cv.IMREAD_COLOR)
+                    # Use the predictor to predict the Pokémon
+                    (
+                        prediction,
+                        time_taken,
+                        predicted_name,
+                    ) = await self.predictor.predict_pokemon(img)
 
-                        # Check if the user is a hunter for the predicted Pokémon
-                        hunters = await self.data_handler.get_hunters_for_pokemon(
-                            predicted_name
-                        )
-                        user_id = ctx.author.id
-                        is_hunter = user_id in hunters
+                    # Check if the user is a hunter for the predicted Pokémon
+                    hunters = await self.data_handler.get_hunters_for_pokemon(
+                        predicted_name
+                    )
+                    user_id = ctx.author.id
+                    is_hunter = user_id in hunters
 
-                        # Prepare the response message
-                        response_message = prediction
-                        if is_hunter:
-                            # Mention the user if they are a hunter
-                            response_message = (
-                                f"{ctx.author.mention}, {response_message}"
-                            )
-
-                        await ctx.reply(response_message, mention_author=False)
-                    else:
-                        await ctx.reply(
-                            f"Failed to download image. Status code: {response.status}",
-                            mention_author=False,
+                    # Prepare the response message
+                    response_message = prediction
+                    if is_hunter:
+                        # Mention the user if they are a hunter
+                        response_message = (
+                            f"{ctx.author.mention}, {response_message}"
                         )
+
+                    await ctx.reply(response_message, mention_author=False)
+                else:
+                    await ctx.reply(
+                        f"Failed to download image. Status code: {response.status}",
+                        mention_author=False,
+                    )
         else:
             await ctx.send("No image found to predict.")
 
@@ -527,7 +523,7 @@ class Pokemon(commands.Cog):
 
             if user_pokemon:
                 await ctx.reply(
-                    f"### Your Pokétwo Pokémon List:\n"
+                    "### Your Pokétwo Pokémon List:\n"
                     + "\n".join(
                         f"{i + 1}. {pokemon.lower()}"
                         for i, pokemon in enumerate(sorted(user_pokemon, key=str.lower))
@@ -950,7 +946,6 @@ class Pokemon(commands.Cog):
         basic_base_stats = "\n".join(_base_stats)
 
         mot = ctx.guild.get_member(ctx.bot.user.id)
-        # color = mot.color
 
         def get_pokemon_species_data(name):
             response = requests.get(
@@ -1030,7 +1025,6 @@ class Pokemon(commands.Cog):
             "km": "🇰🇭",
             "lo": "🇱🇦",
             "am": "🇪🇹",
-            "ti": "🇪🇹",
             "om": "🇪🇹",
             "so": "🇸🇴",
             "sw": "🇰🇪",
@@ -1074,9 +1068,12 @@ class Pokemon(commands.Cog):
                 )  # Get the flag for the language, or None if not found
 
                 # Check if the Pokemon name is the same as the language name, and skip it
-                if name.lower() != lang.lower() and flag is not None:
-                    if key not in alt_names_info:
-                        alt_names_info[key] = f"{flag} {name}"
+                if (
+                    name.lower() != lang.lower()
+                    and flag is not None
+                    and key not in alt_names_info
+                ):
+                    alt_names_info[key] = f"{flag} {name}"
 
             # Extract the unique names with their flags
             name_list = sorted(
@@ -1107,7 +1104,7 @@ class Pokemon(commands.Cog):
                     for name, lang in alternate_names:
                         key = name.lower()
 
-                        flag = flag_mapping.get(lang, None)
+                        flag = flag_mapping.get(lang)
                         if key not in alt_names_info and flag is not None:
                             alt_names_info[key] = f"{flag} {name.capitalize()}"
 
@@ -1135,45 +1132,44 @@ class Pokemon(commands.Cog):
 
             for attempt in range(max_retries):
                 try:
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(url) as response:
-                            if response.status == 200:
-                                type_chart = {}
-                                types_data = (await response.json())["results"]
+                    async with aiohttp.ClientSession() as session, session.get(url) as response:
+                        if response.status == 200:
+                            type_chart = {}
+                            types_data = (await response.json())["results"]
 
-                                for type_data in types_data:
-                                    type_name = type_data["name"]
-                                    effectiveness_url = type_data["url"]
+                            for type_data in types_data:
+                                type_name = type_data["name"]
+                                effectiveness_url = type_data["url"]
 
-                                    async with session.get(
-                                        effectiveness_url
-                                    ) as effectiveness_response:
-                                        if effectiveness_response.status == 200:
-                                            damage_relations = (
-                                                await effectiveness_response.json()
-                                            )["damage_relations"]
-                                            type_chart[type_name] = {
-                                                "double_damage_to": [],
-                                                "half_damage_to": [],
-                                                "no_damage_to": [],
-                                                "double_damage_from": [],
-                                                "half_damage_from": [],
-                                                "no_damage_from": [],
-                                            }
+                                async with session.get(
+                                    effectiveness_url
+                                ) as effectiveness_response:
+                                    if effectiveness_response.status == 200:
+                                        damage_relations = (
+                                            await effectiveness_response.json()
+                                        )["damage_relations"]
+                                        type_chart[type_name] = {
+                                            "double_damage_to": [],
+                                            "half_damage_to": [],
+                                            "no_damage_to": [],
+                                            "double_damage_from": [],
+                                            "half_damage_from": [],
+                                            "no_damage_from": [],
+                                        }
 
-                                            for key, values in damage_relations.items():
-                                                for value in values:
-                                                    type_chart[type_name][key].append(
-                                                        value["name"]
-                                                    )
+                                        for key, values in damage_relations.items():
+                                            for value in values:
+                                                type_chart[type_name][key].append(
+                                                    value["name"]
+                                                )
 
-                                return type_chart
-                            else:
-                                # Handle other HTTP response codes if needed
-                                print(
-                                    f"Error: HTTP request failed with status code {response.status}"
-                                )
-                                return None
+                            return type_chart
+                        else:
+                            # Handle other HTTP response codes if needed
+                            print(
+                                f"Error: HTTP request failed with status code {response.status}"
+                            )
+                            return None
                 except aiohttp.ClientError as e:
                     print(f"Error: aiohttp client error - {e}")
                 except Exception as e:
@@ -1258,7 +1254,7 @@ class Pokemon(commands.Cog):
                     if pokemon_info["is_legendary"]:
                         return "Legendary"
                     elif pokemon_info["is_mythical"]:
-                        return f"Mythical"
+                        return "Mythical"
                     else:
                         flavor_text_entries = pokemon_info["flavor_text_entries"]
                         english_flavor = next(
@@ -1270,7 +1266,7 @@ class Pokemon(commands.Cog):
                             None,
                         )
                         if english_flavor and "ultra beast" in english_flavor.lower():
-                            return f"Ultra Beast"
+                            return "Ultra Beast"
                         else:
                             return None
                 else:
@@ -1427,26 +1423,23 @@ class Pokemon(commands.Cog):
         ]
         appearance = "\n".join(appearance_info)
 
-        # embed.add_field(name='Type', value=f"{formatted_types}", inline=True)
 
-        if region != None:
-            if region in region_mappings:
-                region_emoji = region_mappings[region]
-                embed.add_field(
-                    name="Region", value=f"{region_emoji} {region}", inline=True
-                )
-                region = f"{region_emoji} {region}" or region
+        if region is not None and region in region_mappings:
+            region_emoji = region_mappings[region]
+            embed.add_field(
+                name="Region", value=f"{region_emoji} {region}", inline=True
+            )
+            region = f"{region_emoji} {region}" or region
 
         embed.add_field(name="Names", value=alt_names_str, inline=True)
 
-        if gender != None:
+        if gender is not None:
             gender_differ = bool(
                 gender != "♀️ Female only" or "♂️ Male only" or "Genderless"
             )
         else:
             gender_differ = False
 
-        # embed.add_field(name='', value=f"```Type: {formatted_types}```",inline=False)
         base_stats = formatted_base_stats
 
         # Include alternate names
@@ -1462,7 +1455,7 @@ class Pokemon(commands.Cog):
         if image_thumb:
             embed.set_footer(icon_url=image_thumb, text=appearance)
             gender_info = None
-            if gender != None and gender != "♂ 50% - ♀ 50%":
+            if gender not in (None, "♂ 50% - ♀ 50%"):
                 embed.set_footer(
                     icon_url=image_thumb, text=appearance + f"Gender: {gender}"
                 )
@@ -1487,7 +1480,7 @@ class Pokemon(commands.Cog):
                 image_thumb = None
                 embed.set_footer(text=appearance)
 
-            if gender and rarity != None and gender != "♂ 50% - ♀ 50%":
+            if gender and rarity is not None and gender != "♂ 50% - ♀ 50%":
                 embed.set_footer(
                     icon_url=image_thumb,
                     text=f"Rarity: {rarity}\n\n" +
@@ -1500,7 +1493,7 @@ class Pokemon(commands.Cog):
                 )
                 gender_info = f"Gender: {gender}"
 
-            elif gender != None and gender != "♂ 50% - ♀ 50%":
+            elif gender not in (None, "♂ 50% - ♀ 50%"):
                 embed.set_footer(
                     icon_url=image_thumb, text=appearance + f"Gender: {gender}"
                 )
@@ -1803,8 +1796,9 @@ class Pokebuttons(discord.ui.View):
 
         return embeds
 
+    @staticmethod
     async def determine_evolution_method(
-        self, current_pokemon, evolution_details, next_pokemon
+        current_pokemon, evolution_details, next_pokemon
     ):
         trigger = evolution_details.get("trigger", {}).get("name")
         item = evolution_details.get("item")

@@ -484,7 +484,8 @@ class Anime(commands.Cog):
 
             return embed
 
-        def get_image_url(self, images):
+        @staticmethod
+        def get_image_url(images):
             size_order = ["large", "medium", "small"]
             for size in size_order:
                 image_url = images.get("jpg", {}).get(f"{size}_image_url")

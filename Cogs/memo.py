@@ -481,9 +481,9 @@ class MemoEmbeds:
         check_emoji = discord.utils.get(bot.emojis, id=check_emoji_id)
         reward_emoji = discord.utils.get(bot.emojis, id=reward_emoji_id)
         embed.add_field(
-            name=f"Reward ", value=f"{reward_emoji} {reward_text}", inline=True
+            name="Reward ", value=f"{reward_emoji} {reward_text}", inline=True
         )
-        embed.add_field(name=f"Stella Points:",
+        embed.add_field(name="Stella Points:",
                         value=f"{balance:,}", inline=True)
         embed.set_footer(
             text=f"Current Streak: {streak}\tHighscore: Working on it...")

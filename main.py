@@ -1,4 +1,3 @@
-from Cogs.pokemon import PokemonPredictor
 from Imports.log_imports import logger
 from Imports.discord_imports import *
 from Imports.depend_imports import *
