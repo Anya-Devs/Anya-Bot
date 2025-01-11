@@ -378,7 +378,8 @@ class Options_ImageGenerator:
             fill=self.base_font_color,
         )
 
-    def _download_image(self, url):
+    @staticmethod
+    def _download_image(url):
         """Download an image from a URL."""
         response = requests.get(url)
         response.raise_for_status()  # Ensure we notice bad responses
@@ -512,7 +513,8 @@ class ImageGenerator:
 
         self._resize_character()
 
-    def _download_image(self, url):
+    @staticmethod
+    def _download_image(url):
         """Download an image from a URL and return it as a PIL Image."""
         response = requests.get(url)
         response.raise_for_status()
@@ -652,7 +654,8 @@ class Help(commands.Cog):
                         mapping[cog_name][cmd.name] = " "
         self._save_command_mapping(mapping)
 
-    def format_cog_commands(self, cog_name, cog_commands, command_mapping):
+    @staticmethod
+    def format_cog_commands(cog_name, cog_commands, command_mapping):
         embed = discord.Embed(
             title=f"Commands for {cog_name}", color=primary_color_value
         )
