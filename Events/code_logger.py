@@ -150,8 +150,7 @@ class Logs(commands.Cog):
             await const.error_custom_embed(self.bot, None, e, title="Log Embed Error")
 
     # Method to send an embed message
-    @staticmethod
-    async def send_embed(channel, title, description):
+    async def send_embed(self, channel, title, description):
         embed = discord.Embed(
             title=title,
             description=description,
@@ -164,15 +163,13 @@ class Logs(commands.Cog):
         await channel.send(embed=embed)
 
     # Method to send a file
-    @staticmethod
-    async def send_file(channel, file_path, title, description):
+    async def send_file(self, channel, file_path, title, description):
         with open(file_path, "w") as file:
             file.write(description)
         await channel.send(file=discord.File(file_path), content=f"**{title}**")
 
     # Method to get updated commands
-    @staticmethod
-    async def get_updated_commands():
+    async def get_updated_commands(self):
         root_dir = os.getcwd()
         repo = Repo(root_dir)
         diff = repo.head.commit.diff(None)

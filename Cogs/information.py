@@ -69,8 +69,7 @@ class Information(commands.Cog):
         embed = await self.get_information_embed(id, self.bot)
         await ctx.reply(embed=embed, mention_author=False)
 
-    @staticmethod
-    async def get_information_embed(id, bot):
+    async def get_information_embed(self, id, bot):
         if isinstance(id, discord.Member):
             return await Information_Embed.get_member_embed(bot, id)
         elif isinstance(id, int):

@@ -22,8 +22,7 @@ class System(commands.Cog):
         self.memory_check.start()
         self.image_file = "Data/commands/help/help_embed_images.json"
 
-    @staticmethod
-    async def get_latest_python_version():
+    async def get_latest_python_version(self):
         latest_version = (
             subprocess.check_output(
                 [
@@ -82,8 +81,7 @@ class System(commands.Cog):
             logger.error(
                 f"[System cog] Error occurred while sending ping embed: {e}")
 
-    @staticmethod
-    def cog_unload():
+    def cog_unload(self):
         logger.info(f"{Fore.RED}[System cog] Unloaded{Style.RESET_ALL}")
 
     @commands.command(name="uptime")
@@ -119,8 +117,7 @@ class System(commands.Cog):
         self.bot._connection.clear()
         print(f"Optimized memory. Garbage collected: {collected} objects.")
 
-    @staticmethod
-    def log_memory_usage():
+    def log_memory_usage(self):
         """Logs the bot's current memory usage."""
         process = psutil.Process(os.getpid())
         memory_info = process.memory_info()
@@ -144,8 +141,7 @@ class System(commands.Cog):
         memory_usage = self.get_memory_usage()
         await ctx.send(f"Current memory usage: {memory_usage:.2f} MB")
 
-    @staticmethod
-    def get_memory_usage():
+    def get_memory_usage(self):
         """Returns the current memory usage of the bot."""
         process = psutil.Process(os.getpid())
         memory_info = process.memory_info()

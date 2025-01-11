@@ -83,15 +83,13 @@ class Memo_Game(commands.Cog):
         except asyncio.TimeoutError:
             await message.edit(embed=self.timeout_embed(), view=None)
 
-    @staticmethod
-    def timeout_embed():
+    def timeout_embed(self):
         return discord.Embed(
             title="Time's Up...",
             description="||```You didn't click the emoji in time.```||",
         )
 
-    @staticmethod
-    def timestamp_gen(timestamp: int) -> str:
+    def timestamp_gen(self, timestamp: int) -> str:
         dt = datetime.utcfromtimestamp(timestamp).replace(tzinfo=timezone.utc)
         formatted_timestamp = f"<t:{int(dt.timestamp())}:R>"
         return formatted_timestamp
@@ -403,8 +401,7 @@ class Memo_Data(commands.Cog):
         """Handles errors and sends a custom embed."""
         await error_custom_embed(self.bot, interaction, str(error), title=title)
 
-    @staticmethod
-    async def validate_input(**kwargs):
+    async def validate_input(self, **kwargs):
         """Validates input values to ensure they are not None or empty."""
         for key, value in kwargs.items():
             if value is None or value == "":

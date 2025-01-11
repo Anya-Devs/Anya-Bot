@@ -101,8 +101,7 @@ class PokemonPredictor:
             }
             self.cache[filename] = metadata
 
-    @staticmethod
-    def evaluate_image_quality(image):
+    def evaluate_image_quality(self, image):
         """Evaluates image quality based on sharpness."""
         sharpness = cv.Laplacian(image, cv.CV_64F).var()
         return sharpness
@@ -124,8 +123,7 @@ class PokemonPredictor:
 
         return best_match, max_accuracy
 
-    @staticmethod
-    def evaluate_accuracy(matches):
+    def evaluate_accuracy(self, matches):
         """Evaluates accuracy based on good matches."""
         good_matches = sum(
             1
@@ -323,8 +321,7 @@ class Pokemon(commands.Cog):
                     f"Image for {pokemon_name} already exists, skipping download."
                 )
 
-    @staticmethod
-    def remove_srgb_profile(img_path):
+    def remove_srgb_profile(self, img_path):
         try:
             with Image.open(img_path) as img:
                 img.save(img_path, icc_profile=None)
@@ -332,8 +329,7 @@ class Pokemon(commands.Cog):
         except Exception as e:
             logger.error(f"Error removing sRGB profile: {e}")
 
-    @staticmethod
-    def ensure_correct_color_format(img):
+    def ensure_correct_color_format(self, img):
         """
         Convert image to RGB format.
         """
@@ -344,8 +340,7 @@ class Pokemon(commands.Cog):
             return cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
         return img
 
-    @staticmethod
-    def download_file(url, filename):
+    def download_file(self, url, filename):
         response = urlopen(url)
         with open(filename, "wb") as f:
             f.write(response.read())
@@ -1722,8 +1717,7 @@ class Pokebuttons(discord.ui.View):
                 f"Error fetching Pokémon evolution chain: {str(e)}", ephemeral=True
             )
 
-    @staticmethod
-    async def get_pokemon_evolution_chain(pokemon_name):
+    async def get_pokemon_evolution_chain(self, pokemon_name):
         async with aiohttp.ClientSession() as session:
             species_url = (
                 f"https://pokeapi.co/api/v2/pokemon-species/{pokemon_name.lower()}/"
@@ -1790,9 +1784,8 @@ class Pokebuttons(discord.ui.View):
 
         return embeds
 
-    @staticmethod
     async def determine_evolution_method(
-        current_pokemon, evolution_details, next_pokemon
+        self, current_pokemon, evolution_details, next_pokemon
     ):
         trigger = evolution_details.get("trigger", {}).get("name")
         item = evolution_details.get("item")
@@ -2019,9 +2012,8 @@ class PokeSelect(discord.ui.Select):
     def get_flag(self, lang):
         return self.flag_mapping.get(lang)
 
-    @staticmethod
     def get_pokemon_description(
-        pokemon_id, file_path="Data/pokemon/pokemon_description.csv"
+        self, pokemon_id, file_path="Data/pokemon/pokemon_description.csv"
     ):
         try:
             with open(file_path, mode="r", encoding="utf-8") as csv_file:
@@ -2038,9 +2030,8 @@ class PokeSelect(discord.ui.Select):
             return f"An error occurred: {e}"
         return "Pokémon ID not found"
 
-    @staticmethod
     def get_pokemon_region(
-        pokemon_id, file_path="Data/pokemon/pokemon_description.csv"
+        self, pokemon_id, file_path="Data/pokemon/pokemon_description.csv"
     ):
         try:
             with open(file_path, mode="r", encoding="utf-8") as csv_file:
@@ -2314,8 +2305,7 @@ class Strength_weakness(discord.ui.View):
                 )
         return moves_data
 
-    @staticmethod
-    async def fetch_move_details(move_url):
+    async def fetch_move_details(self, move_url):
         response = requests.get(move_url)
         if response.status_code == 200:
             move_data = response.json()

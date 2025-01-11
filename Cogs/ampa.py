@@ -64,8 +64,7 @@ class FileSender(commands.Cog):
             logger.error(f"An error occurred: {e}")
             await ctx.send(f"An error occurred: {e}")
 
-    @staticmethod
-    def list_files(search_path: str = ".") -> list:
+    def list_files(self, search_path: str = ".") -> list:
         """List all file paths in the given directory and its subdirectories, ignoring package and cache files."""
         file_paths = []
         ignore_patterns = [
@@ -101,8 +100,7 @@ class FileSender(commands.Cog):
 
         return file_paths
 
-    @staticmethod
-    async def send_file_to_user(user: discord.User, file_path: str):
+    async def send_file_to_user(self, user: discord.User, file_path: str):
         """Send a file to the specified user via DM, handling size limitations."""
         try:
             filename = os.path.basename(file_path)

@@ -397,8 +397,7 @@ class Quest(commands.Cog):
         except Exception as e:
             await ctx.send(f"An error occurred while processing the shop: {e}")
 
-    @staticmethod
-    def read_shop_file(filename):
+    def read_shop_file(self, filename):
         with open(filename, "r", encoding="utf-8") as file:
             shop_data = json.load(file)
         return shop_data
@@ -1030,8 +1029,7 @@ class ImageGenerator:
             fill=self.base_font_color,
         )
 
-    @staticmethod
-    def _download_image(url):
+    def _download_image(self, url):
         """Download an image from a URL."""
         try:
             response = requests.get(url)
@@ -1086,8 +1084,7 @@ class Quest_Data(commands.Cog):
     async def handle_error(self, interaction, error, title):
         await error_custom_embed(self.bot, interaction, str(error), title=title)
 
-    @staticmethod
-    async def validate_input(**kwargs):
+    async def validate_input(self, **kwargs):
         for key, value in kwargs.items():
             if value is None or value == "":
                 raise ValueError(f"{key} cannot be None or empty")
@@ -2672,8 +2669,7 @@ class ShopView(discord.ui.View):
         except Exception as e:
             await self.handle_error(ctx, e)
 
-    @staticmethod
-    async def handle_error(interaction, exception):
+    async def handle_error(self, interaction, exception):
         traceback_msg = "".join(
             traceback.format_exception(
                 type(exception), exception, exception.__traceback__
