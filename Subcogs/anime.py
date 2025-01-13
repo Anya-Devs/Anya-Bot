@@ -68,7 +68,7 @@ class Recommendation(commands.Cog):
                 value=(
                     f"**Episodes:** `{episodes}`\n"
                     f"**Status:** `{status}`\n"
-                    f"**Genres:** `{genres}`\n"
+                    f"**Genres:** `{genres}`\n" if len(genres) > 0 else ''
                     f"{'**Trailer:** ' + f'``{trailer_url}``' if trailer_url else ''}\n"
                     f"```py\nScore: {score:>3} (out of 10)\n"
                     f"{'▰' * int(score * 10 / 10)}{'▱' * (10 - int(score * 10 / 10))}```"
@@ -131,5 +131,5 @@ class Recommendation(commands.Cog):
         anime_data = await self.fetch_random_anime()
 
         # Send the initial message with the anime embed and random button
-        anime_message = await ctx.reply(" ", embed=None, mention_author=False)
+        anime_message = await ctx.reply("> <:neko_lurk:1320306198075015201> Nya~ I just found an anime!", embed=None, mention_author=False)
         await self.update_anime_embed(anime_message, anime_data)
