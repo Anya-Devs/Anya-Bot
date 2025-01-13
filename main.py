@@ -9,7 +9,6 @@ from motor.motor_asyncio import AsyncIOMotorClient
 # Custom Imports
 from Imports.log_imports import logger
 from Imports.discord_imports import *
-from discord.ext import commands
 from Imports.depend_imports import *
 from dotenv import load_dotenv
 
