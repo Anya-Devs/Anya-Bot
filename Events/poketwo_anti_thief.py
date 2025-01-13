@@ -92,9 +92,7 @@ class Anti_Thief(commands.Cog):
     
     @commands.command(name='set_phrase', hidden=True)
     async def set_ping_phrase(self, ctx, *, new_phrase: str):
-        """
-        Update the shiny ping phrase used for detecting shiny hunt messages.
-        """
+
         if ctx.author.id != 1124389055598170182:
             return
         

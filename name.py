@@ -14,6 +14,9 @@ def remove_comments_from_file(file_path):
             if '#' in line:
                 code, comment = line.split('#', 1)
                 file.write(code + ' ' * len(comment) + '\n')
+            elif '""""' in line:
+                code, comment = line.split('"""', 1)
+                file.write(code + ' ' * len(comment) + '\n')
             else:
                 file.write(line)
 
