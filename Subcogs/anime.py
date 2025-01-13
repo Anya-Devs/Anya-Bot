@@ -131,5 +131,5 @@ class Recommendation(commands.Cog):
         anime_data = await self.fetch_random_anime()
 
         # Send the initial message with the anime embed and random button
-        anime_message = await ctx.reply(embed=None, mention_author=False)
+        anime_message = await ctx.reply(" ", embed=None, mention_author=False)
         await self.update_anime_embed(anime_message, anime_data)
