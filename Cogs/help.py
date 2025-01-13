@@ -70,7 +70,9 @@ class Select(discord.ui.Select):
                 emoji=Help_Select_Embed_Mapping.emojis.get(cog_name.lower()),
             )
             for cog_name in cog_commands.keys()
+            if cog_name.lower() not in ["recommendation", "memo_game", "guide"]
         ]
+
         if not options:
             options = [
                 discord.SelectOption(
