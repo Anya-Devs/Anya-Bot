@@ -235,7 +235,7 @@ class EventGate(commands.Cog):
                                                      
                 embed = Embed(
                     title="Shiny Thief Detected!",
-                    description=f"🚨 {non_hunter.mention} stole **{pokemon_name}**. They've been timed out for 3 hours.",
+                    description=f"<:sigh:1328502167153410068> {non_hunter.mention} stole **{pokemon_name}**. They've been timed out for 3 hours.",
                     color=self.primary_color                                  
                 )
                 await catch_channel.send(embed=embed)
@@ -265,8 +265,8 @@ class EventGate(commands.Cog):
         if shiny_hunter:
             embed = Embed(
                 title="Congratulations!",
-                description=f"✅ Good luck on your shiny hunt, <@{who_caught_pokemon_user_id}>! Keep up the great work!",
-                color=0x00FF00
+                description=f"<:yay_anya:1328500899953512569> Good luck on your shiny hunt, <@{who_caught_pokemon_user_id}>! Keep up the great work!",
+                color=self.primary_color
             )
             await catch_channel.send(embed=embed)
             await self.delete_embed_on_catch(original_message)
@@ -281,7 +281,7 @@ class EventGate(commands.Cog):
     @staticmethod
     async def allow_all_to_catch(message):
         embed = message.embeds[0]
-        embed.description = "✅ Everyone may catch the Pokémon now! No restrictions."
+        embed.description = "<:salute:1328503334629543978> Everyone may catch the Pokémon now! No restrictions."
         embed.color = 0x00FF00
         await message.edit(embed=embed)
         logger.info("Everyone is allowed to catch the Pokémon now.")
