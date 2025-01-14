@@ -20,11 +20,9 @@ RUN echo "deb http://deb.debian.org/debian/ stable main contrib non-free" > /etc
     apt-get install -y --no-install-recommends libjemalloc2 && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy from the builder stage
 COPY --from=builder /usr/local /usr/local
 
 WORKDIR /app
 COPY . .
 
-# Set the default command
 CMD ["python", "main.py"]
