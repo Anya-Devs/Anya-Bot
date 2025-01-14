@@ -1,7 +1,7 @@
 import os
 import logging
 from datetime import datetime
-from git import Repo
+#from git import Repo
 from difflib import get_close_matches
 
 import Data.const as const
@@ -197,4 +197,4 @@ class Permission(commands.Cog):
 # Setup function to add the Logs cog to the bot
 def setup(bot):
     bot.add_cog(Permission(bot))
-    bot.add_cog(Logs(bot))
+    # bot.add_cog(Logs(bot))
