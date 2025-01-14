@@ -265,7 +265,7 @@ class EventGate(commands.Cog):
         if shiny_hunter:
             embed = Embed(
                 title="Congratulations!",
-                description=f"<:yay_anya:1328500899953512569> Good luck on your shiny hunt, <@{who_caught_pokemon_user_id}>! Keep up the great work!",
+                description=f"<a:yay_anya:1328500899953512569> Good luck on your shiny hunt, <@{who_caught_pokemon_user_id}>! Keep up the great work!",
                 color=self.primary_color
             )
             await catch_channel.send(embed=embed)
