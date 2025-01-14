@@ -122,9 +122,9 @@ class Permission(commands.Cog):
         
         embed = discord.Embed(description=error_message)
         await ctx.reply(embed=embed, mention_author=False)
-
-# Define the Logs cog
-class Logs(commands.Cog):
+"""
+ # Define the Logs cog
+ class Logs(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
@@ -192,6 +192,7 @@ class Logs(commands.Cog):
     async def on_ready(self):
         logger.info("Log cog is ready. This cog tells the server what updates are in the code.")
         # await self.send_log_embed("Bot is online")
+"""
 
 # Setup function to add the Logs cog to the bot
 def setup(bot):
