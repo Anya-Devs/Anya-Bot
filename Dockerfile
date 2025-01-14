@@ -21,7 +21,6 @@ RUN echo "deb http://deb.debian.org/debian/ stable main contrib non-free" > /etc
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local /usr/local
-
 WORKDIR /app
 COPY . .
 
