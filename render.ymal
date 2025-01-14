@@ -3,16 +3,18 @@ services:
   - type: web
     name: discord-bot
     env: python
-    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt && pip install numpy"
+    buildCommand: |
+      pip install --upgrade pip && \
+      pip install --no-cache-dir -r requirements.txt
     startCommand: "python main.py"
     envVars:
       - key: TOKEN
         value: ${TOKEN}
       - key: PORT
-        value: "8080"  # Add the port to environment variables
+        value: "8080"
     branch: main
     repo: https://github.com/Anya-Devs/Anya-Bot.git
     pullRequestPreviews: false
     autoDeploy: true
     restartPolicy: always
-    port: 8080  # Port is explicitly set here for Render
+    port: 8080
