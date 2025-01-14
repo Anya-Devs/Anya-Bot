@@ -281,7 +281,7 @@ class EventGate(commands.Cog):
     @staticmethod
     async def allow_all_to_catch(message):
         embed = message.embeds[0]
-        embed.description = "<:salute:1328503334629543978> Everyone may catch the Pokémon now! No restrictions."
+        embed.description = ":white_check_mark: Everyone may catch the Pokémon now! No restrictions."
         embed.color = 0x00FF00
         await message.edit(embed=embed)
         logger.info("Everyone is allowed to catch the Pokémon now.")
