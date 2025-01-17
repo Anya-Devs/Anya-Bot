@@ -1,4 +1,4 @@
-# Standard Library Imports
+
 import os
 import traceback
 import json
@@ -29,7 +29,7 @@ class HelpEmbedImagesManager:
                 data = json.load(f)
                 return data.get("help_embed", {})
         except (FileNotFoundError, json.JSONDecodeError):
-            # If the file is missing or corrupted, return a default structure
+            
             return {
                 "anime": {"thumbnail_url": None},
                 "information": {"thumbnail_url": None},
@@ -83,7 +83,7 @@ class Select(discord.ui.Select):
         )
         self.cog_commands = cog_commands
         self.bot = bot
-        self.page = 0  # Track the current page
+        self.page = 0  
         self.primary_color = primary_color
         self.command_mapping_file = "Data/commands/help/command_map.json"
         self.set_thumbnail_file = "Data/commands/help/help_embed_images.json"
@@ -136,7 +136,7 @@ class Select(discord.ui.Select):
             color = self.primary_color
             emoji = Help_Select_Embed_Mapping.emojis.get(cog_name.lower())
 
-            # Create the embeds
+            
             self.cog_embed1 = discord.Embed(
                 title=f'Category - {emoji} {cog_name.replace("_", " ")}',
                 description=f'{Help_Select_Embed_Mapping.embeds[cog_name.lower()]["description"] or ""}',
@@ -144,7 +144,7 @@ class Select(discord.ui.Select):
             )
             self.cog_embed2 = discord.Embed(description="", color=color)
 
-            # Use HelpEmbedImagesManager to get the image URL
+            
             help_embed_manager = HelpEmbedImagesManager(
                 self.set_thumbnail_file)
             thumbnail_url = help_embed_manager.get_image_url(cog_name)
@@ -154,7 +154,7 @@ class Select(discord.ui.Select):
             else:
                 logger.warning(f"No thumbnail URL found for cog '{cog_name}'.")
 
-            # Attach the generated image if it exists
+            
             image_path = "Data/commands/help/set_image/cog_image.png"
             file = None
             if os.path.exists(image_path):
@@ -162,7 +162,7 @@ class Select(discord.ui.Select):
                     file = discord.File(f, filename="cog_image.png")
                 self.cog_embed2.set_image(url="attachment://cog_image.png")
 
-            # Add commands to the embed
+            
             cog = self.bot.get_cog(cog_name)
             if cog:
                 cog_commands = [
@@ -178,9 +178,9 @@ class Select(discord.ui.Select):
                             )
                             for param in cmd.clean_params.values()
                         ]
-                        args_str = " ".join(cmd_args)  # Command arguments
+                        args_str = " ".join(cmd_args)  
                         command_info = (
-                            # Command with arguments
+                            
                             f"`{cmd.name}`\t{args_str}"
                         )
 
@@ -193,7 +193,7 @@ class Select(discord.ui.Select):
             else:
                 logger.info(f"Cog not found: {cog_name}")
 
-            # Send or update the interaction message
+            
             if file:
                 await interaction.response.edit_message(
                     embed=self.cog_embed2, attachments=[file]
@@ -218,15 +218,15 @@ class HelpMenu(discord.ui.View):
         self.bot = bot
         self.primary_color = primary_color
 
-        cog_commands = {}  # Dictionary to store commands for each cog
+        cog_commands = {}  
         self.add_item(select_view)
-        # Send only the embed without the button
+        
 
 
 class Options_ImageGenerator:
     def __init__(self, cog_name):
         """Initialize the ImageGenerator with cog-specific data and load resources."""
-        # Configurable values
+        
         self.font_path_header = (
             "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
         )
@@ -240,18 +240,18 @@ class Options_ImageGenerator:
             "Data/commands/help/menu/initial/style/assets/background.png"
         )
 
-        # Font sizes
+        
         self.header_font_size = 35
         self.base_font_size = 12
 
-        # Font colors
+        
         self.header_font_color = "white"
         self.base_font_color = "black"
 
-        # Character image scale
+        
         self.character_scale = 0.4
 
-        # Text content
+        
         self.cog_name = cog_name
         self.header_text = f"{cog_name.replace('_', ' ')}"
         self.description_text = self._wrap_text(
@@ -259,19 +259,19 @@ class Options_ImageGenerator:
             max_width=500,
         )
 
-        # Layout positions
+        
         self.character_pos = (5, 5)
         self.text_x_offset = 10
         self.text_y_offset = 27
         self.text_spacing = 20
 
-        # Color replacements
+        
         self.color_replacements_map = {
-            # 'f9fbfa': 'transparent',
-            # 'f8a9a2': 'transparent',  # Replace this color with a solid color
+            
+            
         }
 
-        # Load fonts and images
+        
         self._load_resources()
         self._apply_color_replacements()
 
@@ -285,7 +285,7 @@ class Options_ImageGenerator:
         self.character = Image.open(self.character_path).convert("RGBA")
         self.background = Image.open(self.background_path).convert("RGBA")
 
-        # Resize character image
+        
         self._resize_character()
 
     def _resize_character(self):
@@ -300,15 +300,15 @@ class Options_ImageGenerator:
 
         for old_hex, replacement in self.color_replacements_map.items():
             old_color = tuple(int(old_hex[i: i + 2], 16) for i in (0, 2, 4))
-            if replacement == "transparent":  # If replacement is transparency
+            if replacement == "transparent":  
                 mask = cv2.inRange(
                     bg_array[:, :, :3],
                     np.array(old_color) - 10,
                     np.array(old_color) + 10,
                 )
-                # Set the pixels to fully transparent
+                
                 bg_array[mask > 0] = [0, 0, 0, 0]
-            elif replacement.startswith("http"):  # Replacement is an image URL
+            elif replacement.startswith("http"):  
                 replacement_img = self._download_image(replacement)
                 replacement_img = replacement_img.resize(
                     (self.background.width, self.background.height)
@@ -321,7 +321,7 @@ class Options_ImageGenerator:
                     np.array(old_color) + 10,
                 )
                 bg_array[mask > 0, :3] = replacement_array[mask > 0]
-            else:  # Replacement is a solid color hex code
+            else:  
                 replacement_color = tuple(
                     int(replacement[i: i + 2], 16) for i in (1, 3, 5)
                 )
@@ -342,10 +342,10 @@ class Options_ImageGenerator:
 
         draw = ImageDraw.Draw(
             Image.new("RGBA", (1, 1))
-        )  # Dummy image to get draw object
+        )  
         font = ImageFont.truetype(
             self.font_path_base, self.base_font_size
-        )  # Use base font size
+        )  
 
         for word in words:
             current_line.append(word)
@@ -363,7 +363,7 @@ class Options_ImageGenerator:
 
     def _draw_text(self, draw, text_x, text_y):
         """Draw all text on the image."""
-        # Draw header text
+        
         draw.text(
             (text_x, text_y),
             self.header_text,
@@ -372,7 +372,7 @@ class Options_ImageGenerator:
         )
         text_y += self.header_font.size + self.text_spacing
 
-        # Draw description text
+        
         draw.text(
             (text_x, text_y),
             self.description_text,
@@ -384,7 +384,7 @@ class Options_ImageGenerator:
     def _download_image(url):
         """Download an image from a URL."""
         response = requests.get(url)
-        response.raise_for_status()  # Ensure we notice bad responses
+        response.raise_for_status()  
         return Image.open(BytesIO(response.content)).convert("RGBA")
 
     def create_image(self):
@@ -392,11 +392,11 @@ class Options_ImageGenerator:
         bg = self.background.copy()
         draw = ImageDraw.Draw(bg)
 
-        # Paste the character image onto the background
+        
         character_x, character_y = self.character_pos
         bg.paste(self.character, (character_x, character_y), self.character)
 
-        # Draw all text onto the image
+        
         text_x = self.character.width + self.text_x_offset
         text_y = self.text_y_offset
         self._draw_text(draw, text_x, text_y)
@@ -422,7 +422,7 @@ class ImageGenerator:
         """Initialize the ImageGenerator with user-specific data and load resources."""
         self.user_name = ctx.author.display_name
 
-        # Configurable values
+        
         self.font_path_header = (
             "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
         )
@@ -436,30 +436,30 @@ class ImageGenerator:
             "Data/commands/help/menu/initial/style/assets/background.png"
         )
 
-        # Color replacements
+        
         self.color_replacements_map = {
-            # 'f9fbfa': 'transparent',
-            # 'f8a9a2': 'transparent',  # Replace this color with a solid color
-            # 'ffd7d4': 'transparent',
+            
+            
+            
         }
 
-        # Font sizes
+        
         self.header_font_size = 35
         self.base_font_size = 22
         self.command_font_size = 13
 
-        # Font colors
+        
         self.header_font_color = "white"
         self.base_font_color = "black"
         self.command_font_color = "white"
 
-        # Character image scale
+        
         self.character_scale = 0.4
 
-        # Text content
+        
         self.text1 = self._truncate_text(
             f"{ctx.me.display_name} Help", 350
-        )  # Truncate user_name if needed
+        )  
         self.text2_options = [
             "how can I help you today?",
             "need help with something?",
@@ -469,7 +469,7 @@ class ImageGenerator:
         self.text2 = f"Hello {self.user_name}, {random.choice(self.text2_options)}"
         self.text3 = "Command: [option]?"
 
-        # Layout positions
+        
         self.character_pos = (5, 5)
         self.text_x_offset = 10
         self.text_y_offset = 25
@@ -478,22 +478,22 @@ class ImageGenerator:
         self.command_text_margin = 40
         self.command_text_bottom_margin = 30
 
-        # Load fonts and images
+        
         self._load_resources()
 
     def _truncate_text(self, text, max_width):
         """Truncate text to fit within the specified width."""
         draw = ImageDraw.Draw(
             Image.new("RGBA", (1, 1))
-        )  # Dummy image to get draw object
+        )  
         font = ImageFont.truetype(
             self.font_path_header, self.header_font_size
-        )  # Use header font size
+        )  
 
-        # Check if text fits within the specified width
+        
         while draw.textbbox((0, 0), text, font=font)[2] > max_width:
-            text = text[:-1]  # Remove the last character
-            if len(text) == 0:  # Ensure there's some text
+            text = text[:-1]  
+            if len(text) == 0:  
                 break
         return text
 
@@ -509,7 +509,7 @@ class ImageGenerator:
         self.character = Image.open(self.character_path).convert("RGBA")
         self.background = Image.open(self.background_path).convert("RGBA")
 
-        # Process color replacements
+        
         if self.color_replacements_map:
             self._apply_color_replacements()
 
@@ -528,15 +528,15 @@ class ImageGenerator:
 
         for old_hex, replacement in self.color_replacements_map.items():
             old_color = tuple(int(old_hex[i: i + 2], 16) for i in (0, 2, 4))
-            if replacement == "transparent":  # If replacement is transparency
+            if replacement == "transparent":  
                 mask = cv2.inRange(
                     bg_array[:, :, :3],
                     np.array(old_color) - 10,
                     np.array(old_color) + 10,
                 )
-                # Set the pixels to fully transparent
+                
                 bg_array[mask > 0] = [0, 0, 0, 0]
-            elif replacement.startswith("http"):  # Replacement is an image URL
+            elif replacement.startswith("http"):  
                 replacement_img = self._download_image(replacement)
                 replacement_img = replacement_img.resize(
                     (self.background.width, self.background.height)
@@ -549,7 +549,7 @@ class ImageGenerator:
                     np.array(old_color) + 10,
                 )
                 bg_array[mask > 0, :3] = replacement_array[mask > 0]
-            else:  # Replacement is a solid color hex code
+            else:  
                 replacement_color = tuple(
                     int(replacement[i: i + 2], 16) for i in (1, 3, 5)
                 )
@@ -596,11 +596,11 @@ class ImageGenerator:
         bg = self.background.copy()
         draw = ImageDraw.Draw(bg)
 
-        # Paste the character image onto the background
+        
         character_x, character_y = self.character_pos
         bg.paste(self.character, (character_x, character_y), self.character)
 
-        # Draw all text onto the image
+        
         text_x = self.character.width + self.text_x_offset
         text_y = self.text_y_offset
         self._draw_text(draw, text_x, text_y)
@@ -662,16 +662,16 @@ class Help(commands.Cog):
             title=f"Commands for {cog_name}", color=primary_color_value
         )
         embed.description = (
-            " "  # Add a placeholder description to ensure it's not empty
+            " "  
         )
 
         for cmd_name in cog_commands:
             cmd = command_mapping.get(cmd_name)
             if cmd is None:
-                continue  # Skip if command not found
+                continue  
 
             if not hasattr(cmd, "clean_params"):
-                continue  # Skip if cmd does not have clean_params
+                continue  
 
             cmd_args = [
                 (
@@ -695,7 +695,7 @@ class Help(commands.Cog):
             cog_commands = {}
             command_mapping = self._load_command_mapping()
 
-            # Get the bot's avatar and primary color
+            
             bot_avatar_url = str(self.bot.user.avatar.with_size(128))
             async with aiohttp.ClientSession() as session:
                 async with session.get(bot_avatar_url) as resp:
@@ -743,12 +743,12 @@ class Help(commands.Cog):
                 self.cog_commands = cog_commands
                 self._update_command_mapping()
 
-                # Create the image slideshow
+                
                 image_generator = ImageGenerator(ctx=ctx)
                 image_file_path = "Data/commands/help/set_image/image.png"
                 image_generator.save_image(file_path=image_file_path)
 
-                # Upload the image file to Discord
+                
                 with open(image_file_path, "rb") as file:
                     help_embed = discord.Embed(
                         color=primary_color_value,
@@ -773,7 +773,7 @@ class Help(commands.Cog):
                         allowed_mentions=discord.AllowedMentions.none(),
                     )
 
-                # Ensure file cleanup if necessary
+                
                 if os.path.exists(image_file_path):
                     os.remove(image_file_path)
 

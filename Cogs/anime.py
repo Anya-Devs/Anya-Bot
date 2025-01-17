@@ -4,13 +4,13 @@ import logging
 
 from Imports.discord_imports import *
 from Subcogs.anime import Recommendation
-# Set up logging configuration
+
 logging.basicConfig(
-    # Set the logging level (can be DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    
     level=logging.ERROR,
-    # Format of the log messages
+    
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",  # Date and time format
+    datefmt="%Y-%m-%d %H:%M:%S",  
 )
 
 
@@ -415,7 +415,7 @@ class Anime(commands.Cog):
             self.action = action
 
         async def callback(self, interaction: discord.Interaction):
-            # Access the parent view (MangaView)
+            
             view = self.view
 
             if self.action == "previous" and view.current_page > 0:
@@ -423,10 +423,10 @@ class Anime(commands.Cog):
             elif self.action == "next" and view.current_page < view.max_pages:
                 view.current_page += 1
 
-            # Update the current index based on the new page
+            
             view.current_index = view.current_page
 
-            # Update the buttons and the embed
+            
             view.update_buttons()
             embed = await view.update_embed()
             await interaction.response.edit_message(embed=embed, view=view)
@@ -441,8 +441,8 @@ class Anime(commands.Cog):
             self.update_buttons()
 
         def update_buttons(self):
-            self.clear_items()  # Remove all current buttons
-            # Create the buttons and add them to the view based on the current page
+            self.clear_items()  
+            
             if self.current_page > 0:
                 self.add_item(
                     Anime.MangaButton(
@@ -459,12 +459,12 @@ class Anime(commands.Cog):
             manga = self.manga_data["data"][self.current_index]
             embed = discord.Embed(title=manga["title"])
 
-            # Get the appropriate image URL (we'll prioritize large size)
+            
             image_url = self.get_image_url(manga["images"])
             if image_url:
                 embed.set_image(url=image_url)
 
-            # Add additional fields such as chapters, status, and score
+            
             embed.add_field(
                 name=" ",
                 value=f"**Chapters:** `{manga['chapters']}`\n"
@@ -475,7 +475,7 @@ class Anime(commands.Cog):
                 inline=False,
             )
 
-            # Display synopsis or default message if not available
+            
             embed.description = manga.get(
                 "synopsis", "> <:anya_angy:1268976144548630608> Synopsis not available"
             )

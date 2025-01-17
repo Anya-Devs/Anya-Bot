@@ -1,12 +1,12 @@
 import aiohttp
 from datetime import datetime
-from Imports.discord_imports import *
 
 from Data.const import *
 from Subcogs.information import Guide
 from Data.const import primary_color, Information_Embed
+from Imports.discord_imports import *
 
-# Constants for permission categories
+
 GENERAL_PERMISSIONS = [
     "administrator",
     "manage_guild",
@@ -99,7 +99,7 @@ class Information(commands.Cog):
             f"Boost Tier: {boost_tier}"
         )
 
-        # Other details for the second field
+        
         other_info = (
             f"Roles: {len(guild.roles)}\n"
             f"Channels: {len(guild.channels)} - Text: {len([c for c in guild.channels if isinstance(c, discord.TextChannel)])} - Voice: {len([c for c in guild.channels if isinstance(c, discord.VoiceChannel)])}\n"
@@ -108,15 +108,15 @@ class Information(commands.Cog):
 
         embed = discord.Embed(color=primary_color(), timestamp=datetime.now())
 
-        # Fields for overview and other details
+        
         embed.add_field(name="Overview", value=overview, inline=True)
         embed.add_field(name="Other", value=other_info, inline=True)
 
-        # Thumbnail (guild icon) and footer with server ID
+        
         embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
         embed.set_footer(text=f"ID: {guild.id}")
 
-        # Owner details in the author section
+        
         embed.set_author(name=f"{guild.name}", icon_url=owner.avatar.url)
 
         await ctx.reply(embed=embed, mention_author=False)
@@ -124,25 +124,25 @@ class Information(commands.Cog):
     @commands.command(name="pfp")
     async def pfp(self, ctx, user: discord.Member = None):
         user = user or ctx.author
-        avatar_url = user.avatar.url  # Get the URL of the avatar image
+        avatar_url = user.avatar.url  
 
-        # Embed creation
+        
         embed = discord.Embed(
             title=user.display_name,
             color=primary_color(),
             timestamp=datetime.now(),
-            url=avatar_url,  # This will make the title a clickable link to the avatar image
+            url=avatar_url,  
         )
         embed.set_image(url=avatar_url)
 
-        # Add a button for downloading the image
+        
         button = discord.ui.Button(
             label="Download", style=discord.ButtonStyle.link, url=avatar_url
         )
         view = discord.ui.View()
         view.add_item(button)
 
-        # Create the message with the embed and the button
+        
         await ctx.reply(embed=embed, mention_author=False, view=view)
 
     @commands.command(name="role")
@@ -167,32 +167,32 @@ class Information(commands.Cog):
         banner_url = await get_user_banner_url(self.bot, user)
 
         if banner_url:
-            # Embed creation
+            
             embed = discord.Embed(
                 title=f"{user.display_name}'s banner",
                 color=primary_color(),
                 timestamp=datetime.now(),
-                url=banner_url,  # This will make the title a clickable link to the banner image
+                url=banner_url,  
             )
             embed.set_image(url=banner_url)
 
-            # Add a link button for downloading the banner image
+            
             button = discord.ui.Button(
                 label="Download Banner", style=discord.ButtonStyle.link, url=banner_url
             )
             view = discord.ui.View()
             view.add_item(button)
         else:
-            # If no banner, display a message
+            
             embed = discord.Embed(
                 title=user.display_name,
                 description="No banner set",
                 color=primary_color(),
                 timestamp=datetime.now(),
             )
-            view = None  # No button if there is no banner
+            view = None  
 
-        # Send the message with the embed and the view (if any)
+        
         await ctx.reply(embed=embed, mention_author=False, view=view)
 
     @commands.command(name="joined")
@@ -227,7 +227,7 @@ class Information(commands.Cog):
 
     @commands.command(name="perms")
     async def perms(self, ctx, target: Union[discord.Member, discord.Role] = None):
-        target = target or ctx.author  # Default to the author if no target is provided
+        target = target or ctx.author  
 
         if isinstance(target, discord.Member):
             permissions = target.guild_permissions
@@ -239,13 +239,13 @@ class Information(commands.Cog):
             )
             return
 
-        # Pass only the required arguments to the PermissionsView
+        
         view = PermissionsView(self, ctx, permissions, target)
 
-        # Create the initial embed for the first page
+        
         embed = view.build_perms_embed()
 
-        # Send the embed with the view
+        
         await ctx.reply(embed=embed, view=view, mention_author=False)
 
     @commands.command(name="emojis")
@@ -343,18 +343,18 @@ class PermissionsView(discord.ui.View):
         self.target = target
         self.page = 0
 
-        # Define the list of permission categories for pagination
+        
         self.perm_categories = [
             ("General", self.GENERAL_PERMISSIONS),
             ("Text", self.TEXT_PERMISSIONS),
             ("Voice", self.VOICE_PERMISSIONS),
         ]
 
-        # Store the permission details for each page in a dictionary
+        
         self.perm_details_dict = {}
         self.generate_permission_details()
 
-        # Update the buttons to navigate pages
+        
         print(
             f"PermissionsView initialized with target: {target} and page: {self.page}"
         )
@@ -380,40 +380,40 @@ class PermissionsView(discord.ui.View):
     async def previous(
         self, button: discord.ui.Button, interaction: discord.Interaction
     ):
-        # Debugging the interaction ID
+        
         print(f"Interaction received: previous")
 
-        # Handle previous button press
+        
         if self.page > 0:
             self.page -= 1
             print(f"Previous button clicked, moving to page {self.page}")
         else:
             print("Cannot move to previous page (already on the first page).")
 
-        # Build the embed for the current page and update message
+        
         embed = self.build_perms_embed()
         print(f"Built embed for page {self.page}: {embed.title}")
 
-        # Edit the message with new embed
+        
         await button.response.edit_message(embed=embed, view=self)
         print("Message updated with new embed and view.")
 
     @discord.ui.button(label="Next", style=discord.ButtonStyle.gray, custom_id="next")
     async def next(self, button: discord.ui.Button, interaction: discord.Interaction):
-        print(f"Interaction received: next")  # Debugging the interaction ID
+        print(f"Interaction received: next")  
 
-        # Handle next button press
+        
         if self.page < len(self.perm_categories) - 1:
             self.page += 1
             print(f"Next button clicked, moving to page {self.page}")
         else:
             print("Cannot move to next page (already on the last page).")
 
-        # Build the embed for the current page and update message
+        
         embed = self.build_perms_embed()
         print(f"Built embed for page {self.page}: {embed.title}")
 
-        # Edit the message with new embed
+        
         await button.response.edit_message(embed=embed, view=self)
         print("Message updated with new embed and view.")
 
@@ -424,14 +424,14 @@ class PermissionsView(discord.ui.View):
 
         print(
             f"Permissions details for page {self.page}: {perm_details}"
-        )  # Debugging permission details
+        )  
 
-        # Create the embed for the specific permission category
+        
         embed = discord.Embed(
             title=f"{category_name} Permissions for {self.target.display_name}",
             description="\n".join(perm_details),
-            color=primary_color(),  # Keep this color
-            timestamp=datetime.now(),  # Keep the timestamp
+            color=primary_color(),  
+            timestamp=datetime.now(),  
         )
         embed.set_footer(
             text=f"Page {self.page + 1} of {len(self.perm_categories)}")

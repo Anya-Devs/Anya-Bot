@@ -1,4 +1,4 @@
-# Standard library imports
+
 import json
 import csv
 import time
@@ -11,7 +11,7 @@ from tqdm import tqdm
 from typing import List, Tuple, Optional
 from urllib.request import urlopen
 
-# Third-party library imports
+
 import cv2
 import cv2 as cv
 import numpy as np
@@ -21,20 +21,20 @@ import motor.motor_asyncio
 from PIL import Image
 
 
-# Concurrent and multiprocessing imports
+
 from concurrent import *
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 
 
-# Custom imports
+
 from Imports.discord_imports import *
 from Subcogs.pokemon import Ping_Pokemon
 from Imports.log_imports import logger
 from Data.const import error_custom_embed, primary_color
 
 
-# Configure logging
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -57,7 +57,7 @@ class PokemonPredictor:
         self.dataset_folder = dataset_folder
         self.cache = {}
 
-        # Load or create the dataset on initialization
+        
         self.load_dataset()
 
     def load_dataset(self):
@@ -76,7 +76,7 @@ class PokemonPredictor:
                 path = os.path.join(self.dataset_folder, filename)
                 self.process_image(path, filename)
 
-        # Save the created dataset
+        
         if self.cache:
             np.save(self.dataset_file, self.cache)
             print(f"Dataset saved with {len(self.cache)} images.")
@@ -92,12 +92,12 @@ class PokemonPredictor:
         _, descriptors = self.orb.detectAndCompute(gray, None)
 
         if descriptors is not None and len(descriptors) > 0:
-            # Extract metadata
+            
             metadata = {
                 "descriptors": descriptors.astype(np.uint8),
-                "dimensions": img.shape[:2],  # Height, Width
-                "avg_color": img.mean(axis=(0, 1)).tolist(),  # BGR average
-                "hash": hash(filename),  # Simple hash based on the filename
+                "dimensions": img.shape[:2],  
+                "avg_color": img.mean(axis=(0, 1)).tolist(),  
+                "hash": hash(filename),  
             }
             self.cache[filename] = metadata
 
@@ -111,7 +111,7 @@ class PokemonPredictor:
         """Matches the descriptors against the dataset and finds the best match."""
         sharpness = self.evaluate_image_quality(image)
 
-        # Only consider sharp images for matching
+        
         if sharpness < 0.2:
             return None, 0
 
@@ -171,12 +171,12 @@ class PokemonPredictor:
         return "Metadata not found for the given image."
 
 
-# Pokemon Hunt Data
+
 class PokemonData:
     def __init__(self):
         self.DB_NAME = "Pokemon_SH"
 
-        # Initialize MongoDB connection
+        
         mongo_url = os.getenv("MONGO_URI")
         if not mongo_url:
             raise ValueError("No MONGO_URI found in environment variables")
@@ -184,24 +184,24 @@ class PokemonData:
         self.db = self.mongoConnect[self.DB_NAME]
         self.users_collection = self.db["users_pokemon"]
 
-        # Load the CSV file containing Pokémon descriptions
+        
         self.pokemon_df = pd.read_csv("Data/pokemon/pokemon_description.csv")
 
     async def check_pokemon_exists(self, pokemon_name):
-        # Check if the Pokémon exists in the CSV file
+        
         return not self.pokemon_df[
             self.pokemon_df["slug"].str.lower() == pokemon_name.lower()
         ].empty
 
     async def get_user_pokemon(self, user_id):
-        # Get the user's Pokémon list from the database
+        
         user_data = await self.users_collection.find_one({"user_id": user_id})
         if user_data:
             return user_data["pokemon_list"]
         return []
 
     async def add_pokemon_to_user(self, user_id, pokemon_name):
-        # Add the Pokémon to the user's list
+        
         user_pokemon = await self.get_user_pokemon(user_id)
         user_pokemon.append(pokemon_name)
         await self.users_collection.update_one(
@@ -209,7 +209,7 @@ class PokemonData:
         )
 
     async def remove_pokemon_from_user(self, user_id, pokemon_name):
-        # Remove the Pokémon from the user's list
+        
         user_pokemon = await self.get_user_pokemon(user_id)
         user_pokemon = [p for p in user_pokemon if p.lower() !=
                         pokemon_name.lower()]
@@ -218,12 +218,12 @@ class PokemonData:
         )
 
     async def get_hunters_for_pokemon(self, pokemon_name):
-        # Find users who have the specified Pokémon in their list
+        
         hunters = await self.users_collection.find(
             {"pokemon_list": {"$in": [pokemon_name]}}
         ).to_list(None)
 
-        # Return the list of user IDs
+        
         return [hunter["user_id"] for hunter in hunters]
 
 
@@ -234,23 +234,23 @@ class Pokemon(commands.Cog):
         self.detect_bot_id = [
             854233015475109888,
             874910942490677270,
-        ]  # ID of the bot you're waiting for
+        ]  
         self.phrase = "Shiny hunt pings:"
         self.predictor = PokemonPredictor()
-        self.data_handler = PokemonData()  # PokemonData instance
+        self.data_handler = PokemonData()  
         self.primary_color = primary_color
         self.error_custom_embed = error_custom_embed
-        self.local_color_memory = []  # Binary local color comparator memory
+        self.local_color_memory = []  
         self.pokemon_api_url = "https://pokeapi.co/api/v2/pokemon"
         self.pokemon_info_url = "https://pokeapi.co/api/v2/pokemon/{}/"
         self.dataset_file = "Data/pokemon/dataset.npy"
         self.output_folder = "Data/pokemon/predictions"
         self.cache = {}
-        self.orb = cv.ORB_create()  # Initialize ORB descriptor extractor
+        self.orb = cv.ORB_create()  
         self.executor = (
             concurrent.futures.ThreadPoolExecutor()
-        )  # For async image loading
-        self.dataset_folder = dataset_folder  # Set dataset folder
+        )  
+        self.dataset_folder = dataset_folder  
         self.wait_time = 11
 
     async def fetch_all_pokemon_names(self):
@@ -337,9 +337,9 @@ class Pokemon(commands.Cog):
         """
         Convert image to RGB format.
         """
-        if img.shape[2] == 3:  # Check if the image has 3 color channels
+        if img.shape[2] == 3:  
             return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        # Check if the image has 4 color channels (with alpha)
+        
         elif img.shape[2] == 4:
             return cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
         return img
@@ -351,7 +351,7 @@ class Pokemon(commands.Cog):
             f.write(response.read())
 
     @commands.command(name="predict")
-    # 1 use per 6 seconds per user
+    
     @commands.cooldown(1, 6, commands.BucketType.user)
     async def predict(self, ctx, *, arg=None):
         image_url = None
@@ -382,24 +382,24 @@ class Pokemon(commands.Cog):
                         )
                         img = np.asarray(img_bytes, dtype=np.uint8)
                         img = cv.imdecode(img, cv.IMREAD_COLOR)
-                        # Use the predictor to predict the Pokémon
+                        
                         (
                             prediction,
                             time_taken,
                             predicted_name,
                         ) = await self.predictor.predict_pokemon(img)
 
-                        # Check if the user is a hunter for the predicted Pokémon
+                        
                         hunters = await self.data_handler.get_hunters_for_pokemon(
                             predicted_name
                         )
                         user_id = ctx.author.id
                         is_hunter = user_id in hunters
 
-                        # Prepare the response message
+                        
                         response_message = prediction
                         if is_hunter:
-                            # Mention the user if they are a hunter
+                            
                             response_message = (
                                 f"{ctx.author.mention}, {response_message}"
                             )
@@ -415,21 +415,21 @@ class Pokemon(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        # Check if the message is from the specified author and contains an embed
+        
         if message.author.id == self.author_id and message.embeds:
             embed = message.embeds[0]
             if embed.description and "Guess the pokémon" in embed.description:
                 image_url = embed.image.url
 
-                # Wait for 3 seconds for the bot's reply
+                
                 bot_response = await self.wait_for_bot_response(message.channel)
 
                 if bot_response:
-                    # If the bot responds, you can handle this case here
-                    # await message.channel.send("Bot responded within 3 seconds!")
+                    
+                    
                     pass
                 else:
-                    # If no response, proceed with image processing
+                    
                     async with aiohttp.ClientSession() as session:
                         async with session.get(image_url) as response:
                             if response.status == 200:
@@ -442,7 +442,7 @@ class Pokemon(commands.Cog):
                                 img = np.asarray(img_bytes, dtype=np.uint8)
                                 img = cv.imdecode(img, cv.IMREAD_COLOR)
 
-                                # Get prediction for the Pokémon
+                                
                                 (
                                     prediction,
                                     time_taken,
@@ -455,19 +455,19 @@ class Pokemon(commands.Cog):
                                 )
 
                                 if hunters:
-                                    # Mention hunters and check if they're still in the guild
+                                    
                                     hunter_mentions = []
                                     for hunter_id in hunters:
-                                        # Get the guild member object
+                                        
                                         member = message.guild.get_member(
                                             hunter_id)
                                         if member is None:
-                                            # If the hunter is not in the guild, remove their Pokémon from the user's list
+                                            
                                             await self.data_handler.remove_pokemon_from_user(
                                                 hunter_id, predicted_name
                                             )
                                         else:
-                                            # Otherwise, mention the hunter
+                                            
                                             hunter_mentions.append(
                                                 f"<@{hunter_id}>")
 
@@ -487,18 +487,18 @@ class Pokemon(commands.Cog):
                                 )
 
     async def wait_for_bot_response(self, channel):
-        # Wait for a message from the specific bot within 3 seconds
+        
         def check(msg):
             return msg.author.id in self.detect_bot_id and msg.channel == channel
 
         try:
-            # Wait for 3 seconds for the bot to reply
+            
             msg = await self.bot.wait_for(
                 "message", timeout=self.wait_time, check=check
             )
             return msg
         except asyncio.TimeoutError:
-            # If no response within 3 seconds, return None
+            
             return None
 
     @commands.command(name="hunt")
@@ -508,7 +508,7 @@ class Pokemon(commands.Cog):
         joiner = "\n -"
 
         if action == "list":
-            # List the user's current Pokémon
+            
             user_pokemon = await self.data_handler.get_user_pokemon(user_id)
 
             if user_pokemon:
@@ -535,10 +535,10 @@ class Pokemon(commands.Cog):
                 )
                 return
 
-            # Get the user's current Pokémon list
+            
             user_pokemon = await self.data_handler.get_user_pokemon(user_id)
 
-            # Check if the user has already reached the maximum Pokémon count
+            
             if len(user_pokemon) + len(pokemon_names) > 1:
                 await ctx.reply(
                     "You already have 1 Pokémon in your hunt list. Please **remove** one to add new ones.",
@@ -551,7 +551,7 @@ class Pokemon(commands.Cog):
             already_have_pokemon = []
 
             for pokemon_name in pokemon_names:
-                # Check if the Pokémon exists in the database (from CSV)
+                
                 exists = await self.data_handler.check_pokemon_exists(
                     pokemon_name.lower()
                 )
@@ -559,16 +559,16 @@ class Pokemon(commands.Cog):
                     not_exist_pokemon.append(pokemon_name)
                     continue
 
-                # Check if the Pokémon is already in the user's list
+                
                 if any(p.lower() == pokemon_name.lower() for p in user_pokemon):
                     already_have_pokemon.append(pokemon_name)
                     continue
 
-                # Add the Pokémon to the user's list
+                
                 await self.data_handler.add_pokemon_to_user(user_id, pokemon_name)
                 added_pokemon.append(pokemon_name)
 
-            # Create response messages
+            
             response_messages = []
             if added_pokemon:
                 response_messages.append(
@@ -595,23 +595,23 @@ class Pokemon(commands.Cog):
                 )
                 return
 
-            # Get the user's current Pokémon list
+            
             user_pokemon = await self.data_handler.get_user_pokemon(user_id)
 
             removed_pokemon = []
             not_in_list_pokemon = []
 
             for pokemon_name in pokemon_names:
-                # Check if the Pokémon is in the user's list
+                
                 if not any(p.lower() == pokemon_name.lower() for p in user_pokemon):
                     not_in_list_pokemon.append(pokemon_name)
                     continue
 
-                # Remove the Pokémon from the user's list
+                
                 await self.data_handler.remove_pokemon_from_user(user_id, pokemon_name)
                 removed_pokemon.append(pokemon_name)
 
-            # Create response messages
+            
             response_messages = []
             if removed_pokemon:
                 response_messages.append(
@@ -637,7 +637,7 @@ class Pokemon(commands.Cog):
     )
     @commands.cooldown(1, 6, commands.BucketType.user)
     async def pokemon(self, ctx, *, args=None, form=None):
-        # Get the primary color of the bot's icon
+        
         primary_color = self.primary_color()
         async with ctx.typing():
             is_shiny = False
@@ -665,7 +665,7 @@ class Pokemon(commands.Cog):
 
             if not os.path.exists(file_path):
                 with open(file_path, "w") as file:
-                    file.write("{}")  # Creating an empty JSON file
+                    file.write("{}")  
 
             pokemon_data = {}
 
@@ -706,7 +706,7 @@ class Pokemon(commands.Cog):
                         color=primary_color,
                     )
 
-                # Save or update JSON data in the Pokemon folder
+                
                 pokemon_data[str(pokemon_id)] = data
 
                 with open(file_path, "w") as file:
@@ -738,7 +738,7 @@ class Pokemon(commands.Cog):
             if mega_response.status_code == 200:
                 try:
                     mega_data = mega_response.json()
-                    data_species = mega_response.json()  # Corrected line
+                    data_species = mega_response.json()  
 
                 except json.JSONDecodeError:
                     await ctx.send(
@@ -751,7 +751,7 @@ class Pokemon(commands.Cog):
             url = f"{base_url}{pokemon_name.lower()}/"
             response_species = requests.get(url)
             if response_species.status_code != 200:
-                # Fetch form data if species data not found
+                
                 url = f"https://pokeapi.co/api/v2/pokemon-form/{pokemon_name.lower()}/"
                 form_response = requests.get(url)
                 if form_response.status_code == 200:
@@ -794,7 +794,7 @@ class Pokemon(commands.Cog):
                     word_replacements = {
                         "POKéMON": "Pokémon",
                         "POKé BALL": "Poké Ball",
-                        # Add more replacements as needed
+                        
                     }
 
                     formatted_description = await replace_words(
@@ -850,7 +850,7 @@ class Pokemon(commands.Cog):
                     print(f"Error: Unable to retrieve data for {pokemon_name}")
                     return None
             except KeyError:
-                return None  # or handle the missing key case accordingly
+                return None  
 
         region = get_pokemon_region(id) or None
 
@@ -873,7 +873,7 @@ class Pokemon(commands.Cog):
             if mega_response.status_code == 200:
                 try:
                     mega_data = mega_response.json()
-                    # Redefine data for mega evolution
+                    
                     data = mega_data
                     image_url = mega_data["sprites"]["other"]["official-artwork"][
                         "front_default"
@@ -898,17 +898,17 @@ class Pokemon(commands.Cog):
             float(int(data["weight"])) / 10,
         )
         max_stat = 255
-        bar_length = 13  # Length of the level bar
+        bar_length = 13  
         fixed_bar_length = 13
 
-        # Mapping for renaming
+        
         stat_name_mapping = {
             "hp": "Hp",
             "special-attack": "Sp. Atk",
             "special-defense": "Sp. Def",
         }
 
-        # Bar types
+        
         bar_symbols = {
             0: {
                 "front": "<:__:1194757522041618572>",
@@ -921,8 +921,8 @@ class Pokemon(commands.Cog):
                 "end": "<:__:1194759199071141999>",
             },
         }
-        # Fixed length for all bars
-        # Generate base_stats with modified names and level bars
+        
+        
         base_stats = [
             f"{str(stat_name_mapping.get(stat['stat']['name'], stat['stat']['name']).title()).replace('Hp', 'Health'):<10} {str(stat['base_stat']):>5} {'▒' * int(stat['base_stat'] / max_stat * bar_length)}{'░' * (bar_length - int(stat['base_stat'] / max_stat * bar_length))}"
             for stat in data["stats"]
@@ -936,7 +936,7 @@ class Pokemon(commands.Cog):
         basic_base_stats = "\n".join(_base_stats)
 
         mot = ctx.guild.get_member(ctx.bot.user.id)
-        # color = mot.color
+        
 
         def get_pokemon_species_data(name):
             response = requests.get(
@@ -949,7 +949,7 @@ class Pokemon(commands.Cog):
                 return None
 
         language_codes = ["ja", "ja", "ja", "en", "de", "fr"]
-        # Define a mapping between language codes and flag emojis
+        
         flag_mapping = {
             "en": "🇬🇧",
             "fr": "🇫🇷",
@@ -1042,34 +1042,34 @@ class Pokemon(commands.Cog):
             "ky": "🇰🇬",
         }
 
-        # Fetch alternative names from the PokeAPI
+        
         alternate_names = get_pokemon_alternate_names(
             data_species, species_name)
 
-        desired_pokemon = name  # Replace with the desired Pokémon name
+        desired_pokemon = name  
 
         if alternate_names:
             alt_names_info = {}
 
             for name, lang in alternate_names:
-                # Create a unique key for each name
+                
                 key = name.lower()
 
                 flag = flag_mapping.get(
                     lang, None
-                )  # Get the flag for the language, or None if not found
+                )  
 
-                # Check if the Pokemon name is the same as the language name, and skip it
+                
                 if name.lower() != lang.lower() and flag is not None:
                     if key not in alt_names_info:
                         alt_names_info[key] = f"{flag} {name}"
 
-            # Extract the unique names with their flags
+            
             name_list = sorted(
                 list(alt_names_info.values()), key=lambda x: x.split(" ")[-1]
             )
 
-            # Join the results with newline characters
+            
             alt_names_str = "\n".join(name_list[:6])
 
         else:
@@ -1082,7 +1082,7 @@ class Pokemon(commands.Cog):
             if region:
                 result = f"Region: {region.capitalize()}\n"
 
-                # Fetch alternative names from the PokeAPI
+                
                 alternate_names = get_pokemon_alternate_names(
                     data_species, pokemon_name
                 )
@@ -1155,7 +1155,7 @@ class Pokemon(commands.Cog):
 
                                 return type_chart
                             else:
-                                # Handle other HTTP response codes if needed
+                                
                                 print(
                                     f"Error: HTTP request failed with status code {response.status}"
                                 )
@@ -1165,7 +1165,7 @@ class Pokemon(commands.Cog):
                 except Exception as e:
                     print(f"Error: An unexpected error occurred - {e}")
 
-                # If the attempt is not the last one, wait for a while before retrying
+                
                 if attempt < max_retries - 1:
                     await asyncio.sleep(2**attempt)
 
@@ -1191,7 +1191,7 @@ class Pokemon(commands.Cog):
 
             weaknesses.discard("")
 
-            # Capitalize the output
+            
             weaknesses = {weakness.capitalize() for weakness in weaknesses}
             strengths = {strength.capitalize() for strength in strengths}
 
@@ -1201,13 +1201,13 @@ class Pokemon(commands.Cog):
 
         def get_pokemon_gender_ratio_display(data_species):
             try:
-                # Extract gender data
+                
                 gender_rate = data_species["gender_rate"]
 
-                # Gender rate is an integer representing the likelihood of a Pokemon being female
-                # -1: Genderless
-                # 0: Always male
-                # 1-7: Female ratio (e.g., 1 = 12.5% female, 2 = 25% female, etc.)
+                
+                
+                
+                
                 if gender_rate == -1:
                     return "Genderless"
                 elif gender_rate == 0:
@@ -1222,17 +1222,17 @@ class Pokemon(commands.Cog):
                     elif male_percentage == 100:
                         return "♂️ Male only"
 
-                    # Create a string representing the gender ratio with Discord markdown
+                    
 
-                    # <:male:1212308647984635986> {male_percentage}% - <:female:1212308708151787550> {female_percentage}%
-                    # ♂ {male_percentage}% - ♀ {female_percentage}%
+                    
+                    
                     gender_ratio_display = (
                         f"♂ {male_percentage}% - ♀ {female_percentage}%"
                     )
 
                     return gender_ratio_display
             except KeyError:
-                return None  # or handle the missing key case accordingly
+                return None  
 
         gender = get_pokemon_gender_ratio_display(data_species) or None
 
@@ -1262,7 +1262,7 @@ class Pokemon(commands.Cog):
                 else:
                     return None
             except KeyError:
-                return None  # or handle the missing key case accordingly
+                return None  
 
         rarity = determine_pokemon_category(data_species) or None
 
@@ -1275,7 +1275,7 @@ class Pokemon(commands.Cog):
                 ),
                 description=f"\n{pokemon_description}\n",
                 color=color,
-            )  # Blue color
+            )  
         else:
             embed = discord.Embed(
                 title=(
@@ -1296,7 +1296,7 @@ class Pokemon(commands.Cog):
             f"\n{pokemon_description}\n" if pokemon_description != " " else None
         )
 
-        # Information about the Pokémon itself
+        
 
         """
       [Gender] [Apperence]
@@ -1389,7 +1389,7 @@ class Pokemon(commands.Cog):
 
         s_and_w = wes
 
-        # Define the mappings
+        
         region_mappings = {
             "Paldea": "<:Paldea:1212335178714980403>",
             "Sinnoh": "<:Sinnoh:1212335180459544607>",
@@ -1413,7 +1413,7 @@ class Pokemon(commands.Cog):
         ]
         appearance = "\n".join(appearance_info)
 
-        # embed.add_field(name='Type', value=f"{formatted_types}", inline=True)
+        
 
         if region is not None:
             if region in region_mappings:
@@ -1432,10 +1432,10 @@ class Pokemon(commands.Cog):
         else:
             gender_differ = False
 
-        # embed.add_field(name='', value=f"```Type: {formatted_types}```",inline=False)
+        
         base_stats = formatted_base_stats
 
-        # Include alternate names
+        
 
         appearance = (
             f"Height: {height:.2f} m\nWeight: {weight:.2f} kg\t\t"
@@ -1564,7 +1564,7 @@ class Pokebuttons(discord.ui.View):
         self.description = description
         self.gender_info = gender_info
 
-        # Add PokeSelect to the view
+        
         pokemon_forms = self.get_pokemon_forms()
 
         if pokemon_forms and len(pokemon_forms) > 1:
@@ -1578,7 +1578,7 @@ class Pokebuttons(discord.ui.View):
                 )
             )
 
-        # Assuming the file path to the Pokemon directory
+        
         self.POKEMON_DIR = "Data/pokemon"
         os.makedirs(self.POKEMON_DIR, exist_ok=True)
         self.POKEMON_IMAGES_FILE = os.path.join(
@@ -1586,9 +1586,9 @@ class Pokebuttons(discord.ui.View):
 
         if not os.path.exists(self.POKEMON_IMAGES_FILE):
             with open(self.POKEMON_IMAGES_FILE, "w") as file:
-                file.write("")  # Creating an empty text file
+                file.write("")  
 
-        # Load Pokémon images from the file
+        
         self.pokemon_images = self.load_pokemon_images()
 
     def get_pokemon_forms(self):
@@ -1638,17 +1638,17 @@ class Pokebuttons(discord.ui.View):
 
     async def show_gender_image(self, interaction: discord.Interaction, gender):
         if gender == "male":
-            # Assuming male button is the first child
+            
             male_button = self.children[0]
             female_button = self.children[
                 1
-            ]  # Assuming female button is the second child
+            ]  
         else:
-            # Assuming male button is the second child
+            
             male_button = self.children[1]
             female_button = self.children[
                 0
-            ]  # Assuming female button is the first child
+            ]  
 
         try:
             print(f"Male Button ID: {male_button.custom_id}")
@@ -1660,7 +1660,7 @@ class Pokebuttons(discord.ui.View):
                 ]
                 print(image_url)
             else:
-                # Check if the Pokémon name exists in the loaded images dictionary
+                
                 pokemon_name_lower = self.pokemon_name.lower()
                 if pokemon_name_lower in self.pokemon_images:
                     image_url = self.pokemon_images[pokemon_name_lower]
@@ -1671,7 +1671,7 @@ class Pokebuttons(discord.ui.View):
             embed.set_image(url=image_url)
             await interaction.response.edit_message(embed=embed)
 
-            # Change button colors
+            
             male_button.style = discord.ButtonStyle.blurple
             female_button.style = discord.ButtonStyle.gray
 
@@ -1689,7 +1689,7 @@ class Pokebuttons(discord.ui.View):
     async def show_evolutions_button(
         self, button: discord.ui.Button, interaction: discord.Interaction
     ):
-        # Fetch and display evolution chain when button is clicked
+        
         try:
             await self.show_evolutions(button)
         except requests.exceptions.RequestException as e:
@@ -1699,7 +1699,7 @@ class Pokebuttons(discord.ui.View):
 
     async def show_evolutions(self, interaction: discord.Interaction):
         try:
-            # Fetch Pokémon evolution chain data
+            
             evolution_chain_data = await self.get_pokemon_evolution_chain(
                 self.pokemon_name
             )
@@ -1709,12 +1709,12 @@ class Pokebuttons(discord.ui.View):
                     f"No evolution chain found for {self.pokemon_name.title()}.",
                     ephemeral=True,
                 )
-                # Disable the button if no evolution chain found
+                
                 self.disabled = True
                 await interaction.message.edit(view=self.view)
                 return
 
-            # Display the evolution chain
+            
             embeds = await self.display_evolution_chain(evolution_chain_data)
             await interaction.response.send_message(embeds=embeds, ephemeral=True)
         except Exception as e:
@@ -1753,13 +1753,13 @@ class Pokebuttons(discord.ui.View):
     async def display_evolution_chain(self, chain):
         embeds = []
         queue = [chain]
-        final_forms = set()  # To keep track of Pokémon that are final forms
+        final_forms = set()  
 
         while queue:
             current_chain = queue.pop(0)
             species_name = current_chain["species"]["name"].title()
 
-            # Check if this is a final form
+            
             if not current_chain.get("evolves_to"):
                 final_forms.add(species_name)
                 continue
@@ -1777,10 +1777,10 @@ class Pokebuttons(discord.ui.View):
                     )
                     embeds.append(embed)
 
-                # Add the next evolution stage to the queue
+                
                 queue.append(evolution)
 
-        # Handle final forms
+        
         if final_forms:
             for final_form in final_forms:
                 embed = await self.create_pokemon_embed(
@@ -1803,7 +1803,7 @@ class Pokebuttons(discord.ui.View):
         method = ""
 
         if trigger == "level-up":
-            # Handle leveling up with specific conditions
+            
             if known_move_type:
                 method += f"when leveled up while knowing a {known_move_type['name'].replace('-', ' ').title()} move"
             else:
@@ -1815,11 +1815,11 @@ class Pokebuttons(discord.ui.View):
                 if min_happiness:
                     method += " while holding a Friendship Bracelet"
         elif trigger == "use-item":
-            # Handle evolution using a specific item
+            
             if item:
                 method = f"using a {item['name'].replace('-', ' ').title()}"
         elif trigger == "trade":
-            # Handle trade evolution with or without an item
+            
             if item:
                 method = (
                     f"when traded holding a {item['name'].replace('-', ' ').title()}"
@@ -1841,10 +1841,10 @@ class Pokebuttons(discord.ui.View):
         embed.set_thumbnail(url=sprite_url)
 
         if current_pokemon == next_pokemon:
-            # If the Pokémon evolves into itself (final form)
+            
             embed.description = f"```{current_pokemon} is the final form.```"
         else:
-            # Normal evolution description
+            
             embed.description = (
                 f"```{current_pokemon} evolves into {next_pokemon} {method}```"
             )
@@ -1861,7 +1861,7 @@ class Pokebuttons(discord.ui.View):
         embed.add_field(
             name="Base Stats", value=f"```py\n{self.base_stats}```", inline=False
         )
-        # embed.add_field(name=" ", value="```" + self.pokemon_type + self.s_and_w + "```", inline=False)
+        
         strength_weakness = "```" + self.pokemon_type + self.s_and_w + "```"
         if self.pokemon_type != "shiny":
             image = f"https://pokemonshowdown.com/sprites/dex/{self.pokemon_name}.png"
@@ -1869,7 +1869,7 @@ class Pokebuttons(discord.ui.View):
             image = (
                 f"https://pokemonshowdown.com/sprites/dex-shiny/{self.pokemon_name}.png"
             )
-        # embed.(url=self.image_url)
+        
         if self.image_thumb is None:
             embed.set_footer(text=self.pokemon_dex_name)
         else:
@@ -2142,16 +2142,16 @@ class PokeSelect(discord.ui.Select):
                 else:
                     embed.set_footer(text=footer_text)
 
-                # Remove previous Names field if it exists
+                
                 names_field = next(
                     (field for field in embed.fields if field.name == "Names"), None
                 )
                 if names_field:
                     embed.remove_field(embed.fields.index(names_field))
 
-                embed.clear_fields()  # Clear Fields
+                embed.clear_fields()  
 
-                # Add Region field
+                
                 pokemon_region = self.get_pokemon_region(pokemon_data["id"])
                 if pokemon_region and pokemon_region in self.region_mappings:
                     region_emoji = self.region_mappings[pokemon_region]
@@ -2161,7 +2161,7 @@ class PokeSelect(discord.ui.Select):
                         inline=True,
                     )
 
-                # Add alternate names
+                
                 if names_field:
                     alternate_names = self.get_alternate_names(
                         pokemon_data["name"])

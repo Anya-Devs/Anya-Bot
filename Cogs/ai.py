@@ -1,13 +1,13 @@
-# Standard Libraries
+
 import os
 import asyncio
 from pathlib import Path
 from datetime import datetime
-from openai import AsyncOpenAI  # Assuming AsyncOpenAI is the correct import
+from openai import AsyncOpenAI  
 
 from huggingface_hub import InferenceClient
 
-# Local Imports
+
 from Imports.discord_imports import *
 from Imports.log_imports import logger
 from Data.const import error_custom_embed, primary_color
@@ -29,7 +29,7 @@ class Ai(commands.Cog):
 
         self.image_gen = ImageGenerator(
             "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"
-        )  # Instantiate your ImageGenerator class
+        )  
 
         self.huggingface_url = (
             "https://api-inference.huggingface.co/models/cagliostrolab/animagine-xl-3.1"
@@ -38,7 +38,7 @@ class Ai(commands.Cog):
         self.options = VisionModelOptions(self.vision_model_file)
         self.error_custom_embed = error_custom_embed
 
-        # Load vision model from file or set default if file does not exist
+        
         self.vision_model = self.load_vision_model(self.vision_model_file)
 
     def load_vision_model(self, file_path: str) -> str:
@@ -46,7 +46,7 @@ class Ai(commands.Cog):
         Load vision model identifier from a file or create the file with the default model if it does not exist.
         """
         path = Path(file_path)
-        default_model = "gpt-4-turbo"  # Default model
+        default_model = "gpt-4-turbo"  
 
         try:
             if path.exists():
@@ -55,13 +55,13 @@ class Ai(commands.Cog):
                     if model_id in self.options.models:
                         return model_id
 
-            # If file doesn't exist or model is invalid, create the file with the default model
+            
             self.save_vision_model(file_path, default_model)
             return default_model
 
         except IOError as e:
             print(f"Error loading vision model: {e}")
-            # Fallback to default model in case of any file operation error
+            
             return default_model
 
     def save_vision_model(self, file_path: str, model_id: str):
@@ -90,7 +90,7 @@ class Ai(commands.Cog):
 
         if model_id:
             if model_id.isdigit():
-                # Handle user selection by number
+                
                 index = int(model_id) - 1
                 if 0 <= index < len(vision_options.models):
                     selected_model = vision_options.models[index]
@@ -102,7 +102,7 @@ class Ai(commands.Cog):
                         "Invalid number. Please choose a valid number from the list."
                     )
             else:
-                # Update vision model by model ID
+                
                 if vision_options.is_valid_model(model_id):
                     vision_options.save_model(model_id)
                     self.vision_model = model_id
@@ -110,7 +110,7 @@ class Ai(commands.Cog):
                 else:
                     await ctx.send("Invalid model ID. Please provide a valid model ID.")
         else:
-            # Show current vision model
+            
             current_model = self.vision_model
             model_list_message = vision_options.get_model_message()
             await ctx.send(
@@ -152,7 +152,7 @@ class Ai(commands.Cog):
                     mention_author=False,
                 )
 
-                # Generate image using the generate_image method
+                
                 image_path = await self.image_gen.generate_image(prompt)
 
                 if image_path:
@@ -185,7 +185,7 @@ class Ai(commands.Cog):
         async def vision(image_link: str, prompt: str = " ") -> str:
             try:
                 response = await self.openai_client.chat.completions.create(
-                    model="gemini-1.5-pro",  # self.vision_model,
+                    model="gemini-1.5-pro",  
                     messages=[
                         {
                             "role": "user",
@@ -221,7 +221,7 @@ class Ai(commands.Cog):
                         if ref_message.attachments:
                             image_url = ref_message.attachments[0].url
                         elif ref_message.embeds:
-                            # Extract image URL from the embed's thumbnail or image
+                            
                             embed = ref_message.embeds[0]
                             if embed.thumbnail and embed.thumbnail.url:
                                 image_url = embed.thumbnail.url
@@ -233,7 +233,7 @@ class Ai(commands.Cog):
                             )
                             return
                     elif ctx.message.embeds:
-                        # Extract image URL from the embed's thumbnail or image
+                        
                         embed = ctx.message.embeds[0]
                         if embed.thumbnail and embed.thumbnail.url:
                             image_url = embed.thumbnail.url
@@ -266,7 +266,7 @@ class Ai(commands.Cog):
 
 class ImageGenerator:
     def __init__(self, api_key: str):
-        # Use Hugging Face InferenceClient for faster image generation
+        
         self.client = InferenceClient(
             "ehristoforu/dalle-3-xl-v2", token=api_key)
         self.output_dir = Path("Data/commands/ai/images")
@@ -281,11 +281,11 @@ class ImageGenerator:
             print(f"Generating image for prompt: {prompt}")
             negative_prompt = "longbody, lowres, bad anatomy, bad hands, missing fingers, pubic hair, extra digit, fewer digits, cropped, worst quality, low quality, very displeasing"
 
-            # Send the prompt to the Hugging Face API for image generation
+            
             image = self.client.text_to_image(prompt)
 
             print(image)
-            # Save the image to the output directory
+            
             output_path = self.output_dir / f"generated_image.png"
             image.save(output_path)
             print(f"Image saved at: {output_path}")
@@ -372,7 +372,7 @@ class VisionModelOptions:
                     return model_id
         return self.models[
             0
-        ]  # Default to the first model in the list if file not found or invalid
+        ]  
 
     def save_model(self, model_id: str):
         """Save the vision model identifier to a file."""

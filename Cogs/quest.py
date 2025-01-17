@@ -1,26 +1,25 @@
-# Standard Library Imports
+
 import os
 import datetime
 import random
 import string
-from datetime import datetime
 import typing
 import traceback
 import asyncio
-import discord
 import random
 from io import BytesIO
-from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
+from concurrent.futures import ThreadPoolExecutor
 
 
-# Third-Party Library Imports
+
 import json
 import numpy as np
 import motor.motor_asyncio
 from pymongo.errors import PyMongoError
 
-# Project-Specific Imports
+
 from Data.const import (
     Quest_Progress,
     error_custom_embed,
@@ -56,7 +55,7 @@ class Quest(commands.Cog):
             for item in items:
                 if item["name"].lower() == tool_name.lower():
                     return item.get("emoji", "")
-        return ""  # Return empty string if emoji not found
+        return ""  
 
     @commands.command(name="redirect")
     async def redirect(self, ctx, *channel_mentions: discord.TextChannel):
@@ -68,7 +67,7 @@ class Quest(commands.Cog):
                 "You need the `Manage Channels` permission or the `Anya Manager` role to use this command.",
                 mention_author=False,
             )
-            return  # Exit if the user doesn't have the required permission or role
+            return  
         """
      Command to store channels for the guild.
      Usage: !setchannels #channel1 #channel2
@@ -77,7 +76,7 @@ class Quest(commands.Cog):
             guild_id = str(ctx.guild.id)
             channel_ids = [str(channel.id) for channel in channel_mentions]
 
-            # Store the channels in the database
+            
             if await self.quest_data.store_channels_for_guild(guild_id, channel_ids):
                 await ctx.reply(
                     f"Now redirecting missions to {', '.join([channel.mention for channel in channel_mentions])}",
@@ -123,19 +122,19 @@ class Quest(commands.Cog):
             if quests:
                 view = Quest_View(self.bot, quests, ctx)
                 embeds = await view.generate_messages()
-                # Initialize the ImageGenerator class
+                
                 image_generator = ImageGenerator(
                     ctx,
                     text="Here are the quests you need to complete. Each quest has a specific objective, progress, and reward. Click on the location link to navigate to the respective channel where the quest can be completed.",
-                )  # Pass the quest message as text to the image generator
-                # Generate the image
+                )  
+                
                 img = image_generator.create_image()
-                # Save the image as a BytesIO object to send as an embed
+                
                 img_bytes = BytesIO()
                 img.save(img_bytes, format="PNG")
                 img_bytes.seek(
                     0
-                )  # Reset the pointer to the start of the BytesIO object
+                )  
 
                 image_generator = ImageGenerator(
                     ctx=ctx,
@@ -148,18 +147,18 @@ class Quest(commands.Cog):
                     "Data/Images/generated_image.png", filename="image.png"
                 )
 
-                # Set the image in the embed using the attachment URL
+                
                 embeds.set_image(url=f"attachment://image.png")
 
-                # Send initial embed and view
+                
                 if embeds:
                     if len(quests) > 3:
-                        # Multiple pages if there are more quests than fit on one page
+                        
                         await ctx.reply(
                             embed=embeds, view=view, mention_author=False, file=file
                         )
                     else:
-                        # Single embed if the number of quests fits on one page
+                        
                         await ctx.reply(embed=embeds, mention_author=False, file=file)
 
             else:
@@ -181,7 +180,7 @@ class Quest(commands.Cog):
     async def q_roles(self, ctx, *role_mentions: discord.Role):
         """Command for admins to set or list roles that a target can get randomly."""
 
-        # Check for required permissions
+        
         if not (
             ctx.author.guild_permissions.manage_roles
             or discord.utils.get(ctx.author.roles, name="Anya Manager")
@@ -200,7 +199,7 @@ class Quest(commands.Cog):
 
         guild_id = str(ctx.guild.id)
 
-        # If no roles are mentioned, list the currently set roles
+        
         if not role_mentions:
             current_roles = await self.quest_data.get_roles_for_guild(guild_id)
             if current_roles:
@@ -229,11 +228,11 @@ class Quest(commands.Cog):
             await ctx.reply(embed=embed, mention_author=False)
             return
 
-        # Convert roles to IDs and store them in the database
+        
         role_ids = [str(role.id) for role in role_mentions]
         await self.quest_data.store_roles_for_guild(guild_id, role_ids)
 
-        # Success response embed
+        
         embed = discord.Embed(
             title="Roles Set Successfully",
             description="Allows targets to get a random role.\n\nThe following roles have been set for this guild:",
@@ -243,7 +242,7 @@ class Quest(commands.Cog):
         embed.set_author(name=ctx.author.display_name,
                          icon_url=ctx.author.avatar.url)
 
-        # Add roles to the embed
+        
         roles_list = "\n".join([f"{role.mention}" for role in role_mentions])
         embed.add_field(name="Roles", value=roles_list, inline=False)
 
@@ -256,7 +255,7 @@ class Quest(commands.Cog):
             guild_id = str(ctx.guild.id)
             user_id = str(ctx.author.id)
 
-            # Fetch the user's inventory from the database
+            
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_collection = db["Servers"]
 
@@ -279,7 +278,7 @@ class Quest(commands.Cog):
                 )
                 return
 
-            # Prepare the embed
+            
             embed = discord.Embed(
                 title=f"{ctx.author.display_name}'s Inventory",
                 description="Your current tool inventory:\n- ||Due to bugs, purchasing doesn't grant an item but only reserves a slot on first purchase.||",
@@ -288,31 +287,31 @@ class Quest(commands.Cog):
             )
             embed.set_thumbnail(url=ctx.author.avatar.url)
 
-            # Add fields for each tool and its quantity, including emojis
+            
             for tool in inventory.keys():
                 try:
-                    # Fetch the unique tool ID
+                    
                     un_tool_id = await self.quest_data.get_existing_tool_id(
                         guild_id, user_id, tool
                     )
 
                     if not un_tool_id:
-                        # Create a new unique tool ID if it doesn't exist
+                        
                         un_tool_id = await self.quest_data.create_un_tool_id(
                             guild_id, user_id, tool
                         )
 
-                    # Fetch the quantity for the tool
+                    
                     quantity = await self.quest_data.get_quantity(
                         guild_id, user_id, tool
                     )
 
                     emoji = (
                         self.get_tool_emoji(tool) or ""
-                    )  # Default to empty string if emoji not found
+                    )  
 
                     tool = str(tool)
-                    # Add field to embed
+                    
                     embed.add_field(
                         name=f"{tool.title()}",
                         value=f"`{un_tool_id}` : \t{emoji}\t`x{quantity}`",
@@ -330,7 +329,7 @@ class Quest(commands.Cog):
             embed.set_footer(text="Inventory",
                              icon_url=self.bot.user.avatar.url)
 
-            # Send the embed
+            
             await ctx.reply(embed=embed, mention_author=False)
 
         except Exception as e:
@@ -416,14 +415,14 @@ class Quest_View(View):
         self.page = page
         self.max_pages = (
             len(self.filtered_quests) + 2
-        ) // 3  # Calculate the total number of pages
+        ) // 3  
 
-        # Add quest filters and navigation buttons
+        
         self.add_item(Quest_Select_Filter(bot, quests, ctx))
         if self.page < self.max_pages - 1:
             self.add_item(
                 Quest_Select(bot, self.filtered_quests, ctx, self.max_pages)
-            )  # Add the Quest_Select button if there are more pages
+            )  
         if self.page > 0:
             self.add_item(
                 QuestButton(
@@ -449,7 +448,7 @@ class Quest_View(View):
                 )
             )
 
-        # Add the "Fresh Start" button on the bottom row
+        
         self.add_item(
             QuestButton(
                 "Fresh Start",
@@ -464,23 +463,23 @@ class Quest_View(View):
 
     async def generate_messages(self):
         start_index = self.page * 3
-        end_index = start_index + 3  # Always try to display 3 quests per page
+        end_index = start_index + 3  
         quests_to_display = self.filtered_quests[start_index:end_index]
 
-        # Create a single embed for the current page
+        
         embed = discord.Embed(color=primary_color())
         embed.set_footer(
             text=f"{self.ctx.author.display_name}'s quests",
             icon_url=self.ctx.author.avatar,
         )
 
-        field_count = 0  # Track how many fields have been added
-        index = start_index  # Start index for iterating over all filtered quests
+        field_count = 0  
+        index = start_index  
 
-        # Try to add up to 3 quests per page, replacing inaccessible quests
+        
         while field_count < 3 and index < len(self.filtered_quests):
             quest = self.filtered_quests[index]
-            index += 1  # Move to the next quest in the list
+            index += 1  
 
             quest_id = quest["quest_id"]
             progress = quest["progress"]
@@ -489,10 +488,10 @@ class Quest_View(View):
             content = quest["content"]
             reward = quest["reward"]
 
-            # Get the channel using the channel ID
+            
             channel = self.bot.get_channel(int(quest["channel_id"]))
 
-            # Generate instructions based on method
+            
             if method == "message":
                 instruction = "Send: {0}".format(content.replace("\n", " "))
             elif method == "emoji":
@@ -502,7 +501,7 @@ class Quest_View(View):
             else:
                 instruction = "Unknown method. Please refer to the quest details."
 
-            # Generate progress bar
+            
             progress_bar = await Quest_Progress.generate_progress_bar(
                 progress / times, self.bot
             )
@@ -512,7 +511,7 @@ class Quest_View(View):
                 self.bot.emojis, id=reward_emoji_id)
             instructions_emoji = "📋"
 
-            # Construct the channel link based on whether it's the current channel
+            
             if channel:
                 channel_link = (
                     f"[Go here](https://discord.com/channels/{self.ctx.guild.id}/{channel.id})"
@@ -520,20 +519,20 @@ class Quest_View(View):
                     else "In this channel"
                 )
             else:
-                # Fallback in case the channel is not found
+                
                 channel_link = f"Channel not found | Recommended: `/quest delete quest_id: {quest_id}`"
 
             message = (
-                # Progress info
+                
                 f"✦ Quest {quest_id} | {progress_bar} `{progress}/{times}`\n"
                 f"├ {instructions_emoji} {channel_link} | **{instruction}**\n"
-                # Reward and instruction
+                
                 f"└ {reward_emoji} Reward: `{reward} stp`"
-                f"\n\n"  # For spacing
+                f"\n\n"  
             )
 
-            # Check if the channel exists and if the member has required roles
-            can_view_channel = True  # Default to True if channel does not exist
+            
+            can_view_channel = True  
             if channel:
                 overwrites = channel.overwrites
                 can_view_channel = False
@@ -544,19 +543,19 @@ class Quest_View(View):
                         can_view_channel = True
                         break
 
-            # Add the quest to the embed only if the user can view it
+            
             if can_view_channel:
                 embed.add_field(
                     name="",
                     value=message,
-                    inline=False,  # Field name remains blank
+                    inline=False,  
                 )
                 field_count += 1
             else:
-                # Skip the quest and move to the next available one
+                
                 continue
 
-        # If you want to set an image, here’s how you can handle it (optional):
+        
         file = discord.File(
             "Data/Images/generated_image.png", filename="image.png")
         embed.set_image(url=f"attachment://image.png")
@@ -658,15 +657,15 @@ class QuestButton(discord.ui.Button):
             )
             return
 
-        embed = None  # Declare embed variable
-        view = None  # Default to no view
+        embed = None  
+        view = None  
 
         if self.custom_id == "previous":
             self.page -= 1
         elif self.custom_id == "next":
             self.page += 1
         elif self.custom_id == "fresh_start":
-            # Call the delete all quests function
+            
             success = await self.quest_data.delete_all_quests(
                 self.ctx.guild.id, self.ctx.author
             )
@@ -675,24 +674,24 @@ class QuestButton(discord.ui.Button):
                     description=f":white_check_mark: All quests have been deleted for you {self.ctx.author.mention}. Starting fresh!",
                     color=discord.Color.green(),
                 )
-                # Reset page and quest list after deletion
+                
                 self.page = 0
-                self.quests = []  # Clear quests since they are all deleted
-                # After fresh start, we don't need a view anymore
-                view = None  # Remove the view after successful fresh start
+                self.quests = []  
+                
+                view = None  
             else:
                 embed = discord.Embed(
                     description="You have no quests.", color=discord.Color.red()
                 )
-                # If no quests exist, maintain the view and reset quests accordingly
+                
                 view = Quest_View(self.bot, self.quests, self.ctx, self.page)
 
-        # Only call view.generate_messages() if fresh start wasn't successful
+        
         if not embed:
             view = Quest_View(self.bot, self.quests, self.ctx, self.page)
             embed = await view.generate_messages()
 
-        # Edit the message to include the embed and updated view (even if the view is None)
+        
         await interaction.response.edit_message(embed=embed, view=view)
 
 
@@ -730,30 +729,30 @@ class Quest_Button1(discord.ui.View):
         self, button: discord.ui.Button, interaction: discord.Interaction
     ):
         try:
-            # Retrieve guild ID and check if redirect channels exist for this guild
+            
             guild_id = str(button.guild.id)
             channel_id = await self.quest_data.get_random_channel_for_guild(guild_id)
 
             if not channel_id:
-                # If no redirect channels are found, edit the original message (instead of sending a new one)
+                
                 await button.response.edit_message(
                     content="No redirected channels found for this guild. Please set redirect channels before creating a new quest.\n"
                     "> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `...redirect <channels>`"
                 )
-                return  # Exit if no channels are set
+                return  
 
-            # Proceed to create new quests for the user
+            
             button_user = button.user
 
-            # Add the user to the guild's quest balance
+            
             await self.quest_data.add_balance(button_user, guild_id, 0)
 
-            # Add new quests for the user
+            
             for _ in range(50):
                 logger.debug("Adding new quest")
                 await self.quest_data.add_new_quest(guild_id, button_user, chance=100)
 
-            # Edit the original message to notify the user that new quests have been created
+            
             await button.response.edit_message(
                 content=f"Successfully created new quests for you, {button_user.mention}!",
                 view=None,
@@ -804,21 +803,21 @@ class Quest_Button(discord.ui.View):
         guild_id = str(button.guild.id)
         channel_id = await self.quest_data.get_random_channel_for_guild(guild_id)
         if not channel_id:
-            # If no redirect channels are found, notify the user (without mentioning the author)
+            
             await button.response.send_message(
                 "No redirected channels found for this guild. Please set redirect channels before creating a new quest.\n"
                 "> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `...redirect <channels>`",
                 ephemeral=True,
             )
-            return  # Exit if no channels are set
+            return  
         try:
             added = await self.add_user_to_server()
 
             if added:
-                # Retrieve guild ID and check if redirect channels exist for this guild
+                
                 guild_id = str(button.guild.id)
 
-                # Proceed if channels are available
+                
                 embed = await QuestEmbed.get_agree_confirmation_embed(
                     self.bot, button.user
                 )
@@ -827,10 +826,10 @@ class Quest_Button(discord.ui.View):
 
                 button_user = button.user
 
-                # Add the user to the guild's quest balance
+                
                 await self.quest_data.add_balance(button_user, guild_id, 0)
 
-                # Add new quests for the user
+                
                 for _ in range(10):
                     logger.debug("Adding new quest")
                     await self.quest_data.add_new_quest(
@@ -838,7 +837,7 @@ class Quest_Button(discord.ui.View):
                     )
 
             else:
-                # Notify the user if they are already part of the game
+                
                 await button.response.send_message(
                     "You are already part of the game!",
                     ephemeral=True,
@@ -880,7 +879,7 @@ class Quest_Button(discord.ui.View):
 class ImageGenerator:
     def __init__(self, ctx, text):
         """Initialize the ImageGenerator with cog-specific data and load resources."""
-        # Configurable values
+        
         self.font_path_header = (
             "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
         )
@@ -894,34 +893,34 @@ class ImageGenerator:
             "Data/commands/help/menu/initial/style/assets/background.png"
         )
 
-        # Font sizes
+        
         self.header_font_size = 35
         self.base_font_size = 11
 
-        # Font colors
+        
         self.header_font_color = "white"
         self.base_font_color = "black"
 
-        # Character image scale
+        
         self.character_scale = 0.4
 
-        # Text content
+        
         self.header_text = "Anya Quest!"
         self.description_text = text
 
-        # Layout positions
+        
         self.character_pos = (5, 5)
         self.text_x_offset = 10
         self.text_y_offset = 25
         self.text_spacing = 20
-        self.text_box_margin = 20  # Margin for text box
+        self.text_box_margin = 20  
 
-        # Color replacements
+        
         self.color_replacements_map = {
-            # Add your custom mappings here
+            
         }
 
-        # Load fonts and images
+        
         self._load_resources()
         self._apply_color_replacements()
 
@@ -944,7 +943,7 @@ class ImageGenerator:
         self.character = Image.open(self.character_path).convert("RGBA")
         self.background = Image.open(self.background_path).convert("RGBA")
 
-        # Resize character image
+        
         self._resize_character()
 
     def _resize_character(self):
@@ -962,11 +961,11 @@ class ImageGenerator:
             lower_bound = np.array(old_color) - 10
             upper_bound = np.array(old_color) + 10
 
-            if replacement == "transparent":  # Replace with transparency
+            if replacement == "transparent":  
                 mask = cv2.inRange(
                     bg_array[:, :, :3], lower_bound, upper_bound)
                 bg_array[mask > 0] = [0, 0, 0, 0]
-            elif replacement.startswith("http"):  # Replace with image from URL
+            elif replacement.startswith("http"):  
                 replacement_img = self._download_image(replacement)
                 replacement_img = replacement_img.resize(
                     (self.background.width, self.background.height)
@@ -976,7 +975,7 @@ class ImageGenerator:
                 mask = cv2.inRange(
                     bg_array[:, :, :3], lower_bound, upper_bound)
                 bg_array[mask > 0, :3] = replacement_array[mask > 0]
-            else:  # Replace with solid color
+            else:  
                 replacement_color = tuple(
                     int(replacement[i: i + 2], 16) for i in (1, 3, 5)
                 )
@@ -1011,7 +1010,7 @@ class ImageGenerator:
 
     def _draw_text(self, draw, text_x, text_y):
         """Draw all text on the image, ensuring it doesn't touch the edges."""
-        # Draw header text
+        
         draw.text(
             (text_x, text_y),
             self.header_text,
@@ -1020,7 +1019,7 @@ class ImageGenerator:
         )
         text_y += self.header_font.size + self.text_spacing
 
-        # Set the max width of the description text box
+        
         text_box_width = self.background.width - text_x - self.text_box_margin * 2
         wrapped_text = self._wrap_text(self.description_text, text_box_width)
         draw.multiline_text(
@@ -1048,7 +1047,7 @@ class ImageGenerator:
         character_x, character_y = self.character_pos
         bg.paste(self.character, (character_x, character_y), self.character)
 
-        # Use the adjusted text_x with proper margin for wrapping
+        
         text_x = self.character.width + self.text_x_offset - 45
 
         text_y = self.text_y_offset
@@ -1076,7 +1075,7 @@ class Quest_Data(commands.Cog):
         self.DB_NAME = "Quest"
         self.quest_content_file = "Data/commands/quest/quest_content.txt"
 
-        # Initialize MongoDB connection
+        
         mongo_url = os.getenv("MONGO_URI")
 
         if not mongo_url:
@@ -1098,12 +1097,12 @@ class Quest_Data(commands.Cog):
         guild_data = await collection.find_one({"guild_id": guild_id})
 
         if guild_data:
-            # Update the existing roles
+            
             await collection.update_one(
                 {"guild_id": guild_id}, {"$set": {"roles": role_ids}}
             )
         else:
-            # Insert a new document for the guild if it doesn't exist
+            
             await collection.insert_one({"guild_id": guild_id, "roles": role_ids})
 
     async def get_roles_for_guild(self, guild_id):
@@ -1121,14 +1120,14 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Query to find the user's inventory entry
+            
             user_data = await server_collection.find_one(
                 {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
                 {f"members.{user_id}.inventory.{material_name}": 1},
             )
 
             if user_data:
-                # Check if the material_name exists in the user's inventory
+                
                 if (
                     "inventory" in user_data["members"][user_id]
                     and material_name in user_data["members"][user_id]["inventory"]
@@ -1137,7 +1136,7 @@ class Quest_Data(commands.Cog):
                         material_name, 0
                     )
                 else:
-                    # If the material_name does not exist, create a slot for it with default value 0
+                    
                     await server_collection.update_one(
                         {"guild_id": guild_id},
                         {"$set": {f"members.{user_id}.inventory.{material_name}": 0}},
@@ -1178,7 +1177,7 @@ class Quest_Data(commands.Cog):
                 {f"members.{user_id}.inventory.tool.{tool_name}": 1},
             )
 
-            # Check if the tool has an existing un_tool_id
+            
             tool_data = (
                 user_data.get("members", {})
                 .get(user_id, {})
@@ -1202,13 +1201,13 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Fetch the user's inventory and get the quantity for the specific material
+            
             user_data = await server_collection.find_one(
                 {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
                 {f"members.{user_id}.inventory.tool.{material_name}.quantity": 1},
             )
 
-            # Retrieve the quantity or default to 0 if not found
+            
             quantity = (
                 user_data.get("members", {})
                 .get(user_id, {})
@@ -1231,7 +1230,7 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Increment the material quantity while ensuring the structure includes a `quantity` field
+            
             await server_collection.update_one(
                 {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
                 {
@@ -1254,11 +1253,11 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Fetch the current quantity of the tool in the user's inventory
+            
             current_quantity = await self.get_quantity(guild_id, user_id, tool_name)
 
             if current_quantity > 0:
-                # Decrease the quantity by 1
+                
                 await server_collection.update_one(
                     {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
                     {
@@ -1290,29 +1289,29 @@ class Quest_Data(commands.Cog):
     async def create_un_tool_id(self, guild_id, user_id, tool):
         """Create a new unique tool ID for the user and tool."""
 
-        # Helper function to generate a short, 6-digit unique ID for the tool
+        
         def generate_short_uuid():
-            # Only digits now
+            
             return "".join(random.choices(string.digits, k=6) + 1000)
 
         db = self.mongoConnect[self.DB_NAME]
         server_collection = db["Servers"]
 
         try:
-            # Generate a new 6-digit ID
+            
             un_tool_id = generate_short_uuid()
 
-            # Create the tool data with the generated un_tool_id
+            
             tool_data = {"un_tool_id": un_tool_id}
 
-            # Use upsert to ensure the tool is added with the generated un_tool_id
+            
             result = await server_collection.update_one(
                 {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
                 {"$set": {f"members.{user_id}.inventory.tool.{tool}": tool_data}},
-                upsert=True,  # Ensures the tool is inserted if missing
+                upsert=True,  
             )
 
-            # Debugging info
+            
             logger.debug(
                 f"Generated new un_tool_id: {un_tool_id} for tool '{tool}'")
             logger.debug(f"Database update result: {result.raw_result}")
@@ -1322,14 +1321,14 @@ class Quest_Data(commands.Cog):
             logger.error(
                 f"Error in create_un_tool_id for tool '{tool}' (guild: {guild_id}, user: {user_id}): {e}"
             )
-            raise  # Re-raise the exception after logging it
+            raise  
 
     async def get_un_tool_id(self, guild_id, user_id, tool):
         """Fetch the unique tool ID for the user and tool."""
         db = self.mongoConnect[self.DB_NAME]
         server_collection = db["Servers"]
 
-        # Check if the tool exists in the user's inventory
+        
         user_tool_data = await server_collection.find_one(
             {
                 "guild_id": guild_id,
@@ -1340,16 +1339,16 @@ class Quest_Data(commands.Cog):
 
         if user_tool_data:
             try:
-                # Access the tool data safely
+                
                 tool_data = user_tool_data["members"][user_id]["inventory"]["tool"].get(
                     tool
                 )
 
                 if isinstance(tool_data, dict) and "un_tool_id" in tool_data:
-                    # Return the un_tool_id if it exists
+                    
                     return tool_data["un_tool_id"]
 
-                # If the un_tool_id doesn't exist, handle the case separately
+                
                 logger.error(
                     f"Tool {tool} does not have an 'un_tool_id' or is in an unexpected format."
                 )
@@ -1361,7 +1360,7 @@ class Quest_Data(commands.Cog):
                 )
                 return None
         else:
-            # If the tool does not exist in the user's inventory
+            
             logger.error(f"Tool {tool} does not exist in the inventory.")
             return None
 
@@ -1370,13 +1369,13 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Update documents where quests field is missing or not an array
+            
             await server_collection.update_many(
                 {"guild_id": guild_id, "members.quests": {"$exists": False}},
                 {"$set": {"members.$.quests": []}},
             )
 
-            # Remove all quests for all users in the server
+            
             await server_collection.update_many(
                 {"guild_id": guild_id}, {"$set": {"members.$[].quests": []}}
             )
@@ -1453,9 +1452,9 @@ class Quest_Data(commands.Cog):
             if guild_doc:
                 return guild_doc.get(
                     "quest_limit", 25
-                )  # Default to 25 if limit is not found
+                )  
             else:
-                return 25  # Default limit if not set
+                return 25  
         except PyMongoError as e:
             logger.error(f"Error occurred while getting quest limit: {e}")
             raise e
@@ -1480,20 +1479,20 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Log the query being made
+            
             logger.debug(f"Querying for guild_id: {guild_id}")
 
-            # Find the guild document by its ID
+            
             guild_document = await server_collection.find_one(
                 {"guild_id": str(guild_id)}
             )
 
             if guild_document:
-                # Extract the members data from the guild document
+                
                 members_data = guild_document.get("members", {})
-                users_in_server = list(members_data.keys())  # Extract user IDs
+                users_in_server = list(members_data.keys())  
 
-                # logger.debug(f"Found {len(users_in_server)} users in server {guild_id}.")
+                
                 return users_in_server
             else:
                 logger.debug(f"No guild found with ID {guild_id}.")
@@ -1507,27 +1506,27 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Log the query being made
+            
             logger.debug(
                 f"Querying for guild_id: {guild_id} with quest_id: {quest_id}")
 
-            # Find the guild document by its ID
+            
             guild_document = await server_collection.find_one(
                 {"guild_id": str(guild_id)}
             )
 
             if guild_document:
-                # Extract the members data from the guild document
+                
                 members_data = guild_document.get("members", {})
                 users_with_quest = []
 
-                # Iterate through each user and their quests to find the specified quest
+                
                 for user_id, user_data in members_data.items():
                     quests = user_data.get("quests", [])
                     if any(quest["quest_id"] == quest_id for quest in quests):
                         users_with_quest.append(user_id)
 
-                # logger.debug(f"Found {len(users_with_quest)} users with quest ID {quest_id} in guild {guild_id}.")
+                
                 return users_with_quest
             else:
                 logger.debug(f"No guild found with ID {guild_id}.")
@@ -1547,13 +1546,13 @@ class Quest_Data(commands.Cog):
             if server_data:
                 member_data = server_data.get("members", {}).get(user_id, {})
                 quests = member_data.get("quests", [])
-                # logger.debug(f"Found {len(quests)} quests for user {user_id} in guild {guild_id}.")
+                
                 if len(quests) == 0:
                     return None
                 return quests
 
             else:
-                # logger.debug("No server data found.")
+                
                 return []
         except PyMongoError as e:
             logger.error(f"Error occurred while finding quests: {e}")
@@ -1565,13 +1564,13 @@ class Quest_Data(commands.Cog):
         self, guild_id: str, user_id: str, quest_data: dict, interaction=None
     ):
         try:
-            # Add progress field with default value 0
+            
             quest_data["progress"] = 0
             await self.validate_input(**quest_data)
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Append the quest data to the appropriate spot
+            
             await server_collection.update_one(
                 {
                     "guild_id": guild_id,
@@ -1607,7 +1606,7 @@ class Quest_Data(commands.Cog):
                 )
                 return latest_quest
             else:
-                # logger.debug(f"No server data found for user {user_id} in guild {guild_id}.")
+                
                 return 0
         except PyMongoError as e:
             logger.error(f"Error occurred while getting latest quest ID: {e}")
@@ -1620,19 +1619,19 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Find the server document by guild_id or create a new one if not exists
+            
             server_doc = await server_collection.find_one({"_id": guild_id})
             if not server_doc:
                 server_doc = {"_id": guild_id, "server_quest": []}
 
-            # Assign a quest_id based on the current number of quests
+            
             quest_id = len(server_doc["server_quest"]) + 1
             quest_data["quest_id"] = quest_id
 
-            # Append the quest data and update the document
+            
             server_doc["server_quest"].append(quest_data)
 
-            # Update the document in MongoDB
+            
             await server_collection.update_one(
                 {"_id": guild_id}, {"$set": server_doc}, upsert=True
             )
@@ -1653,13 +1652,13 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Fetch the channels for the guild from the database
+            
             guild_data = await server_collection.find_one(
                 {"guild_id": guild_id}, {"channels": 1}
             )
 
             if guild_data and "channels" in guild_data and guild_data["channels"]:
-                # If channels are found, select a random one
+                
                 channel_ids = guild_data["channels"]
                 random_channel_id = random.choice(channel_ids)
                 logger.debug(
@@ -1686,12 +1685,12 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Replace the document with the new channel IDs for the guild
+            
             await server_collection.update_one(
                 {"guild_id": guild_id},
                 {
                     "$set": {"channels": channel_ids}
-                },  # This will replace the 'channels' field
+                },  
                 upsert=True,
             )
 
@@ -1708,7 +1707,7 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Find the server document by guild_id
+            
             server_doc = await server_collection.find_one({"_id": guild_id})
             if not server_doc or "server_quest" not in server_doc:
                 return None
@@ -1730,7 +1729,7 @@ class Quest_Data(commands.Cog):
         interaction=None,
     ):
         try:
-            # Fetch a random channel for the guild, provide an interaction fallback
+            
             fallback_channel = (
                 discord.utils.get(
                     interaction.guild.text_channels, name="general")
@@ -1742,17 +1741,17 @@ class Quest_Data(commands.Cog):
             )
 
             if not channel_id:
-                # Notify you or the user that no channels have been redirected for the guild
+                
                 message = "No redirected channels found for this guild. Please use the command to set redirect channels first."
                 logger.error(message)
                 if interaction:
                     await interaction.send(message)
-                return  # Exit function, no channels to create the quest
+                return  
 
-            # Calculate reward as a random value between 4 and 20 times the `times` value
+            
             reward = random.randint(4, 20) * times
 
-            # Prepare quest data
+            
             quest_data = {
                 "action": action,
                 "method": method,
@@ -1762,17 +1761,17 @@ class Quest_Data(commands.Cog):
                 "reward": reward,
             }
 
-            # Validate the quest data
+            
             await self.validate_input(**quest_data)
 
-            # Store the quest data in MongoDB
+            
             await self.store_server_quest(guild_id, quest_data)
 
-            # Increment and assign the quest ID
+            
             quest_count = await self.get_server_quest_count(guild_id)
             quest_data["quest_id"] = quest_count + 1
 
-            # Insert the quest for each user in the server
+            
             users_in_server = await self.find_users_in_server(guild_id)
             if not users_in_server:
                 raise ValueError("No users found in the server.")
@@ -1784,7 +1783,7 @@ class Quest_Data(commands.Cog):
                 f"Created quest for guild {guild_id} with action {action} and content {content}."
             )
 
-            return quest_count + 1  # Return the incremented quest count
+            return quest_count + 1  
 
         except (ValueError, PyMongoError) as e:
             logger.error(f"Error occurred while creating quest: {e}")
@@ -1803,10 +1802,10 @@ class Quest_Data(commands.Cog):
         interaction=None,
     ):
         try:
-            # Calculate reward as a random value between 4 and 20 times the `times` value
+            
             reward = random.randint(4, 20) * times
 
-            # Ensure the reward is correctly set in the quest data
+            
             quest_data = {
                 "action": action,
                 "method": method,
@@ -1830,7 +1829,7 @@ class Quest_Data(commands.Cog):
 
             quest_data["quest_id"] = (
                 quest_count + 1
-            )  # Set the quest_id to be the next number
+            )  
             await self.insert_quest(guild_id, user_id, quest_data, interaction)
 
             logger.debug(
@@ -1860,10 +1859,10 @@ class Quest_Data(commands.Cog):
         if not guild:
             return None
 
-        # Get the list of emojis in the server
+        
         emojis = [emoji for emoji in guild.emojis if not emoji.animated]
 
-        # If there are fewer than 5 custom emojis, use default Discord emojis
+        
         if len(emojis) < 5:
             default_emojis = [
                 "😄",
@@ -1903,7 +1902,7 @@ class Quest_Data(commands.Cog):
                 logger.debug(f"Guild found: {guild.name} (ID: {guild_id})")
                 channel_activity = {}
 
-                # Executor for concurrent task execution
+                
                 with ThreadPoolExecutor() as executor:
                     loop = asyncio.get_event_loop()
 
@@ -1922,17 +1921,17 @@ class Quest_Data(commands.Cog):
                             )
                             return None
 
-                    # List of tasks for concurrent execution
+                    
                     tasks = [
                         loop.run_in_executor(executor, count_messages, channel)
                         for channel in guild.text_channels
                         if channel.permissions_for(guild.default_role).send_messages
                     ]
 
-                    # Gather all results
+                    
                     results = await asyncio.gather(*tasks)
 
-                    # Process the results
+                    
                     for result in results:
                         if result:
                             channel_id, message_count, member_count = result
@@ -1942,7 +1941,7 @@ class Quest_Data(commands.Cog):
                                 f"Processed channel {channel_id}: {message_count} messages, {member_count} members"
                             )
 
-                # Sort channels by member count and message count
+                
                 sorted_channels = sorted(
                     channel_activity.items(),
                     key=lambda x: (x[1][1], x[1][0]),
@@ -1962,7 +1961,7 @@ class Quest_Data(commands.Cog):
                         f"Selected most active channel: {most_active_channel_id}"
                     )
                 else:
-                    # Handle fallback if no active channels found
+                    
                     most_active_channel_id = fallback_channel_id or random.choice(
                         [channel.id for channel in guild.text_channels]
                     )
@@ -1988,7 +1987,7 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Check if the user exists in the server
+            
             server_data = await server_collection.find_one(
                 {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}}
             )
@@ -1998,7 +1997,7 @@ class Quest_Data(commands.Cog):
                     f"User ID {user_id} does not exist in guild {guild_id}.")
                 return False
 
-            # Append the quest data to the user's quest list
+            
             await server_collection.update_one(
                 {
                     "guild_id": guild_id,
@@ -2027,25 +2026,25 @@ class Quest_Data(commands.Cog):
             user_id = str(message_author.id)
             logger.debug(f"User ID: {user_id}")
 
-            # Generate random times for the quest
+            
             times = random.randint(1, 5)
             logger.debug(f"Random times selected: {times}")
 
             reward = random.randint(4, 20) * times
 
-            # Check the random chance first
+            
             if random.randint(1, 100) > chance:
                 logger.debug(
                     "Random chance check failed. No quest will be created.")
                 return None
 
-            # Check quest limit
+            
             quest_limit = await self.get_quest_limit(guild_id)
             existing_quests = await self.find_quests_by_user_and_server(
                 user_id, guild_id
             )
             if existing_quests is None:
-                existing_quests = []  # Initialize as an empty list if None
+                existing_quests = []  
 
             if len(existing_quests) >= quest_limit:
                 logger.debug(
@@ -2053,7 +2052,7 @@ class Quest_Data(commands.Cog):
                 )
                 return None
 
-            # Get a random channel for the guild, provide an interaction fallback
+            
             fallback_channel = (
                 discord.utils.get(
                     message_author.guild.text_channels, name="general")
@@ -2065,69 +2064,69 @@ class Quest_Data(commands.Cog):
             )
 
             if not channel_id:
-                # Notify user to create redirect channels
+                
                 message = "No redirected channels found for this guild. Please use the command to set redirect channels first."
                 logger.error(message)
                 await message_author.send(
                     message
-                )  # Assuming `message_author` is a user object
-                return None  # Exit function, no channels to create the quest
+                )  
+                return None  
 
             while True:
-                # Randomly choose method if not provided
+                
                 if method is None:
                     method = random.choice(["message", "reaction", "emoji"])
                     logger.debug(f"Method chosen: {method}")
 
-                # Generate random quest content based on the method
+                
                 if method == "message":
                     content = await self.generate_random_quest_content(
                         self.bot, message_author, guild_id
                     )
-                else:  # method == 'reaction'
+                else:  
                     content = await self.generate_random_reaction_content(guild_id)
                 if content is None:
                     logger.error("Failed to generate random quest content.")
                     return None
 
-                # Check if the content is already used in other quests
+                
                 content_exists = any(
                     quest["content"] == content for quest in existing_quests
                 )
 
                 if not content_exists:
-                    break  # Exit the loop if the content is unique
+                    break  
 
             logger.debug(f"Generated quest content: {content}")
 
-            # Fetch the latest quest ID for the user in the guild
+            
             latest_quest_id = await self.get_latest_quest_id(guild_id, user_id)
 
-            # If latest_quest_id is None, set new_quest_id to 1
+            
             new_quest_id = 1 if latest_quest_id is None else latest_quest_id + 1
 
-            # Define the new quest data
+            
             quest_data = {
                 "quest_id": new_quest_id,
                 "action": action,
                 "method": method,
                 "channel_id": channel_id,
-                # Updated
+                
                 "times": times if method not in ("message", "emoji") else 1,
                 "content": content,
                 "reward": reward,
-                "progress": 0,  # Initialize progress to 0
+                "progress": 0,  
             }
             logger.debug(
                 f"Creating quest for user_id: {user_id}, guild_id: {guild_id}, quest_data: {quest_data}"
             )
 
-            # Insert the new quest for the user in the guild
+            
             if await self.insert_quest_existing_path(guild_id, user_id, quest_data):
                 logger.debug(
                     f"Quest created for user_id: {user_id}, guild_id: {guild_id}, quest_data: {quest_data}"
                 )
-                return new_quest_id  # Return the new quest ID
+                return new_quest_id  
             else:
                 logger.debug(
                     f"Failed to create quest for user_id: {user_id}, guild_id: {guild_id} because the user path does not exist."
@@ -2145,27 +2144,27 @@ class Quest_Data(commands.Cog):
         try:
             user_id = str(message_author.id)
 
-            # Fetch all quests for the user in the specified guild
+            
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Find the guild document by guild_id
+            
             guild_document = await server_collection.find_one(
                 {"guild_id": str(guild_id)}
             )
 
             if not guild_document:
                 logger.debug(f"No guild found with ID {guild_id}.")
-                return False  # No guild data found
+                return False  
 
-            # Extract the members data
+            
             members_data = guild_document.get("members", {})
 
-            # Check if the user exists in the members data
+            
             if user_id not in members_data:
                 logger.debug(
                     f"User ID {user_id} not found in the guild {guild_id}.")
-                return False  # No quests to delete if user does not exist
+                return False  
 
             user_data = members_data[user_id]
             quests = user_data.get("quests", [])
@@ -2173,9 +2172,9 @@ class Quest_Data(commands.Cog):
             if not quests:
                 logger.debug(
                     "No quests found for the user. Nothing to delete.")
-                return False  # No quests to delete for the user
+                return False  
 
-            # Loop through and delete each quest individually
+            
             for quest in quests:
                 quest_id = quest.get("quest_id")
                 deletion_success = await self.delete_quest(
@@ -2194,7 +2193,7 @@ class Quest_Data(commands.Cog):
             logger.info(
                 f"Successfully deleted all quests for user_id: {user_id} in guild_id: {guild_id}"
             )
-            return True  # Return True once all quests are deleted
+            return True  
 
         except Exception as e:
             logger.error(f"Error occurred while deleting all quests: {e}")
@@ -2222,11 +2221,11 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Log the query being made
+            
             logger.debug(
                 f"Querying for guild_id: {guild_id} with quest_id: {quest_id}")
 
-            # Find the guild document by its ID
+            
             guild_document = await server_collection.find_one(
                 {"guild_id": str(guild_id)}
             )
@@ -2235,27 +2234,27 @@ class Quest_Data(commands.Cog):
                 logger.debug(f"No guild found with ID {guild_id}.")
                 return
 
-            # Extract the members data from the guild document
+            
             members_data = guild_document.get("members", {})
 
-            # Loop through each member
+            
             for member_id, member_data in members_data.items():
-                # Extract quests for the current member
+                
                 quests = member_data.get("quests", [])
 
-                # Log the current quests for the member
+                
                 logger.debug(f"Current quests for user {member_id}: {quests}")
 
-                # Check if any quest matches the specified quest ID
+                
                 if any(quest.get("quest_id") == quest_id for quest in quests):
-                    # logger.debug(f"Found quest with ID {quest_id} for user {member_id} in guild {guild_id}.")
+                    
 
-                    # Remove the quests that match the quest_id
+                    
                     new_quests = [
                         quest for quest in quests if quest.get("quest_id") != quest_id
                     ]
 
-                    # Update the guild document with the modified member data
+                    
                     result = await server_collection.update_one(
                         {"guild_id": str(guild_id)},
                         {"$set": {f"members.{member_id}.quests": new_quests}},
@@ -2286,11 +2285,11 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Log the query being made
+            
             logger.debug(
                 f"Querying for guild_id: {guild_id} with quest_id: {quest_id}")
 
-            # Find the guild document by its ID
+            
             guild_document = await server_collection.find_one(
                 {"guild_id": str(guild_id)}
             )
@@ -2299,28 +2298,28 @@ class Quest_Data(commands.Cog):
                 logger.debug(f"No guild found with ID {guild_id}.")
                 return
 
-            # Extract the members data from the guild document
+            
             members_data = guild_document.get("members", {})
 
-            # Check if the specified user exists in the guild
+            
             if user_id not in members_data:
                 logger.debug(
                     f"No user found with ID {user_id} in guild {guild_id}.")
                 return
 
-            # Extract quests for the specified user
+            
             user_quests = members_data[user_id].get("quests", [])
 
-            # Loop through the user's quests
+            
             for quest in user_quests:
                 if quest.get("quest_id") == quest_id:
                     user_quests.remove(quest)
                     logger.debug(
                         f"Deleted quest with ID {quest_id} for user {user_id} in guild {guild_id}."
                     )
-                    break  # No need to continue searching once the quest is deleted
+                    break  
 
-            # Update the guild document with the modified member data
+            
             await server_collection.update_one(
                 {"guild_id": guild_id},
                 {"$set": {f"members.{user_id}.quests": user_quests}},
@@ -2338,7 +2337,7 @@ class Quest_Data(commands.Cog):
             db = self.mongoConnect[self.DB_NAME]
             server_collection = db["Servers"]
 
-            # Update the progress of the specified quest for the user
+            
             await server_collection.update_one(
                 {"guild_id": guild_id, f"members.{user_id}.quests.quest_id": quest_id},
                 {"$set": {f"members.{user_id}.quests.$.progress": progress}},
@@ -2460,7 +2459,7 @@ class Quest_Slash(commands.Cog):
         times: typing.Optional[int] = 1,
     ) -> None:
         try:
-            # Check if content contains mentions
+            
             if any(mention in content for mention in ["<@", "<@&"]):
                 await interaction.response.send_message(
                     "Content cannot contain user or role mentions.", ephemeral=True
@@ -2471,7 +2470,7 @@ class Quest_Slash(commands.Cog):
             user_id = str(interaction.user.id)
             user = interaction.user
 
-            # Create the quest
+            
             quest_id = await self.quest_data.create_quest(
                 guild_id,
                 action.value,
@@ -2483,7 +2482,7 @@ class Quest_Slash(commands.Cog):
                 interaction,
             )
             if quest_id is not None:
-                # Create the quest embed
+                
                 embed = await QuestEmbed.create_quest_embed(
                     self.bot,
                     "Created",
@@ -2496,7 +2495,7 @@ class Quest_Slash(commands.Cog):
                     user=user,
                 )
 
-                # Send the embed
+                
                 await interaction.response.send_message(embed=embed)
                 logger.debug("Quest creation successful.")
             else:
@@ -2520,7 +2519,7 @@ class Quest_Slash(commands.Cog):
         try:
             guild_id = interaction.guild.id
 
-            # Find all users in the guild
+            
             users_in_guild = await self.quest_data.find_users_in_server(guild_id)
 
             if not users_in_guild:
@@ -2532,12 +2531,12 @@ class Quest_Slash(commands.Cog):
             quest_deleted = False
 
             for user_id in users_in_guild:
-                # Check if the quest exists for the user
+                
                 quest_exists = await self.quest_data.find_users_with_quest(
                     guild_id, quest_id
                 )
                 if quest_exists:
-                    # Delete the quest for this user
+                    
                     await self.quest_data.delete_quest(guild_id, quest_id)
                     quest_deleted = True
 
@@ -2564,7 +2563,7 @@ class Quest_Slash(commands.Cog):
         try:
             guild_id = str(interaction.guild_id)
 
-            # Remove all server quests
+            
             await self.quest_data.remove_all_server_quests(guild_id)
 
             await interaction.response.send_message(
@@ -2588,7 +2587,7 @@ class Quest_Slash(commands.Cog):
         try:
             guild_id = str(interaction.guild_id)
 
-            # Update the quest limit for the guild
+            
             await self.quest_data.set_quest_limit(guild_id, limit)
 
             await interaction.response.send_message(
@@ -2661,13 +2660,13 @@ class ShopView(discord.ui.View):
 
             shop_embed = await ShopEmbed.start_shop_embed(self.bot, ctx, balance)
 
-            # Create and add the select menu
+            
             select = SpyToolSelect(
                 self.shop_data, self.materials_dict, self.quest_data, user_id, guild_id
             )
             self.add_item(select)
 
-            # Send the initial embed with the select menu
+            
             await ctx.send(embed=shop_embed, view=self)
         except Exception as e:
             await self.handle_error(ctx, e)
@@ -2695,16 +2694,16 @@ class MaterialsButton(discord.ui.View):
         self.items_per_page = 5
         self.max_pages = (
             len(shop_data["Materials"]) - 1) // self.items_per_page + 1
-        self.original_embed = original_embed  # Store the original embed
+        self.original_embed = original_embed  
         self.materials_dict = {
             material["name"]: material["emoji"]
             for material in self.shop_data.get("Materials", [])
         }
 
     async def update_view(self):
-        self.clear_items()  # Clear all buttons
+        self.clear_items()  
 
-        # Check if all materials are sufficient
+        
         material_checks = await asyncio.gather(
             *(
                 self.check_material_indicator(material)
@@ -2712,7 +2711,7 @@ class MaterialsButton(discord.ui.View):
             )
         )
 
-        # Create the Buy button and check if it's enabled
+        
         if all(material_checks):
             buy_button = discord.ui.Button(
                 style=discord.ButtonStyle.blurple,
@@ -2722,7 +2721,7 @@ class MaterialsButton(discord.ui.View):
                 disabled=False,
             )
             buy_button.callback = self.buy_tool_callback
-            self.add_item(buy_button)  # Add the Buy button at the top
+            self.add_item(buy_button)  
         else:
             buy_button = discord.ui.Button(
                 style=discord.ButtonStyle.grey,
@@ -2731,9 +2730,9 @@ class MaterialsButton(discord.ui.View):
                 row=0,
                 disabled=True,
             )
-            self.add_item(buy_button)  # Add disabled Buy button
+            self.add_item(buy_button)  
 
-        # Add the material buttons below the Buy button
+        
         start_index = self.page * self.items_per_page
         end_index = start_index + self.items_per_page
         materials = self.shop_data["Materials"][start_index:end_index]
@@ -2757,7 +2756,7 @@ class MaterialsButton(discord.ui.View):
             except Exception as e:
                 traceback.print_exc()
 
-        # Add pagination buttons at the bottom
+        
         if self.page > 0:
             prev_button = discord.ui.Button(
                 emoji="⬅️",
@@ -2859,7 +2858,7 @@ class MaterialsButton(discord.ui.View):
                 spent = -price
                 await self.quest_data.add_balance(self.user_id, self.guild_id, spent)
 
-                # Refresh the embed with updated inventory
+                
                 await self.refresh_embed(interaction)
             else:
                 await interaction.response.send_message(
@@ -2891,7 +2890,7 @@ class MaterialsButton(discord.ui.View):
                 )
                 return
 
-            # Check if user has enough materials
+            
             for material in tool.get("materials", []):
                 material_name = material.get("material", "")
                 required_quantity = material.get("quantity", 0)
@@ -2908,7 +2907,7 @@ class MaterialsButton(discord.ui.View):
                     )
                     return
 
-            # Deduct materials and add the tool to inventory
+            
             for material in tool.get("materials", []):
                 material_name = material.get("material", "")
                 required_quantity = material.get("quantity", 0)
@@ -2916,27 +2915,27 @@ class MaterialsButton(discord.ui.View):
                     self.guild_id, self.user_id, material_name, -required_quantity
                 )
 
-            # Add tool to inventory
+            
             await self.quest_data.add_tool_to_inventory(
                 self.guild_id, self.user_id, tool_name, 1
             )
 
-            # Call update_view after buying
+            
             await self.update_view()
 
-            # Fetch the user's current quantity of the purchased tool
+            
             quantity = await self.quest_data.get_quantity(
                 self.guild_id, self.user_id, tool_name
             )
 
-            # Create the success embed message
+            
             success_embed = discord.Embed(
                 title="Purchase Successful",
                 description=f"- {tool_name} has been purchased successfully!\n> {tool.get('emoji', '')} : `x{quantity}`",
-                color=primary_color(),  # Use the primary color for the embed
+                color=primary_color(),  
             )
 
-            # Send the embed response
+            
             await interaction.response.send_message(embed=success_embed, ephemeral=True)
 
         except Exception as e:
@@ -2946,7 +2945,7 @@ class MaterialsButton(discord.ui.View):
             )
 
     async def get_user_inventory_count(self, material_name):
-        # Retrieve the user's inventory count for a given material from quest_data
+        
         material_count = await self.quest_data.get_user_inventory_count(
             self.guild_id, self.user_id, material_name
         )
@@ -2958,11 +2957,11 @@ class MaterialsButton(discord.ui.View):
         user_quantity = await self.get_user_inventory_count(material_name) or 0
 
         if user_quantity == 0:
-            indicator_emoji = "<:red:1261639413943762944> "  # Red
+            indicator_emoji = "<:red:1261639413943762944> "  
         elif user_quantity < required_quantity:
-            indicator_emoji = "<:yellow:1261639412253724774> "  # Yellow
+            indicator_emoji = "<:yellow:1261639412253724774> "  
         else:
-            indicator_emoji = "<:green:1261639410181476443> "  # Green
+            indicator_emoji = "<:green:1261639410181476443> "  
 
         return f"{indicator_emoji} : {self.materials_dict.get(material_name, '')} - {user_quantity}/{required_quantity}"
 
@@ -2999,7 +2998,7 @@ class SpyToolSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         try:
-            # Check if the user who clicked the select is the same as the author
+            
             id_1 = int(self.user_id)
             id_2 = int(interaction.user.id)
             if id_1 != id_2:
@@ -3033,7 +3032,7 @@ class SpyToolSelect(discord.ui.Select):
                 ]
             )
 
-            # Create the embed and send it
+            
             initial_embed = discord.Embed(
                 title=f"{selected_tool_name}",
                 description=f"{emoji} {description}",
@@ -3050,7 +3049,7 @@ class SpyToolSelect(discord.ui.Select):
             user_balance = "{:,}".format(user_balance)
             initial_embed.set_footer(text=f"Stella Points: {user_balance}")
 
-            # Create MaterialsButton view
+            
             materials_button_view = MaterialsButton(
                 self.shop_data,
                 self.quest_data,
@@ -3060,7 +3059,7 @@ class SpyToolSelect(discord.ui.Select):
             )
             await materials_button_view.update_view()
 
-            # Send the initial embed with buttons
+            
             await interaction.response.send_message(
                 embed=initial_embed, view=materials_button_view, ephemeral=True
             )
@@ -3072,7 +3071,7 @@ class SpyToolSelect(discord.ui.Select):
             )
 
     async def get_user_inventory_count(self, material_name):
-        # Retrieve the user's inventory count for a given material from quest_data
+        
         material_count = await self.quest_data.get_user_inventory_count(
             self.guild_id, self.user_id, material_name
         )
@@ -3084,11 +3083,11 @@ class SpyToolSelect(discord.ui.Select):
         user_quantity = await self.get_user_inventory_count(material_name) or 0
 
         if user_quantity == 0:
-            indicator_emoji = "<:red:1261639413943762944> "  # Red
+            indicator_emoji = "<:red:1261639413943762944> "  
         elif user_quantity < required_quantity:
-            indicator_emoji = "<:yellow:1261639412253724774> "  # Yellow
+            indicator_emoji = "<:yellow:1261639412253724774> "  
         else:
-            indicator_emoji = "<:green:1261639410181476443> "  # Green
+            indicator_emoji = "<:green:1261639410181476443> "  
 
         return f"{indicator_emoji} : {self.materials_dict.get(material_name, '')} - {user_quantity}/{required_quantity}"
 

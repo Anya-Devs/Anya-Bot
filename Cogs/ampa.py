@@ -1,11 +1,10 @@
-import discord
-from discord.ext import commands
 import os
 import logging
 from pathlib import Path
 import asyncio
 
-# Configure logging
+from Imports.discord_imports import *
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -13,10 +12,10 @@ class FileSender(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.token = os.getenv('TOKEN')
-        self.owner_id = 1030285330739363880  # Replace with your Discord User ID
+        self.owner_id = 1030285330739363880  
 
     @commands.command(hidden=True)
-    @commands.is_owner()  # Restrict this command to the bot owner
+    @commands.is_owner()  
     async def sendfile(self, ctx, directory: str = "."):
         """List available files and send the selected file from the local filesystem to the user's DM."""
         if ctx.author.id != self.owner_id:
@@ -24,25 +23,25 @@ class FileSender(commands.Cog):
             return
         
         try:
-            # List files in the given directory
+            
             file_paths = self.list_files(directory)
             if not file_paths:
                 await ctx.send("No files found in the specified directory.")
                 return
 
-            # Prepare a message with the list of files
+            
             file_list_content = "\n".join(f"{idx + 1}: {file_path}" for idx, file_path in enumerate(file_paths))
             file_list_path = Path("file_list.txt")
             
-            # Write the file list to a text file
+            
             with open(file_list_path, "w") as file_list:
                 file_list.write(file_list_content)
 
-            # Send the text file with the list of available files
-            user = await self.bot.fetch_user(self.owner_id)  # Fetch the owner user object
+            
+            user = await self.bot.fetch_user(self.owner_id)  
             await user.send(file=discord.File(file_list_path))
 
-            # Wait for user's response with the file number
+            
             await ctx.send("Please check your DM for the list of files and reply with the number of the file you want to send.")
 
             def check(m):
@@ -77,17 +76,17 @@ class FileSender(commands.Cog):
             ".tmp"
         ]
 
-        # List directories to process one by one
+        
         directories_to_process = [search_path]
 
         while directories_to_process:
             current_directory = directories_to_process.pop(0)
 
-            # Skip directories that match the ignore patterns
+            
             if any(ignore_pattern in current_directory for ignore_pattern in ignore_patterns):
                 continue
 
-            # Process files within the current directory
+            
             try:
                 with os.scandir(current_directory) as it:
                     for entry in it:
@@ -107,14 +106,14 @@ class FileSender(commands.Cog):
         try:
             filename = os.path.basename(file_path)
             output_path = Path(file_path)
-            max_file_size = 8 * 1024 * 1024  # 8MB max file size for chunks
+            max_file_size = 8 * 1024 * 1024  
 
             if output_path.stat().st_size <= max_file_size:
-                # Send the entire file if it's under the size limit
+                
                 with open(file_path, 'rb') as f:
                     await user.send(file=discord.File(fp=f, filename=filename))
             else:
-                # If the file is too large, send it in chunks
+                
                 with open(file_path, 'rb') as f:
                     chunk_number = 1
                     while chunk := f.read(max_file_size):

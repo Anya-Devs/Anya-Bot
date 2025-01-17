@@ -1,5 +1,5 @@
-from Imports.discord_imports import *
 import traceback
+from Imports.discord_imports import *
 
 class Sync(commands.Cog):
     def __init__(self, bot):
@@ -13,7 +13,7 @@ class Sync(commands.Cog):
             print(f"[DEBUG] Sync command called by {ctx.author} in guild {ctx.guild}")
             print(f"[DEBUG] Spec: {spec}")
 
-            # Determine the guilds to sync
+            
             if spec == "^":
                 guilds = [ctx.guild]
             else:
@@ -28,21 +28,21 @@ class Sync(commands.Cog):
                     print(f"[DEBUG] Syncing commands for guild: {guild.name} (ID: {guild.id})")
 
                     if spec == "~":
-                        # Sync global commands to the specific guild
+                        
                         synced_commands = await self.bot.tree.sync(guild=guild)
                     elif spec == "*":
-                        # Copy global commands to the specific guild
+                        
                         await self.bot.tree.copy_global_to(guild=guild)
-                        # Sync commands after copying
+                        
                         synced_commands = await self.bot.tree.sync(guild=guild)
                     else:
-                        # Sync global commands
+                        
                         synced_commands = await self.bot.tree.sync()
 
                     synced_count = len(synced_commands)
                     total_synced_commands += synced_count
 
-                    # Send feedback for each guild
+                    
                     message = f"Synced {synced_count} commands in guild: {guild.name} (ID: {guild.id})."
                     await ctx.send(embed=discord.Embed(description=message, color=discord.Color.green()))
 
@@ -52,7 +52,7 @@ class Sync(commands.Cog):
                     failed_guilds.append(guild)
                     await ctx.send(embed=discord.Embed(description=error_message, color=discord.Color.red()))
 
-            # Send final feedback
+            
             success_message = f"Successfully synced commands in {total_guilds} guild(s). Total commands synced: {total_synced_commands}."
             await ctx.send(embed=discord.Embed(description=success_message, color=discord.Color.green()))
 

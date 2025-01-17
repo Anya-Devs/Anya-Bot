@@ -2,15 +2,15 @@ import os
 import random
 import asyncio
 import logging
-from datetime import datetime, timezone, timedelta
 import motor.motor_asyncio
 from pymongo.errors import PyMongoError
+from datetime import datetime, timezone, timedelta
 
 from Imports.discord_imports import *
 from Cogs.quest import Quest_Data, primary_color
 from Data.const import error_custom_embed
 
-# Configure the logger
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 ch = logging.StreamHandler()
@@ -23,7 +23,7 @@ logger.addHandler(ch)
 class Memo_Game(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.correct_emojis = {}  # Define correct_emojis as a dictionary
+        self.correct_emojis = {}  
 
     @commands.command(name="memo")
     @commands.cooldown(1, 15, commands.BucketType.user)
@@ -53,23 +53,23 @@ class Memo_Game(commands.Cog):
 
         chosen_emoji = random.choice(emojis)
 
-        # Store the correct emoji for this channel
+        
         self.correct_emojis[ctx.channel.id] = chosen_emoji
 
-        # Create an embed with the chosen emoji
+        
         embed = discord.Embed(
             description=f"Remember this emoji: {chosen_emoji}", color=primary_color()
         )
 
-        # Display the embed for a short duration before updating content
+        
         message = await ctx.reply(embed=embed, mention_author=False)
         await asyncio.sleep(2)
 
-        # Create an instance of Memo
+        
         memo_view = Memo(ctx, shuffled_emojis, chosen_emoji,
                          message, bot=self.bot)
 
-        # Generate the timestamp for 10 seconds from now
+        
         future_timestamp = int(
             (datetime.utcnow() + timedelta(seconds=13)).timestamp())
         formatted_time = self.timestamp_gen(future_timestamp)
@@ -79,7 +79,7 @@ class Memo_Game(commands.Cog):
         )
         try:
             await message.edit(embed=embed, view=memo_view)
-            await asyncio.sleep(10)  # Wait for 10 seconds
+            await asyncio.sleep(10)  
         except asyncio.TimeoutError:
             await message.edit(embed=self.timeout_embed(), view=None)
 
@@ -99,21 +99,21 @@ class Memo_Game(commands.Cog):
 
 class Memo(discord.ui.View):
     def __init__(self, ctx, emojis, chosen_emoji, message, bot):
-        self.timeout_duration = 10  # Timeout in seconds
-        self.streak_increment = 1  # Streak increment for correct answers
-        self.base_points = 5  # Base points for the first streak
-        self.points_multiplier = 2  # Multiplier for points based on streak
+        self.timeout_duration = 10  
+        self.streak_increment = 1  
+        self.base_points = 5  
+        self.points_multiplier = 2  
         self.max_streak = (
-            3  # Max streak allowed (this is different from emojis to remember)
+            3  
         )
-        # Default max emojis to remember (up to 3)
+        
         self.max_emojis_to_remember = 3
         self.user_points = {}
 
-        # Now initialize the parent class
+        
         super().__init__(timeout=self.timeout_duration)
 
-        # Context and game setup
+        
         self.ctx = ctx
         self.emojis = emojis
         self.chosen_emoji = chosen_emoji
@@ -123,11 +123,11 @@ class Memo(discord.ui.View):
         self.quest_data = Quest_Data(bot)
         self.memo_data = Memo_Data(bot)
 
-        # Ensure emojis are a list
+        
         if not isinstance(self.emojis, list):
             self.emojis = list(self.emojis)
 
-        # Prepare random emojis for reactions
+        
         reactions = random.sample(
             list(set(self.emojis) - {chosen_emoji}),
             min(len(set(self.emojis) - {chosen_emoji}), 4),
@@ -135,7 +135,7 @@ class Memo(discord.ui.View):
         reactions.append(chosen_emoji)
         random.shuffle(reactions)
 
-        # Add emoji buttons
+        
         self.buttons = []
         for index, emoji in enumerate(reactions):
             custom_id = "correct_emoji" if emoji == chosen_emoji else f"emoji_{index}"
@@ -146,7 +146,7 @@ class Memo(discord.ui.View):
             self.add_item(button)
             self.buttons.append(button)
 
-        # Stop and Continue buttons
+        
         self.stop_button = discord.ui.Button(
             style=discord.ButtonStyle.red, label="Stop", custom_id="stop_button"
         )
@@ -159,7 +159,7 @@ class Memo(discord.ui.View):
         )
         self.continue_button.callback = self.on_continue_click
 
-        # Setup the game asynchronously
+        
         self.setup_task = asyncio.create_task(self.setup())
 
     async def setup(self):
@@ -183,12 +183,12 @@ class Memo(discord.ui.View):
         selected_button_id = interaction.data["custom_id"]
 
         if selected_button_id == "correct_emoji":
-            # Correct emoji selected: update streak and points
+            
             current_streak = await self.memo_data.get_streak(user.guild.id, user.id)
             new_streak = current_streak + self.streak_increment
             await self.memo_data.set_streak(user.guild.id, user.id, new_streak)
 
-            # Calculate points
+            
             points = (
                 int(new_streak * self.points_multiplier)
                 if new_streak > 1
@@ -200,29 +200,29 @@ class Memo(discord.ui.View):
                 str(user.id), str(interaction.guild.id), points
             )
 
-            # Update the embed and display correct answer using continue_game_embed
+            
             balance = await self.quest_data.get_balance(
                 str(user.id), str(interaction.guild.id)
-            )  # Get the updated balance
+            )  
             embed_correct = await MemoEmbeds.continue_game_embed(
                 points, new_streak, balance, user, self.bot
             )
 
-            # Update view
+            
             self.clear_items()
             self.add_item(self.stop_button)
             self.add_item(self.continue_button)
             await interaction.response.edit_message(embed=embed_correct, view=self)
 
-            # Mark button as green (indicating it was clicked)
+            
             for button in self.buttons:
                 if button.custom_id == selected_button_id:
-                    button.style = discord.ButtonStyle.green  # Mark the button green
+                    button.style = discord.ButtonStyle.green  
                     break
             await interaction.message.edit(view=self)
 
         else:
-            # Incorrect answer: reset streak and points
+            
             current_streak = await self.memo_data.get_streak(user.guild.id, user.id)
             await self.memo_data.set_streak(user.guild.id, user.id, 0)
             embed_incorrect = MemoEmbeds.incorrect_embed(current_streak)
@@ -231,7 +231,7 @@ class Memo(discord.ui.View):
     async def on_stop_click(self, interaction: discord.Interaction):
         user = interaction.user
 
-        # Only the author of the game can stop the game
+        
         if user != self.ctx.author:
             await interaction.response.send_message(
                 "Only the author of the game can stop the game!", ephemeral=True
@@ -241,14 +241,14 @@ class Memo(discord.ui.View):
         streak = await self.memo_data.get_streak(user.guild.id, user.id)
         highscore = await self.memo_data.get_user_highscore(
             user.guild.id, user.id
-        )  # Fetch highscore
+        )  
         avatar = str(user.avatar)
 
         embed_stop = await MemoEmbeds.stop_game_embed(streak, highscore, avatar)
         await interaction.response.edit_message(embed=embed_stop, view=None)
 
     async def on_continue_click(self, interaction: discord.Interaction):
-        # Only the author of the game can continue the game
+        
         user = interaction.user
         if user != self.ctx.author:
             await interaction.response.send_message(
@@ -259,7 +259,7 @@ class Memo(discord.ui.View):
         await interaction.response.defer()
         current_streak = await self.memo_data.get_streak(user.guild.id, user.id)
 
-        # Handle points based on streak
+        
         points = (
             int(current_streak * self.points_multiplier)
             if current_streak > 0
@@ -267,17 +267,17 @@ class Memo(discord.ui.View):
         )
         self.user_points[user.id] = self.user_points.get(user.id, 0) + points
 
-        # Get balance asynchronously
+        
         balance = await self.quest_data.get_balance(
             str(user.id), str(user.guild.id)
-        )  # Get balance from quest_data
+        )  
 
-        # Randomly select a new emoji to remember
+        
         new_chosen_emoji = random.choice(self.emojis)
 
-        # Update the description with the new chosen emoji
+        
         embed = await MemoEmbeds.blank_embed()
-        # Set the description as requested
+        
         embed.description = f"Remember this emoji: {new_chosen_emoji}"
 
         formatted_time = self.ctx.cog.timestamp_gen(
@@ -293,15 +293,15 @@ class Memo(discord.ui.View):
             inline=False,
         )
 
-        # Create a new Memo view for the updated game state with the new emoji
+        
         memo_view = Memo(
             self.ctx, self.emojis, new_chosen_emoji, self.message, self.ctx.bot
         )
 
-        # Update the embed and view
+        
         await self.message.edit(embed=embed, view=memo_view)
 
-        # Clear the description after 1 second
+        
         await asyncio.sleep(1)
         embed.description = " "
         await self.message.edit(embed=embed, view=memo_view)
@@ -311,13 +311,13 @@ class Memo(discord.ui.View):
         user = self.ctx.author
         streak = await self.memo_data.get_user_highscore(user.guild.id, user.id)
 
-        # Ensure `stop_game_embed` is awaited and returns the embed
+        
         embed_stop = await MemoEmbeds.stop_game_embed(streak, streak, user.avatar)
 
-        # Add missing field if needed (like `formatted_time`)
+        
         await self.message.edit(embed=embed_stop, view=None)
 
-    # Timeout handler is automatically handled by discord.ui.View
+    
     async def on_timeout(self):
         """Handle timeout logic: reset streak and points if no reaction."""
         current_streak = await self.memo_data.get_streak(
@@ -325,8 +325,8 @@ class Memo(discord.ui.View):
         )
         await self.memo_data.set_streak(
             self.ctx.guild.id, self.ctx.author.id, 0
-        )  # Reset streak
-        self.user_points[self.ctx.author.id] = 0  # Reset points
+        )  
+        self.user_points[self.ctx.author.id] = 0  
         embed_timeout = await MemoEmbeds.timeout_embed()
         await self.message.edit(embed=embed_timeout, view=None)
 
@@ -336,7 +336,7 @@ class Memo_Data(commands.Cog):
         self.bot = bot
         self.DB_NAME = "Memo"
 
-        # Initialize MongoDB connection
+        
         mongo_url = os.getenv("MONGO_URI")
 
         if not mongo_url:
@@ -411,16 +411,16 @@ class Memo_Data(commands.Cog):
                 raise ValueError(f"{key} cannot be None or empty")
 
     async def update_user_data(self, user_id, points, set_time):
-        # Update the user's data with the new points and set time
+        
         user_data = await self.get_user_data(user_id)
         if user_data:
-            # Add the points to the user's current total
+            
             user_data["points"] += points
-            # Update the set time for the user
+            
             user_data["set_time"] = set_time
-            await self.save_user_data(user_data)  # Save the updated data
+            await self.save_user_data(user_data)  
         else:
-            # If user data doesn't exist, create it
+            
             user_data = {"points": points, "set_time": set_time}
             await self.save_user_data(user_data)
 
@@ -470,13 +470,13 @@ class MemoEmbeds:
     async def continue_game_embed(points, streak, balance, user, bot):
         """Returns the embed when the user chooses to continue."""
         embed = discord.Embed(color=primary_color())
-        # Define emoji ids
+        
         check_emoji_id = 1243403342722371645
         reward_emoji_id = 1247800150479339581
 
         reward_text = f"`{points} stp`"
 
-        # Get emojis
+        
         check_emoji = discord.utils.get(bot.emojis, id=check_emoji_id)
         reward_emoji = discord.utils.get(bot.emojis, id=reward_emoji_id)
         embed.add_field(
@@ -494,7 +494,7 @@ class MemoEmbeds:
         """Returns the embed for a new round."""
         embed = discord.Embed(
             description=f"Remember this emoji: {chosen_emoji}",
-            color=primary_color(),  # Assuming you have this function defined
+            color=primary_color(),  
         )
         return embed
 

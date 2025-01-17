@@ -3,15 +3,15 @@ import gc
 import json
 import platform
 import psutil
-import subprocess
 import time
 import json
+import subprocess
 from datetime import datetime
 from colorama import Fore, Style
 
-from Imports.discord_imports import *
-from Imports.log_imports import *
 import Data.const as const
+from Imports.log_imports import *
+from Imports.discord_imports import *
 from Data.const import primary_color, timestamp_gen
 
 
@@ -112,9 +112,9 @@ class System(commands.Cog):
 
     def optimize_memory(self):
         """Optimize memory usage by clearing cache and running garbage collection."""
-        # Force garbage collection
+        
         collected = gc.collect()
-        # Clear internal cache
+        
         self.bot._connection.clear()
         print(f"Optimized memory. Garbage collected: {collected} objects.")
 
@@ -123,7 +123,7 @@ class System(commands.Cog):
         """Logs the bot's current memory usage."""
         process = psutil.Process(os.getpid())
         memory_info = process.memory_info()
-        memory_usage = memory_info.rss / (1024**2)  # Convert bytes to MB
+        memory_usage = memory_info.rss / (1024**2)  
         print(f"Current memory usage: {memory_usage:.2f} MB")
 
     @commands.command()
@@ -148,7 +148,7 @@ class System(commands.Cog):
         """Returns the current memory usage of the bot."""
         process = psutil.Process(os.getpid())
         memory_info = process.memory_info()
-        return memory_info.rss / (1024**2)  # Convert bytes to MB
+        return memory_info.rss / (1024**2)  
 
     @commands.command(name="credit")
     async def credit(self, ctx):

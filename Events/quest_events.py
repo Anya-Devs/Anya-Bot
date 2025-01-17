@@ -1,13 +1,13 @@
-# Standard library imports
+
 import asyncio
 import logging
 import re
 import traceback
 
-# Third-party library imports
+
 from fuzzywuzzy import fuzz
 
-# Local imports
+
 from Cogs.quest import Quest_Data
 from Data.const import Quest_Completed_Embed
 from Imports.discord_imports import *
@@ -23,7 +23,7 @@ class Quest_Checker(commands.Cog):
         logger.debug("Quest_Checker initialized")
 
     async def cog_load(self):
-        # Start the background task in the async cog_load method
+        
         self.process_message_queue.start()
 
     @commands.Cog.listener()
@@ -58,7 +58,7 @@ class Quest_Checker(commands.Cog):
             logger.error(e)
 
     async def handle_message_quest(self, quest, message, user_id, guild_id):
-        quest_content = quest["content"]  # Quest content with {member}
+        quest_content = quest["content"]  
 
         member_id_pattern = r"<@!?(\d+)>"
         message_content = message.content
@@ -66,13 +66,13 @@ class Quest_Checker(commands.Cog):
         for member_id in member_ids:
             message_content = message_content.replace(
                 f"<@{member_id}>", f"<@{member_id}>"
-            )  # Ensure mentions are properly formatted
+            )  
 
         quest_content_replaced = quest_content.replace(
             "{member}", f"<@{member_ids[0]}>" if member_ids else "{member}"
-        )  # Replace {member} with a placeholder for mention
+        )  
 
-        # Normalize the message content and the quest content for comparison
+        
         normalized_message_content = re.sub(
             r"\s+", " ", message_content.strip()
         ).lower()
@@ -80,12 +80,12 @@ class Quest_Checker(commands.Cog):
             r"\s+", " ", quest_content_replaced.strip()
         ).lower()
 
-        # Use fuzzy matching to compare the quest content with the message content
+        
         similarity_ratio = fuzz.ratio(
             normalized_message_content, normalized_quest_content
         )
 
-        # Check if the similarity ratio is above a certain threshold (e.g., 88)
+        
         if similarity_ratio >= 88:
             mentions = [
                 member
@@ -99,7 +99,7 @@ class Quest_Checker(commands.Cog):
             if "{member}" not in quest_content or (
                 mentions and mentions[0].id != message.author.id and not mentions[0].bot
             ):
-                # Update quest progress
+                
                 quest["progress"] += 1
                 await message.add_reaction("<:anyasus:1244195699331960863>")
                 await self.update_quest_progress(
@@ -262,7 +262,7 @@ class Quest_Checker(commands.Cog):
                 )
                 await channel.send(embed=embed, reference=message)
 
-            # Add balance to user's account
+            
 
             await self.quest_data.delete_quest_for_user(
                 guild_id, user_id, quest["quest_id"]
@@ -294,8 +294,8 @@ class Quest_Checker(commands.Cog):
     async def process_message_queue(self):
         await self.bot.wait_until_ready()
         while not self.bot.is_closed():
-            # Perform necessary background tasks here
-            await asyncio.sleep(5)  # Example delay for demonstration
+            
+            await asyncio.sleep(5)  
 
 
 async def setup(bot):

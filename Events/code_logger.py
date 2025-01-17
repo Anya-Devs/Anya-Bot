@@ -1,7 +1,7 @@
 import os
 import logging
 from datetime import datetime
-#from git import Repo
+
 from difflib import get_close_matches
 
 import Data.const as const
@@ -10,7 +10,7 @@ from Imports.log_imports import logger
 from Imports.discord_imports import *
 import traceback
 
-# Define ANSI escape codes for colors
+
 class LogColors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
@@ -19,7 +19,7 @@ class LogColors:
     ERROR = '\033[91m'
     ENDC = '\033[0m'
 
-# Set up logging with custom formatting
+
 class CustomFormatter(logging.Formatter):
     def format(self, record):
         if record.levelno == logging.DEBUG:
@@ -32,14 +32,14 @@ class CustomFormatter(logging.Formatter):
             record.msg = f"{LogColors.ERROR}{record.msg}{LogColors.ENDC}"
         return super().format(record)
 
-# Set up logging
+
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 for handler in logging.getLogger().handlers:
     handler.setFormatter(CustomFormatter())
 
 
 
-# Configure logging
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 class Permission(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.logger = logger  # Assumes bot has a logger configured
+        self.logger = logger  
         self.error_custom_embed = error_custom_embed
 
     @commands.Cog.listener()
@@ -60,7 +60,7 @@ class Permission(commands.Cog):
             elif isinstance(error, commands.CommandNotFound):
                 await self.suggest_command(ctx, error)
             else:
-                raise error  # Propagate other errors to log them
+                raise error  
         except Exception as e:
             await self.notify_error(ctx, e)
             self.logger.error(f"Error in command {ctx.command}: {e}")
@@ -72,7 +72,7 @@ class Permission(commands.Cog):
         await ctx.send(error_message)
         self.logger.info(f"User {ctx.author} missing permissions: {missing_perms} in {ctx.guild.name}")
 
-        # List current channel permissions for the user
+        
         user_perms = ctx.channel.permissions_for(ctx.author)
         perms_list = [perm for perm, value in user_perms if value]
         await ctx.send(f"Your current permissions in this channel: {', '.join(perms_list)}")
@@ -85,7 +85,7 @@ class Permission(commands.Cog):
         await ctx.send(error_message)
         self.logger.info(f"Bot missing permissions: {missing_perms} in {ctx.guild.name}")
 
-        # List current channel permissions for the bot
+        
         bot_perms = ctx.channel.permissions_for(ctx.guild.me)
         perms_list = [perm for perm, value in bot_perms if value]
         await ctx.send(f"My current permissions in this channel: {', '.join(perms_list)}")
@@ -95,7 +95,7 @@ class Permission(commands.Cog):
                        f"Please check the channel and role settings to ensure proper permissions.")
         self.logger.warning(f"Forbidden error in command {ctx.command}: {error}")
 
-        # List current role and channel-specific permissions for the bot
+        
         bot_perms = ctx.channel.permissions_for(ctx.guild.me)
         perms_list = [perm for perm, value in bot_perms if value]
         await ctx.send(f"My current permissions in this channel: {', '.join(perms_list)}")
@@ -194,7 +194,7 @@ class Permission(commands.Cog):
         # await self.send_log_embed("Bot is online")
 """
 
-# Setup function to add the Logs cog to the bot
+
 def setup(bot):
     bot.add_cog(Permission(bot))
-    # bot.add_cog(Logs(bot))
+    
