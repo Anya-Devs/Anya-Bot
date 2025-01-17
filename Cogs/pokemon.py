@@ -29,7 +29,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 # Custom imports
 from Imports.discord_imports import *
-from discord.ext import tasks
+from Subcogs.pokemon import Ping_Pokemon
 from Imports.log_imports import logger
 from Data.const import error_custom_embed, primary_color
 
@@ -251,7 +251,7 @@ class Pokemon(commands.Cog):
             concurrent.futures.ThreadPoolExecutor()
         )  # For async image loading
         self.dataset_folder = dataset_folder  # Set dataset folder
-        self.wait_time = 20
+        self.wait_time = 11
 
     async def fetch_all_pokemon_names(self):
         pokemon_names = []
@@ -2326,3 +2326,5 @@ class Strength_weakness(discord.ui.View):
 
 def setup(bot):
     bot.add_cog(Pokemon(bot))
+    bot.add_cog(Ping_Pokemon(bot))
+

@@ -3,7 +3,7 @@ import aiohttp
 import logging
 
 from Imports.discord_imports import *
-
+from Subcogs.anime import Recommendation
 # Set up logging configuration
 logging.basicConfig(
     # Set the logging level (can be DEBUG, INFO, WARNING, ERROR, CRITICAL)
@@ -500,3 +500,4 @@ class Anime(commands.Cog):
 
 def setup(bot):
     bot.add_cog(Anime(bot))
+    bot.add_cog(Recommendation(bot))

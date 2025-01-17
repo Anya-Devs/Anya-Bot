@@ -1,20 +1,27 @@
-FROM python:3.10-slim
+FROM python:3.10-slim as builder
 
-WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends libjemalloc2 git && rm -rf /var/lib/apt/lists/*
+RUN echo "deb http://deb.debian.org/debian/ stable main contrib non-free" > /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends libjemalloc2 git && \
+    rm -rf /var/lib/apt/lists/*
+
 ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
 
-RUN pip install poetry
-RUN poetry config virtualenvs.create false
+RUN pip install --no-cache-dir poetry && \
+    poetry config virtualenvs.create false
 
-# Copy the requirements.txt first for caching dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy the .env file (Optional, if you want to use it within Docker build)
-# COPY .github/.env ./.env
+FROM python:3.10-slim
 
-# Copy the rest of the application code
+RUN echo "deb http://deb.debian.org/debian/ stable main contrib non-free" > /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends libjemalloc2 && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local /usr/local
+WORKDIR /app
 COPY . .
 
 CMD ["python", "main.py"]

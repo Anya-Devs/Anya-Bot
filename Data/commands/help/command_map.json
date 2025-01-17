@@ -68,5 +68,8 @@
     },
     "Memo_Game": {
         "memo": " "
+    },
+    "Recommendation": {
+        "anime_recommend": " "
     }
 }
