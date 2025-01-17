@@ -1476,7 +1476,7 @@ class Pokemon(commands.Cog):
 
         # embed.add_field(name='Type', value=f"{formatted_types}", inline=True)
 
-        if region != None:
+        if region is not None:
             if region in region_mappings:
                 region_emoji = region_mappings[region]
                 embed.add_field(
@@ -1486,7 +1486,7 @@ class Pokemon(commands.Cog):
 
         embed.add_field(name="Names", value=alt_names_str, inline=True)
 
-        if gender != None:
+        if gender is not None:
             gender_differ = bool(
                 gender != "♀️ Female only" or "♂️ Male only" or "Genderless"
             )
@@ -1511,7 +1511,7 @@ class Pokemon(commands.Cog):
         if image_thumb:
             embed.set_footer(icon_url=image_thumb, text=appearance)
             gender_info = None
-            if gender != None and gender != "♂ 50% - ♀ 50%":
+            if gender is not None and gender != "♂ 50% - ♀ 50%":
                 embed.set_footer(
                     icon_url=image_thumb, text=appearance + f"Gender: {gender}"
                 )
@@ -1536,7 +1536,7 @@ class Pokemon(commands.Cog):
                 image_thumb = None
                 embed.set_footer(text=appearance)
 
-            if gender and rarity != None and gender != "♂ 50% - ♀ 50%":
+            if gender and rarity is not None and gender != "♂ 50% - ♀ 50%":
                 embed.set_footer(
                     icon_url=image_thumb,
                     text=f"Rarity: {rarity}\n\n" +
@@ -1549,7 +1549,7 @@ class Pokemon(commands.Cog):
                 )
                 gender_info = f"Gender: {gender}"
 
-            elif gender != None and gender != "♂ 50% - ♀ 50%":
+            elif gender is not None and gender != "♂ 50% - ♀ 50%":
                 embed.set_footer(
                     icon_url=image_thumb, text=appearance + f"Gender: {gender}"
                 )
@@ -1933,7 +1933,7 @@ class Pokebuttons(discord.ui.View):
                 f"https://pokemonshowdown.com/sprites/dex-shiny/{self.pokemon_name}.png"
             )
         # embed.(url=self.image_url)
-        if self.image_thumb == None:
+        if self.image_thumb is None:
             embed.set_footer(text=self.pokemon_dex_name)
         else:
             embed.set_footer(icon_url=self.image_thumb,
