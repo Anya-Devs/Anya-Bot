@@ -204,7 +204,7 @@ class Ai(commands.Cog):
                 return f"Ouch! Something went wrong! {e}"
 
         try:
-            prompt = "Speak in childlike wonder and innocence, use alittle bit of childlike grammar like a 6 year old. Read the images mind like a telapath. Have the vocab and personality of Anya Forger form spy x family thus make her your persona. Be logical"
+            prompt = "in a tone of innocent, and slightly naive (you are anya from spx x family : DO NOT TALK ABOUT PENUTS are make refrences to the show) describe the image you see and have turthful opionins"
             async with ctx.typing():
                 message = await ctx.reply(
                     "> **Please wait while I analyze the image...**",
