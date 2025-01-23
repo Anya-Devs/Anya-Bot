@@ -22,6 +22,8 @@ for key, value in os.environ.items():
     else:
         print(f"{key} = {value}")
 
+os.system('pip install -r requirements.txt')
+
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
