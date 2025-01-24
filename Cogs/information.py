@@ -88,38 +88,39 @@ class Information(commands.Cog):
 
     @commands.command(name="server")
     async def server_info(self, ctx):
-        guild = ctx.guild
-        owner = guild.owner
-        boosts = guild.premium_subscription_count
-        boost_tier = f"Tier {guild.premium_tier}" if boosts > 0 else "Not boosted"
+     guild = ctx.guild
+     owner = guild.owner
+     boosts = guild.premium_subscription_count
+     boost_tier = f"Tier {guild.premium_tier}" if boosts > 0 else "Not boosted"
 
-        overview = (
-            f"Owner: {owner.mention}\n"
-            f"Boosts: {boosts}/14\n"
-            f"Boost Tier: {boost_tier}"
-        )
+     # Count members
+     bots = len([member for member in guild.members if member.bot])
+     users = len([member for member in guild.members if not member.bot])
+     total_members = guild.member_count
 
-        
-        other_info = (
-            f"Roles: {len(guild.roles)}\n"
-            f"Channels: {len(guild.channels)} - Text: {len([c for c in guild.channels if isinstance(c, discord.TextChannel)])} - Voice: {len([c for c in guild.channels if isinstance(c, discord.VoiceChannel)])}\n"
-            f"Members: {guild.member_count}"
-        )
+     overview = (
+        f"Owner: {owner.mention}\n"
+        f"Boosts: {boosts}/14\n"
+        f"Boost Tier: {boost_tier}"
+     )
 
-        embed = discord.Embed(color=primary_color(), timestamp=datetime.now())
+     other_info = (
+        f"Roles: {len(guild.roles)}\n"
+        f"Channels: {len(guild.channels)} - Text: {len([c for c in guild.channels if isinstance(c, discord.TextChannel)])} - Voice: {len([c for c in guild.channels if isinstance(c, discord.VoiceChannel)])}\n"
+        f"Members: {total_members} (Users: {users}, Bots: {bots})"
+     )
 
-        
-        embed.add_field(name="Overview", value=overview, inline=True)
-        embed.add_field(name="Other", value=other_info, inline=True)
+     embed = discord.Embed(color=primary_color(), timestamp=datetime.now())
+ 
+     embed.add_field(name="Overview", value=overview, inline=True)
+     embed.add_field(name="Other", value=other_info, inline=True)
 
-        
-        embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
-        embed.set_footer(text=f"ID: {guild.id}")
+     embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+     embed.set_footer(text=f"ID: {guild.id}")
 
-        
-        embed.set_author(name=f"{guild.name}", icon_url=owner.avatar.url)
+     embed.set_author(name=f"{guild.name}", icon_url=owner.avatar.url)
 
-        await ctx.reply(embed=embed, mention_author=False)
+     await ctx.reply(embed=embed, mention_author=False)
 
     @commands.command(name="pfp")
     async def pfp(self, ctx, user: discord.Member = None):
