@@ -2682,6 +2682,23 @@ class ShopView(discord.ui.View):
         print(traceback_msg)
         await interaction.response.send_message(error_message, ephemeral=True)
 
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
 
 class MaterialsButton(discord.ui.View):
     def __init__(self, shop_data, quest_data, user_id, guild_id, original_embed=None):
@@ -2691,19 +2708,17 @@ class MaterialsButton(discord.ui.View):
         self.user_id = user_id
         self.guild_id = guild_id
         self.page = 0
-        self.items_per_page = 5
-        self.max_pages = (
-            len(shop_data["Materials"]) - 1) // self.items_per_page + 1
+        self.items_per_page = 25
+        self.max_pages = (len(shop_data["Materials"]) - 1) // self.items_per_page + 1
         self.original_embed = original_embed  
         self.materials_dict = {
-            material["name"]: material["emoji"]
+            material["name"]: material.get("emoji", "")  # Ensure emoji is set to an empty string if missing
             for material in self.shop_data.get("Materials", [])
         }
 
     async def update_view(self):
-        self.clear_items()  
+        self.clear_items()  # Clear the existing items
 
-        
         material_checks = await asyncio.gather(
             *(
                 self.check_material_indicator(material)
@@ -2711,58 +2726,100 @@ class MaterialsButton(discord.ui.View):
             )
         )
 
-        
+        # Check if all material checks pass
         if all(material_checks):
             buy_button = discord.ui.Button(
                 style=discord.ButtonStyle.blurple,
                 label="Buy",
                 custom_id="buy_button",
-                row=0,
+                row=1,
                 disabled=False,
             )
             buy_button.callback = self.buy_tool_callback
             self.add_item(buy_button)  
+
         else:
             buy_button = discord.ui.Button(
                 style=discord.ButtonStyle.grey,
                 label="Buy",
                 custom_id="buy_button",
-                row=0,
+                row=1,
                 disabled=True,
             )
             self.add_item(buy_button)  
 
-        
+
+        # Get the materials related to the current spy tool
+        tool_name = self.original_embed.title
+        tool = next(
+            (
+                t
+                for t in self.shop_data.get("Spy Tools", [])
+                if t.get("name") == tool_name
+            ),
+            None,
+        )
+
+        if tool:
+            required_materials = tool.get("materials", [])
+        else:
+            required_materials = []
+
+        # Pagination for the materials list
         start_index = self.page * self.items_per_page
         end_index = start_index + self.items_per_page
-        materials = self.shop_data["Materials"][start_index:end_index]
+        filtered_materials = [
+            material for material in self.shop_data["Materials"]
+            if material["name"] in [m.get("material") for m in required_materials]
+        ][start_index:end_index]
 
-        for material in materials:
+        # Track the current row for buttons
+        current_row = 1
+        item_count = 0
+
+        for material in filtered_materials:
             try:
                 name = material.get("name", "Unknown Material")
                 emoji = material.get("emoji", "")
-                material_count = await self.quest_data.get_user_inventory_count(
-                    self.guild_id, self.user_id, name
-                )
-                material_button = discord.ui.Button(
-                    style=discord.ButtonStyle.green,
-                    emoji=emoji,
-                    label=f"{material_count}",
-                    custom_id=name,
-                    row=1,
-                )
-                material_button.callback = self.material_callback
-                self.add_item(material_button)
+                price = material.get("price", "")
+
+                # If emoji is invalid, it might raise an error when trying to use it
+                try:
+                    material_button = discord.ui.Button(
+                        style=discord.ButtonStyle.green,
+                        emoji=emoji,
+                        label=f"{price} stp", 
+                        custom_id=name,
+                        row=current_row,
+                    )
+                    material_button.callback = self.material_callback
+                    self.add_item(material_button)
+                    item_count += 1
+
+                    # After 5 items, switch to a new row
+                    if item_count % 5 == 0:
+                        current_row += 1
+                        item_count = 0  # Reset the item count for the new row
+
+                except Exception as e:
+                    print(f"Error generating emoji for material: {name}, Emoji: {emoji}")
+                    print(f"Error: {e}")
+                    continue  # Skip this material if emoji generation fails
+
             except Exception as e:
                 traceback.print_exc()
+                
 
-        
+
+        # Pagination buttons should go in a separate row (row 2 or higher)
+        pagination_row = current_row if current_row > 1 else 2
+
         if self.page > 0:
             prev_button = discord.ui.Button(
                 emoji="⬅️",
                 style=discord.ButtonStyle.primary,
                 custom_id="prev_page",
-                row=2,
+                row=pagination_row,
             )
             prev_button.callback = self.prev_page_callback
             self.add_item(prev_button)
@@ -2772,11 +2829,11 @@ class MaterialsButton(discord.ui.View):
                 emoji="➡️",
                 style=discord.ButtonStyle.primary,
                 custom_id="next_page",
-                row=2,
+                row=pagination_row,
             )
             next_button.callback = self.next_page_callback
             self.add_item(next_button)
-
+            
     async def refresh_embed(self, interaction: discord.Interaction):
         tool_name = self.original_embed.title
         tool = next(
@@ -2872,6 +2929,7 @@ class MaterialsButton(discord.ui.View):
                 f"An error occurred: {e}", ephemeral=True
             )
 
+
     async def buy_tool_callback(self, interaction: discord.Interaction):
         try:
             tool_name = self.original_embed.title
@@ -2931,12 +2989,11 @@ class MaterialsButton(discord.ui.View):
             
             success_embed = discord.Embed(
                 title="Purchase Successful",
-                description=f"- {tool_name} has been purchased successfully!\n> {tool.get('emoji', '')} : `x{quantity}`",
-                color=primary_color(),  
+                description=f"- {tool_name} has been added to your inventory.\nYou now have {quantity} of this tool.",
+                color=discord.Color.green(),
             )
 
-            
-            await interaction.response.send_message(embed=success_embed, ephemeral=True)
+            await interaction.response.send_message(embed=success_embed)
 
         except Exception as e:
             traceback.print_exc()
@@ -2944,40 +3001,22 @@ class MaterialsButton(discord.ui.View):
                 f"An error occurred: {e}", ephemeral=True
             )
 
-    async def get_user_inventory_count(self, material_name):
-        
-        material_count = await self.quest_data.get_user_inventory_count(
-            self.guild_id, self.user_id, material_name
-        )
-        return material_count
-
-    async def format_materials(self, item):
-        material_name = item.get("material", "")
-        required_quantity = item.get("quantity", 0)
-        user_quantity = await self.get_user_inventory_count(material_name) or 0
-
-        if user_quantity == 0:
-            indicator_emoji = "<:red:1261639413943762944> "  
-        elif user_quantity < required_quantity:
-            indicator_emoji = "<:yellow:1261639412253724774> "  
-        else:
-            indicator_emoji = "<:green:1261639410181476443> "  
-
-        return f"{indicator_emoji} : {self.materials_dict.get(material_name, '')} - {user_quantity}/{required_quantity}"
-
     async def prev_page_callback(self, interaction: discord.Interaction):
-        if self.page > 0:
-            self.page -= 1
-            await self.update_view()
-            await interaction.response.edit_message(view=self)
+        self.page -= 1
+        await self.refresh_embed(interaction)
 
     async def next_page_callback(self, interaction: discord.Interaction):
-        if self.page < self.max_pages - 1:
-            self.page += 1
-            await self.update_view()
-            await interaction.response.edit_message(view=self)
+        self.page += 1
+        await self.refresh_embed(interaction)
 
-
+            
+            
+            
+            
+            
+            
+            
+            
 class SpyToolSelect(discord.ui.Select):
     def __init__(self, shop_data, materials_dict, quest_data, user_id, guild_id):
         spy_tools = shop_data.get("Spy Tools", [])
