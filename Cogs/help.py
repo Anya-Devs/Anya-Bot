@@ -169,7 +169,11 @@ class Select(discord.ui.Select):
                     cmd for cmd in cog.get_commands() if not cmd.hidden]
                 if cog_commands:
                     command_mapping = self._load_command_mapping().get(cog_name, {})
-                    for cmd in cog_commands:
+                    # Create a string to hold the commands and arguments
+                    commands_info = "```\n"
+                    # Sort the commands alphabetically by name
+                    sorted_commands = sorted(cog_commands, key=lambda cmd: cmd.name)
+                    for cmd in sorted_commands:
                         cmd_args = [
                             (
                                 f"[{param.name}]"
@@ -180,16 +184,14 @@ class Select(discord.ui.Select):
                         ]
                         args_str = " ".join(cmd_args)  
                         command_info = (
-                            
-                            f"`{cmd.name}`\t{args_str}"
+                            f"{cmd.name} {args_str}"
                         )
-
-                        self.cog_embed2.add_field(
-                            name="", value=command_info, inline=False
-                        )
+                        commands_info += f"{command_info}\n"
+                    commands_info += "```"
+                    # Set the description with the sorted command list
+                    self.cog_embed2.description = commands_info
                 else:
-                    logger.info(
-                        f"No visible commands found for cog: {cog_name}")
+                    logger.info(f"No visible commands found for cog: {cog_name}")
             else:
                 logger.info(f"Cog not found: {cog_name}")
 
@@ -209,8 +211,8 @@ class Select(discord.ui.Select):
             print(traceback_str)
             logger.debug(f"An error occurred: {traceback_str}")
             pass
-
-
+        
+        
 class HelpMenu(discord.ui.View):
     def __init__(self, bot, primary_color, select_view, *, timeout=None):
         super().__init__(timeout=timeout)
