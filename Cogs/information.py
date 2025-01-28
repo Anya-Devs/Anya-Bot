@@ -84,10 +84,8 @@ class Information(commands.Cog):
         # Prepare member data
         member_info = {
             "username": member.name,
-            "discriminator": member.discriminator,
             "nickname": member.nick or "None",
             "current_name": member.display_name,
-            "username_full": f"{member.name}#{member.discriminator}",
             "joined_at": self.format_time(member.joined_at),
             "created_at": self.format_time(member.created_at),
             "status": member.status.name.capitalize(),
@@ -95,7 +93,6 @@ class Information(commands.Cog):
             "top_role": member.top_role.name,
             "permissions": await self.get_permissions(member),  # Await permissions here
             "roles": [role.name for role in member.roles if role.name != "@everyone"],
-            "inviter": await self.get_inviter(member),
             "last_message": await self.get_last_message(member, ctx),
             "pinged_by": await self.get_pinged_by(ctx, member),
             "avatar_url": str(member.avatar),
@@ -105,13 +102,13 @@ class Information(commands.Cog):
         embed = discord.Embed(
             title=f"{member.name}'s Info",
             description=f"```json\n{json.dumps(member_info, indent=4)}\n```",
-            color=primary_color()
+            color=primary_color(),
+            timestamp=datetime.now()
         )
-        embed.set_thumbnail(url=ctx.author.avatar)  # Set the thumbnail to the author's avatar
-        embed.set_footer(icon_url=self.bot.user.avatar ,text=f"{ctx.author} json | ID: {ctx.author.id}")
+        embed.set_footer(icon_url=ctx.author.avatar ,text=f"User: {ctx.author}・ID: {ctx.author.id}")
 
         # Send the embed
-        await ctx.send(embed=embed)
+        await ctx.reply(embed=embed,mention_author=False)
 
     def format_time(self, time):
         """Formats a datetime object into a human-readable format."""
@@ -126,12 +123,7 @@ class Information(commands.Cog):
                 perms.append(f"{perm.replace('_', ' ').capitalize()}")
         return perms or ["No special permissions"]
 
-    async def get_inviter(self, member):
-        """Fetches the inviter of the member."""
-        async for entry in member.guild.audit_logs(action=discord.AuditLogAction.invite_create):
-            if entry.target == member:
-                return entry.user.name
-        return "Unknown"
+
 
     async def get_last_message(self, member, ctx):
      """Fetches the last message sent by the member in the current channel."""
