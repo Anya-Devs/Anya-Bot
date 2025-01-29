@@ -1,5 +1,7 @@
 FROM python:3.10-slim as builder
 
+WORKDIR /app
+
 RUN echo "deb http://deb.debian.org/debian/ stable main contrib non-free" > /etc/apt/sources.list && \
     apt-get update && \
     apt-get install -y --no-install-recommends libjemalloc2 git && \
@@ -7,13 +9,14 @@ RUN echo "deb http://deb.debian.org/debian/ stable main contrib non-free" > /etc
 
 ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
 
-RUN pip install --no-cache-dir poetry && \
-    poetry config virtualenvs.create false
+RUN pip install --no-cache-dir poetry && poetry config virtualenvs.create false
 
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+COPY pyproject.toml poetry.lock ./
+RUN poetry install --no-root --no-interaction || poetry init -n && poetry install --no-root --no-interaction
 
 FROM python:3.10-slim
+
+WORKDIR /app
 
 RUN echo "deb http://deb.debian.org/debian/ stable main contrib non-free" > /etc/apt/sources.list && \
     apt-get update && \
@@ -21,7 +24,6 @@ RUN echo "deb http://deb.debian.org/debian/ stable main contrib non-free" > /etc
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local /usr/local
-WORKDIR /app
 COPY . .
 
 CMD ["python", "main.py"]
