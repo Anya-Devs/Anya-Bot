@@ -2,7 +2,6 @@ discord.py>=2.0.0
 scikit-learn
 colorama
 motor
-diffusers
 httpx
 colorlog
 opencv-python-headless
@@ -25,6 +24,5 @@ python-dotenv
 asyncio-redis
 redis
 psutil 
-accelerate
 huggingface_hub
 aiosignal
