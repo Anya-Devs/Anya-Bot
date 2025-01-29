@@ -1,4 +1,4 @@
-FROM python:3.10-slim as builder
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
@@ -11,10 +11,15 @@ ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
 
 RUN pip install --no-cache-dir poetry && poetry config virtualenvs.create false
 
-COPY pyproject.toml poetry.lock ./
-RUN poetry install --no-root --no-interaction || poetry init -n && poetry install --no-root --no-interaction
+RUN poetry --version
 
-FROM python:3.10-slim
+COPY pyproject.toml poetry.lock ./
+
+RUN if [ ! -f poetry.lock ]; then poetry lock; fi
+
+RUN poetry install --no-root --no-interaction
+
+FROM python:3.12-slim
 
 WORKDIR /app
 
