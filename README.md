@@ -1,7 +1,7 @@
 
 
 ### ❓Do tell?
- <img src="Repo/Images/anya_bot.webp" alt="Anya Bot" width="150px" align="left"/>Anya Bot ignites your server with engaging quests and thrilling competition!  Boost activity, forge friendships, and build a brilliant community where every member feels valued.  Anya Bot empowers your members to complete exciting quests, track their progress, and climb the ranks to earn bragging rights.  More than just a bot, Anya is the heartbeat of a thriving server, its covet inclusivity and keeping the energy high.  Ready to transform your community?
+ <img src="Repo/Images/anya_bot.webp" alt="Anya Bot" width="150px" align="left"/>Anya Bot ignites your server with engaging quests and thrilling competition!  Boost activity, forge friendships, and build a brilliant community where every member feels valued.  Anya Bot empowers your members to complete exciting quests, track their progress, and climb the ranks to earn bragging rights.  More than just a bot, Anya is the heartbeat of a thriving server, its core is inclusivity and keeping the energy high. Anya is more than ready to transform your community!
 
 
 
