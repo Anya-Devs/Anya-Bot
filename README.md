@@ -1,7 +1,8 @@
 
 
 ### ![Anya Bot](Repo/Images/anya_bot.png)  ❓What is it?
-Anya Bot is all about getting people active and engaged in your server while having fun with a bit of spy flair. It creates a interactive experience where members can do  quests, track their progress, and show off their dedication with rankings. It's not just a bot—it's the heartbeat of your community. Anya wants everyone to be active, make new friends, and feel like they’re part of something bigger. Whether you’re aiming for a top spot or just enjoying the quality of the server, Anya Bot keeps the energy up and makes sure everyone feels included. It’s the must-have tool for any server that wants to keep members engaged with love and mix-nuts.
+Anya Bot ignites your server with engaging quests and thrilling competition!  Boost activity, forge friendships, and build a brilliant community where every member feels valued.  Anya Bot empowers your members to complete exciting quests, track their progress, and climb the ranks to earn bragging rights.  More than just a bot, Anya is the heartbeat of a thriving server, its covet inclusivity and keeping the energy high.  Ready to transform your community? 
+
 
 
 
