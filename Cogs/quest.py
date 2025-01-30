@@ -176,8 +176,8 @@ class Quest(commands.Cog):
             traceback.print_exc()
             await ctx.send(f"{error_message}")
 
-    @commands.command(name="q_roles")
-    async def q_roles(self, ctx, *role_mentions: discord.Role):
+    @commands.command(name="quest_roles")
+    async def quest_roles(self, ctx, *role_mentions: discord.Role):
         """Command for admins to set or list roles that a target can get randomly."""
 
         
@@ -339,7 +339,7 @@ class Quest(commands.Cog):
             )
             logger.error(f"Error in inventory command: {e}")
 
-    @commands.command(name="stars", aliases=["bal", "points", "balance"])
+    @commands.command(name="balance", aliases=["bal", "points", "stars","stp"])
     async def balance(
         self, ctx, method=None, amount: int = None, member: discord.Member = None
     ):
@@ -1291,8 +1291,7 @@ class Quest_Data(commands.Cog):
 
         
         def generate_short_uuid():
-            
-            return "".join(random.choices(string.digits, k=6) + 1000)
+             return str(int("".join(random.choices(string.digits, k=6))) + 1000)
 
         db = self.mongoConnect[self.DB_NAME]
         server_collection = db["Servers"]
@@ -2884,6 +2883,27 @@ class MaterialsButton(discord.ui.View):
             or 0
         )
         return user_quantity >= required_quantity
+    
+    async def format_materials(self, item):
+        material_name = item.get("material", "")
+        required_quantity = item.get("quantity", 0)
+        user_quantity = await self.get_user_inventory_count(material_name) or 0
+
+        if user_quantity == 0:
+            indicator_emoji = "<:red:1261639413943762944> "  
+        elif user_quantity < required_quantity:
+            indicator_emoji = "<:yellow:1261639412253724774> "  
+        else:
+            indicator_emoji = "<:green:1261639410181476443> "  
+
+        return f"{indicator_emoji} : {self.materials_dict.get(material_name, '')} - {user_quantity}/{required_quantity}"
+    
+    async def get_user_inventory_count(self, material_name):
+        
+        material_count = await self.quest_data.get_user_inventory_count(
+            self.guild_id, self.user_id, material_name
+        )
+        return material_count
 
     async def material_callback(self, interaction: discord.Interaction):
         try:
