@@ -27,7 +27,7 @@ class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         intents.members = True
-        self.prefix = "..."
+        self.prefix = ">"
         super().__init__(
             command_prefix=commands.when_mentioned_or(self.prefix),
             intents=intents,
@@ -39,7 +39,7 @@ class BotSetup(commands.AutoShardedBot):
         self.mongo_client = None
         self.DB_NAME = "Bot"
         self.COLLECTION_NAME = "information"
-        self.token_field = "Token"
+        self.token_field = "Test_Token"
 
     async def on_ready(self):
         print(f"\033[92mLogged in as {self.user} (ID: {self.user.id})\033[0m")

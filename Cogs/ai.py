@@ -33,35 +33,43 @@ class Ai(commands.Cog):
     @commands.command(name="imagine", description="Generate an image", aliases=["i"])
     async def imagine(self, ctx: commands.Context, *, prompt: str):
         try:
+            style_list = ["color-detailed stlye", "shadow-detailed stlye", "hyper-detailed stlye"]
+
+            generated_files = []
+
             async with ctx.typing():
-                message = await ctx.reply(
-                    "> **Please wait while I generate your prompt...**",
-                    mention_author=False,
-                )
-
-                
-                image_path = await self.image_gen.generate_image(prompt)
-
-                if image_path:
-                    image_file = discord.File(
-                        image_path, filename="generated_image.png"
+                for idx, punct in enumerate(style_list, start=1):
+                    custom_prompt = f"{punct}: {prompt} "
+                    output_path = await asyncio.to_thread(
+                        self.image_gen.generate_image_sync, custom_prompt
                     )
+
+                    new_file = self.image_gen.output_dir / f"{idx}.png"
+                    if new_file.exists():
+                        new_file.unlink()
+                    output_path.rename(new_file)
+                    generated_files.append(new_file)
+
+                embeds = []
+                files = []
+                for idx, file_path in enumerate(generated_files, start=1):
+                    file = discord.File(str(file_path), filename=f"{idx}.png")
+                    files.append(file)
+
                     description = f"**Prompt:** ```{prompt}```"
                     embed = discord.Embed(
                         description=description,
-                        color=primary_color(),
+                        color=primary_color(),  
                         timestamp=datetime.now(),
+                        url="https://rajtech.me"
                     )
-                    embed.set_image(url="attachment://generated_image.png")
+                    embed.set_image(url=f"attachment://{idx}.png")
                     embed.set_footer(
                         icon_url=ctx.author.avatar, text=f"Requested by {ctx.author}"
                     )
+                    embeds.append(embed)
 
-                    await message.delete()
-                    await ctx.reply(embed=embed, file=image_file)
-                else:
-                    await ctx.reply("Failed to generate image after multiple attempts.")
-
+            await ctx.reply(embeds=embeds, files=files)
         except Exception as e:
             await ctx.send(f"An error occurred: {e}")
 
