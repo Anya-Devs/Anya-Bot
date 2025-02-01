@@ -57,7 +57,7 @@ class Ai(commands.Cog):
                     description = f"**Prompt:** ```{prompt}```"
                     embed = discord.Embed(
                         description=description,
-                        color=discord.Color.blurple(),
+                        color=primary_color(),
                         timestamp=datetime.now(),
                     )
                     embed.set_image(url="attachment://generated_image.png")
@@ -74,9 +74,8 @@ class Ai(commands.Cog):
             await ctx.send(f"An error occurred: {e}")
 
     @commands.command(
-        name="vision", description="Generate a vision-based response", aliases=["v"]
-    )
-    async def vision_command(self, ctx, image_url: str = None):
+        name="vision", description="Generate a vision-based response", aliases=["v"])
+    async def vision_commmand(self, ctx, image_url: str = None):
         async def vision(image_link: str, prompt: str = " ") -> str:
             try:
                 response = await self.openai_client.chat.completions.create(
@@ -102,7 +101,7 @@ class Ai(commands.Cog):
             prompt = "in a tone of innocent, and slightly naive (you are anya from spx x family : DO NOT TALK ABOUT PENUTS are make refrences to the show) describe the image you see and have turthful opionins"
             async with ctx.typing():
                 message = await ctx.reply(
-                    "> **Please wait while I analyze the image...**",
+                    "> **Thinking ... :thought_balloon:**",
                     mention_author=False,
                 )
 
@@ -163,7 +162,7 @@ class ImageGenerator:
     def __init__(self, api_key: str):
         
         self.client = InferenceClient(
-            "ehristoforu/dalle-3-xl-v2", token=api_key)
+            "black-forest-labs/FLUX.1-dev", token=api_key)
         self.output_dir = Path("Data/commands/ai/images")
         self.output_dir.mkdir(parents=True, exist_ok=True)
         print("Using Hugging Face model via InferenceClient...")
