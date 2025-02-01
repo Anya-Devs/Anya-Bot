@@ -16,8 +16,8 @@ from Data.const import error_custom_embed, primary_color
 class Ai(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.api_key = os.getenv("api_key")
-        self.ai_api_key =  os.getenv("ai_api_key")
+        self.api_key = os.getenv("OPENAI_KEY")
+        self.h_api_key =  os.getenv("HUGGINGFACE_API_KEY")
 
         if not self.api_key:
             raise ValueError("API key is not set in environment variables.")
@@ -26,15 +26,7 @@ class Ai(commands.Cog):
             api_key=self.api_key,
             base_url="https://api.naga.ac/v1",
         )
-
-        self.image_gen = ImageGenerator(
-            "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"
-        )  
-
-        self.huggingface_url = (
-            "https://api-inference.huggingface.co/models/cagliostrolab/animagine-xl-3.1"
-        )
-        self.vision_model_file = "Data/commands/ai/vision_model.txt"
+        self.image_gen = ImageGenerator(self.h_api_key)  
         self.error_custom_embed = error_custom_embed
 
    
