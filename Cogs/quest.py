@@ -281,7 +281,7 @@ class Quest(commands.Cog):
             
             embed = discord.Embed(
                 title=f"{ctx.author.display_name}'s Inventory",
-                description="Your current tool inventory:\n- ||Due to bugs, purchasing doesn't grant an item but only reserves a slot on first purchase.||",
+                #description="Your current tool inventory:\n- ||Due to bugs, purchasing doesn't grant an item but only reserves a slot on first purchase.||",
                 color=primary_color(),
                 timestamp=datetime.now(),
             )
