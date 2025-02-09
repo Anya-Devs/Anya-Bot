@@ -3,9 +3,7 @@
 ### ❓Do tell?
  <img src="Repo/Images/anya_bot.webp" alt="Anya Bot" width="150px" align="left"/> Anya Bot keeps your server active with fun quests with conversation starters. It's all about engaging your community and making things more interactive. 
 
-
-
-
+---
 
 
 | Command                | Description                                                                                                   | Image                                         |
