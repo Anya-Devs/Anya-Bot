@@ -413,8 +413,9 @@ class Pokemon(commands.Cog):
         else:
             await ctx.send("No image found to predict.")
 
-    @commands.Cog.listener()
-    async def on_message(self, message):
+    """
+     @commands.Cog.listener()
+     async def on_message(self, message):
         
         if message.author.id == self.author_id and message.embeds:
             embed = message.embeds[0]
@@ -485,7 +486,8 @@ class Pokemon(commands.Cog):
                                     f"Failed to download image. Status code: {response.status}",
                                     reference=message,
                                 )
-
+    """
+    
     async def wait_for_bot_response(self, channel):
         
         def check(msg):
