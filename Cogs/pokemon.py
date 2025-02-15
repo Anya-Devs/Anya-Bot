@@ -486,9 +486,8 @@ class Pokemon(commands.Cog):
                                     f"Failed to download image. Status code: {response.status}",
                                     reference=message,
                                 )
-    """
     
-    async def wait_for_bot_response(self, channel):
+     async def wait_for_bot_response(self, channel):
         
         def check(msg):
             return msg.author.id in self.detect_bot_id and msg.channel == channel
@@ -502,6 +501,7 @@ class Pokemon(commands.Cog):
         except asyncio.TimeoutError:
             
             return None
+    """
 
     @commands.command(name="hunt")
     @commands.cooldown(1, 6, commands.BucketType.user)
