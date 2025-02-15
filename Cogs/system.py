@@ -19,7 +19,6 @@ class System(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.start_time = time.time()
-        self.memory_check.start()
         self.image_file = "Data/commands/help/help_embed_images.json"
 
 
