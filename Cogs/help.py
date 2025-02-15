@@ -17,7 +17,7 @@ from Data.const import primary_color, error_custom_embed, Help_Select_Embed_Mapp
 from Imports.log_imports import logger
 
 
-class HelpEmbedImagesManager:
+class Help_Thumbnails:
     def __init__(self, json_file_path):
         self.json_file_path = json_file_path
         self.help_embed = self.load_images()
@@ -145,7 +145,7 @@ class Select(discord.ui.Select):
             self.cog_embed2 = discord.Embed(description="", color=color)
 
             
-            help_embed_manager = HelpEmbedImagesManager(
+            help_embed_manager = Help_Thumbnails(
                 self.set_thumbnail_file)
             thumbnail_url = help_embed_manager.get_image_url(cog_name)
 
