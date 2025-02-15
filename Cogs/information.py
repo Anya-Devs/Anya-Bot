@@ -229,22 +229,7 @@ class Information(commands.Cog):
         
         await ctx.reply(embed=embed, mention_author=False, view=view)
 
-    @commands.command(name="about_role")
-    async def role(self, ctx, user: discord.Member = None):
-        user = user or ctx.author
-        role = user.top_role
-        member_count = sum(
-            1 for member in ctx.guild.members if role in member.roles)
-        description = (
-            f"Role: {role.mention}\n"
-            f"Members with this role: `{member_count}`\n"
-            f"Rank: `{ctx.guild.roles.index(role) + 1}`"
-        )
-        embed = discord.Embed(
-            description=description, color=role.color, timestamp=datetime.now()
-        )
-        await ctx.reply(embed=embed, mention_author=False)
-
+    
     @commands.command(name="banner")
     async def banner(self, ctx, user: discord.Member = None):
         user = user or ctx.author
@@ -395,7 +380,7 @@ class Information(commands.Cog):
         view = PaginationView()
         await ctx.reply(embed=embed, view=view, mention_author=False)
 
-    @commands.command(name="role")
+    @commands.command(name="server_role")
     async def role_select(self, ctx):
         """Command to let users select roles and navigate members."""
         guild = ctx.guild
