@@ -163,33 +163,38 @@ class Select(discord.ui.Select):
                 self.cog_embed2.set_image(url="attachment://cog_image.png")
 
             
+            # Add the commands for the selected cog
             cog = self.bot.get_cog(cog_name)
             if cog:
-                cog_commands = [
-                    cmd for cmd in cog.get_commands() if not cmd.hidden]
+                cog_commands = [cmd for cmd in cog.get_commands() if not cmd.hidden]
                 if cog_commands:
                     command_mapping = self._load_command_mapping().get(cog_name, {})
-                    
-                    commands_info = "```\n"
-                    
+
+                    commands_info = ""
                     sorted_commands = sorted(cog_commands, key=lambda cmd: cmd.name)
+                    
                     for cmd in sorted_commands:
                         cmd_args = [
-                            (
-                                f"[{param.name}]"
-                                if param.default is not param.empty
-                                else f"<{param.name}>"
-                            )
+                            {
+                                "parameter": param.name,
+                                "type": "[]" if param.default is not param.empty else "<>"
+                            }
                             for param in cmd.clean_params.values()
                         ]
-                        args_str = " ".join(cmd_args)  
-                        command_info = (
-                            f"{cmd.name} {args_str}"
-                        )
-                        commands_info += f"{command_info}\n"
-                    commands_info += "```"
+                        
+                        # Prepare the formatted structure for each command
+                        command_info = {
+                            "command": cmd.name,
+                            "args": cmd_args
+                        }
+                        
+                        # Formatting each command as required
+                        command_str = f"{command_info['command']}:\n"
+                        for arg in command_info['args']:
+                            command_str += f"  - {arg['type']} {arg['parameter']}\n"
+                        commands_info += f"{command_str}\n"
                     
-                    self.cog_embed2.description = commands_info
+                    self.cog_embed2.description = f"```\n{commands_info}```"
                 else:
                     logger.info(f"No visible commands found for cog: {cog_name}")
             else:
@@ -210,8 +215,7 @@ class Select(discord.ui.Select):
             traceback_str = traceback.format_exc()
             print(traceback_str)
             logger.debug(f"An error occurred: {traceback_str}")
-            pass
-        
+            pass       
         
 class HelpMenu(discord.ui.View):
     def __init__(self, bot, primary_color, select_view, *, timeout=None):

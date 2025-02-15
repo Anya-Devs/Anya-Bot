@@ -187,7 +187,7 @@ class Help_Select_Embed_Mapping:
         # "<:system_icon:1238536111266201610>",
         "system": "<:system:1261208067085959320>",
         "quest": "<:anyasus:1258563706518765669> ",
-        "ai": "<:ai:1258206841737973842> ",
+        "ai": "✨",
         "pokemon": "<:Pokeball:1261208239891156992>",
         "anime": "<:neko_lurk:1320306198075015201>",
         "information": "<:help_info:1268971820988764272>",
