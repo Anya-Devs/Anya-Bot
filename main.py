@@ -39,7 +39,7 @@ class BotSetup(commands.AutoShardedBot):
         self.mongo_client = None
         self.DB_NAME = "Bot"
         self.COLLECTION_NAME = "information"
-        self.token_field = "Test_Token"
+        self.token_field = "Token"
 
     async def on_ready(self):
         print(f"\033[92mLogged in as {self.user} (ID: {self.user.id})\033[0m")
