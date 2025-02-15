@@ -67,9 +67,9 @@ class Information(commands.Cog):
 
 
     @commands.command(name="about", aliases=["info", "details"])
-    async def about(self, ctx, id: Union[discord.Member, int, str] = None):
-        if id is None:
-            id = ctx.bot.user
+    async def about(self, ctx, topic: Union[discord.Member, int, str] = None):
+        if topic is None:
+            topic = ctx.bot.user
         embed = await self.get_information_embed(id, self.bot)
         await ctx.reply(embed=embed, mention_author=False)
         

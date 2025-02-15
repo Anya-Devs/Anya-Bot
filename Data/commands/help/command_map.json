@@ -5,7 +5,9 @@
         "shop": "Buy a Spy Tool.",
         "redirect": " ",
         "inventory": " ",
-        "q_roles": " "
+        "q_roles": " ",
+        "quest_roles": " ",
+        "balance": " "
     },
     "Ai": {
         "vision_model": "Get the current vision model.",
@@ -41,7 +43,9 @@
         "roles": " ",
         "invite": " ",
         "perms": " ",
-        "emojis": " "
+        "emojis": " ",
+        "json": " ",
+        "server_roles": " "
     },
     "PokemonBot": {
         "predict": " "

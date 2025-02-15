@@ -61,6 +61,7 @@ class Help_Thumbnails:
         return self.help_embed.get(cog_name, {}).get("thumbnail_url", None)
 
 
+
 class Select(discord.ui.Select):
     def __init__(self, cog_commands, bot, primary_color):
         options = [
@@ -74,149 +75,169 @@ class Select(discord.ui.Select):
         ]
 
         if not options:
-            options = [
-                discord.SelectOption(
-                    label="No Categories Available", value="none")
-            ]
-        super().__init__(
-            placeholder="[option]", max_values=1, min_values=1, options=options
-        )
+            options = [discord.SelectOption(label="No Categories Available", value="none")]
+        super().__init__(placeholder="[option]", max_values=1, min_values=1, options=options)
         self.cog_commands = cog_commands
         self.bot = bot
-        self.page = 0  
         self.primary_color = primary_color
         self.command_mapping_file = "Data/commands/help/command_map.json"
         self.set_thumbnail_file = "Data/commands/help/help_embed_images.json"
 
     def _ensure_file_exists(self):
-        """Ensures the command mapping file exists."""
         os.makedirs(os.path.dirname(self.command_mapping_file), exist_ok=True)
         if not os.path.exists(self.command_mapping_file):
             with open(self.command_mapping_file, "w") as f:
                 json.dump({}, f, indent=4)
 
     def _load_command_mapping(self):
-        """Loads the command mapping JSON."""
         self._ensure_file_exists()
         with open(self.command_mapping_file, "r") as f:
             return json.load(f)
 
     def _save_command_mapping(self, mapping):
-        """Saves the updated command mapping JSON."""
         with open(self.command_mapping_file, "w") as f:
             json.dump(mapping, f, indent=4)
 
     def _update_command_mapping(self):
-        """Updates the command mapping by syncing with cog commands."""
         mapping = self._load_command_mapping()
         for cog_name in self.cog_commands.keys():
             if cog_name not in mapping:
                 mapping[cog_name] = {}
             cog = self.bot.get_cog(cog_name)
             if cog:
-                cog_commands = [
-                    cmd for cmd in cog.get_commands() if not cmd.hidden]
-                for cmd in cog_commands:
-                    if cmd.name not in mapping[cog_name]:
+                for cmd in cog.get_commands():
+                    if not cmd.hidden and cmd.name not in mapping[cog_name]:
                         mapping[cog_name][cmd.name] = "---------"
         self._save_command_mapping(mapping)
+
+    def _build_commands_info(self, cog):
+     output = ""
+     seen_commands = set()  
+     main_category_commands = {}
+
+     for cmd in [cmd for cmd in cog.get_commands() if not cmd.hidden]:
+        cmd_args = [f"[{param.name}]" if param.default is not param.empty else f"<{param.name}>" for param in cmd.clean_params.values()]
+
+        # Limit to 3 arguments and add '...' if there are more
+        if len(cmd_args) > 3:
+            cmd_args = cmd_args[:3] + ['...']
+
+        main_category = cmd.name.split('_')[0]  # Get the part before the first '_'
+
+        # If the command has a subcommand, group it under the main command
+        if main_category != cmd.name:  # If the command has a subcommand
+            if main_category not in seen_commands:
+                seen_commands.add(main_category)
+                output += f"{main_category} {' '.join(cmd_args)}\n"  # Add the main category first
+
+            if cmd.name not in seen_commands:
+                seen_commands.add(cmd.name)
+                main_category_commands.setdefault(main_category, []).append(f"- {cmd.name} {' '.join(cmd_args)}")
+        else:  # If it's a standalone command
+            if cmd.name not in seen_commands:
+                seen_commands.add(cmd.name)
+                output += f"{cmd.name} {' '.join(cmd_args)}\n"
+
+     for main_category, subcommands in main_category_commands.items():
+        output += "\n".join(subcommands) + "\n"
+
+     return self.organize_info(output.strip())
+
+    def organize_info(self, help_info):
+     # Split the input text into lines
+     lines = help_info.strip().split('\n')
+    
+     # Initialize the dictionary to store the organized commands
+     organized = {}
+    
+     # Process each command line
+     for line in lines:
+        parts = line.split(' ')
+        command_name = parts[0]
+        
+        # Check if it's a main command or a sub-command (prefixed by '-')
+        if command_name.startswith('-'):
+            # Find the base command name (before the underscore) for grouping
+            base_command = line.split(' ')[1].split('_')[0]
+            if base_command not in organized:
+                organized[base_command] = []
+            organized[base_command].append(line.strip())
+        else:
+            # Add the regular command to the dictionary
+            if command_name not in organized:
+                organized[command_name] = []
+            organized[command_name].append(line.strip())
+
+     # Now, to ensure correct ordering and grouping, we'll create the final list
+     sorted_output = []
+     for command_group in organized:
+        # Add the main command itself
+        sorted_output.append(command_group)
+        # Sort and add any sub-commands under the main command
+        sub_commands = sorted(organized[command_group][1:])  # Exclude the main command
+        for sub_command in sub_commands:
+            sorted_output.append(sub_command)
+
+     # Return the organized and sorted commands as a single text block
+     return '\n'.join(sorted_output)
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
 
     async def callback(self, interaction: discord.Interaction):
         try:
             self._update_command_mapping()
-
             cog_name = self.values[0]
             if cog_name == "none":
-                await interaction.response.send_message(
-                    "No categories available.", ephemeral=True
-                )
+                await interaction.response.send_message("No categories available.", ephemeral=True)
                 return
 
             cog_info = self.cog_commands.get(cog_name)
             color = self.primary_color
             emoji = Help_Select_Embed_Mapping.emojis.get(cog_name.lower())
 
-            
-            self.cog_embed1 = discord.Embed(
-                title=f'Category - {emoji} {cog_name.replace("_", " ")}',
-                description=f'{Help_Select_Embed_Mapping.embeds[cog_name.lower()]["description"] or ""}',
-                color=color,
-            )
+            self.cog_embed1 = discord.Embed(title=f'Category - {emoji} {cog_name.replace("_", " ")}', description=f'{Help_Select_Embed_Mapping.embeds.get(cog_name.lower(), {}).get("description", "")}', color=color)
             self.cog_embed2 = discord.Embed(description="", color=color)
 
-            
-            help_embed_manager = Help_Thumbnails(
-                self.set_thumbnail_file)
+            help_embed_manager = Help_Thumbnails(self.set_thumbnail_file)
             thumbnail_url = help_embed_manager.get_image_url(cog_name)
-
             if thumbnail_url:
                 self.cog_embed2.set_thumbnail(url=thumbnail_url)
-            else:
-                logger.warning(f"No thumbnail URL found for cog '{cog_name}'.")
 
-            
             image_path = "Data/commands/help/set_image/cog_image.png"
-            file = None
             if os.path.exists(image_path):
                 with open(image_path, "rb") as f:
                     file = discord.File(f, filename="cog_image.png")
                 self.cog_embed2.set_image(url="attachment://cog_image.png")
 
-            
-            # Add the commands for the selected cog
             cog = self.bot.get_cog(cog_name)
             if cog:
-                cog_commands = [cmd for cmd in cog.get_commands() if not cmd.hidden]
-                if cog_commands:
-                    command_mapping = self._load_command_mapping().get(cog_name, {})
-
-                    commands_info = ""
-                    sorted_commands = sorted(cog_commands, key=lambda cmd: cmd.name)
-                    
-                    for cmd in sorted_commands:
-                        cmd_args = [
-                            {
-                                "parameter": param.name,
-                                "type": "[]" if param.default is not param.empty else "<>"
-                            }
-                            for param in cmd.clean_params.values()
-                        ]
-                        
-                        # Prepare the formatted structure for each command
-                        command_info = {
-                            "command": cmd.name,
-                            "args": cmd_args
-                        }
-                        
-                        # Formatting each command as required
-                        command_str = f"{command_info['command']}:\n"
-                        for arg in command_info['args']:
-                            command_str += f"  - {arg['type']} {arg['parameter']}\n"
-                        commands_info += f"{command_str}\n"
-                    
+                commands_info = self._build_commands_info(cog)
+                if commands_info:
                     self.cog_embed2.description = f"```\n{commands_info}```"
-                else:
-                    logger.info(f"No visible commands found for cog: {cog_name}")
-            else:
-                logger.info(f"Cog not found: {cog_name}")
 
-            
             if file:
-                await interaction.response.edit_message(
-                    embed=self.cog_embed2, attachments=[file]
-                )
+                await interaction.response.edit_message(embed=self.cog_embed2, attachments=[file])
             else:
-                await interaction.response.edit_message(
-                    embed=self.cog_embed2, attachments=[]
-                )
+                await interaction.response.edit_message(embed=self.cog_embed2)
 
-            logger.info("Message edited successfully.")
         except Exception as e:
             traceback_str = traceback.format_exc()
             print(traceback_str)
             logger.debug(f"An error occurred: {traceback_str}")
-            pass       
-        
+
+            
 class HelpMenu(discord.ui.View):
     def __init__(self, bot, primary_color, select_view, *, timeout=None):
         super().__init__(timeout=timeout)
