@@ -169,9 +169,9 @@ class Select(discord.ui.Select):
                     cmd for cmd in cog.get_commands() if not cmd.hidden]
                 if cog_commands:
                     command_mapping = self._load_command_mapping().get(cog_name, {})
-                    # Create a string to hold the commands and arguments
+                    
                     commands_info = "```\n"
-                    # Sort the commands alphabetically by name
+                    
                     sorted_commands = sorted(cog_commands, key=lambda cmd: cmd.name)
                     for cmd in sorted_commands:
                         cmd_args = [
@@ -188,7 +188,7 @@ class Select(discord.ui.Select):
                         )
                         commands_info += f"{command_info}\n"
                     commands_info += "```"
-                    # Set the description with the sorted command list
+                    
                     self.cog_embed2.description = commands_info
                 else:
                     logger.info(f"No visible commands found for cog: {cog_name}")

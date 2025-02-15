@@ -70,7 +70,7 @@ class Quest(commands.Cog):
             return  
         """
      Command to store channels for the guild.
-     Usage: !setchannels #channel1 #channel2
+     Usage: ...setchannels #channel1 #channel2
      """
         try:
             guild_id = str(ctx.guild.id)
@@ -281,7 +281,7 @@ class Quest(commands.Cog):
             
             embed = discord.Embed(
                 title=f"{ctx.author.display_name}'s Inventory",
-                #description="Your current tool inventory:\n- ||Due to bugs, purchasing doesn't grant an item but only reserves a slot on first purchase.||",
+                
                 color=primary_color(),
                 timestamp=datetime.now(),
             )
@@ -2711,12 +2711,12 @@ class MaterialsButton(discord.ui.View):
         self.max_pages = (len(shop_data["Materials"]) - 1) // self.items_per_page + 1
         self.original_embed = original_embed  
         self.materials_dict = {
-            material["name"]: material.get("emoji", "")  # Ensure emoji is set to an empty string if missing
+            material["name"]: material.get("emoji", "")  
             for material in self.shop_data.get("Materials", [])
         }
 
     async def update_view(self):
-        self.clear_items()  # Clear the existing items
+        self.clear_items()  
 
         material_checks = await asyncio.gather(
             *(
@@ -2725,7 +2725,7 @@ class MaterialsButton(discord.ui.View):
             )
         )
 
-        # Check if all material checks pass
+        
         if all(material_checks):
             buy_button = discord.ui.Button(
                 style=discord.ButtonStyle.blurple,
@@ -2748,7 +2748,7 @@ class MaterialsButton(discord.ui.View):
             self.add_item(buy_button)  
 
 
-        # Get the materials related to the current spy tool
+        
         tool_name = self.original_embed.title
         tool = next(
             (
@@ -2764,7 +2764,7 @@ class MaterialsButton(discord.ui.View):
         else:
             required_materials = []
 
-        # Pagination for the materials list
+        
         start_index = self.page * self.items_per_page
         end_index = start_index + self.items_per_page
         filtered_materials = [
@@ -2772,7 +2772,7 @@ class MaterialsButton(discord.ui.View):
             if material["name"] in [m.get("material") for m in required_materials]
         ][start_index:end_index]
 
-        # Track the current row for buttons
+        
         current_row = 1
         item_count = 0
 
@@ -2782,7 +2782,7 @@ class MaterialsButton(discord.ui.View):
                 emoji = material.get("emoji", "")
                 price = material.get("price", "")
 
-                # If emoji is invalid, it might raise an error when trying to use it
+                
                 try:
                     material_button = discord.ui.Button(
                         style=discord.ButtonStyle.green,
@@ -2795,22 +2795,22 @@ class MaterialsButton(discord.ui.View):
                     self.add_item(material_button)
                     item_count += 1
 
-                    # After 5 items, switch to a new row
+                    
                     if item_count % 5 == 0:
                         current_row += 1
-                        item_count = 0  # Reset the item count for the new row
+                        item_count = 0  
 
                 except Exception as e:
                     print(f"Error generating emoji for material: {name}, Emoji: {emoji}")
                     print(f"Error: {e}")
-                    continue  # Skip this material if emoji generation fails
+                    continue  
 
             except Exception as e:
                 traceback.print_exc()
                 
 
 
-        # Pagination buttons should go in a separate row (row 2 or higher)
+        
         pagination_row = current_row if current_row > 1 else 2
 
         if self.page > 0:
