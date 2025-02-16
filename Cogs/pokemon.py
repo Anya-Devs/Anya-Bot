@@ -19,6 +19,8 @@ import aiohttp
 import requests
 import motor.motor_asyncio
 from PIL import Image
+import cysimdjson
+
 
 
 
@@ -63,30 +65,23 @@ class Pokemon_Emojis(commands.Cog):
         self.POKE_API_URL = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{}.png"
         self.emoji_json_path = os.path.join("Data", "pokemon", "pokemon_emojis.json")
         self.owner_id = 1124389055598170182
+        self.parser = cysimdjson.JSONParser()  # Faster JSON parser
+
         
         self.emoji_mapping = self.load_emoji_mapping()
-
 
         os.makedirs(os.path.dirname(self.emoji_json_path), exist_ok=True)
         os.makedirs(self.POKEMON_IMAGES_FOLDER, exist_ok=True)
 
-        
-
-        if os.path.exists(self.emoji_json_path):
-            with open(self.emoji_json_path, "r") as f:
-                self.emoji_mapping = json.load(f)
-        else:
-            self.emoji_mapping = {}
-
         self.semaphore = asyncio.Semaphore(5)
 
     def load_emoji_mapping(self):
-        """Load emoji mappings from the JSON file."""
-        if os.path.exists(self.emoji_json_path):
-            with open(self.emoji_json_path, "r") as f:
-                return json.load(f)
-        else:
-            return {}
+     """Load emoji mappings from the JSON file using cysimdjson for fast parsing."""
+     if os.path.exists(self.emoji_json_path):
+        with open(self.emoji_json_path, "rb") as f:  # Open in binary mode
+            return self.parser.parse(f.read())  # No need to encode, it's already bytes
+     else:
+        return {}
         
     def get_pokemon_id(self, filename):
         return filename.split(".")[0].zfill(3)
@@ -185,7 +180,7 @@ class Pokemon_Emojis(commands.Cog):
 
             # Save updated emoji mapping incrementally
             with open(self.emoji_json_path, "w") as f:
-                json.dump(self.emoji_mapping, f, indent=4)
+                cysimdjson.dump(self.emoji_mapping, f, indent=4)  # Use cysimdjson to dump JSON
 
         except discord.errors.HTTPException as e:
             if e.status == 429:
@@ -290,7 +285,7 @@ class Pokemon_Emojis(commands.Cog):
     
     @staticmethod
     def get_emoji_for_pokemon(self, pokemon_id):
-        """Return the emoji in the format <:emoji_name:emoji_id> for a given Pokémon ID across all servers."""
+        """Return the emoji in the format <:emoji_name:emoji_id> for a given Pokémon ID across all servers.""" 
         emoji_name = str(pokemon_id).zfill(3)
         
         # Loop through all the server data in the emoji mapping
@@ -303,7 +298,7 @@ class Pokemon_Emojis(commands.Cog):
         
         # Return None if no emoji is found for that Pokémon ID across all servers
         return None
-    
+
     def call_emoji(self, emoji_mapping, pokemon_id):
      """
      Return a discord.PartialEmoji for a given Pokémon ID across all servers.
@@ -318,14 +313,12 @@ class Pokemon_Emojis(commands.Cog):
             print(f"Emoji found: {emoji_name} (ID: {emoji_id})")  # Debug print
             return f"<:{emoji_name}:{emoji_id}>"
             
-            
             # Return a discord.PartialEmoji object
             return discord.PartialEmoji(name=emoji_name, id=emoji_id)
     
      print(f"No emoji found for Pokémon ID {pokemon_id}")  # Debug print
      # Return None if no matching emoji is found
      return None
-    
     
     @commands.command()
     async def get_emoji(self, ctx, pokemon_id: int):
@@ -335,55 +328,6 @@ class Pokemon_Emojis(commands.Cog):
             await ctx.send(f"Here is your Pokémon emoji: {emoji_str}")
         else:
             await ctx.send(f"No emoji found for Pokémon ID {pokemon_id} across all servers.")
-   
-   
-   
-   
-   
-   
-   
-    @commands.command(name="clear_emojis")
-    async def delete_all_emojis(self, ctx):
-     # Loop through each server in GUILD_IDS
-     for guild_id in self.GUILD_IDS:
-        server = self.bot.get_guild(int(guild_id))
-        
-        if not server:
-            print(f"Server with ID {guild_id} not found.")
-            continue
-
-        if not server.me.guild_permissions.manage_emojis:
-            await ctx.send(f"I do not have permission to manage emojis in server {server.name} (ID: {server.id})!")
-            continue
-
-        print(f"Starting to delete all emojis in server: {server.name} (ID: {server.id})")
-        
-        # Get all emojis from the server and delete them
-        emojis_to_delete = list(server.emojis)
-
-        if not emojis_to_delete:
-            print(f"No emojis to delete in server: {server.name}")
-            continue
-
-        for emoji in emojis_to_delete:
-            try:
-                await emoji.delete()
-                print(f"Deleted emoji: {emoji.name} from server: {server.name}")
-            except discord.HTTPException as e:
-                # If error code 10014 (Unknown Emoji) is returned, ignore it
-                if hasattr(e, "code") and e.code == 10014:
-                    print(f"Emoji {emoji.name} not found (possibly already deleted). Skipping...")
-                    continue
-                else:
-                    print(f"Failed to delete emoji {emoji.name}: {e}")
-
-        await ctx.send(f"All emojis have been deleted in {server.name} (ID: {server.id})!")
-        print(f"Finished deleting emojis in server: {server.name}")
-
-
-
-
-
 
 
 
@@ -773,7 +717,6 @@ class Pokemon(commands.Cog):
     @commands.command(
         help="Displays Pokemon dex information.", aliases=["pokdex", "dex", "d", "p"]
     )
-    @commands.cooldown(1, 6, commands.BucketType.user)
     async def pokemon(self, ctx, *, args=None, form=None):
         
         primary_color = self.primary_color()
@@ -2161,7 +2104,7 @@ class PokeSelect(discord.ui.Select):
             form_name = form["name"]
             formatted_name  = self.format_pokemon_name(form_name)
             pokemon_id = self.get_pokemon_id(form_name)
-            description = self.get_pokemon_description_first(form_name)
+            description = self.get_pokemon_description(pokemon_id['id'])
             emo = Pokemon_Emojis(bot=self.bot)
             emoji = emo.call_emoji(self.emoji_mapping, pokemon_id)
 
@@ -2199,16 +2142,6 @@ class PokeSelect(discord.ui.Select):
         # Get pokemon ID from the response
         return {"id": data["id"], "slug": form_name.lower()}
 
-    def get_pokemon_description_first(self, pokemon_name):
-      file_path="Data/pokemon/pokemon_description.csv"
-      with open(file_path, mode="r", encoding="utf-8") as csv_file:
-        reader = csv.DictReader(csv_file)
-
-        for row in reader:
-            if row["slug"].lower() == pokemon_name.lower():  # Match by name (slug)
-                return row["description"]
-
-      return "Pokémon not found"
 
     def format_pokemon_name(self, name):
      """Format Pokemon names by handling forms like Alolan Vulpix, Gigantamax, etc."""
