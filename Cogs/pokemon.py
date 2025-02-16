@@ -2198,7 +2198,7 @@ class PokeSelect(discord.ui.Select):
         # Get pokemon ID from the response
         return {"id": data["id"], "slug": form_name.lower()}
 
-     def get_pokemon_description_first(self, pokemon_name):
+    def get_pokemon_description_first(self, pokemon_name):
       file_path="Data/pokemon/pokemon_description.csv"
       with open(file_path, mode="r", encoding="utf-8") as csv_file:
         reader = csv.DictReader(csv_file)
@@ -2207,7 +2207,7 @@ class PokeSelect(discord.ui.Select):
             if row["slug"].lower() == pokemon_name.lower():  # Match by name (slug)
                 return row["description"]
 
-     return "Pokémon not found"
+      return "Pokémon not found"
 
     def format_pokemon_name(self, name):
      """Format Pokemon names by handling forms like Alolan Vulpix, Gigantamax, etc."""
