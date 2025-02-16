@@ -56,7 +56,8 @@ class Pokemon_Emojis(commands.Cog):
             "1340448664157687830", "1340448723603296300", "1340448725314703390",
             "1340448849281548363", "1340449016089153598", "1340449082971390033",
             "1340449185933299723", "1340449231194030121", "1340449271366815806",
-            "1340449391533625398", "1340449491765166231", "1340449540175691847"
+            "1340449391533625398", "1340449491765166231", "1340449540175691847",
+            "1340698929922183300", "1340699061992558665", "1340699001011437610"
         ]
         self.POKEMON_IMAGES_FOLDER = "Data/pokemon/pokemon_emojis"
         self.POKE_API_URL = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{}.png"
@@ -2170,7 +2171,7 @@ class PokeSelect(discord.ui.Select):
             option = discord.SelectOption(
                 label=formatted_name,
                 value=form_url,
-                description=f"{emoji[:50]}...",
+                description=f"{description[:50]}...",
                 emoji=emoji
             )
             options.append(option)
