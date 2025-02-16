@@ -42,133 +42,255 @@ logging.basicConfig(
 )
 
 
-class PokemonPredictor:
-    def __init__(
-        self,
-        dataset_folder="Data/pokemon/pokemon_images",
-        dataset_file="Data/pokemon/dataset.npy",
-    ):
-        self.orb = cv.ORB_create(nfeatures=172)
-        self.flann = cv.FlannBasedMatcher(
-            dict(algorithm=6, table_number=9, key_size=9, multi_probe_level=1),
-            dict(checks=10),
-        )
-        self.dataset_file = dataset_file
-        self.dataset_folder = dataset_folder
-        self.cache = {}
 
+import discord
+from discord.ext import commands
+import os
+import json
+import asyncio
+import aiohttp
+import requests
+
+import os
+import json
+import requests
+import discord
+from discord.ext import commands
+import asyncio
+
+class Pokemon_Emojis(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.GUILD_IDS = [
+            "1340447626105065585", "1340447685685153852", "1340447747974762556", 
+            "1340447749111545998", "1340447923548459133", "1340447977340145717", 
+            "1340448026740916338", "1340448028196212807", "1340448148866469971", 
+            "1340448241069723749", "1340448280966074519", "1340448379729346560", 
+            "1340448496100053055", "1340448546603667619", "1340448595052335104", 
+            "1340448664157687830", "1340448723603296300", "1340448725314703390", 
+            "1340448849281548363", "1340449016089153598", "1340449082971390033", 
+            "1340449185933299723", "1340449231194030121", "1340449271366815806", 
+            "1340449391533625398", "1340449491765166231", "1340449540175691847"
+        ]
+        self.POKEMON_IMAGES_FOLDER = "Data/pokemon/pokemon_emojis"
+        self.POKE_API_URL = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{}.png"
+        self.emoji_json_path = os.path.join("Data", "pokemon", "pokemon_emojis.json")
         
-        self.load_dataset()
+        # Ensure directories exist
+        os.makedirs(os.path.dirname(self.emoji_json_path), exist_ok=True)
+        os.makedirs(self.POKEMON_IMAGES_FOLDER, exist_ok=True)  # Ensure pokemon_emojis folder exists
 
-    def load_dataset(self):
-        """Loads the dataset from a file or creates a new one."""
-        if os.path.exists(self.dataset_file):
-            self.cache = np.load(self.dataset_file, allow_pickle=True).item()
-            print(f"Dataset loaded with {len(self.cache)} images.")
+        if os.path.exists(self.emoji_json_path):
+            with open(self.emoji_json_path, "r") as f:
+                self.emoji_mapping = json.load(f)
         else:
-            print("Dataset not found, creating a new one...")
-            self.create_dataset()
+            self.emoji_mapping = {}
 
-    def create_dataset(self):
-        """Creates the dataset by processing all images in the folder."""
-        for filename in os.listdir(self.dataset_folder):
-            if filename.endswith(".png"):
-                path = os.path.join(self.dataset_folder, filename)
-                self.process_image(path, filename)
+        self.semaphore = asyncio.Semaphore(5)
 
-        
-        if self.cache:
-            np.save(self.dataset_file, self.cache)
-            print(f"Dataset saved with {len(self.cache)} images.")
+    def get_pokemon_id(self, filename):
+        """Ensure the Pokémon ID is always 3 digits with leading zeros."""
+        return filename.split(".")[0].zfill(3)  # e.g., "1.png" -> "001", "23.png" -> "023"
 
-    def process_image(self, path, filename):
-        """Processes an image to extract descriptors and metadata."""
-        img = cv.imread(path)
-        if img is None:
-            print(f"Failed to load {filename}")
+    async def download_pokemon_images(self):
+        """Download Pokémon images dynamically for all Pokémon."""
+        pokemon_ids = await self.fetch_all_pokemon_ids()
+
+        # List all current image files in the folder
+        existing_images = set(self.load_images())  # Get all the files in the folder
+        missing_pokemon_ids = []
+
+        for pokemon_id in pokemon_ids:
+            img_filename = f"{str(pokemon_id).zfill(3)}.png"
+            if img_filename not in existing_images:
+                missing_pokemon_ids.append(pokemon_id)
+            else:
+                print(f"Image for Pokémon ID {pokemon_id} already exists.")
+
+        if missing_pokemon_ids:
+            print(f"Downloading missing Pokémon images: {missing_pokemon_ids}")
+            for pokemon_id in missing_pokemon_ids:
+                img_url = self.POKE_API_URL.format(pokemon_id)
+                img_path = os.path.join(self.POKEMON_IMAGES_FOLDER, f"{str(pokemon_id).zfill(3)}.png")
+                try:
+                    response = requests.get(img_url)
+                    if response.status_code == 200:
+                        with open(img_path, "wb") as img_file:
+                            img_file.write(response.content)
+                        print(f"Downloaded image for Pokémon ID: {pokemon_id}")
+                    else:
+                        print(f"Failed to download image for Pokémon ID: {pokemon_id}")
+                except Exception as e:
+                    print(f"Error downloading Pokémon ID {pokemon_id}: {e}")
+        else:
+            print("All Pokémon images are already downloaded.")
+
+    def load_images(self):
+        return os.listdir(self.POKEMON_IMAGES_FOLDER)
+
+    async def fetch_all_pokemon_ids(self):
+        """Fetch all Pokémon IDs asynchronously from the Pokémon API."""
+        pokemon_ids = []
+        url = "https://pokeapi.co/api/v2/pokemon"
+        async with aiohttp.ClientSession() as session:
+            while url:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        for result in data["results"]:
+                            async with session.get(result["url"]) as poke_response:
+                                if poke_response.status == 200:
+                                    poke_data = await poke_response.json()
+                                    pokemon_ids.append(poke_data["id"])
+                        url = data.get("next")
+                    else:
+                        print("Failed to fetch Pokémon IDs.")
+                        break
+        return pokemon_ids
+
+    async def list_existing_emojis(self, server):
+        """List existing emojis in the server."""
+        if server is None:
+            print("Server is None, cannot list emojis.")
+            return {}
+
+        try:
+            existing_emojis = {emoji.name: emoji.id for emoji in server.emojis}
+            return existing_emojis
+        except AttributeError:
+            print(f"Error: Unable to access emojis for {server.name}.")
+            return {}
+
+    async def upload_single_emoji(self, server, pokemon_id):
+        """Upload a single emoji for a given Pokémon ID if it doesn't already exist."""
+        existing_emojis = await self.list_existing_emojis(server)
+
+        if pokemon_id in existing_emojis:
+            print(f"Emoji for {pokemon_id} already exists in {server.name}. Skipping upload.")
             return
 
-        gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        _, descriptors = self.orb.detectAndCompute(gray, None)
-
-        if descriptors is not None and len(descriptors) > 0:
+        try:
+            emoji_image_path = os.path.join(self.POKEMON_IMAGES_FOLDER, f"{str(pokemon_id).zfill(3)}.png")
+            with open(emoji_image_path, "rb") as emoji_file:
+                emoji_data = emoji_file.read()
+                emoji = await server.create_custom_emoji(name=str(pokemon_id).zfill(3), image=emoji_data)
+                print(f"Created emoji for {pokemon_id} in {server.name}.")
+                if str(server.id) not in self.emoji_mapping:
+                    self.emoji_mapping[str(server.id)] = {}
+                self.emoji_mapping[str(server.id)][pokemon_id] = {"name": str(pokemon_id).zfill(3), "id": emoji.id}
+        except discord.HTTPException as e:
+            await self.handle_rate_limit(e)
             
-            metadata = {
-                "descriptors": descriptors.astype(np.uint8),
-                "dimensions": img.shape[:2],  
-                "avg_color": img.mean(axis=(0, 1)).tolist(),  
-                "hash": hash(filename),  
-            }
-            self.cache[filename] = metadata
+    async def upload_emojis_for_server(self, servers, max_emojis_per_server=50, embed_message=None, ctx=None):
+        """Upload emojis for all the given servers, filling slots across servers."""
+        images = self.load_images()
+        total_emojis = len(images)
+        emojis_uploaded = 0
+        current_server_index = 0
 
-    @staticmethod
-    def evaluate_image_quality(image):
-        """Evaluates image quality based on sharpness."""
-        sharpness = cv.Laplacian(image, cv.CV_64F).var()
-        return sharpness
+        while emojis_uploaded < total_emojis:
+            server = servers[current_server_index]
+            existing_emojis = await self.list_existing_emojis(server)
+            max_uploads_for_server = max_emojis_per_server - len(existing_emojis)
+            
+            print(f"Existing emojis in {server.name}: {len(existing_emojis)}")
+            print(f"Uploading to {server.name} with room for {max_uploads_for_server} more emojis.")
+            
+            embed = discord.Embed(
+                    description=f"Starting upload for {server.name}.",
+                    color=discord.Color.default())
 
-    def cross_match(self, descriptors, image, k=2):
-        """Matches the descriptors against the dataset and finds the best match."""
-        sharpness = self.evaluate_image_quality(image)
+            if embed_message is None:
+                embed_message = await ctx.send(embed=embed)
 
-        
-        if sharpness < 0.2:
-            return None, 0
+            log = f"Uploading to {server.name} with room for {max_uploads_for_server} more emojis."
+            embed.description = f"```{log}```"
 
-        best_match, max_accuracy = None, 0
-        for filename, data in self.cache.items():
-            matches = self.flann.knnMatch(descriptors, data["descriptors"], k)
-            accuracy = self.evaluate_accuracy(matches)
-            if accuracy > max_accuracy:
-                best_match, max_accuracy = filename, accuracy
+            for img in images[emojis_uploaded:emojis_uploaded + max_uploads_for_server]:
+                pokemon_id = self.get_pokemon_id(img)
+                if pokemon_id in existing_emojis:
+                    print(f"Skipping {pokemon_id}, as it already exists.")
+                    continue
 
-        return best_match, max_accuracy
+                print(f"Uploading emoji for {pokemon_id} in {server.name}...")
+                await self.upload_single_emoji(server, pokemon_id)
+                emojis_uploaded += 1
+                await asyncio.sleep(10)  # Wait 10 seconds before uploading the next emoji
 
-    @staticmethod
-    def evaluate_accuracy(matches):
-        """Evaluates accuracy based on good matches."""
-        good_matches = sum(
-            1
-            for match in matches
-            if len(match) >= 2 and match[0].distance < 0.75 * match[1].distance
+                if emojis_uploaded >= total_emojis:
+                    break
+            
+            if len(existing_emojis) >= max_emojis_per_server:
+                log = f"{server.name} is full. Moving to the next server."
+                embed.description = f"{log}"
+                await embed_message.edit(embed=embed)
+
+                current_server_index = (current_server_index + 1) % len(servers)
+                continue
+
+            if emojis_uploaded >= total_emojis:
+                break
+
+    @commands.command()
+    async def create_emojis(self, ctx):
+        if ctx.author.id != self.owner_id:
+            await ctx.reply("You do not have permission to use this command")
+            return 
+        """Download Pokémon images and upload them as emojis."""
+        total_servers = len(self.GUILD_IDS)
+        embed = discord.Embed(
+            description="Downloading Pokémon images and uploading emojis.",
+            color=discord.Color.default()
         )
-        accuracy = (good_matches / len(matches)) * 100 if matches else 0
-        return accuracy
+        initial_message = await ctx.send(embed=embed)
+        await self.download_pokemon_images()
 
-    async def predict_pokemon(self, img):
-        """Predicts the Pokémon by comparing descriptors with the precomputed dataset."""
-        start_time = time.time()
-        gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        _, descriptors = self.orb.detectAndCompute(gray_img, None)
+        servers = [self.bot.get_guild(int(guild_id)) for guild_id in self.GUILD_IDS]
+        await self.upload_emojis_for_server(servers, embed_message=initial_message, ctx=ctx)
 
-        if descriptors is None:
-            return "No descriptors found", time.time() - start_time
+        with open(self.emoji_json_path, "w") as f:
+            json.dump(self.emoji_mapping, f, indent=4)
+        await ctx.send("All Pokémon emojis have been created and mapping saved!")
 
-        best_match, accuracy = self.cross_match(descriptors, img)
-        elapsed_time = time.time() - start_time
+    @commands.command()
+    async def emoji(self, ctx, pokemon_id: str):
+        """Fetch a Pokémon emoji."""
+        await ctx.send(self.get_emoji(pokemon_id))
 
-        if best_match:
-            predicted_name = best_match.replace(
-                ".png", "").replace("_flipped", "")
-            return (
-                f"{predicted_name.title()}: {round(accuracy, 2)}%",
-                elapsed_time,
-                predicted_name,
-            )
-        else:
-            return "No match found", elapsed_time
+    def get_emoji(self, pokemon_id: str):
+        """Return the first available emoji for the given Pokémon ID from any server."""
+        for server_id, emojis in self.emoji_mapping.items():
+            if pokemon_id in emojis:
+                emoji_data = emojis[pokemon_id]
+                return f"<:{emoji_data['name']}:{emoji_data['id']}>"
+        return "Emoji not found!"
 
-    def get_metadata(self, filename):
-        """Retrieves metadata for a given image in the dataset."""
-        metadata = self.cache.get(filename)
-        if metadata:
-            dimensions = metadata["dimensions"]
-            avg_color = metadata["avg_color"]
-            hash_value = metadata["hash"]
-            return (
-                f"Dimensions: {dimensions}, Avg Color: {avg_color}, Hash: {hash_value}"
-            )
-        return "Metadata not found for the given image."
+    @commands.command()
+    async def clear_emojis(self, ctx):
+        if ctx.author.id != self.owner_id:
+            await ctx.reply("You do not have permission to use this command")
+            return 
+        """Clear all custom emojis for each specified server."""
+        for guild_id in self.GUILD_IDS:
+            server = self.bot.get_guild(int(guild_id))
+            if not server:
+                continue
+            for emoji in server.emojis:
+                try:
+                    await emoji.delete(reason="Clearing emojis command invoked")
+                    print(f"Deleted emoji {emoji.name} in {server.name}")
+                    await asyncio.sleep(1)
+                except Exception as e:
+                    print(f"Failed to delete emoji {emoji.name} in {server.name}: {e}")
+            self.emoji_mapping[str(server.id)] = {}
+            await asyncio.sleep(10)
+        with open(self.emoji_json_path, "w") as f:
+            json.dump(self.emoji_mapping, f, indent=4)
+        await ctx.send("Cleared all custom emojis for the specified servers and updated mapping.")
+
+
+
+
 
 
 
@@ -236,7 +358,7 @@ class Pokemon(commands.Cog):
             874910942490677270,
         ]  
         self.phrase = "Shiny hunt pings:"
-        self.predictor = PokemonPredictor()
+        #self.predictor = PokemonPredictor()
         self.data_handler = PokemonData()  
         self.primary_color = primary_color
         self.error_custom_embed = error_custom_embed
@@ -412,96 +534,6 @@ class Pokemon(commands.Cog):
                         )
         else:
             await ctx.send("No image found to predict.")
-
-    """
-     @commands.Cog.listener()
-     async def on_message(self, message):
-        
-        if message.author.id == self.author_id and message.embeds:
-            embed = message.embeds[0]
-            if embed.description and "Guess the pokémon" in embed.description:
-                image_url = embed.image.url
-
-                
-                bot_response = await self.wait_for_bot_response(message.channel)
-
-                if bot_response:
-                    
-                    
-                    pass
-                else:
-                    
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(image_url) as response:
-                            if response.status == 200:
-                                loop = asyncio.get_event_loop()
-                                img_bytes = await loop.run_in_executor(
-                                    self.executor,
-                                    lambda: bytearray(
-                                        requests.get(image_url).content),
-                                )
-                                img = np.asarray(img_bytes, dtype=np.uint8)
-                                img = cv.imdecode(img, cv.IMREAD_COLOR)
-
-                                
-                                (
-                                    prediction,
-                                    time_taken,
-                                    predicted_name,
-                                ) = await self.predictor.predict_pokemon(img)
-                                hunters = (
-                                    await self.data_handler.get_hunters_for_pokemon(
-                                        predicted_name
-                                    )
-                                )
-
-                                if hunters:
-                                    
-                                    hunter_mentions = []
-                                    for hunter_id in hunters:
-                                        
-                                        member = message.guild.get_member(
-                                            hunter_id)
-                                        if member is None:
-                                            
-                                            await self.data_handler.remove_pokemon_from_user(
-                                                hunter_id, predicted_name
-                                            )
-                                        else:
-                                            
-                                            hunter_mentions.append(
-                                                f"<@{hunter_id}>")
-
-                                    if hunter_mentions:
-                                        ping_message = f"{prediction}\n\n{self.phrase} {' '.join(hunter_mentions)}"
-                                        await message.channel.send(
-                                            f"{ping_message}", reference=message
-                                        )
-                                else:
-                                    await message.channel.send(
-                                        prediction, reference=message
-                                    )
-                            else:
-                                await message.channel.send(
-                                    f"Failed to download image. Status code: {response.status}",
-                                    reference=message,
-                                )
-    
-     async def wait_for_bot_response(self, channel):
-        
-        def check(msg):
-            return msg.author.id in self.detect_bot_id and msg.channel == channel
-
-        try:
-            
-            msg = await self.bot.wait_for(
-                "message", timeout=self.wait_time, check=check
-            )
-            return msg
-        except asyncio.TimeoutError:
-            
-            return None
-    """
 
     @commands.command(name="hunt")
     @commands.cooldown(1, 6, commands.BucketType.user)
@@ -2329,4 +2361,6 @@ class Strength_weakness(discord.ui.View):
 def setup(bot):
     bot.add_cog(Pokemon(bot))
     bot.add_cog(Ping_Pokemon(bot))
+    bot.add_cog(Pokemon_Emojis(bot))
+
 

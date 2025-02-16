@@ -75,5 +75,9 @@
     },
     "Recommendation": {
         "anime_recommend": " "
+    },
+    "Pokemon_Emojis": {
+        "create_emojis": " ",
+        "emoji": " "
     }
 }

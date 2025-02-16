@@ -264,17 +264,6 @@ class Information(commands.Cog):
         
         await ctx.reply(embed=embed, mention_author=False, view=view)
 
-    @commands.command(name="joined")
-    async def joined(self, ctx, user: discord.Member = None):
-        user = user or ctx.author
-        description = (
-            f"Joined on: {timestamp_gen(user.joined_at.timestamp())}\n"
-            f"Account created on: {timestamp_gen(user.created_at.timestamp())}"
-        )
-        embed = discord.Embed(
-            description=description, color=primary_color(), timestamp=datetime.now()
-        )
-        await ctx.reply(embed=embed, mention_author=False)
 
     @commands.command(name="invite")
     async def invite(self, ctx, link: str = None):
