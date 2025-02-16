@@ -287,7 +287,7 @@ class Pokemon_Emojis(commands.Cog):
         await ctx.send("All Pokémon emojis have been created and mapping saved!")
         print("Emoji creation process completed.")
     
-
+    @staticmethod
     def get_emoji_for_pokemon(self, pokemon_id):
         """Return the emoji in the format <:emoji_name:emoji_id> for a given Pokémon ID across all servers."""
         emoji_name = str(pokemon_id).zfill(3)
@@ -302,6 +302,28 @@ class Pokemon_Emojis(commands.Cog):
         
         # Return None if no emoji is found for that Pokémon ID across all servers
         return None
+    
+    def call_emoji(self, emoji_mapping, pokemon_id):
+     """
+     Return a discord.PartialEmoji for a given Pokémon ID across all servers.
+     """
+     pokemon_id = pokemon_id['id']
+     # Iterate over each server's emoji mapping
+     for server_id, server_data in emoji_mapping.items():
+        if str(pokemon_id) in server_data:
+            emoji_data = server_data[str(pokemon_id)]
+            emoji_name = emoji_data['name']
+            emoji_id = int(emoji_data['id'])  # Ensure the emoji ID is an integer
+            print(f"Emoji found: {emoji_name} (ID: {emoji_id})")  # Debug print
+            return f"<:{emoji_name}:{emoji_id}>"
+            
+            
+            # Return a discord.PartialEmoji object
+            return discord.PartialEmoji(name=emoji_name, id=emoji_id)
+    
+     print(f"No emoji found for Pokémon ID {pokemon_id}")  # Debug print
+     # Return None if no matching emoji is found
+     return None
     
     
     @commands.command()
@@ -1634,6 +1656,7 @@ class Pokemon(commands.Cog):
                 region,
                 description,
                 gender_info,
+                self.bot
             ),
             mention_author=False,
         )
@@ -1659,6 +1682,7 @@ class Pokebuttons(discord.ui.View):
         region=None,
         description=None,
         gender_info=None,
+        bot=None
     ):
         super().__init__(timeout=None)
         self.alt_names_str = alt_names_str
@@ -1678,6 +1702,8 @@ class Pokebuttons(discord.ui.View):
         self.region = region
         self.description = description
         self.gender_info = gender_info
+        self.bot = bot
+
 
         
         pokemon_forms = self.get_pokemon_forms()
@@ -1690,6 +1716,7 @@ class Pokebuttons(discord.ui.View):
                     self.alt_names_str,
                     self.pokemon_shiny,
                     self.gender_info,
+                    self.bot
                 )
             )
 
@@ -2007,24 +2034,20 @@ class Pokebuttons(discord.ui.View):
             ephemeral=True,
         )
 
-
-class PokeSelect(discord.ui.Select):
-    def __init__(
-        self, pokemon_forms, default_image_url, alt_names, pokemon_shiny, gender
-    ):
-        options = []
-        for index, form in enumerate(pokemon_forms):
-            form_name = form["name"]
-            form_url = f"https://pokeapi.co/api/v2/pokemon/{form_name.lower()}"
-            options.append(discord.SelectOption(
-                label=form_name, value=form_url))
-        super().__init__(
-            placeholder="Form", options=options, custom_id="Select_Pokemon_Form"
-        )
-        self.default_image_url = default_image_url
-        self.alt_names = alt_names
-        self.pokemon_type = pokemon_shiny
-        self.gender = gender
+class RegionFlagMapping:
+    def __init__(self):
+        self.region_mappings = {
+            "paldea": "<:Paldea:1212335178714980403>",
+            "sinnoh": "<:Sinnoh:1212335180459544607>",
+            "alola": "<:Alola:1212335185228472411>",
+            "kalos": "<:Kalos:1212335190656024608>",
+            "galar": "<:Galar:1212335192740470876>",
+            "pasio": "<:848495108667867139:1212335194628034560>",
+            "hoenn": "<:Hoenn:1212335197304004678>",
+            "unova": "<:Unova:1212335199095095306>",
+            "kanto": "<:Kanto:1212335202341363713>",
+            "johto": "<:Johto:1212335202341363713>",
+        }
 
         self.flag_mapping = {
             "en": "🇬🇧",
@@ -2117,23 +2140,106 @@ class PokeSelect(discord.ui.Select):
             "uz": "🇺🇿",
             "ky": "🇰🇬",
         }
+        
 
-        self.region_mappings = {
-            "paldea": "<:Paldea:1212335178714980403>",
-            "sinnoh": "<:Sinnoh:1212335180459544607>",
-            "alola": "<:Alola:1212335185228472411>",
-            "kalos": "<:Kalos:1212335190656024608>",
-            "galar": "<:Galar:1212335192740470876>",
-            "pasio": "<:848495108667867139:1212335194628034560>",
-            "hoenn": "<:Hoenn:1212335197304004678>",
-            "unova": "<:Unova:1212335199095095306>",
-            "kanto": "<:Kanto:1212335202341363713>",
-            "johto": "<:Johto:1212335202341363713>",
-        }
 
+
+
+        
+class PokeSelect(discord.ui.Select):
+    def __init__(
+        self, pokemon_forms, default_image_url, alt_names, pokemon_shiny, gender, bot
+    ):
+        self.emoji_mapping = self.load_emoji_mapping()
+        self.pokemon_df = pd.read_csv("Data/pokemon/pokemon_description.csv")
+        self.emoji_json_path = os.path.join("Data", "pokemon", "pokemon_emojis.json")
+        self.bot = bot
+        
+        options = []
+        for index, form in enumerate(pokemon_forms):
+            form_name = form["name"]
+            formatted_name  = self.format_pokemon_name(form_name)
+            pokemon_id = self.get_pokemon_id(form_name)
+            description = self.get_pokemon_description_first(form_name)
+            emo = Pokemon_Emojis(bot=self.bot)
+            emoji = emo.call_emoji(self.emoji_mapping, pokemon_id)
+
+            form_url = f"https://pokeapi.co/api/v2/pokemon/{form_name.lower()}"
+            
+            # Correct way to add emoji to SelectOption
+            option = discord.SelectOption(
+                label=formatted_name,
+                value=form_url,
+                description=f"{emoji[:50]}...",
+                emoji=emoji
+            )
+            options.append(option)
+        
+        super().__init__(
+            placeholder="Form", options=options, custom_id="Select_Pokemon_Form"
+        )
+        self.default_image_url = default_image_url
+        self.alt_names = alt_names
+        self.pokemon_type = pokemon_shiny
+        self.gender = gender
+
+        self.region_flag_mapping = RegionFlagMapping()
+        self.region_mappings = self.region_flag_mapping.region_mappings
+        self.flag_mapping = self.region_flag_mapping.flag_mapping
+          
     def get_flag(self, lang):
         return self.flag_mapping.get(lang)
+    
+    def get_pokemon_id(self, form_name):
+        # Fetch pokemon data from PokeAPI
+        url = f"https://pokeapi.co/api/v2/pokemon/{form_name.lower()}"
+        response = requests.get(url)
+        data = response.json()
+        # Get pokemon ID from the response
+        return {"id": data["id"], "slug": form_name.lower()}
 
+     def get_pokemon_description_first(self, pokemon_name):
+      file_path="Data/pokemon/pokemon_description.csv"
+      with open(file_path, mode="r", encoding="utf-8") as csv_file:
+        reader = csv.DictReader(csv_file)
+
+        for row in reader:
+            if row["slug"].lower() == pokemon_name.lower():  # Match by name (slug)
+                return row["description"]
+
+     return "Pokémon not found"
+
+    def format_pokemon_name(self, name):
+     """Format Pokemon names by handling forms like Alolan Vulpix, Gigantamax, etc."""
+     # Handle specific cases for formatting like "vulpix-alola" -> "Alolan Vulpix"
+     special_forms = {
+        "alola": "Alolan",
+        "gmax": "Gigantamax",  # Updated to Gigantamax
+        "mega": "Mega",
+        "galar": "Galarian",
+        "hisui": "Hisuian",
+        "kalos": "Kalosian",
+        # Add more special forms here as needed
+     }
+
+     if "-" in name:
+        parts = name.split("-")
+        # Capitalize the special form part and then capitalize the rest in reverse order
+        formatted_parts = [special_forms.get(parts[1], parts[1].capitalize()), parts[0].capitalize()]
+        formatted_name = " ".join(formatted_parts)
+        return formatted_name
+     else:
+        # If there are no hyphens, simply capitalize the name
+        return name.capitalize()
+
+
+    def load_emoji_mapping(self):
+        """Load emoji mappings from the JSON file."""
+        if os.path.exists("Data/pokemon/pokemon_emojis.json"):
+            with open("Data/pokemon/pokemon_emojis.json", "r") as f:
+                return json.load(f)
+        else:
+            return {}
     @staticmethod
     def get_pokemon_description(
         pokemon_id, file_path="Data/pokemon/pokemon_description.csv"
@@ -2312,6 +2418,18 @@ class PokeSelect(discord.ui.Select):
             await interaction.response.send_message(
                 "Error fetching data for the selected form.", ephemeral=True
             )
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class Strength_weakness(discord.ui.View):
