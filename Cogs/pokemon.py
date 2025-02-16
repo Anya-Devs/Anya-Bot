@@ -43,33 +43,19 @@ logging.basicConfig(
 
 
 
-import discord
-from discord.ext import commands
-import os
-import json
-import asyncio
-import aiohttp
-import requests
-
-import os
-import json
-import requests
-import discord
-from discord.ext import commands
-import asyncio
 
 class Pokemon_Emojis(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.GUILD_IDS = [
-            "1340447626105065585", "1340447685685153852", "1340447747974762556", 
-            "1340447749111545998", "1340447923548459133", "1340447977340145717", 
-            "1340448026740916338", "1340448028196212807", "1340448148866469971", 
-            "1340448241069723749", "1340448280966074519", "1340448379729346560", 
-            "1340448496100053055", "1340448546603667619", "1340448595052335104", 
-            "1340448664157687830", "1340448723603296300", "1340448725314703390", 
-            "1340448849281548363", "1340449016089153598", "1340449082971390033", 
-            "1340449185933299723", "1340449231194030121", "1340449271366815806", 
+            "1340447626105065585", "1340447685685153852", "1340447747974762556",
+            "1340447749111545998", "1340447923548459133", "1340447977340145717",
+            "1340448026740916338", "1340448028196212807", "1340448148866469971",
+            "1340448241069723749", "1340448280966074519", "1340448379729346560",
+            "1340448496100053055", "1340448546603667619", "1340448595052335104",
+            "1340448664157687830", "1340448723603296300", "1340448725314703390",
+            "1340448849281548363", "1340449016089153598", "1340449082971390033",
+            "1340449185933299723", "1340449231194030121", "1340449271366815806",
             "1340449391533625398", "1340449491765166231", "1340449540175691847"
         ]
         self.POKEMON_IMAGES_FOLDER = "Data/pokemon/pokemon_emojis"
@@ -86,32 +72,118 @@ class Pokemon_Emojis(commands.Cog):
         else:
             self.emoji_mapping = {}
 
+        self.semaphore = asyncio.Semaphore(5)
+
     def get_pokemon_id(self, filename):
         return filename.split(".")[0].zfill(3)
+
+    async def download_pokemon_images(self):
+        print("Starting Pokémon image download...")
+        pokemon_ids = await self.fetch_all_pokemon_ids()
+        existing_images = set(self.load_images())
+        missing_pokemon_ids = []
+
+        for pokemon_id in pokemon_ids:
+            img_filename = f"{str(pokemon_id).zfill(3)}.png"
+            if img_filename not in existing_images:
+                missing_pokemon_ids.append(pokemon_id)
+
+        if missing_pokemon_ids:
+            async with aiohttp.ClientSession() as session:
+                for pokemon_id in tqdm(missing_pokemon_ids, desc="Downloading Pokémon images"):
+                    img_url = self.POKE_API_URL.format(pokemon_id)
+                    img_path = os.path.join(self.POKEMON_IMAGES_FOLDER, f"{str(pokemon_id).zfill(3)}.png")
+                    try:
+                        async with session.get(img_url) as response:
+                            if response.status == 200:
+                                with open(img_path, "wb") as img_file:
+                                    img_file.write(await response.read())
+                                print(f"Downloaded image for Pokémon ID: {pokemon_id}")
+                            else:
+                                print(f"Failed to download image for Pokémon ID: {pokemon_id}")
+                    except Exception as e:
+                        print(f"Error downloading Pokémon ID {pokemon_id}: {e}")
+        else:
+            print("All Pokémon images are already downloaded.")
 
     def load_images(self):
         return os.listdir(self.POKEMON_IMAGES_FOLDER)
 
+    async def fetch_all_pokemon_ids(self):
+        pokemon_ids = []
+        url = "https://pokeapi.co/api/v2/pokemon"
+        async with aiohttp.ClientSession() as session:
+            while url:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        for result in data["results"]:
+                            async with session.get(result["url"]) as poke_response:
+                                if poke_response.status == 200:
+                                    poke_data = await poke_response.json()
+                                    pokemon_ids.append(poke_data["id"])
+                        url = data.get("next")
+                    else:
+                        print("Failed to fetch Pokémon IDs.")
+                        break
+        return pokemon_ids
+
     async def list_existing_emojis(self, server):
+        """List existing emojis in the server."""
         if server is None:
+            print("Server is None, cannot list emojis.")
             return {}
+
+        if not server.me.guild_permissions.manage_emojis:
+            print(f"Bot does not have permission to manage emojis in {server.name}.")
+            return {}
+
         try:
-            return {emoji.name: emoji.id for emoji in server.emojis}
+            existing_emojis = {emoji.name: emoji.id for emoji in server.emojis}
+            return existing_emojis
         except AttributeError:
+            print(f"Error: Unable to access emojis for {server.name}.")
             return {}
 
     async def upload_single_emoji(self, server, pokemon_id):
+        # Check if the emoji already exists in the server
         existing_emojis = await self.list_existing_emojis(server)
         if pokemon_id in existing_emojis:
+            print(f"Emoji for Pokémon ID {pokemon_id} already exists in {server.name}. Skipping upload.")
+            return
+
+        # Check if the emoji is already mapped in emoji_mapping
+        if str(server.id) in self.emoji_mapping and pokemon_id in self.emoji_mapping[str(server.id)]:
+            print(f"Emoji for Pokémon ID {pokemon_id} is already mapped for {server.name}. Skipping upload.")
             return
 
         emoji_image_path = os.path.join(self.POKEMON_IMAGES_FOLDER, f"{pokemon_id}.png")
         with open(emoji_image_path, "rb") as emoji_file:
             emoji_data = emoji_file.read()
+        
+        try:
+            # Attempt to create the custom emoji
             emoji = await server.create_custom_emoji(name=pokemon_id, image=emoji_data)
             if str(server.id) not in self.emoji_mapping:
                 self.emoji_mapping[str(server.id)] = {}
             self.emoji_mapping[str(server.id)][pokemon_id] = {"name": pokemon_id, "id": emoji.id}
+            print(f"Uploaded emoji for Pokémon ID {pokemon_id} in server: {server.name}")
+
+            # Save updated emoji mapping incrementally
+            with open(self.emoji_json_path, "w") as f:
+                json.dump(self.emoji_mapping, f, indent=4)
+
+        except discord.errors.HTTPException as e:
+            if e.status == 429:
+                # Retrieve Retry-After from the response headers (default to 60 seconds if not provided)
+                retry_after = int(e.response.headers.get("Retry-After", 60))
+                print(f"Rate limited when uploading Pokémon ID {pokemon_id}. Retrying in {retry_after} seconds.")
+                await asyncio.sleep(retry_after)
+                await self.upload_single_emoji(server, pokemon_id)  # Retry the upload
+            else:
+                print(f"Error uploading emoji for Pokémon ID {pokemon_id} in server {server.name}: {e}")
+        except Exception as e:
+            print(f"Error uploading emoji for Pokémon ID {pokemon_id} in server {server.name}: {e}")
 
     async def upload_emojis_for_server(self, servers, max_emojis_per_server=50, embed_message=None, ctx=None):
         images = self.load_images()
@@ -119,72 +191,150 @@ class Pokemon_Emojis(commands.Cog):
         emojis_uploaded = 0
         current_server_index = 0
 
+        print(f"Starting emoji upload process. Total images to upload: {total_emojis}")
+
         while emojis_uploaded < total_emojis:
             server = servers[current_server_index]
+
+            if not server:
+                print(f"Invalid server at index {current_server_index}. Skipping...")
+                current_server_index = (current_server_index + 1) % len(servers)
+                continue
+
+            print(f"Processing server: {server.name} (ID: {server.id})")
+
             existing_emojis = await self.list_existing_emojis(server)
+            print(f"Found {len(existing_emojis)} existing emojis in {server.name}")
+
             max_uploads_for_server = max_emojis_per_server - len(existing_emojis)
 
             if len(existing_emojis) >= max_emojis_per_server:
-                with open(self.emoji_json_path, "w") as f:
-                    json.dump(self.emoji_mapping, f, indent=4)
+                print(f"Server {server.name} already has the max number of emojis. Skipping...")
                 current_server_index = (current_server_index + 1) % len(servers)
                 continue
 
             for img in images[emojis_uploaded:emojis_uploaded + max_uploads_for_server]:
                 pokemon_id = self.get_pokemon_id(img)
-                if pokemon_id in existing_emojis:
+
+                if pokemon_id in existing_emojis or (str(server.id) in self.emoji_mapping and pokemon_id in self.emoji_mapping[str(server.id)]):
+                    print(f"Emoji for Pokémon ID {pokemon_id} already exists. Skipping...")
                     continue
 
-                await self.upload_single_emoji(server, pokemon_id)
-                emojis_uploaded += 1
-                await asyncio.sleep(10)
+                try:
+                    await self.upload_single_emoji(server, pokemon_id)
+                    emojis_uploaded += 1
+                    print(f"Uploaded emoji for Pokémon ID: {pokemon_id} in server: {server.name}")
+
+                    # Fixed 10-second delay after each emoji upload
+                    await asyncio.sleep(3)
+
+                except Exception as e:
+                    print(f"Error uploading emoji for Pokémon ID {pokemon_id} in server {server.name}: {e}")
+
+                await asyncio.sleep(1)  # Short delay between uploads
 
                 if emojis_uploaded >= total_emojis:
                     break
 
-        with open(self.emoji_json_path, "w") as f:
-            json.dump(self.emoji_mapping, f, indent=4)
+            current_server_index = (current_server_index + 1) % len(servers)
+
+        if embed_message:
+            embed_message.description = "All Pokémon emojis have been created and mapping saved!"
+            await embed_message.edit(embed=embed_message)
+        else:
+            await ctx.send("All Pokémon emojis have been created and mapping saved!")
+        
+        print("Emoji creation process completed.")
 
     @commands.command()
     async def create_emojis(self, ctx):
+        print("create_emojis command invoked")
         if ctx.author.id != self.owner_id:
             await ctx.reply("You do not have permission to use this command")
-            return 
+            return  
+        print("User has permission. Proceeding...")
+
+        embed = discord.Embed(
+            description="Downloading Pokémon images and uploading emojis.",
+            color=discord.Color.default()
+        )
+        initial_message = await ctx.send(embed=embed)
+
+        print("Starting image download...")
+        await self.download_pokemon_images()
+        print("Image download completed.")
+
+        # Process only servers listed in GUILD_IDS
         servers = [self.bot.get_guild(int(guild_id)) for guild_id in self.GUILD_IDS]
-        await self.upload_emojis_for_server(servers, ctx=ctx)
+        servers = [server for server in servers if server]
+        print(f"Found {len(servers)} valid servers.")
+
+        await self.upload_emojis_for_server(servers, embed_message=initial_message, ctx=ctx)
+
         await ctx.send("All Pokémon emojis have been created and mapping saved!")
+        print("Emoji creation process completed.")
 
     @commands.command()
-    async def emoji(self, ctx, pokemon_id: str):
-        await ctx.send(self.get_emoji(pokemon_id))
+    async def get_emoji(self, ctx, pokemon_id: int):
+        server = ctx.guild
+        existing_emojis = await self.list_existing_emojis(server)
+        emoji_name = str(pokemon_id).zfill(3)
 
-    def get_emoji(self, pokemon_id: str):
-        for server_id, emojis in self.emoji_mapping.items():
-            if pokemon_id in emojis:
-                emoji_data = emojis[pokemon_id]
-                return f"<:{emoji_data['name']}:{emoji_data['id']}>"
-        return "Emoji not found!"
+        if emoji_name in existing_emojis:
+            emoji = discord.utils.get(server.emojis, name=emoji_name)
+            await ctx.send(f"Here is your Pokémon emoji: {emoji}")
+        else:
+            await ctx.send(f"No emoji found for Pokémon ID {pokemon_id}.")
 
-    @commands.command()
-    async def clear_emojis(self, ctx):
-        if ctx.author.id != self.owner_id:
-            await ctx.reply("You do not have permission to use this command")
-            return 
-        for guild_id in self.GUILD_IDS:
-            server = self.bot.get_guild(int(guild_id))
-            if not server:
-                continue
-            for emoji in server.emojis:
-                try:
-                    await emoji.delete(reason="Clearing emojis command invoked")
-                    await asyncio.sleep(1)
-                except Exception:
+    @commands.command(name="clear_emojis")
+    async def delete_all_emojis(self, ctx):
+     # Loop through each server in GUILD_IDS
+     for guild_id in self.GUILD_IDS:
+        server = self.bot.get_guild(int(guild_id))
+        
+        if not server:
+            print(f"Server with ID {guild_id} not found.")
+            continue
+
+        if not server.me.guild_permissions.manage_emojis:
+            await ctx.send(f"I do not have permission to manage emojis in server {server.name} (ID: {server.id})!")
+            continue
+
+        print(f"Starting to delete all emojis in server: {server.name} (ID: {server.id})")
+        
+        # Get all emojis from the server and delete them
+        emojis_to_delete = list(server.emojis)
+
+        if not emojis_to_delete:
+            print(f"No emojis to delete in server: {server.name}")
+            continue
+
+        for emoji in emojis_to_delete:
+            try:
+                await emoji.delete()
+                print(f"Deleted emoji: {emoji.name} from server: {server.name}")
+            except discord.HTTPException as e:
+                # If error code 10014 (Unknown Emoji) is returned, ignore it
+                if hasattr(e, "code") and e.code == 10014:
+                    print(f"Emoji {emoji.name} not found (possibly already deleted). Skipping...")
                     continue
-            self.emoji_mapping[str(server.id)] = {}
-            await asyncio.sleep(10)
-        with open(self.emoji_json_path, "w") as f:
-            json.dump(self.emoji_mapping, f, indent=4)
-        await ctx.send("Cleared all custom emojis and updated mapping.")
+                else:
+                    print(f"Failed to delete emoji {emoji.name}: {e}")
+
+        await ctx.send(f"All emojis have been deleted in {server.name} (ID: {server.id})!")
+        print(f"Finished deleting emojis in server: {server.name}")
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

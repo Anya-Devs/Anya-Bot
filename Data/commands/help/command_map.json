@@ -78,6 +78,9 @@
     },
     "Pokemon_Emojis": {
         "create_emojis": " ",
-        "emoji": " "
+        "emoji": " ",
+        "get_emoji": " ",
+        "delete_all_emojis": " ",
+        "clear_emojis": " "
     }
 }
