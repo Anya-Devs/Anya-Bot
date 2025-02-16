@@ -62,9 +62,14 @@ class Pokemon_Emojis(commands.Cog):
         self.POKE_API_URL = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{}.png"
         self.emoji_json_path = os.path.join("Data", "pokemon", "pokemon_emojis.json")
         self.owner_id = 1124389055598170182
+        
+        self.emoji_mapping = self.load_emoji_mapping()
+
 
         os.makedirs(os.path.dirname(self.emoji_json_path), exist_ok=True)
         os.makedirs(self.POKEMON_IMAGES_FOLDER, exist_ok=True)
+
+        
 
         if os.path.exists(self.emoji_json_path):
             with open(self.emoji_json_path, "r") as f:
@@ -74,6 +79,14 @@ class Pokemon_Emojis(commands.Cog):
 
         self.semaphore = asyncio.Semaphore(5)
 
+    def load_emoji_mapping(self):
+        """Load emoji mappings from the JSON file."""
+        if os.path.exists(self.emoji_json_path):
+            with open(self.emoji_json_path, "r") as f:
+                return json.load(f)
+        else:
+            return {}
+        
     def get_pokemon_id(self, filename):
         return filename.split(".")[0].zfill(3)
 
@@ -273,19 +286,39 @@ class Pokemon_Emojis(commands.Cog):
 
         await ctx.send("All Pokémon emojis have been created and mapping saved!")
         print("Emoji creation process completed.")
+    
 
+    def get_emoji_for_pokemon(self, pokemon_id):
+        """Return the emoji in the format <:emoji_name:emoji_id> for a given Pokémon ID across all servers."""
+        emoji_name = str(pokemon_id).zfill(3)
+        
+        # Loop through all the server data in the emoji mapping
+        for server_id, server_data in self.emoji_mapping.items():
+            if str(pokemon_id) in server_data:
+                emoji_data = server_data[str(pokemon_id)]
+                emoji_name = emoji_data['name']
+                emoji_id = emoji_data['id']
+                return f"<:{emoji_name}:{emoji_id}>"
+        
+        # Return None if no emoji is found for that Pokémon ID across all servers
+        return None
+    
+    
     @commands.command()
     async def get_emoji(self, ctx, pokemon_id: int):
-        server = ctx.guild
-        existing_emojis = await self.list_existing_emojis(server)
-        emoji_name = str(pokemon_id).zfill(3)
-
-        if emoji_name in existing_emojis:
-            emoji = discord.utils.get(server.emojis, name=emoji_name)
-            await ctx.send(f"Here is your Pokémon emoji: {emoji}")
+        emoji_str = self.get_emoji_for_pokemon(pokemon_id)
+        
+        if emoji_str:
+            await ctx.send(f"Here is your Pokémon emoji: {emoji_str}")
         else:
-            await ctx.send(f"No emoji found for Pokémon ID {pokemon_id}.")
-
+            await ctx.send(f"No emoji found for Pokémon ID {pokemon_id} across all servers.")
+   
+   
+   
+   
+   
+   
+   
     @commands.command(name="clear_emojis")
     async def delete_all_emojis(self, ctx):
      # Loop through each server in GUILD_IDS
