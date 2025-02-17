@@ -79,7 +79,8 @@ class Pokemon_Emojis(commands.Cog):
      """Load emoji mappings from the JSON file using cysimdjson for fast parsing."""
      if os.path.exists(self.emoji_json_path):
         with open(self.emoji_json_path, "rb") as f:  # Open in binary mode
-            return self.parser.parse(f.read())  # No need to encode, it's already bytes
+            parsed_json = self.parser.parse(f.read())  # Parse JSON
+            return json.loads(parsed_json.dumps())  # Convert to a standard dict
      else:
         return {}
         
