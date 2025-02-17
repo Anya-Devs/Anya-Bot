@@ -2345,7 +2345,7 @@ class PokeSelect(discord.ui.Select):
 
                     alt_names_str = "\n".join(name_list[:6])
                     embed.add_field(
-                        name="Names", value=alt_names_str, inline=True)
+                        name="Names", value=alt_names_str if len(alt_names_srt) > 0 else self.alt_names, inline=True)
 
             await interaction.message.edit(embed=embed)
         else:
