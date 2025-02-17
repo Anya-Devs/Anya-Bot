@@ -2099,7 +2099,7 @@ class PokeSelect(discord.ui.Select):
             option = discord.SelectOption(
                 label=formatted_name,
                 value=form_url,
-                description=f"{description[:60]}...",
+                description=f"{description[:54]}...",
                 emoji=emoji
             )
             options.append(option)
