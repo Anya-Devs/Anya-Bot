@@ -76,11 +76,10 @@ class Pokemon_Emojis(commands.Cog):
         self.semaphore = asyncio.Semaphore(5)
 
     def load_emoji_mapping(self):
-     """Load emoji mappings from the JSON file using cysimdjson for fast parsing."""
+     """Load emoji mappings from a JSON file using standard JSON parsing."""
      if os.path.exists(self.emoji_json_path):
-        with open(self.emoji_json_path, "rb") as f:  # Open in binary mode
-            parsed_json = self.parser.parse(f.read())  # Parse using cysimdjson
-            return json.loads(parsed_json.as_json())  # Convert to a standard Python dictionary
+        with open(self.emoji_json_path, "r", encoding="utf-8") as f:
+            return json.load(f)  # Load JSON as a standard Python dictionary
      else:
         return {}
         
