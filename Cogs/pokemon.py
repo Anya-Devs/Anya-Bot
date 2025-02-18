@@ -19,7 +19,6 @@ import aiohttp
 import requests
 import motor.motor_asyncio
 from PIL import Image
-import cysimdjson
 
 
 
@@ -193,7 +192,7 @@ class Pokemon_Emojis(commands.Cog):
         except Exception as e:
             print(f"Error uploading emoji for Pokémon ID {pokemon_id} in server {server.name}: {e}")
 
-    async def upload_emojis_for_server(self, servers, global_existing, max_emojis_per_server=50, embed_message=None, ctx=None):
+    async def upload_emojis_for_server(self, servers, global_existing, max_emojis_per_server=50, embed_message=None, ctx=None, embed=None):
         images = self.load_images()
         total_emojis = len(images)
         emojis_uploaded = 0
@@ -232,8 +231,8 @@ class Pokemon_Emojis(commands.Cog):
             await asyncio.sleep(1)
 
         if embed_message:
-            embed_message.description = "All missing Pokémon emojis have been created and mapping saved!"
-            await embed_message.edit(embed=embed_message)
+            embed.description = "All missing Pokémon emojis have been created and mapping saved!"
+            await embed_message.edit(embed=embed)
         elif ctx:
             await ctx.send("All missing Pokémon emojis have been created and mapping saved!")
         print("Emoji creation process completed.")
@@ -270,7 +269,7 @@ class Pokemon_Emojis(commands.Cog):
         await self.download_pokemon_images()
         print("Image download completed.")
 
-        await self.upload_emojis_for_server(servers, global_existing, embed_message=initial_message, ctx=ctx)
+        await self.upload_emojis_for_server(servers, global_existing, embed_message=initial_message, ctx=ctx, embed=embed)
 
         await ctx.send("All missing Pokémon emojis have been created and mapping saved!")
         print("Emoji creation process completed.")

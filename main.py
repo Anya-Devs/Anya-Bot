@@ -1,27 +1,26 @@
 import os
 import traceback
 import asyncio
-import requests
+import aiohttp
 from aiohttp import web
+from rich.tree import Tree
+from rich.console import Console
 from motor.motor_asyncio import AsyncIOMotorClient
-
-# Custom Imports
 from Imports.log_imports import logger
 from Imports.discord_imports import *
 from Imports.depend_imports import *
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from the .env file inside the ".github" directory.
+if __name__ == "__main__":
+    load_dotenv(dotenv_path=os.path.join(".github", ".env"))
 
-# Print loaded environment variables (masking sensitive info)
 print("\033[93mLoaded Environment Variables:\033[0m")
 for key, value in os.environ.items():
     if key.startswith(("TOKEN", "PASSWORD", "SECRET")):
         print(f"{key} = [REDACTED]")
     else:
         print(f"{key} = {value}")
-
 
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
@@ -48,31 +47,26 @@ class BotSetup(commands.AutoShardedBot):
         mongo_url = os.getenv("MONGO_URI")
         if not mongo_url:
             raise ValueError("No MONGO_URI found in environment variables")
-
         self.mongo_client = AsyncIOMotorClient(mongo_url)
         db = self.mongo_client[self.DB_NAME]
         collection = db[self.COLLECTION_NAME]
-
         token_data = await collection.find_one({self.token_field: {"$exists": True}})
         if token_data:
             return token_data.get(self.token_field)
-        else:
-            raise ValueError("No token found in the database")
+        raise ValueError("No token found in the database")
 
     async def start_bot(self):
         await self.setup()
         token = await self.get_token_from_db()
-
         if not token:
-            logger.error("No token found. Please check the database.")
+            logger.error("No token found. Check database.")
             return
-
         try:
             await self.start(token)
         except KeyboardInterrupt:
             await self.close()
         except Exception as e:
-            logger.error(f"An error occurred while logging in: {e}\n{traceback.format_exc()}")
+            logger.error(f"Error during bot start: {e}\n{traceback.format_exc()}")
         finally:
             if self.is_closed():
                 print("Bot is closed, cleaning up.")
@@ -85,71 +79,82 @@ class BotSetup(commands.AutoShardedBot):
         await self.import_cogs("Cogs")
         print("\n\033[94m• —— Events/\033[0m")
         await self.import_cogs("Events")
-        print("\n\033[94m===== Setup Completed =====\033[0m")
+        print("\033[94m===== Setup Completed =====\033[0m")
 
     async def import_cogs(self, dir_name):
+        console = Console()
+        tree = Tree(f"[bold blue]{dir_name}[/bold blue]")
+
         for filename in os.listdir(dir_name):
             if filename.endswith(".py"):
-                print(f"\033[94m|   ├── {filename}\033[0m")
-                module = __import__(f"{dir_name}.{os.path.splitext(filename)[0]}", fromlist=[""])
+                file_branch = tree.add(f"[cyan]{filename}[/cyan]")
+                module_name = os.path.splitext(filename)[0]
+                module = __import__(f"{dir_name}.{module_name}", fromlist=[""])
+
                 for obj_name in dir(module):
                     obj = getattr(module, obj_name)
                     if isinstance(obj, commands.CogMeta):
                         if not self.get_cog(obj_name):
                             await self.add_cog(obj(self))
-                            print(f"\033[92m|   |   └── {obj_name}\033[0m")
+                            file_branch.add(f"[green]{obj_name}[/green]")
+
+        console.print(tree)
 
 async def check_rate_limit():
+    """Checks Discord's rate limit to ensure our bot is operating safely."""
     url = "https://discord.com/api/v10/users/@me"
-    token = await BotSetup().get_token_from_db()
+    bot_instance = BotSetup()
+    token = await bot_instance.get_token_from_db()
     headers = {"Authorization": f"Bot {token}"}
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        remaining_requests = int(response.headers.get("X-RateLimit-Remaining", 1))
-        rate_limit_reset_after = float(response.headers.get("X-RateLimit-Reset-After", 0))
-        if remaining_requests <= 0:
-            logger.error(f"Rate limit exceeded. Retry after {rate_limit_reset_after} seconds.")
-            print(f"Rate limit exceeded. Please wait for {rate_limit_reset_after} seconds before retrying.")
-            await asyncio.sleep(rate_limit_reset_after)
-    else:
-        logger.error(f"Failed to check rate limit. Status code: {response.status_code}")
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as response:
+            if response.status == 200:
+                remaining = int(response.headers.get("X-RateLimit-Remaining", 1))
+                reset_after = float(response.headers.get("X-RateLimit-Reset-After", 0))
+                if remaining <= 0:
+                    logger.error(f"Rate limit exceeded. Retry after {reset_after} seconds.")
+                    print(f"Rate limit exceeded. Waiting {reset_after} seconds.")
+                    await asyncio.sleep(reset_after)
+            else:
+                logger.error(f"Failed to check rate limit. Status code: {response.status}")
 
 async def start_http_server():
-    try:
-        app = web.Application()
-        async def handle_index(request):
-            return web.Response(text="Bot is running", content_type="text/html")
-        
-        app.router.add_get("/", handle_index)
-        runner = web.AppRunner(app)
-        await runner.setup()
-        port = int(os.getenv("PORT", 8080))
-        site = web.TCPSite(runner, "0.0.0.0", port)
-        await site.start()
-        print(f"HTTP server started on port {port}")
-    except Exception as e:
-        logger.error(f"Failed to start HTTP server: {e}")
-        print("Failed to start HTTP server.")
+    """Starts an HTTP server to respond to ping requests from Uptime Robot."""
+    app = web.Application()
 
-async def main():
-    bot = BotSetup()
-    try:
-        await check_rate_limit()
-        await start_http_server()  # Ensure HTTP server starts before bot
-        await bot.start_bot()
-    except discord.HTTPException as e:
-        if e.status == 429:
-            retry_after = int(e.response.headers.get("Retry-After", 0))
-            logger.error(f"Rate limit exceeded. Retry after {retry_after} seconds.")
-            print(f"Rate limit exceeded. Please wait for {retry_after} seconds before retrying.")
-            await asyncio.sleep(retry_after)
-        else:
-            logger.error(f"An error occurred: {e}\n{traceback.format_exc()}")
-    except Exception as e:
-        logger.error(f"An error occurred: {e}\n{traceback.format_exc()}")
-    finally:
-        await bot.close()
+    async def handle_index(request):
+        return web.Response(text="Bot is running", content_type="text/html")
+
+    app.router.add_get("/", handle_index)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.getenv("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    print(f"HTTP server started on port {port}")
+
+    # Keep the server running indefinitely.
+    while True:
+        await asyncio.sleep(3600)
+
+async def run_bot():
+    """Starts the bot and restarts it in case of crashes."""
+    while True:
+        bot = BotSetup()
+        try:
+            await check_rate_limit()
+            await bot.start_bot()
+        except Exception as e:
+            logger.error(f"Bot crashed: {e}\n{traceback.format_exc()}")
+            print("Bot crashed, restarting in 10 seconds.")
+            await asyncio.sleep(10)
+
+async def start_server():
+    """Runs both the HTTP server and the bot concurrently."""
+    await asyncio.gather(
+        start_http_server(),
+        run_bot(),
+    )
 
 if __name__ == "__main__":
-    load_dotenv(dotenv_path=os.path.join(".github", ".env"))
-    asyncio.run(main())
+    asyncio.run(start_server())
