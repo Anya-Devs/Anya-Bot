@@ -63,7 +63,7 @@ class Pokemon_Emojis(commands.Cog):
         self.POKEMON_IMAGES_FOLDER = "Data/pokemon/pokemon_emojis"
         self.POKE_API_URL = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{}.png"
         self.emoji_json_path = os.path.join("Data", "pokemon", "pokemon_emojis.json")
-        self.owner_id = 1124389055598170182
+        self.owner_id = [1124389055598170182,1320515815270907957]
         
         # Load emoji mapping using standard JSON parsing.
         self.emoji_mapping = self.load_emoji_mapping()
@@ -153,94 +153,205 @@ class Pokemon_Emojis(commands.Cog):
             return {}
 
     async def upload_single_emoji(self, server, pokemon_id):
-        # Check if the emoji already exists in the server
-        existing_emojis = await self.list_existing_emojis(server)
-        if pokemon_id in existing_emojis:
-            print(f"Emoji for Pokémon ID {pokemon_id} already exists in {server.name}. Skipping upload.")
-            return
+     """Upload a single emoji to the given server if it isn’t already uploaded."""
+     # Check if the emoji already exists in the server.
+     existing_emojis = await self.list_existing_emojis(server)
+     if str(pokemon_id) in existing_emojis:
+        print(f"Emoji for Pokémon ID {pokemon_id} already exists in {server.name}. Skipping upload.")
+        return False
 
-        # Check if the emoji is already mapped in emoji_mapping
-        if str(server.id) in self.emoji_mapping and pokemon_id in self.emoji_mapping[str(server.id)]:
-            print(f"Emoji for Pokémon ID {pokemon_id} is already mapped for {server.name}. Skipping upload.")
-            return
+     # Check if the emoji is already mapped in emoji_mapping.
+     if str(server.id) in self.emoji_mapping and str(pokemon_id) in self.emoji_mapping[str(server.id)]:
+        print(f"Emoji for Pokémon ID {pokemon_id} is already mapped for {server.name}. Skipping upload.")
+        return False
 
-        emoji_image_path = os.path.join(self.POKEMON_IMAGES_FOLDER, f"{pokemon_id}.png")
+     emoji_image_path = os.path.join(self.POKEMON_IMAGES_FOLDER, f"{pokemon_id}.png")
+    
+     # Attempt to open the image; if it's not found, create it.
+     try:
         with open(emoji_image_path, "rb") as emoji_file:
             emoji_data = emoji_file.read()
-        
+     except FileNotFoundError:
+        print(f"Image for Pokémon ID {pokemon_id} not found at {emoji_image_path}. Attempting to create the emoji image.")
+        # Call a method that handles the creation of the image.
+        # This method should create the file at emoji_image_path.
+        await self.create_emoji_image(pokemon_id)
+        # Try opening the file again after creation.
         try:
-            # Attempt to create the custom emoji
-            emoji = await server.create_custom_emoji(name=pokemon_id, image=emoji_data)
-            if str(server.id) not in self.emoji_mapping:
-                self.emoji_mapping[str(server.id)] = {}
-            self.emoji_mapping[str(server.id)][pokemon_id] = {"name": pokemon_id, "id": emoji.id}
-            print(f"Uploaded emoji for Pokémon ID {pokemon_id} in server: {server.name}")
+            with open(emoji_image_path, "rb") as emoji_file:
+                emoji_data = emoji_file.read()
+        except FileNotFoundError:
+            print(f"Failed to create the image for Pokémon ID {pokemon_id}. Aborting upload for this emoji.")
+            return False
 
-            # Save updated emoji mapping incrementally using standard json.dump
-            with open(self.emoji_json_path, "w", encoding="utf-8") as f:
-                json.dump(self.emoji_mapping, f, indent=4)
+     try:
+        # Attempt to create the custom emoji.
+        emoji = await server.create_custom_emoji(name=str(pokemon_id), image=emoji_data)
+        if str(server.id) not in self.emoji_mapping:
+            self.emoji_mapping[str(server.id)] = {}
+        self.emoji_mapping[str(server.id)][str(pokemon_id)] = {"name": str(pokemon_id), "id": emoji.id}
+        print(f"Uploaded emoji for Pokémon ID {pokemon_id} in server: {server.name}")
 
-        except discord.errors.HTTPException as e:
-            if e.status == 429:
-                # Retrieve Retry-After from the response headers (default to 60 seconds if not provided)
-                retry_after = int(e.response.headers.get("Retry-After", 60))
-                print(f"Rate limited when uploading Pokémon ID {pokemon_id}. Retrying in {retry_after} seconds.")
-                await asyncio.sleep(retry_after)
-                await self.upload_single_emoji(server, pokemon_id)  # Retry the upload
-            else:
-                print(f"Error uploading emoji for Pokémon ID {pokemon_id} in server {server.name}: {e}")
-        except Exception as e:
+        # Save updated emoji mapping incrementally.
+        with open(self.emoji_json_path, "w", encoding="utf-8") as f:
+            json.dump(self.emoji_mapping, f, indent=4)
+        return True
+
+     except discord.errors.HTTPException as e:
+        if e.status == 429:
+            # Retrieve Retry-After from the response headers (default to 60 seconds if not provided).
+            retry_after = int(e.response.headers.get("Retry-After", 60))
+            print(f"Rate limited when uploading Pokémon ID {pokemon_id}. Retrying in {retry_after} seconds.")
+            await asyncio.sleep(retry_after)
+            return await self.upload_single_emoji(server, pokemon_id)  # Retry the upload
+        else:
             print(f"Error uploading emoji for Pokémon ID {pokemon_id} in server {server.name}: {e}")
+     except Exception as e:
+        print(f"Error uploading emoji for Pokémon ID {pokemon_id} in server {server.name}: {e}")
 
+     return False
+    
+    async def create_emoji_image(self, pokemon_id):
+
+     image_url = self.POKE_API_URL.format(pokemon_id)  # Use PokeAPI URL
+     emoji_image_path = os.path.join(self.POKEMON_IMAGES_FOLDER, f"{pokemon_id}.png")
+
+     # Ensure the folder exists before saving
+     os.makedirs(self.POKEMON_IMAGES_FOLDER, exist_ok=True)
+
+     async with aiohttp.ClientSession() as session:
+        async with session.get(image_url) as response:
+            if response.status == 200:
+                image_data = await response.read()
+                with open(emoji_image_path, "wb") as f:
+                    f.write(image_data)
+                print(f"✅ Successfully downloaded and saved emoji image for Pokémon ID {pokemon_id}.")
+            else:
+                print(f"❌ Failed to download image for Pokémon ID {pokemon_id} from {image_url}. HTTP Status: {response.status}")
+    
     async def upload_emojis_for_server(self, servers, global_existing, max_emojis_per_server=50, embed_message=None, ctx=None, embed=None):
-        images = self.load_images()
-        total_emojis = len(images)
-        emojis_uploaded = 0
-        current_server_index = 0
+     images = self.load_images()
+     total_emojis = len(images)
+     emojis_uploaded = 0
+     current_server_index = 0
 
-        print(f"Starting emoji upload process. Total images available: {total_emojis}")
+     print(f"Starting emoji upload process. Total images available: {total_emojis}")
 
-        # Process each image sequentially.
-        for img in images:
-            pokemon_id = self.get_pokemon_id(img)
-            # Skip if this Pokémon has been uploaded on any server.
-            if pokemon_id in global_existing:
-                print(f"Skipping Pokémon ID {pokemon_id} as it is already uploaded globally.")
-                continue
+     # Process each image sequentially.
+     for img in images:
+        pokemon_id = self.get_pokemon_id(img)
+        # Skip if this Pokémon has been uploaded on any server.
+        if pokemon_id in global_existing:
+            print(f"Skipping Pokémon ID {pokemon_id} as it is already uploaded globally.")
+            continue
 
-            # Find a server with capacity that doesn't already have this emoji.
-            attempts = 0
-            uploaded = False
-            while attempts < len(servers) and not uploaded:
-                server = servers[current_server_index]
-                # Check if the server has capacity.
-                server_emojis = await self.list_existing_emojis(server)
-                if len(server_emojis) < max_emojis_per_server:
-                    uploaded = await self.upload_single_emoji(server, pokemon_id, global_existing)
-                    if uploaded:
-                        emojis_uploaded += 1
-                        # Delay after a successful upload.
-                        await asyncio.sleep(3)
-                else:
-                    print(f"Server {server.name} has reached its emoji capacity. Skipping.")
-                # Move to next server.
-                current_server_index = (current_server_index + 1) % len(servers)
-                attempts += 1
+        # Find a server with capacity that doesn't already have this emoji.
+        attempts = 0
+        uploaded = False
+        while attempts < len(servers) and not uploaded:
+            server = servers[current_server_index]
+            # Check if the server has capacity.
+            server_emojis = await self.list_existing_emojis(server)
+            if len(server_emojis) < max_emojis_per_server:
+                uploaded = await self.upload_single_emoji(server, pokemon_id)
+                if uploaded:
+                    emojis_uploaded += 1
+                    # Delay after a successful upload.
+                    await asyncio.sleep(3)
+            else:
+                print(f"Server {server.name} has reached its emoji capacity. Skipping.")
+            # Move to next server.
+            current_server_index = (current_server_index + 1) % len(servers)
+            attempts += 1
 
-            # Short delay between processing images.
-            await asyncio.sleep(1)
+        # Short delay between processing images.
+        await asyncio.sleep(1)
 
-        if embed_message:
-            embed.description = "All missing Pokémon emojis have been created and mapping saved!"
-            await embed_message.edit(embed=embed)
-        elif ctx:
-            await ctx.send("All missing Pokémon emojis have been created and mapping saved!")
-        print("Emoji creation process completed.")
+     print("Local emoji upload process completed.")
 
+     # Call upload_missing_emojis using the same servers list.
+     print("Checking for any missing Pokémon emojis via API...")
+     await self.upload_missing_emojis(available_servers=servers, max_emojis_per_server=max_emojis_per_server,
+                                     embed_message=embed_message, ctx=ctx, embed=embed)
+
+     if embed_message:
+        embed.description = "All missing Pokémon emojis have been created and mapping saved!"
+        await embed_message.edit(embed=embed)
+     elif ctx:
+        await ctx.send("All missing Pokémon emojis have been created and mapping saved!")
+
+     print("Emoji creation process completed.")
+
+    async def upload_missing_emojis(self, available_servers=None, max_emojis_per_server=50, embed_message=None, ctx=None, embed=None):
+     # Step 1: Get all Pokémon IDs from the API.
+     all_pokemon_ids = await self.fetch_all_pokemon_ids()
+     print(f"Fetched {len(all_pokemon_ids)} Pokémon IDs from the API.")
+
+     # Step 2: Build a set of globally existing emoji IDs from self.emoji_mapping.
+     global_existing = set()
+     for guild_emojis in self.emoji_mapping.values():
+        global_existing.update(guild_emojis.keys())
+
+     # Convert Pokémon IDs to strings for consistency.
+     all_pokemon_ids_str = set(str(pid) for pid in all_pokemon_ids)
+
+     # Determine which Pokémon IDs are missing.
+     missing_ids = list(all_pokemon_ids_str - global_existing)
+     print(f"Total missing Pokémon emojis: {len(missing_ids)}")
+
+     # Step 3: Retrieve server objects if not provided.
+     servers = []
+     if available_servers is not None:
+        servers = available_servers
+     else:
+        for guild_id in self.GUILD_IDS:
+            guild = self.bot.get_guild(int(guild_id))
+            if guild is not None:
+                servers.append(guild)
+     if not servers:
+        print("No valid servers found to upload emojis.")
+        return
+
+     # Step 4: Iterate over each missing Pokémon ID and try uploading it.
+     emojis_uploaded = 0
+     current_server_index = 0
+
+     for pokemon_id in missing_ids:
+        attempts = 0
+        uploaded = False
+        while attempts < len(servers) and not uploaded:
+            server = servers[current_server_index]
+            server_emojis = await self.list_existing_emojis(server)
+            if len(server_emojis) < max_emojis_per_server:
+                uploaded = await self.upload_single_emoji(server, pokemon_id)
+                if uploaded:
+                    emojis_uploaded += 1
+                    # Delay after a successful upload.
+                    await asyncio.sleep(3)
+            else:
+                print(f"Server {server.name} has reached its emoji capacity. Skipping.")
+            current_server_index = (current_server_index + 1) % len(servers)
+            attempts += 1
+
+        # Short delay between processing each missing emoji.
+        await asyncio.sleep(1)
+
+     # Step 5: Notify upon completion.
+     if embed_message:
+        embed.description = "All missing Pokémon emojis have been created and mapping saved!"
+        await embed_message.edit(embed=embed)
+     elif ctx:
+        await ctx.send("All missing Pokémon emojis have been created and mapping saved!")
+
+     print(f"Emoji creation process completed. Total emojis uploaded: {emojis_uploaded}")
+    
+    
+    
+    
     @commands.command()
     async def create_emojis(self, ctx):
         print("create_emojis command invoked")
-        if ctx.author.id != self.owner_id:
+        if ctx.author.id not in self.owner_id:
             await ctx.reply("You do not have permission to use this command")
             return
         print("User has permission. Proceeding...")
