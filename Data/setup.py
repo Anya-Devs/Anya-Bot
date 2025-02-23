@@ -14,5 +14,5 @@ def generate_requirements():
 
 # Call the function to generate the requirements.txt file
 generate_requirements()
-os.system("pip install -r requirements.txt")
+os.system("pip install -r requirements.txt && pip install --upgrade pip")
 
