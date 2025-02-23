@@ -1,4 +1,4 @@
-import os
+import Data.setup
 import traceback
 import asyncio
 import aiohttp
