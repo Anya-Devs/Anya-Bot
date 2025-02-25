@@ -64,19 +64,6 @@ class BotSetup(commands.AutoShardedBot):
         Login_Text=text2art(f"{self.user.name.title()[:10]}", "sub-zero")
         print(f"\033[92m{Login_Text}\033[0m")
 
-    def print_centered_text(text):
-     # Get the current terminal size (width)
-     terminal_width = shutil.get_terminal_size().columns
-
-     # Get the length of the text to center
-     text_length = len(text)
-
-     # Calculate padding for center alignment
-     padding = (terminal_width - text_length) // 2
-
-     # Print the centered text
-     print(" " * padding + text)
-
 
 
     async def get_token_from_db(self):
@@ -135,7 +122,6 @@ class BotSetup(commands.AutoShardedBot):
         console.print(tree)
 
 async def check_rate_limit():
-    """Checks Discord's rate limit to ensure our bot is operating safely."""
     url = "https://discord.com/api/v10/users/@me"
     bot_instance = BotSetup()
     token = await bot_instance.get_token_from_db()
@@ -153,7 +139,6 @@ async def check_rate_limit():
                 logger.error(f"Failed to check rate limit. Status code: {response.status}")
 
 async def start_http_server():
-    """Starts an HTTP server to respond to ping requests from Uptime Robot."""
     app = web.Application()
 
     async def handle_index(request):
@@ -163,7 +148,6 @@ async def start_http_server():
     runner = web.AppRunner(app)
     await runner.setup()
 
-    # Fetch port from environment variable with a fallback to 8080
     port = int(os.getenv("PORT", 8080))
 
     if not is_port_available(port):
@@ -183,14 +167,12 @@ def is_port_available(port):
         except socket.error:
             return False
 async def find_available_port():
-    """Finds an available port starting from 8080 upwards."""
     for port in range(8080,9999):
         if is_port_available(port):
             return port
     raise OSError("No available ports found.")
 
 async def run_bot():
-    """Starts the bot and restarts it in case of crashes."""
     while True:
         bot = BotSetup()
         try:
@@ -202,9 +184,7 @@ async def run_bot():
             await asyncio.sleep(10)
 
 async def start_server():
-    """Runs both the HTTP server and the bot concurrently."""
-
-    gc.collect()  # Forces a garbage collection to free unused objects
+    gc.collect() 
     await asyncio.gather(
         start_http_server(),
         run_bot(),
