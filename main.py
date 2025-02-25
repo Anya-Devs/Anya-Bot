@@ -166,11 +166,7 @@ def is_port_available(port):
             return True
         except socket.error:
             return False
-async def find_available_port():
-    for port in range(8080,9999):
-        if is_port_available(port):
-            return port
-    raise OSError("No available ports found.")
+
 
 async def run_bot():
     while True:
