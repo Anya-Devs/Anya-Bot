@@ -30,7 +30,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 from Imports.discord_imports import *
-from Subcogs.pokemon import Ping_Pokemon
+from subcogs.pokemon import Ping_Pokemon
 from Imports.log_imports import logger
 from Data.const import error_custom_embed, primary_color
 
@@ -833,7 +833,7 @@ class Pokemon(commands.Cog):
                 args = args.replace("shiny ", "")
                 pokemon_id = args
 
-            folder_path = "Data"
+            folder_path = "Data/commands"
             os.makedirs(folder_path, exist_ok=True)
             pokemon_folder_path = os.path.join(folder_path, "pokemon")
             os.makedirs(pokemon_folder_path, exist_ok=True)
@@ -1760,7 +1760,7 @@ class Pokebuttons(discord.ui.View):
             )
 
         
-        self.POKEMON_DIR = "Data/pokemon"
+        self.POKEMON_DIR = "Data/commands/pokemon"
         os.makedirs(self.POKEMON_DIR, exist_ok=True)
         self.POKEMON_IMAGES_FILE = os.path.join(
             self.POKEMON_DIR, "pokemon_images.txt")

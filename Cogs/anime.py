@@ -3,7 +3,7 @@ import aiohttp
 import logging
 
 from Imports.discord_imports import *
-from Subcogs.anime import Recommendation
+from subcogs.anime import Recommendation
 
 logging.basicConfig(
     

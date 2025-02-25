@@ -9,12 +9,11 @@ import asyncio
 class AvatarChanger(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.emojis_folder = 'Data/Emojis'  
-        self.output_folder = 'Data/Emojis/output'  
+        #self.emojis_folder = 'Data/Emojis'  
 
         
-        os.makedirs(self.emojis_folder, exist_ok=True)
-        os.makedirs(self.output_folder, exist_ok=True)
+        #os.makedirs(self.emojis_folder, exist_ok=True)
+        #os.makedirs(self.output_folder, exist_ok=True)
 
     async def compose_grid(self, images, output_filename, ctx, grid_index):
         try:
