@@ -1,6 +1,5 @@
 import subprocess
 import os
-
 # Generate requirements.txt based on installed packages
 def generate_requirements_txt():
     installed_packages = subprocess.check_output(['pip', 'freeze'])

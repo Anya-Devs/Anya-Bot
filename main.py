@@ -1,11 +1,21 @@
+"""-----------------------""" 
+
+import Data.setup   # Set everything up first
+
+"""-----------------------"""
+
 import os
+import gc
+import art
 import asyncio
 import aiohttp
 import traceback
 from aiohttp import web
+from art import *
 from rich.tree import Tree
 from rich.console import Console
 from motor.motor_asyncio import AsyncIOMotorClient
+from Data.const import AvatarToTextArt
 from Imports.log_imports import logger
 from Imports.discord_imports import *
 from Imports.depend_imports import *
@@ -16,12 +26,13 @@ import socket  # Use socket to check if the port is in use
 if __name__ == "__main__":
     load_dotenv(dotenv_path=os.path.join(".github", ".env"))
 
-print("\033[93mLoaded Environment Variables:\033[0m")
-for key, value in os.environ.items():
-    if key.startswith(("TOKEN", "PASSWORD", "SECRET")):
-        print(f"{key} = [REDACTED]")
-    else:
-        print(f"{key} = {value}")
+#print("\033[93mLoaded Environment Variables:\033[0m")
+#for key, value in os.environ.items():
+#    if key.startswith(("TOKEN", "PASSWORD", "SECRET")):
+#        print(f"{key} = [REDACTED]")
+#    else:
+#        print(f"{key} = {value}")
+
 
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
@@ -42,7 +53,15 @@ class BotSetup(commands.AutoShardedBot):
         self.token_field = "Token"
 
     async def on_ready(self):
-        print(f"\033[92mLogged in as {self.user} (ID: {self.user.id})\033[0m")
+        avatar_url = self.user.avatar
+        art_generator =  AvatarToTextArt(avatar_url, new_width=25)
+        art_generator.create_art()
+        print(art_generator.get_colored_ascii_art())
+        print("\033[38;2;88;101;242mWelcome to Discord!\033[0m")
+        Login_Text=text2art(f"{self.user.name.title()}", "sub-zero")
+        print(f"\033[92m{Login_Text}\033[0m")
+
+
 
     async def get_token_from_db(self):
         mongo_url = os.getenv("MONGO_URI")
@@ -76,9 +95,7 @@ class BotSetup(commands.AutoShardedBot):
             await self.close()
 
     async def setup(self):
-        print("\n\033[94m• —— Cogs/\033[0m")
         await self.import_cogs("Cogs")
-        print("\n\033[94m• —— Events/\033[0m")
         await self.import_cogs("Events")
         print("\033[94m===== Setup Completed =====\033[0m")
 
@@ -130,12 +147,12 @@ async def start_http_server():
     runner = web.AppRunner(app)
     await runner.setup()
 
+    # Fetch port from environment variable with a fallback to 8080
     port = int(os.getenv("PORT", 8080))
-    
-    # Check if the port is already in use
+
     if not is_port_available(port):
-        print(f"Port {port} is already in use, attempting to use another port.")
-        port = await find_available_port()
+        print(f"Port {port} is already in use. Please free up the port or specify another one.")
+        return
 
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
@@ -149,7 +166,6 @@ def is_port_available(port):
             return True
         except socket.error:
             return False
-
 async def find_available_port():
     """Finds an available port starting from 8080 upwards."""
     for port in range(8080,9999):
@@ -171,6 +187,8 @@ async def run_bot():
 
 async def start_server():
     """Runs both the HTTP server and the bot concurrently."""
+
+    gc.collect()  # Forces a garbage collection to free unused objects
     await asyncio.gather(
         start_http_server(),
         run_bot(),

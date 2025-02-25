@@ -80,7 +80,7 @@ class Ping_Pokemon(commands.Cog):
             pokemon_name = match.group(1).strip()                                 
             percentage = match.group(2)
 
-            print(f"Matched Pokémon name: {pokemon_name}, Percentage: {percentage}")
+            #print(f"Matched Pokémon name: {pokemon_name}, Percentage: {percentage}")
 
                                                          
             translated_pokemon_name, region = self.transform_pokemon_name(pokemon_name)

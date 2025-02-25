@@ -1,18 +1,22 @@
 # Standard Library Imports
 import asyncio
+import requests
 import io
 import json
 import os
 import platform
+import numpy as np
 import re
 import traceback
 from datetime import datetime, timezone
+
 
 # Third-Party Imports
 import aiohttp
 from PIL import Image
 import psutil
 from psutil import *  # Import all functions from psutil
+import cv2
 
 
 # Custom Imports
@@ -1136,3 +1140,88 @@ async def error_custom_embed(
 def timestamp_gen(timestamp: int) -> str:
     dt = datetime.utcfromtimestamp(timestamp).replace(tzinfo=timezone.utc)
     return f"<t:{int(dt.timestamp())}:R>"
+
+
+
+
+class AvatarToTextArt:
+    def __init__(self, avatar_url, new_width=80):
+        self.avatar_url = avatar_url
+        self.new_width = new_width
+        self.img = None             # Original colored image (as a NumPy array, in RGB order)
+        self.gray_img = None        # Grayscale version of the image
+        self.resized_img = None     # Resized colored image for proper color mapping
+        self.ascii_art = None       # ASCII art string (without ANSI colors)
+        self.colored_art = None     # Final ANSI-colored ASCII art
+        
+        # Custom ASCII characters from light to dark.
+        # We will invert the brightness mapping so that dark regions use the densest characters.
+        self.custom_ascii_chars = '@' # .,:;irsXA253hMHGS#9B&@
+
+    def fetch_image(self):
+        """Fetches the image from the URL and converts it to an RGB NumPy array."""
+        response = requests.get(self.avatar_url)
+        img_data = io.BytesIO(response.content)
+        img = Image.open(img_data)
+        # Ensure the image is in RGB mode
+        self.img = np.array(img.convert('RGB'))
+    
+    def convert_to_grayscale(self):
+        """Converts the RGB image to grayscale using the proper color conversion."""
+        if self.img is not None:
+            self.gray_img = cv2.cvtColor(self.img, cv2.COLOR_RGB2GRAY)
+    
+    def resize_image(self):
+        """Resizes both the grayscale and colored images while maintaining aspect ratio."""
+        if self.gray_img is not None:
+            original_height, original_width = self.gray_img.shape
+            aspect_ratio = original_width / float(original_height)
+            new_height = int(self.new_width / aspect_ratio)
+            # Resize grayscale image for ASCII mapping
+            self.gray_img = cv2.resize(self.gray_img, (self.new_width, new_height))
+            # Also resize the colored image to match the grayscale dimensions
+            self.resized_img = cv2.resize(self.img, (self.new_width, new_height))
+    
+    def map_grayscale_to_ascii(self):
+     if self.gray_img is not None:
+        num_chars = len(self.custom_ascii_chars)
+        # Ensure pixel values are within valid range [0, 255]
+        ascii_chars = [
+            self.custom_ascii_chars[(num_chars - 1) - (min(int(pixel), 255) * (num_chars - 1) // 255)]
+            for pixel in self.gray_img.flatten()
+        ]
+        self.ascii_art = ''.join(ascii_chars)
+    
+    
+    def rgb_to_ansi(self, r, g, b):
+        return f'\033[38;2;{r};{g};{b}m'
+    
+    def colored_ascii_art(self):
+        if self.resized_img is not None and self.ascii_art is not None:
+            colored_art = ""
+            new_width = self.gray_img.shape[1]
+            for i, char in enumerate(self.ascii_art):
+                y, x = divmod(i, new_width)
+                # Extract the pixel color from the resized image
+                pixel_value = self.resized_img[y, x]
+                # Ensure the RGB values are within the valid range and convert to int
+                r, g, b = np.clip(pixel_value, 0, 255).astype(int)
+                color = self.rgb_to_ansi(r, g, b)
+                colored_art += f"{color}{char}\033[0m"
+                if x == new_width - 1:
+                    colored_art += "\n"
+            self.colored_art = colored_art
+    
+    def create_art(self):
+        """Executes the complete pipeline to generate colored ASCII art from the avatar URL."""
+        self.fetch_image()
+        self.convert_to_grayscale()
+        self.resize_image()
+        self.map_grayscale_to_ascii()
+        self.colored_ascii_art()
+    
+    def get_colored_ascii_art(self):
+        """Returns the final colored ASCII art string."""
+        return self.colored_art
+
+

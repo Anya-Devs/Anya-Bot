@@ -13,9 +13,21 @@ from Imports.discord_imports import *
 from Data.const import primary_color
 
                               
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+# Ensure the directory exists before logging
+log_dir = "Data"
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
 
+# Set up logging configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    filename=os.path.join(log_dir, "bot.log"),
+    filemode="a"  # Append to the file instead of overwriting
+)
+
+# Create a logger instance
+logger = logging.getLogger(__name__)
                     
 def timestamp_gen(timestamp: int) -> str:
     dt = datetime.datetime.utcfromtimestamp(timestamp).replace(tzinfo=datetime.timezone.utc)
