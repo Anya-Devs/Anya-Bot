@@ -1,10 +1,5 @@
 
 
-### ❓Do tell?
- <img src=".github/repo/images/anya_bot.webp" alt="Anya Bot" width="150px" align="left"/> Anya Bot keeps your server active with fun quests with conversation starters. It's all about engaging your community and making things more interactive. 
-
-
-
 | Command                | Description                                                                                                   | Image                                         |
 |------------------------|---------------------------------------------------------------------------------------------------------------|-----------------------------------------------|
 | `...quest`    | The `...quest` command allows users to start new quests or check the progress of their ongoing quests. This is the heart of the game mechanics, where players interact with different quests to earn rewards (stella points). It encourages players to actively participate in the server and interact with other members. Anya wants you to make new friends and be active in the community. | ![Quest Image](.github/repo/images/quest.webp)    |
@@ -13,4 +8,14 @@
 | `...balance`    | Use the `...balance` command to check your status in the server. It shows how many Stella Stars / Stella Points you've earned and your class ranking, so others can recognize your dedication and respect your progress. While you can also view your balance in `...shop`, think of this command as more of a status indicator than just a balance check. After all, spies need a specialized, verified wallet! > w < | ![Balance Image](.github/repo/images/balance.webp) |
 
 ---
+
+## Setup
+### `.github`
+1. make a `.env`
+   
+   ```
+     MONGO_URI= https://cloud.mongodb.com
+     HUGGINGFACE_API_KEY= https://huggingface.co/settings/tokens
+     OPENAI_KEY= https://openai.com/index/openai-api/
+   
 
