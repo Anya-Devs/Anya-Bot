@@ -129,13 +129,9 @@ async def start_http_server():
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.getenv("PORT", 8080))
-    site = web.TCPSite(runner, "8.8.8.8", port)
+    site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
     print(f"HTTP server started on port {port}")
-
-    # Keep the server running indefinitely.
-    while True:
-        await asyncio.sleep(3600)
 
 async def run_bot():
     """Starts the bot and restarts it in case of crashes."""

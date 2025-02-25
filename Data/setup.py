@@ -1,18 +1,22 @@
 """
 ------------ SetUp Section ------------
-> Creates the requirements.txt file and downloads the latest versions first, then installs them.
+> Scans all Python files in the project, generates a requirements.txt file 
+  containing only necessary dependencies, and installs them.
 """
-import os
+
 import subprocess
 
+def install_package(package):
+    """Ensures the given package is installed before running commands."""
+    subprocess.run(['pip', 'install', '--quiet', package], check=True)
+
 def generate_requirements():
-    with open('requirements.txt', 'w') as f:
-        # Run the pip freeze command and capture the output
-        result = subprocess.run(['pip', 'freeze'], stdout=subprocess.PIPE, text=True)
-        # Write the output to the requirements.txt file
-        f.write(result.stdout)
+    """Generates requirements.txt based on actual project imports."""
+    subprocess.run(['pipreqs', '--force', '--ignore', 'venv,.venv', '.'], check=True)
 
-# Call the function to generate the requirements.txt file
+# Ensure pipreqs is installed
+install_package('pipreqs')
+
+# Generate and install only necessary dependencies
 generate_requirements()
-os.system("pip install -r requirements.txt && pip install --upgrade pip")
-
+subprocess.run(['pip', 'install', '--upgrade', '-r', 'requirements.txt', 'pip'], check=True)
