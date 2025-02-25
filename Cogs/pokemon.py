@@ -60,7 +60,7 @@ class Pokemon_Emojis(commands.Cog):
             "1340449391533625398", "1340449491765166231", "1340449540175691847",
             "1340698929922183300", "1340699061992558665", "1340699001011437610"
         ]
-        self.POKEMON_IMAGES_FOLDER = "Data/pokemon/pokemon_emojis"
+        self.POKEMON_IMAGES_FOLDER = "Data/commands/pokemon/pokemon_emojis"
         self.POKE_API_URL = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{}.png"
         self.emoji_json_path = os.path.join("Data", "pokemon", "pokemon_emojis.json")
         self.owner_id = [1124389055598170182,1320515815270907957]
@@ -450,7 +450,7 @@ class PokemonData:
         self.users_collection = self.db["users_pokemon"]
 
         
-        self.pokemon_df = pd.read_csv("Data/pokemon/pokemon_description.csv")
+        self.pokemon_df = pd.read_csv("Data/commands/pokemon/pokemon_description.csv")
 
     async def check_pokemon_exists(self, pokemon_name):
         
@@ -493,7 +493,7 @@ class PokemonData:
 
 
 class Pokemon(commands.Cog):
-    def __init__(self, bot, dataset_folder="Data/pokemon/pokemon_images"):
+    def __init__(self, bot, dataset_folder="Data/commands/pokemon/pokemon_images"):
         self.bot = bot
         self.author_id = 716390085896962058
         self.detect_bot_id = [
@@ -508,8 +508,8 @@ class Pokemon(commands.Cog):
         self.local_color_memory = []  
         self.pokemon_api_url = "https://pokeapi.co/api/v2/pokemon"
         self.pokemon_info_url = "https://pokeapi.co/api/v2/pokemon/{}/"
-        self.dataset_file = "Data/pokemon/dataset.npy"
-        self.output_folder = "Data/pokemon/predictions"
+        self.dataset_file = "Data/commands/pokemon/dataset.npy"
+        self.output_folder = "Data/commands/pokemon/predictions"
         self.cache = {}
         self.orb = cv.ORB_create()  
         self.executor = (
@@ -985,7 +985,7 @@ class Pokemon(commands.Cog):
                 print(f"Error: An unexpected error occurred - {e}")
 
         def get_pokemon_description(
-            pokemon_id, file_path="Data/pokemon/pokemon_description.csv"
+            pokemon_id, file_path="Data/commands/pokemon/pokemon_description.csv"
         ):
             with open(file_path, mode="r", encoding="utf-8") as csv_file:
                 reader = csv.DictReader(csv_file)
@@ -997,7 +997,7 @@ class Pokemon(commands.Cog):
             return "Pokémon ID not found"
 
         def get_pokemon_region(
-            pokemon_id, file_path="Data/pokemon/pokemon_description.csv"
+            pokemon_id, file_path="Data/commands/pokemon/pokemon_description.csv"
         ):
             try:
                 with open(file_path, mode="r", encoding="utf-8") as csv_file:
@@ -2190,7 +2190,7 @@ class PokeSelect(discord.ui.Select):
         self, pokemon_forms, default_image_url, alt_names, pokemon_shiny, gender, bot
     ):
         self.emoji_mapping = self.load_emoji_mapping()
-        self.pokemon_df = pd.read_csv("Data/pokemon/pokemon_description.csv")
+        self.pokemon_df = pd.read_csv("Data/commands/pokemon/pokemon_description.csv")
         self.emoji_json_path = os.path.join("Data", "pokemon", "pokemon_emojis.json")
         self.bot = bot
         
@@ -2264,14 +2264,14 @@ class PokeSelect(discord.ui.Select):
 
     def load_emoji_mapping(self):
         """Load emoji mappings from the JSON file."""
-        if os.path.exists("Data/pokemon/pokemon_emojis.json"):
-            with open("Data/pokemon/pokemon_emojis.json", "r") as f:
+        if os.path.exists("Data/commands/pokemon/pokemon_emojis.json"):
+            with open("Data/commands/pokemon/pokemon_emojis.json", "r") as f:
                 return json.load(f)
         else:
             return {}
     @staticmethod
     def get_pokemon_description(
-        pokemon_id, file_path="Data/pokemon/pokemon_description.csv"
+        pokemon_id, file_path="Data/commands/pokemon/pokemon_description.csv"
     ):
         try:
             with open(file_path, mode="r", encoding="utf-8") as csv_file:
@@ -2290,7 +2290,7 @@ class PokeSelect(discord.ui.Select):
 
     @staticmethod
     def get_pokemon_region(
-        pokemon_id, file_path="Data/pokemon/pokemon_description.csv"
+        pokemon_id, file_path="Data/commands/pokemon/pokemon_description.csv"
     ):
         try:
             with open(file_path, mode="r", encoding="utf-8") as csv_file:

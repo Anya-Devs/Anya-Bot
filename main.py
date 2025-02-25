@@ -1,7 +1,7 @@
-import Data.setup
-import traceback
+import os
 import asyncio
 import aiohttp
+import traceback
 from aiohttp import web
 from rich.tree import Tree
 from rich.console import Console
@@ -10,6 +10,7 @@ from Imports.log_imports import logger
 from Imports.discord_imports import *
 from Imports.depend_imports import *
 from dotenv import load_dotenv
+import socket  # Use socket to check if the port is in use
 
 # Load environment variables from the .env file inside the ".github" directory.
 if __name__ == "__main__":
@@ -128,10 +129,33 @@ async def start_http_server():
     app.router.add_get("/", handle_index)
     runner = web.AppRunner(app)
     await runner.setup()
+
     port = int(os.getenv("PORT", 8080))
+    
+    # Check if the port is already in use
+    if not is_port_available(port):
+        print(f"Port {port} is already in use, attempting to use another port.")
+        port = await find_available_port()
+
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
     print(f"HTTP server started on port {port}")
+
+def is_port_available(port):
+    """Checks if a port is available by attempting to bind to it."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("0.0.0.0", port))
+            return True
+        except socket.error:
+            return False
+
+async def find_available_port():
+    """Finds an available port starting from 8080 upwards."""
+    for port in range(8080, 8090):
+        if is_port_available(port):
+            return port
+    raise OSError("No available ports found.")
 
 async def run_bot():
     """Starts the bot and restarts it in case of crashes."""

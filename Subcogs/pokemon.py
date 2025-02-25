@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class Ping_Pokemon(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.csv_file = 'Data/pokemon/pokemon_special_names.csv'
+        self.csv_file = 'Data/commands/pokemon/pokemon_special_names.csv'
         self.user_author_id = 854233015475109888                                                   
                                                            
         self.message_rare_pokemon = "<@&1278580577104040023>"

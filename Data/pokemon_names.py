@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class PokemonNamesDownloader:
     def __init__(self):
         self.pokemon_species_url = "https://pokeapi.co/api/v2/pokemon-species"
-        self.csv_file = 'Data/pokemon/pokemon_special_names.csv'
+        self.csv_file = 'Data/commands/pokemon/pokemon_special_names.csv'
         self.regional_terms = ["alola", "galar", "hisui", "paldea"]  # List of regions to search for
 
     async def fetch_pokemon_species(self):
