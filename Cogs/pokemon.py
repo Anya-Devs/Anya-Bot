@@ -1,5 +1,4 @@
 import json
-import csv
 import time
 import os
 import random
@@ -7,6 +6,9 @@ import asyncio
 import logging
 from urllib.request import urlopen
 from typing import List, Tuple, Optional
+from concurrent import *
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
 
 import aiofiles
 import aiohttp
@@ -15,22 +17,13 @@ import pandas as pd
 from tqdm import tqdm
 import motor.motor_asyncio
 from PIL import Image
-import cv2
+import cv2 as cv
 import numpy as np
-
-
-
-from concurrent import *
-import concurrent.futures
-from concurrent.futures import ThreadPoolExecutor
-
-
 
 from Imports.discord_imports import *
 from subcogs.pokemon import Ping_Pokemon
 from Imports.log_imports import logger
 from Data.const import error_custom_embed, primary_color
-
 
 
 logging.basicConfig(
@@ -594,10 +587,10 @@ class Pokemon(commands.Cog):
         Convert image to RGB format.
         """
         if img.shape[2] == 3:  
-            return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            return cv.cvtColor(img, cv.COLOR_BGR2RGB)
         
         elif img.shape[2] == 4:
-            return cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
+            return cv.cvtColor(img, cv.COLOR_RGBA2RGB)
         return img
 
     @staticmethod
