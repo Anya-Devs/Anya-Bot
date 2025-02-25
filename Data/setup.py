@@ -1,30 +1,18 @@
-import subprocess
 import os
+import subprocess
+import ast
 
-def generate_requirements_txt():
-    installed_packages = subprocess.check_output(['pip', 'freeze'])
-    with open('requirements.txt', 'wb') as f:
-        f.write(installed_packages)
-    print("requirements.txt generated successfully.")
+def install_package(package):
+    """Ensures the given package is installed before running commands."""
+    subprocess.run(['pip', 'install', '--quiet', package], check=True)
 
-def check_opencv():
-    try:
-        import cv2
-    except ImportError:
-        print("cv2 not found. Installing...")
-        subprocess.check_call(['pip', 'install', 'opencv-python-headless'])
-        print("cv2 installed.")
+def generate_requirements():
+    """Generates requirements.txt based on actual project imports."""
+    subprocess.run(['pipreqs', '--force', '--ignore', 'venv,.venv', '.'], check=True)
 
-def update_pip():
-    subprocess.check_call(['pip', 'install', '--upgrade', 'pip'])
-    print("pip updated successfully.")
 
-def install_requirements():
-    subprocess.check_call(['pip', 'install', '-r', 'requirements.txt'])
-    print("All requirements installed.")
-
-if __name__ == '__main__':
-    check_opencv()         
-    generate_requirements_txt() 
-    update_pip()     
-    install_requirements()    
+# Generate and install only necessary dependencies
+def start():
+ generate_requirements()
+ install_package('pipreqs')
+ subprocess.run(['pip', 'install', '--upgrade', '-r', 'requirements.txt', 'pip'], check=True)

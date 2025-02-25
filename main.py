@@ -1,12 +1,12 @@
 """-----------------------""" 
 
-import Data.setup   # Set everything up first
+from Data.setup import start  # Set everything up first
+start()
 
 """-----------------------"""
 
 import os
 import gc
-import art
 import asyncio
 import aiohttp
 import traceback
