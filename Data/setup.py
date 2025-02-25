@@ -11,9 +11,9 @@ def check_opencv():
     try:
         import cv2
     except ImportError:
-        print("OpenCV (cv2) not found. Installing...")
+        print("cv2 not found. Installing...")
         subprocess.check_call(['pip', 'install', 'opencv-python-headless'])
-        print("OpenCV (cv2) installed.")
+        print("cv2 installed.")
 
 def update_pip():
     subprocess.check_call(['pip', 'install', '--upgrade', 'pip'])
