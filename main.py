@@ -152,7 +152,7 @@ def is_port_available(port):
 
 async def find_available_port():
     """Finds an available port starting from 8080 upwards."""
-    for port in range(8080, 8090):
+    for port in range(8080,9999):
         if is_port_available(port):
             return port
     raise OSError("No available ports found.")

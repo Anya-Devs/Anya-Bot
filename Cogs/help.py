@@ -116,33 +116,43 @@ class Select(discord.ui.Select):
      main_category_commands = {}
 
      for cmd in [cmd for cmd in cog.get_commands() if not cmd.hidden]:
-        cmd_args = [f"[{param.name}]" if param.default is not param.empty else f"<{param.name}>" for param in cmd.clean_params.values()]
+        # Properly format the command arguments
+        cmd_args = [
+            f"[{param.name}]" if param.default is not param.empty else f"<{param.name}>"
+            for param in cmd.clean_params.values()
+        ]
 
-        
+        # Truncate to 3 arguments, and append '...' if there are more
         if len(cmd_args) > 3:
             cmd_args = cmd_args[:3] + ['...']
 
-        main_category = cmd.name.split('_')[0]  
+        # Convert list to a space-separated string (to avoid list syntax)
+        cmd_args_str = ' '.join(cmd_args)
 
-        
+        # Main category is derived from the first part of the command name
+        main_category = cmd.name.split('_')[0]  
+        print(cmd_args_str)
+
+        # Format the command output based on the main category
         if main_category != cmd.name:  
             if main_category not in seen_commands:
                 seen_commands.add(main_category)
-                output += f"{main_category} {' '.join(cmd_args)}\n"  
+                output += f"{main_category} {cmd_args_str}\n"  
 
             if cmd.name not in seen_commands:
                 seen_commands.add(cmd.name)
-                main_category_commands.setdefault(main_category, []).append(f"- {cmd.name} {' '.join(cmd_args)}")
+                main_category_commands.setdefault(main_category, []).append(f"- {cmd.name} {cmd_args_str}")
         else:  
             if cmd.name not in seen_commands:
                 seen_commands.add(cmd.name)
-                output += f"{cmd.name} {' '.join(cmd_args)}\n"
+                output += f"{cmd.name} {cmd_args_str}\n"
 
+     # Add any subcommands under their main category
      for main_category, subcommands in main_category_commands.items():
         output += "\n".join(subcommands) + "\n"
 
      return self.organize_info(output.strip())
-
+    
     def organize_info(self, help_info):
      
      lines = help_info.strip().split('\n')

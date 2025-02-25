@@ -22,10 +22,6 @@ class Quest_Checker(commands.Cog):
         self.quest_data = Quest_Data(bot)
         logger.debug("Quest_Checker initialized")
 
-    async def cog_load(self):
-        
-        self.process_message_queue.start()
-
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
@@ -290,13 +286,7 @@ class Quest_Checker(commands.Cog):
             logger.error(f"Error occurred while updating quest progress: {e}")
             traceback.print_exc()
 
-    @tasks.loop(seconds=5)
-    async def process_message_queue(self):
-        await self.bot.wait_until_ready()
-        while not self.bot.is_closed():
-            
-            await asyncio.sleep(5)  
-
+ 
 
 async def setup(bot):
     await bot.add_cog(Quest_Checker(bot))
