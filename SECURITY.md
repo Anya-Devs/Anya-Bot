@@ -5,7 +5,7 @@
 |-----------|--------------------|
 | Latest    | ✅                 |
 | Previous  | ✅ (Critical fixes)|
-| Older     | ❌                 |
+| Older     | 🟨 (Under Development)           |
 
 We actively support the following versions of Anya-Bot:
 Please ensure you are using a supported version before reporting issues.
