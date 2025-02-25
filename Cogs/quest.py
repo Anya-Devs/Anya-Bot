@@ -2026,7 +2026,7 @@ class Quest_Data(commands.Cog):
             logger.debug(f"User ID: {user_id}")
 
             
-            times = 4
+            times = random.randint(1, 3)
             logger.debug(f"Random times selected: {times}")
 
             reward = random.randint(4, 20) * times
@@ -3044,6 +3044,7 @@ class SpyToolSelect(discord.ui.Select):
             discord.SelectOption(
                 emoji=f"{tool.get('emoji', '')}",
                 label=f"{tool.get('name', 'Unknown Item')}",
+                description=f"{tool.get('description', 'No description available.')}",
                 value=tool.get("name", "Unknown Item"),
             )
             for tool in spy_tools
