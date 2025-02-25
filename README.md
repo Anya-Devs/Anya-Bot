@@ -12,7 +12,7 @@
 ## ⚙️ Setup
 ### `.github`
 
-1. Make a `.env`
+1. **Make a `.env`**
    
    ```
      MONGO_URI= https://cloud.mongodb.com | Database: Bot | Collection Name: information
