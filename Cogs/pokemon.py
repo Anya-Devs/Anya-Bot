@@ -338,7 +338,7 @@ class Pokemon_Emojis(commands.Cog):
     
     
     
-    @commands.command()
+    @commands.command(hidden=True)
     async def create_emojis(self, ctx):
         print("create_emojis command invoked")
         if ctx.author.id not in self.owner_id:
@@ -407,8 +407,8 @@ class Pokemon_Emojis(commands.Cog):
         
         return None
 
-    @commands.command()
-    async def get_emoji(self, ctx, pokemon_id: int):
+    @commands.command(hidden=True)
+    async def get_pokemon_emoji(self, ctx, pokemon_id: int):
         emoji_str = self.get_emoji_for_pokemon(pokemon_id)
         
         if emoji_str:

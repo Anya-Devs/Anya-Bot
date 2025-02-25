@@ -208,13 +208,9 @@ class Select(discord.ui.Select):
             if os.path.exists(image_path):
                 with open(image_path, "rb") as f:
                     file = discord.File(f, filename="cog_image.png")
-
-                
                 self.cog_embed2.set_image(url="attachment://cog_image.png")
-
             cog = self.bot.get_cog(cog_name)
            
-            
             if cog:
                 commands_info = self._build_commands_info(cog)
                 if commands_info:
@@ -437,7 +433,7 @@ class Options_ImageGenerator:
         img = self.create_image()
         img_bytes = BytesIO()
         img.save(img_bytes, format="PNG")
-        #display(IPImage(img_bytes.getvalue())) 
+        
 
 
 class ImageGenerator:
@@ -641,7 +637,7 @@ class ImageGenerator:
         img = self.create_image()
         img_bytes = BytesIO()
         img.save(img_bytes, format="PNG")
-        #display(IPImage(img_bytes.getvalue()))
+        
 
 
 class Help(commands.Cog):
