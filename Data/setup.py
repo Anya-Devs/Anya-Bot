@@ -3,11 +3,9 @@ import subprocess
 import ast
 
 def install_package(package):
-    """Ensures the given package is installed before running commands."""
     subprocess.run(['pip', 'install', '--quiet', package], check=True)
 
 def generate_requirements():
-    """Generates requirements.txt based on actual project imports."""
     subprocess.run(['pipreqs', '--force', '--ignore', 'venv,.venv', '.'], check=True)
 
 

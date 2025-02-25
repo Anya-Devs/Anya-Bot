@@ -3044,7 +3044,7 @@ class SpyToolSelect(discord.ui.Select):
             discord.SelectOption(
                 emoji=f"{tool.get('emoji', '')}",
                 label=f"{tool.get('name', 'Unknown Item')}",
-                description=f"{tool.get('description', 'No description available.')}",
+                description=f"{tool.get('description', 'No description available.')[:50]}",
                 value=tool.get("name", "Unknown Item"),
             )
             for tool in spy_tools

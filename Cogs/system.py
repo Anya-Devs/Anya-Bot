@@ -22,11 +22,7 @@ class System(commands.Cog):
         self.image_file = "Data/commands/help/help_embed_images.json"
 
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        logger.info(
-            f"{Fore.YELLOW}[System cog] Bot is ready.{Style.RESET_ALL}")
-
+  
     @commands.command(name="ping")
     async def ping(self, ctx):
         try:

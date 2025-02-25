@@ -7,6 +7,7 @@ start()
 
 import os
 import gc
+import shutil
 import asyncio
 import aiohttp
 import traceback
@@ -20,7 +21,7 @@ from Imports.log_imports import logger
 from Imports.discord_imports import *
 from Imports.depend_imports import *
 from dotenv import load_dotenv
-import socket  # Use socket to check if the port is in use
+import socket  
 
 # Load environment variables from the .env file inside the ".github" directory.
 if __name__ == "__main__":
@@ -38,7 +39,7 @@ class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         intents.members = True
-        self.prefix = "..."
+        self.prefix = ">"
         super().__init__(
             command_prefix=commands.when_mentioned_or(self.prefix),
             intents=intents,
@@ -50,7 +51,9 @@ class BotSetup(commands.AutoShardedBot):
         self.mongo_client = None
         self.DB_NAME = "Bot"
         self.COLLECTION_NAME = "information"
-        self.token_field = "Token"
+        self.token_field = "Test_Token"
+
+   
 
     async def on_ready(self):
         avatar_url = self.user.avatar
@@ -58,8 +61,21 @@ class BotSetup(commands.AutoShardedBot):
         art_generator.create_art()
         print(art_generator.get_colored_ascii_art())
         print("\033[38;2;88;101;242mWelcome to Discord!\033[0m")
-        Login_Text=text2art(f"{self.user.name.title()}", "sub-zero")
+        Login_Text=text2art(f"{self.user.name.title()[:10]}", "sub-zero")
         print(f"\033[92m{Login_Text}\033[0m")
+
+    def print_centered_text(text):
+     # Get the current terminal size (width)
+     terminal_width = shutil.get_terminal_size().columns
+
+     # Get the length of the text to center
+     text_length = len(text)
+
+     # Calculate padding for center alignment
+     padding = (terminal_width - text_length) // 2
+
+     # Print the centered text
+     print(" " * padding + text)
 
 
 
