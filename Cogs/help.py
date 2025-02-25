@@ -118,22 +118,22 @@ class Select(discord.ui.Select):
      for cmd in [cmd for cmd in cog.get_commands() if not cmd.hidden]:
         cmd_args = [f"[{param.name}]" if param.default is not param.empty else f"<{param.name}>" for param in cmd.clean_params.values()]
 
-        # Limit to 3 arguments and add '...' if there are more
+        
         if len(cmd_args) > 3:
             cmd_args = cmd_args[:3] + ['...']
 
-        main_category = cmd.name.split('_')[0]  # Get the part before the first '_'
+        main_category = cmd.name.split('_')[0]  
 
-        # If the command has a subcommand, group it under the main command
-        if main_category != cmd.name:  # If the command has a subcommand
+        
+        if main_category != cmd.name:  
             if main_category not in seen_commands:
                 seen_commands.add(main_category)
-                output += f"{main_category} {' '.join(cmd_args)}\n"  # Add the main category first
+                output += f"{main_category} {' '.join(cmd_args)}\n"  
 
             if cmd.name not in seen_commands:
                 seen_commands.add(cmd.name)
                 main_category_commands.setdefault(main_category, []).append(f"- {cmd.name} {' '.join(cmd_args)}")
-        else:  # If it's a standalone command
+        else:  
             if cmd.name not in seen_commands:
                 seen_commands.add(cmd.name)
                 output += f"{cmd.name} {' '.join(cmd_args)}\n"
@@ -144,41 +144,40 @@ class Select(discord.ui.Select):
      return self.organize_info(output.strip())
 
     def organize_info(self, help_info):
-     # Split the input text into lines
+     
      lines = help_info.strip().split('\n')
     
-     # Initialize the dictionary to store the organized commands
+     
      organized = {}
     
-     # Process each command line
      for line in lines:
         parts = line.split(' ')
         command_name = parts[0]
         
-        # Check if it's a main command or a sub-command (prefixed by '-')
+        
         if command_name.startswith('-'):
-            # Find the base command name (before the underscore) for grouping
+            
             base_command = line.split(' ')[1].split('_')[0]
             if base_command not in organized:
                 organized[base_command] = []
             organized[base_command].append(line.strip())
         else:
-            # Add the regular command to the dictionary
+            
             if command_name not in organized:
                 organized[command_name] = []
             organized[command_name].append(line.strip())
 
-     # Now, to ensure correct ordering and grouping, we'll create the final list
+     
      sorted_output = []
      for command_group in organized:
-        # Add the main command itself
+        
         sorted_output.append(command_group)
-        # Sort and add any sub-commands under the main command
-        sub_commands = sorted(organized[command_group][1:])  # Exclude the main command
+        
+        sub_commands = sorted(organized[command_group][1:])  
         for sub_command in sub_commands:
             sorted_output.append(sub_command)
 
-     # Return the organized and sorted commands as a single text block
+     
      return '\n'.join(sorted_output)
 
     
@@ -441,7 +440,7 @@ class Options_ImageGenerator:
         img = self.create_image()
         img_bytes = BytesIO()
         img.save(img_bytes, format="PNG")
-        display(IPImage(img_bytes.getvalue()))
+        #display(IPImage(img_bytes.getvalue())) 
 
 
 class ImageGenerator:
@@ -645,7 +644,7 @@ class ImageGenerator:
         img = self.create_image()
         img_bytes = BytesIO()
         img.save(img_bytes, format="PNG")
-        display(IPImage(img_bytes.getvalue()))
+        #display(IPImage(img_bytes.getvalue()))
 
 
 class Help(commands.Cog):
@@ -686,7 +685,7 @@ class Help(commands.Cog):
     @staticmethod
     def format_cog_commands(cog_name, cog_commands, command_mapping):
         embed = discord.Embed(
-            title=f"Commands for {cog_name}", color=primary_color_value
+            title=f"{cog_name.title()}", color=primary_color
         )
         embed.description = (
             " "  
