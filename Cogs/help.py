@@ -180,19 +180,6 @@ class Select(discord.ui.Select):
      
      return '\n'.join(sorted_output)
 
-    
-
-
-
-
-
-
-
-
-
-
-
-
 
     async def callback(self, interaction: discord.Interaction):
         try:
@@ -206,7 +193,6 @@ class Select(discord.ui.Select):
             color = self.primary_color
             emoji = Help_Select_Embed_Mapping.emojis.get(cog_name.lower())
 
-            self.cog_embed1 = discord.Embed(title=f'Category - {emoji} {cog_name.replace("_", " ")}', description=f'{Help_Select_Embed_Mapping.embeds.get(cog_name.lower(), {}).get("description", "")}', color=color)
             self.cog_embed2 = discord.Embed(description="", color=color)
 
             help_embed_manager = Help_Thumbnails(self.set_thumbnail_file)
@@ -214,13 +200,21 @@ class Select(discord.ui.Select):
             if thumbnail_url:
                 self.cog_embed2.set_thumbnail(url=thumbnail_url)
 
-            image_path = "Data/commands/help/set_image/cog_image.png"
+            image_generator = Options_ImageGenerator(cog_name)
+            
+            image_path = "Data/Images/help_images/cog_image.png" 
+            saved_image_path = image_generator.save_image(image_path)
+
             if os.path.exists(image_path):
                 with open(image_path, "rb") as f:
                     file = discord.File(f, filename="cog_image.png")
+
+                
                 self.cog_embed2.set_image(url="attachment://cog_image.png")
 
             cog = self.bot.get_cog(cog_name)
+           
+            
             if cog:
                 commands_info = self._build_commands_info(cog)
                 if commands_info:
@@ -247,6 +241,9 @@ class HelpMenu(discord.ui.View):
         cog_commands = {}  
         self.add_item(select_view)
         
+
+
+
 
 
 class Options_ImageGenerator:
