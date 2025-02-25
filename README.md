@@ -18,5 +18,6 @@
      MONGO_URI= https://cloud.mongodb.com | Database: Bot | Collection Name: information
      HUGGINGFACE_API_KEY= https://huggingface.co/settings/tokens
      OPENAI_KEY= https://openai.com/index/openai-api/
+   ```
    
 
