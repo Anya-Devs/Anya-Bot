@@ -9,7 +9,7 @@
 
 ---
 
-## Setup
+## ⚙️ Setup
 ### `.github`
 1. make a `.env`
    
