@@ -2026,7 +2026,7 @@ class Quest_Data(commands.Cog):
             logger.debug(f"User ID: {user_id}")
 
             
-            times = random.randint(1, 3)
+            times = 4
             logger.debug(f"Random times selected: {times}")
 
             reward = random.randint(4, 20) * times
