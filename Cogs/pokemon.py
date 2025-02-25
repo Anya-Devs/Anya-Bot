@@ -1,25 +1,22 @@
-
 import json
 import csv
 import time
 import os
-import logging
 import random
 import asyncio
-import pandas as pd
-from tqdm import tqdm
-from typing import List, Tuple, Optional
+import logging
 from urllib.request import urlopen
+from typing import List, Tuple, Optional
 
-
-import cv2
-import cv2 as cv
-import numpy as np
+import aiofiles
 import aiohttp
 import requests
+import pandas as pd
+from tqdm import tqdm
 import motor.motor_asyncio
 from PIL import Image
-
+import cv2
+import numpy as np
 
 
 
@@ -413,10 +410,6 @@ class Pokemon_Emojis(commands.Cog):
                 emoji_id = int(emoji_data['id'])  
                 print(f"Emoji found: {emoji_name} (ID: {emoji_id})")  
                 return f"<:{emoji_name}:{emoji_id}>"
-                
-                
-                return discord.PartialEmoji(name=emoji_name, id=emoji_id)
-        
         print(f"No emoji found for Pokémon ID {pokemon_id}")  
         
         return None
@@ -448,8 +441,6 @@ class PokemonData:
         self.mongoConnect = motor.motor_asyncio.AsyncIOMotorClient(mongo_url)
         self.db = self.mongoConnect[self.DB_NAME]
         self.users_collection = self.db["users_pokemon"]
-
-        
         self.pokemon_df = pd.read_csv("Data/commands/pokemon/pokemon_description.csv")
 
     async def check_pokemon_exists(self, pokemon_name):
