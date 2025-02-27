@@ -1,5 +1,7 @@
 import os
+os.system("pip install pipreqs")
 import subprocess
+
 
 # Function to install a package
 def install_package(package):
