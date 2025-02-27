@@ -171,8 +171,7 @@ class ImageGenerator:
     def generate_image_sync(self, prompt: str, width: int = 1344, height: int = 768) -> Path:
         try:
             print(f"Generating image for prompt: {prompt}")
-            negative_prompt = "longbody, lowres, bad anatomy, bad hands, missing fingers, pubic hair, extra digit, fewer digits, cropped, worst quality, low quality, very displeasing"
-
+            negative_prompt = "lowres, bad anatomy, bad hands, text, error, missing finger, extra digits, fewer digits, cropped, worst quality, low quality, low score, bad score, average score, signature, watermark, username, blurry, missing fingers, extra limbs, extra fingers, duplicate bodys, unfinished limbs"
             # Modify the parameters to match the model's requirements for size
             image = self.client.text_to_image(
                 prompt,
