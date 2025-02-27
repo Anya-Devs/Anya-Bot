@@ -895,7 +895,6 @@ class Pokemon(commands.Cog):
             print("Getting Mega Evolution")
             mega_url = f"https://pokeapi.co/api/v2/pokemon/{pokemon_name.lower()}-mega"
             mega_response = requests.get(mega_url)
-            print(requests.get(mega_url))
             if mega_response.status_code == 200:
                 try:
                     mega_data = mega_response.json()
@@ -908,7 +907,6 @@ class Pokemon(commands.Cog):
             else:
                 await ctx.send(f"Mega evolution data not found for `{pokemon_name}`.")
         else:
-            print("Getting Basic Pokemon")
             url = f"{base_url}{pokemon_name.lower()}/"
             response_species = requests.get(url)
             if response_species.status_code != 200:
@@ -921,7 +919,6 @@ class Pokemon(commands.Cog):
                 data_species = response_species.json()
 
         if type == "mega":
-            print(f"Pokemon {name} is mega")
 
         async def title_case_except_all_caps(text):
             words = text.split()
@@ -935,39 +932,6 @@ class Pokemon(commands.Cog):
 
             return " ".join(result)
 
-        async def get_pokemon_info(data_species, pokemon_name):
-            try:
-                flavor = data_species["flavor_text_entries"][0]["flavor_text"]
-                english_flavor = next(
-                    (
-                        entry["flavor_text"]
-                        for entry in data_species["flavor_text_entries"]
-                        if entry["language"]["name"] == "en"
-                    ),
-                    None,
-                )
-
-                if english_flavor:
-                    flavor = english_flavor
-                    formatted_flavor = " ".join(flavor.split())
-                    formatted_description = await capitalize_sentences(formatted_flavor)
-
-                    word_replacements = {
-                        "POKéMON": "Pokémon",
-                        "POKé BALL": "Poké Ball",
-                        
-                    }
-
-                    formatted_description = await replace_words(
-                        formatted_description, word_replacements
-                    )
-
-                    return formatted_description
-                else:
-                    await find_pokemon_description(pokemon_name)
-            except Exception as e:
-                await find_pokemon_description(pokemon_name)
-                print(f"Error: An unexpected error occurred - {e}")
 
         def get_pokemon_description(
             pokemon_id, file_path="Data/commands/pokemon/pokemon_description.csv"
