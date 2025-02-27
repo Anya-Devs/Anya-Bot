@@ -18,6 +18,7 @@ class Ai(commands.Cog):
         self.bot = bot
         self.api_key = os.getenv("OPENAI_KEY")
         self.h_api_key =  os.getenv("HUGGINGFACE_API_KEY")
+        self.queue = []  
 
         if not self.api_key:
             raise ValueError("API key is not set in environment variables.")
@@ -32,36 +33,49 @@ class Ai(commands.Cog):
    
     @commands.command(name="imagine", description="Generate an image", aliases=["i"])
     async def imagine(self, ctx: commands.Context, *, prompt: str):
-     try:
-        async with ctx.typing():
-            # Generate a single image based on the prompt
-            custom_prompt = f"{prompt}"
-            output_path = await asyncio.to_thread(
-                self.image_gen.generate_image_sync, custom_prompt
-            )
+        if ctx.author.id in self.queue:
+            await ctx.send(f"{ctx.author.mention}, you're already in the process of generating an image. Please wait until it finishes.")
+            return
+        
+        # Add user to the queue
+        self.queue.append(ctx.author.id)
+        
+        try:
+            async with ctx.typing():
+                # Generate a single image based on the prompt
+                custom_prompt = f"{prompt}"
+                output_path = await asyncio.to_thread(
+                    self.image_gen.generate_image_sync, custom_prompt
+                )
 
-            # Save the generated image
-            new_file = self.image_gen.output_dir / "1.png"
-            if new_file.exists():
-                new_file.unlink()
-            output_path.rename(new_file)
+                # Save the generated image
+                new_file = self.image_gen.output_dir / "1.png"
+                if new_file.exists():
+                    new_file.unlink()
+                output_path.rename(new_file)
 
-            file = discord.File(str(new_file), filename="1.png")
-            description = f"**Prompt:** ```{prompt}```"
-            embed = discord.Embed(
-                description=description,
-                color=primary_color(),
-                timestamp=datetime.now(),
-                url="https://rajtech.me"
-            )
-            embed.set_image(url="attachment://1.png")
-            embed.set_footer(
-                icon_url=ctx.author.avatar, text=f"Requested by {ctx.author}"
-            )
+                file = discord.File(str(new_file), filename="1.png")
+                description = f"**Prompt:** ```{prompt}```"
+                embed = discord.Embed(
+                    description=description,
+                    color=primary_color(),
+                    timestamp=datetime.now(),
+                    url="https://rajtech.me"
+                )
+                embed.set_image(url="attachment://1.png")
+                embed.set_footer(
+                    icon_url=ctx.author.avatar, text=f"Requested by {ctx.author}"
+                )
 
-            await ctx.reply(embed=embed, file=file)
-     except Exception as e:
-        await ctx.send(f"An error occurred: {e}")
+                await ctx.reply(embed=embed, file=file)
+        
+        except Exception as e:
+            await ctx.send(f"An error occurred: {e}")
+        
+        finally:
+            # Remove the user from the queue once done
+            self.queue.remove(ctx.author.id)
+
     @commands.command(
         name="vision", description="Generate a vision-based response", aliases=["v"])
     async def vision_commmand(self, ctx, image_url: str = None):
