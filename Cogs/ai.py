@@ -32,47 +32,36 @@ class Ai(commands.Cog):
    
     @commands.command(name="imagine", description="Generate an image", aliases=["i"])
     async def imagine(self, ctx: commands.Context, *, prompt: str):
-        try:
-            style_list = ["color-detailed stlye", "shadow-detailed stlye", "hyper-detailed stlye"]
+     try:
+        async with ctx.typing():
+            # Generate a single image based on the prompt
+            custom_prompt = f"{prompt}"
+            output_path = await asyncio.to_thread(
+                self.image_gen.generate_image_sync, custom_prompt
+            )
 
-            generated_files = []
+            # Save the generated image
+            new_file = self.image_gen.output_dir / "1.png"
+            if new_file.exists():
+                new_file.unlink()
+            output_path.rename(new_file)
 
-            async with ctx.typing():
-                for idx, punct in enumerate(style_list, start=1):
-                    custom_prompt = f"{punct}: {prompt} "
-                    output_path = await asyncio.to_thread(
-                        self.image_gen.generate_image_sync, custom_prompt
-                    )
+            file = discord.File(str(new_file), filename="1.png")
+            description = f"**Prompt:** ```{prompt}```"
+            embed = discord.Embed(
+                description=description,
+                color=primary_color(),
+                timestamp=datetime.now(),
+                url="https://rajtech.me"
+            )
+            embed.set_image(url="attachment://1.png")
+            embed.set_footer(
+                icon_url=ctx.author.avatar, text=f"Requested by {ctx.author}"
+            )
 
-                    new_file = self.image_gen.output_dir / f"{idx}.png"
-                    if new_file.exists():
-                        new_file.unlink()
-                    output_path.rename(new_file)
-                    generated_files.append(new_file)
-
-                embeds = []
-                files = []
-                for idx, file_path in enumerate(generated_files, start=1):
-                    file = discord.File(str(file_path), filename=f"{idx}.png")
-                    files.append(file)
-
-                    description = f"**Prompt:** ```{prompt}```"
-                    embed = discord.Embed(
-                        description=description,
-                        color=primary_color(),  
-                        timestamp=datetime.now(),
-                        url="https://rajtech.me"
-                    )
-                    embed.set_image(url=f"attachment://{idx}.png")
-                    embed.set_footer(
-                        icon_url=ctx.author.avatar, text=f"Requested by {ctx.author}"
-                    )
-                    embeds.append(embed)
-
-            await ctx.reply(embeds=embeds, files=files)
-        except Exception as e:
-            await ctx.send(f"An error occurred: {e}")
-
+            await ctx.reply(embed=embed, file=file)
+     except Exception as e:
+        await ctx.send(f"An error occurred: {e}")
     @commands.command(
         name="vision", description="Generate a vision-based response", aliases=["v"])
     async def vision_commmand(self, ctx, image_url: str = None):
@@ -157,30 +146,31 @@ class Ai(commands.Cog):
         except Exception as e:
             await message.edit(content=f"An error occurred: {e}")
 
-
 class ImageGenerator:
     def __init__(self, api_key: str):
-        
-        self.client = InferenceClient(
-            "black-forest-labs/FLUX.1-dev", token=api_key)
+        """Initialize the image generator with the Hugging Face API key."""
+        self.client = InferenceClient("cagliostrolab/animagine-xl-4.0", token=api_key)
         self.output_dir = Path("Data/commands/ai/images")
         self.output_dir.mkdir(parents=True, exist_ok=True)
         print("Using Hugging Face model via InferenceClient...")
 
-    def generate_image_sync(
-        self, prompt: str, width: int = 1344, height: int = 768
-    ) -> Path:
-        """Generates an image synchronously using Hugging Face InferenceClient."""
+    def generate_image_sync(self, prompt: str, width: int = 1344, height: int = 768) -> Path:
         try:
             print(f"Generating image for prompt: {prompt}")
             negative_prompt = "longbody, lowres, bad anatomy, bad hands, missing fingers, pubic hair, extra digit, fewer digits, cropped, worst quality, low quality, very displeasing"
 
-            
-            image = self.client.text_to_image(prompt)
+            # Modify the parameters to match the model's requirements for size
+            image = self.client.text_to_image(
+                prompt,
+                width=width,       # Pass width as a parameter to the model
+                height=height,     # Pass height as a parameter to the model
+                negative_prompt=negative_prompt
+            )
 
-            print(image)
+            print(f"Image generated successfully with size {width}x{height}")
             
-            output_path = self.output_dir / f"generated_image.png"
+            # Save the image to the output directory
+            output_path = self.output_dir / f"generated_image_{width}x{height}.png"
             image.save(output_path)
             print(f"Image saved at: {output_path}")
             return output_path
@@ -188,17 +178,6 @@ class ImageGenerator:
         except Exception as e:
             print(f"Error during image generation: {e}")
             raise e
-
-    async def generate_image(self, prompt: str) -> str:
-        """Generates an image asynchronously."""
-        try:
-            output_path = await asyncio.to_thread(self.generate_image_sync, prompt)
-            return str(output_path)
-        except Exception as e:
-            print(f"Failed to generate image: {e}")
-            raise Exception(f"Failed to generate image: {e}")
-
-
-
+  
 def setup(bot):
     bot.add_cog(Ai(bot))
