@@ -1,0 +1,23 @@
+import collections.abc
+import contextvars
+import typing
+import typing_extensions
+
+def is_local() -> bool: ...
+async def _interact() -> None: ...
+
+class __interact_spec(typing_extensions.Protocol):
+    def __call__(self) -> None: ...
+    async def aio(self) -> None: ...
+
+interact: __interact_spec
+
+def current_input_id() -> typing.Optional[str]: ...
+def current_function_call_id() -> typing.Optional[str]: ...
+def _set_current_context_ids(
+    input_ids: list[str], function_call_ids: list[str]
+) -> collections.abc.Callable[[], None]: ...
+
+_current_input_id: contextvars.ContextVar
+
+_current_function_call_id: contextvars.ContextVar

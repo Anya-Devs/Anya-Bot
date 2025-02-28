@@ -1,6 +1,9 @@
 
 import os
 import asyncio
+import aiohttp
+import asyncio
+import base64
 from pathlib import Path
 from datetime import datetime
 from openai import AsyncOpenAI  
@@ -161,36 +164,58 @@ class Ai(commands.Cog):
             await message.edit(content=f"An error occurred: {e}")
 
 class ImageGenerator:
-    def __init__(self, api_key: str):
-        """Initialize the image generator with the Hugging Face API key."""
-        self.client = InferenceClient("cagliostrolab/animagine-xl-4.0", token=api_key)
+    def __init__(self):
+        """Initialize the image generator with API settings."""
         self.output_dir = Path("Data/commands/ai/images")
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        print("Using Hugging Face model via InferenceClient...")
+        print("Using Stable Diffusion API via aiohttp...")
+        self.API_URL  = os.getenv("Stable_Diffusion_API_URL")
 
-    def generate_image_sync(self, prompt: str, width: int = 1344, height: int = 768) -> Path:
-        try:
-            print(f"Generating image for prompt: {prompt}")
-            negative_prompt = "lowres, bad anatomy, bad hands, text, error, missing finger, extra digits, fewer digits, cropped, worst quality, low quality, low score, bad score, average score, signature, watermark, username, blurry, missing fingers, extra limbs, extra fingers, duplicate bodys, unfinished limbs"
-            # Modify the parameters to match the model's requirements for size
-            image = self.client.text_to_image(
-                prompt,
-                width=width,       # Pass width as a parameter to the model
-                height=height,     # Pass height as a parameter to the model
-                negative_prompt=negative_prompt
-            )
+    async def generate_image_async(self, prompt: str, width: int = 1344, height: int = 768) -> Path:
+        """ Asynchronously sends a request to the API and saves the generated image. """
 
-            print(f"Image generated successfully with size {width}x{height}")
-            
-            # Save the image to the output directory
-            output_path = self.output_dir / f"generated_image_{width}x{height}.png"
-            image.save(output_path)
-            print(f"Image saved at: {output_path}")
-            return output_path
+        # Strong negative prompt for better quality
+        negative_prompt = (
+            "(painting by bad-artist-anime:0.9), (painting by bad-artist:0.9), watermark, text, error, blurry, "
+            "jpeg artifacts, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, "
+            "watermark, username, artist name, (worst quality, low quality:1.4), bad anatomy"
+        )
 
-        except Exception as e:
-            print(f"Error during image generation: {e}")
-            raise e
-  
+        # Payload with model override
+        payload = {
+            "prompt": f"{prompt}, (masterpiece), (best quality), (ultra-detailed), very aesthetic, illustration, "
+                      "disheveled hair, perfect composition, moist skin, intricate details",
+            "negative_prompt": negative_prompt,
+            "steps": 28,  # Increased for refinement
+            "cfg_scale": 6.5,  # Fine-tuned for a balance of creativity & accuracy
+            "width": width,
+            "height": height,
+            "override_settings": {
+                "sd_model_checkpoint": "animagine-xl-4.0.safetensors"  # Ensures correct model usage
+            }
+        }
+
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(str(self.API_URL), json=payload) as response:
+                    if response.status == 200:
+                        r = await response.json()
+                        
+                        # Decode and save the image
+                        image_data = base64.b64decode(r['images'][0])
+                        output_path = self.output_dir / f"generated_image_{width}x{height}.png"
+                        with open(output_path, 'wb') as f:
+                            f.write(image_data)
+
+                        print(f"✅ Image successfully generated and saved as '{output_path}'")
+                        return output_path
+                    else:
+                        print(f"❌ Error: {response.status}, {await response.text()}")
+                        return None
+
+            except aiohttp.ClientError as e:
+                print(f"❌ Request failed: {str(e)}")
+                return None
+
 def setup(bot):
     bot.add_cog(Ai(bot))
