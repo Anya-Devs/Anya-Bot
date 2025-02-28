@@ -30,54 +30,53 @@ class Ai(commands.Cog):
             api_key=self.api_key,
             base_url="https://api.naga.ac/v1",
         )
-        self.image_gen = ImageGenerator(self.h_api_key)  
+        self.image_gen = ImageGenerator()  
         self.error_custom_embed = error_custom_embed
 
    
     @commands.command(name="imagine", description="Generate an image", aliases=["i"])
     async def imagine(self, ctx: commands.Context, *, prompt: str):
-        if ctx.author.id in self.queue:
-            await ctx.send(f"{ctx.author.mention}, you're already in the process of generating an image. Please wait until it finishes.")
-            return
-        
-        # Add user to the queue
-        self.queue.append(ctx.author.id)
-        
-        try:
-            async with ctx.typing():
-                # Generate a single image based on the prompt
-                custom_prompt = f"{prompt}"
-                output_path = await asyncio.to_thread(
-                    self.image_gen.generate_image_sync, custom_prompt
-                )
+     if ctx.author.id in self.queue:
+        await ctx.send(f"{ctx.author.mention}, you're already in the process of generating an image. Please wait until it finishes.")
+        return
+    
+     # Add user to the queue
+     self.queue.append(ctx.author.id)
+    
+     try:
+        async with ctx.typing():
+            # Generate a single image based on the prompt
+            custom_prompt = f"{prompt}"
+            # Directly call the synchronous method
+            output_path = await self.image_gen.generate_image_sync(custom_prompt)
 
-                # Save the generated image
-                new_file = self.image_gen.output_dir / "1.png"
-                if new_file.exists():
-                    new_file.unlink()
-                output_path.rename(new_file)
+            # Save the generated image
+            new_file = self.image_gen.output_dir / "1.png"
+            if new_file.exists():
+                new_file.unlink()
+            output_path.rename(new_file)
 
-                file = discord.File(str(new_file), filename="1.png")
-                description = f"**Prompt:** ```{prompt}```"
-                embed = discord.Embed(
-                    description=description,
-                    color=primary_color(),
-                    timestamp=datetime.now(),
-                    url="https://rajtech.me"
-                )
-                embed.set_image(url="attachment://1.png")
-                embed.set_footer(
-                    icon_url=ctx.author.avatar, text=f"Requested by {ctx.author}"
-                )
+            file = discord.File(str(new_file), filename="1.png")
+            description = f"**Prompt:** ```{prompt}```"
+            embed = discord.Embed(
+                description=description,
+                color=primary_color(),
+                timestamp=datetime.now(),
+                url="https://rajtech.me"
+            )
+            embed.set_image(url="attachment://1.png")
+            embed.set_footer(
+                icon_url=ctx.author.avatar, text=f"Requested by {ctx.author}"
+            )
 
-                await ctx.reply(embed=embed, file=file)
-        
-        except Exception as e:
-            await ctx.send(f"An error occurred: {e}")
-        
-        finally:
-            # Remove the user from the queue once done
-            self.queue.remove(ctx.author.id)
+            await ctx.reply(embed=embed, file=file)
+    
+     except Exception as e:
+        await ctx.send(f"An error occurred: {e}")
+    
+     finally:
+        # Remove the user from the queue once done
+        self.queue.remove(ctx.author.id)
 
     @commands.command(
         name="vision", description="Generate a vision-based response", aliases=["v"])
@@ -171,8 +170,8 @@ class ImageGenerator:
         print("Using Stable Diffusion API via aiohttp...")
         self.API_URL  = os.getenv("Stable_Diffusion_API_URL")
 
-    async def generate_image_async(self, prompt: str, width: int = 1344, height: int = 768) -> Path:
-        """ Asynchronously sends a request to the API and saves the generated image. """
+    async def generate_image_sync(self, prompt: str, width: int = 1344, height: int = 768) -> Path:
+        """Asynchronously sends a request to the API and saves the generated image."""
 
         # Strong negative prompt for better quality
         negative_prompt = (
@@ -195,9 +194,9 @@ class ImageGenerator:
             }
         }
 
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.post(str(self.API_URL), json=payload) as response:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.API_URL, json=payload) as response:
                     if response.status == 200:
                         r = await response.json()
                         
@@ -212,10 +211,10 @@ class ImageGenerator:
                     else:
                         print(f"❌ Error: {response.status}, {await response.text()}")
                         return None
-
-            except aiohttp.ClientError as e:
-                print(f"❌ Request failed: {str(e)}")
-                return None
+        except aiohttp.ClientError as e:
+            print(f"❌ Request failed: {str(e)}")
+            return None
+        
 
 def setup(bot):
     bot.add_cog(Ai(bot))
