@@ -22,6 +22,15 @@ class System(commands.Cog):
         self.image_file = "Data/commands/help/help_embed_images.json"
 
 
+    @commands.command(name='memory')
+    async def memory(ctx):
+     process = psutil.Process(os.getpid())
+     memory_info = process.memory_info()
+     memory = memory_info.rss / (1024 * 1024) 
+     await ctx.send(memory)
+
+    
+
   
     @commands.command(name="ping")
     async def ping(self, ctx):
