@@ -23,7 +23,7 @@ class System(commands.Cog):
 
 
     @commands.command(name='memory')
-    async def memory(ctx):
+    async def memory(self, ctx):
      process = psutil.Process(os.getpid())
      memory_info = process.memory_info()
      memory = memory_info.rss / (1024 * 1024) 
