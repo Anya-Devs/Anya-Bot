@@ -185,8 +185,8 @@ class ImageGenerator:
             "prompt": f"{prompt}, (masterpiece), (best quality), (ultra-detailed), very aesthetic, illustration, "
                       "disheveled hair, perfect composition, moist skin, intricate details",
             "negative_prompt": negative_prompt,
-            "steps": 28,  # Increased for refinement
-            "cfg_scale": 6.5,  # Fine-tuned for a balance of creativity & accuracy
+            "steps": 30,  # Increased for refinement
+            "cfg_scale": 5,  # Fine-tuned for a balance of creativity & accuracy
             "width": width,
             "height": height,
             "override_settings": {
@@ -215,7 +215,6 @@ class ImageGenerator:
             print(f"❌ Request failed: {str(e)}")
             return None
         
-
 """
 class ImageGenerator:
     def __init__(self, api_key: str):
