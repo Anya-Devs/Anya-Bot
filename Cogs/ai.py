@@ -216,5 +216,39 @@ class ImageGenerator:
             return None
         
 
+"""
+class ImageGenerator:
+    def __init__(self, api_key: str):
+        self.client = InferenceClient("cagliostrolab/animagine-xl-4.0", token=api_key)
+        self.output_dir = Path("Data/commands/ai/images")
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        print("Using Hugging Face model via InferenceClient...")
+
+    def generate_image_sync(self, prompt: str, width: int = 1344, height: int = 768) -> Path:
+        try:
+            print(f"Generating image for prompt: {prompt}")
+            negative_prompt = "lowres, bad anatomy, bad hands, text, error, missing finger, extra digits, fewer digits, cropped, worst quality, low quality, low score, bad score, average score, signature, watermark, username, blurry, missing fingers, extra limbs, extra fingers, duplicate bodys, unfinished limbs"
+            # Modify the parameters to match the model's requirements for size
+            image = self.client.text_to_image(
+                prompt,
+                width=width,       # Pass width as a parameter to the model
+                height=height,     # Pass height as a parameter to the model
+                negative_prompt=negative_prompt
+            )
+
+            print(f"Image generated successfully with size {width}x{height}")
+            
+            # Save the image to the output directory
+            output_path = self.output_dir / f"generated_image_{width}x{height}.png"
+            image.save(output_path)
+            print(f"Image saved at: {output_path}")
+            return output_path
+
+        except Exception as e:
+            print(f"Error during image generation: {e}")
+            raise e
+  
+"""
+
 def setup(bot):
     bot.add_cog(Ai(bot))
