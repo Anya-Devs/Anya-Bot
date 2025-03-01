@@ -186,11 +186,11 @@ class ImageGenerator:
                       "disheveled hair, perfect composition, moist skin, intricate details",
             "negative_prompt": negative_prompt,
             "steps": 30,  # Increased for refinement
-            "cfg_scale": 5,  # Fine-tuned for a balance of creativity & accuracy
+            "cfg_scale": 8.5,  # Fine-tuned for a balance of creativity & accuracy
             "width": width,
             "height": height,
             "override_settings": {
-                "sd_model_checkpoint": "animagine-xl-4.0.safetensors"  # Ensures correct model usage
+                "sd_model_checkpoint": "animagine-xl-4.0"  # Ensures correct model usage
             }
         }
 

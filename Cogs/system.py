@@ -25,9 +25,18 @@ class System(commands.Cog):
     @commands.command(name='memory')
     async def memory(self, ctx):
      process = psutil.Process(os.getpid())
-     memory_info = process.memory_info()
-     memory = memory_info.rss / (1024 * 1024) 
-     await ctx.send(memory)
+     memory_bytes = process.memory_info().rss  # Memory usage in bytes
+
+     # Convert memory to appropriate units
+     if memory_bytes < 1024:
+        memory_str = f"{memory_bytes} B"
+     elif memory_bytes < 1024**2:
+        memory_str = f"{memory_bytes / 1024:.2f} KB"
+     elif memory_bytes < 1024**3:
+        memory_str = f"{memory_bytes / 1024**2:.2f} MB"
+     else:
+        memory_str = f"{memory_bytes / 1024**3:.2f} GB"
+     await ctx.send(f"Memory Usage: {memory_str}")
 
     
 
