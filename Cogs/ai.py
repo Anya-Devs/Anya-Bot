@@ -54,6 +54,9 @@ class Ai(commands.Cog):
             new_file = self.image_gen.output_dir / "1.png"
             if new_file.exists():
                 new_file.unlink()
+            if output_path == None:
+                await ctx.reply("❌ Error genrating prompt, please try again (change some things).")
+                return
             output_path.rename(new_file)
 
             file = discord.File(str(new_file), filename="1.png")
@@ -182,16 +185,14 @@ class ImageGenerator:
 
         # Payload with model override
         payload = {
-            "prompt": f"{prompt}, (masterpiece), (best quality), (ultra-detailed), very aesthetic, illustration, "
-                      "disheveled hair, perfect composition, moist skin, intricate details",
+            "prompt": f"{prompt}, (masterpiece), (best quality), (high resolution), (illustration), (detailed character), (sharp lines), (vibrant colors), (clean lines), (dynamic pose), (expressive eyes), (detailed face), (smooth shading), (intricate clothing), (stylized hair), (anime style), (artstation), (pixiv fanbox), ",
             "negative_prompt": negative_prompt,
             "steps": 28,  # Increased for refinement
-            "cfg_scale": 8.5,  # Fine-tuned for a balance of creativity & accuracy
             "width": width,
             "height": height,
-            "seed": 1475341707,
-            "batch_size": 1,
-            "sampler_name": "Euler a",
+            "seed": -1,
+            "style_preset": "Anim4gine",  # Apply the desired style
+            "sampler_name": "DPM++ 2M SDE Karras",
             "override_settings": {
                 "sd_model_checkpoint": "animagine-xl-4.0"  # Ensures correct model usage
             }
@@ -217,7 +218,7 @@ class ImageGenerator:
         except aiohttp.ClientError as e:
             print(f"❌ Request failed: {str(e)}")
             return None
-        
+
 """
 class ImageGenerator:
     def __init__(self, api_key: str):
