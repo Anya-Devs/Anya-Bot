@@ -58,7 +58,7 @@ class BotSetup(commands.AutoShardedBot):
 
     async def on_ready(self):
         avatar_url = self.user.avatar
-        art_generator = AvatarToTextArt(avatar_url, new_width=25)
+        art_generator = AvatarToTextArt(avatar_url, new_width=50)
         art_generator.create_art()
         print(art_generator.get_colored_ascii_art())
         print("\033[38;2;88;101;242mWelcome to Discord!\033[0m")

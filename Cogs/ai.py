@@ -8,7 +8,7 @@ from pathlib import Path
 from datetime import datetime
 from openai import AsyncOpenAI  
 
-from huggingface_hub import InferenceClient
+#from huggingface_hub import InferenceClient unsued
 
 
 from Imports.discord_imports import *
