@@ -1,4 +1,5 @@
 import os
+os.system("pip install pipreqs")
 import subprocess
 import sys
 
