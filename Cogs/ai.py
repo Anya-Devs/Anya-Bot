@@ -185,10 +185,13 @@ class ImageGenerator:
             "prompt": f"{prompt}, (masterpiece), (best quality), (ultra-detailed), very aesthetic, illustration, "
                       "disheveled hair, perfect composition, moist skin, intricate details",
             "negative_prompt": negative_prompt,
-            "steps": 30,  # Increased for refinement
+            "steps": 28,  # Increased for refinement
             "cfg_scale": 8.5,  # Fine-tuned for a balance of creativity & accuracy
             "width": width,
             "height": height,
+            "seed": 1475341707,
+            "batch_size": 1,
+            "sampler_name": "Euler a",
             "override_settings": {
                 "sd_model_checkpoint": "animagine-xl-4.0"  # Ensures correct model usage
             }
