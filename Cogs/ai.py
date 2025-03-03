@@ -178,14 +178,14 @@ class ImageGenerator:
 
         # Strong negative prompt for better quality
         negative_prompt = (
-            "(painting by bad-artist-anime:0.9), (painting by bad-artist:0.9), watermark, text, error, blurry, "
-            "jpeg artifacts, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, "
-            "watermark, username, artist name, (worst quality, low quality:1.4), bad anatomy"
-        )
+         "(painting by bad-artist-anime:0.9), (painting by bad-artist:0.9), watermark, text, error, blurry, "
+         "jpeg artifacts, cropped, worst quality, low quality, normal quality, signature, "
+         "username, artist name, (worst quality, low quality:1.4), bad anatomy, lowres, bad hands, missing finger, extra digits, fewer digits, low score, average score"
+         )
 
         # Payload with model override
         payload = {
-            "prompt": f"{prompt}, (masterpiece), (best quality), (high resolution), (illustration), (detailed character), (sharp lines), (vibrant colors), (clean lines), (dynamic pose), (expressive eyes), (detailed face), (smooth shading), (intricate clothing), (stylized hair), (anime style), (artstation), (pixiv fanbox), ",
+            "prompt": f"{prompt}, (masterpiece), (clean skin), (clean lines), (best quality), (high resolution), (illustration), (detailed character), (sharp lines), (vibrant colors), (clean lines), (dynamic pose), (expressive eyes), (detailed face), (smooth shading), (intricate clothing), (stylized hair), (anime style), (artstation), (pixiv fanbox), (8K), masterpiece, high score, great score, absurdres",
             "negative_prompt": negative_prompt,
             "steps": 28,  # Increased for refinement
             "width": width,
@@ -194,7 +194,8 @@ class ImageGenerator:
             "style_preset": "Anim4gine",  # Apply the desired style
             "sampler_name": "DPM++ 2M SDE Karras",
             "override_settings": {
-                "sd_model_checkpoint": "animagine-xl-4.0"  # Ensures correct model usage
+                "sd_model_checkpoint": "animagine-xl-4.0",  # Ensures correct model usage
+
             }
         }
 
