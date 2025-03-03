@@ -11,6 +11,8 @@ import json
                 
 from Imports.discord_imports import *
 from Data.const import primary_color
+from Data.utils.token_utils import get_bot_token
+
 
                               
 # Ensure the directory exists before logging
@@ -300,7 +302,7 @@ class EventGate(commands.Cog):
 
     @staticmethod
     async def timeout_user(user, message):
-        BOT_TOKEN = os.getenv("TOKEN")
+        BOT_TOKEN = await get_bot_token()
         GUILD_ID = message.guild.id
         USER_ID = user.id
 

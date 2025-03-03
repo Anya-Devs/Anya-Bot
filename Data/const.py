@@ -1156,7 +1156,7 @@ class AvatarToTextArt:
         
         # Custom ASCII characters from light to dark.
         # We will invert the brightness mapping so that dark regions use the densest characters.
-        self.custom_ascii_chars = '@' # .,:;irsXA253hMHGS#9B&@
+        self.custom_ascii_chars = '@%#*+=-:. ' # .,:;irsXA253hMHGS#9B&@
 
     def fetch_image(self):
         """Fetches the image from the URL and converts it to an RGB NumPy array."""

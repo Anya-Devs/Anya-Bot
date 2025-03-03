@@ -23,6 +23,9 @@ from Imports.depend_imports import *
 from dotenv import load_dotenv
 import socket  
 
+# Import the function to get the bot token
+from Data.utils.token_utils import get_bot_token
+
 # Load environment variables from the .env file inside the ".github" directory.
 if __name__ == "__main__":
     load_dotenv(dotenv_path=os.path.join(".github", ".env"))
@@ -51,40 +54,25 @@ class BotSetup(commands.AutoShardedBot):
         self.mongo_client = None
         self.DB_NAME = "Bot"
         self.COLLECTION_NAME = "information"
-        self.token_field = "Token"
-
-   
+        self.token_field = "Test_Token"
 
     async def on_ready(self):
         avatar_url = self.user.avatar
-        art_generator =  AvatarToTextArt(avatar_url, new_width=25)
+        art_generator = AvatarToTextArt(avatar_url, new_width=25)
         art_generator.create_art()
         print(art_generator.get_colored_ascii_art())
         print("\033[38;2;88;101;242mWelcome to Discord!\033[0m")
-        Login_Text=text2art(f"{self.user.name.title()[:10]}", "sub-zero")
+        Login_Text = text2art(f"{self.user.name.title()[:10]}", "sub-zero")
         print(f"\033[92m{Login_Text}\033[0m")
-
-
-
-    async def get_token_from_db(self):
-        mongo_url = os.getenv("MONGO_URI")
-        if not mongo_url:
-            raise ValueError("No MONGO_URI found in environment variables")
-        self.mongo_client = AsyncIOMotorClient(mongo_url)
-        db = self.mongo_client[self.DB_NAME]
-        collection = db[self.COLLECTION_NAME]
-        token_data = await collection.find_one({self.token_field: {"$exists": True}})
-        if token_data:
-            return token_data.get(self.token_field)
-        raise ValueError("No token found in the database")
 
     async def start_bot(self):
         await self.setup()
-        token = await self.get_token_from_db()
-        if not token:
-            logger.error("No token found. Check database.")
-            return
         try:
+            # Fetch token using the utility function
+            token = await get_bot_token()  
+            if not token:
+                logger.error("No token found. Check database.")
+                return
             await self.start(token)
         except KeyboardInterrupt:
             await self.close()
@@ -124,7 +112,7 @@ class BotSetup(commands.AutoShardedBot):
 async def check_rate_limit():
     url = "https://discord.com/api/v10/users/@me"
     bot_instance = BotSetup()
-    token = await bot_instance.get_token_from_db()
+    token = await get_bot_token()  # Fetch token using the utility function
     headers = {"Authorization": f"Bot {token}"}
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers) as response:

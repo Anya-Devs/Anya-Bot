@@ -70,7 +70,7 @@ class Information(commands.Cog):
     async def about(self, ctx, topic: Union[discord.Member, int, str] = None):
         if topic is None:
             topic = ctx.bot.user
-        embed = await self.get_information_embed(id, self.bot)
+        embed = await self.get_information_embed(topic, self.bot)  # Pass 'topic' instead of 'id'
         await ctx.reply(embed=embed, mention_author=False)
         
  

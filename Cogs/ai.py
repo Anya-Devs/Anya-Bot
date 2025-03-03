@@ -177,17 +177,14 @@ class ImageGenerator:
         """Asynchronously sends a request to the API and saves the generated image."""
 
         # Strong negative prompt for better quality
-        negative_prompt = (
-         "(painting by bad-artist-anime:0.9), (painting by bad-artist:0.9), watermark, text, error, blurry, "
-         "jpeg artifacts, cropped, worst quality, low quality, normal quality, signature, "
-         "username, artist name, (worst quality, low quality:1.4), bad anatomy, lowres, bad hands, missing finger, extra digits, fewer digits, low score, average score"
-         )
+        negative_prompt = "(bad-artist-anime:0.9), (bad-artist:0.9), watermark, text, error, blurry, jpeg artifacts, cropped, worst quality, low quality, normal quality, signature, username, artist name, (worst quality, low quality:1.4), bad anatomy, bad hands, missing fingers, extra digits, fewer digits, lowres, bad composition, ugly, dull colors, distorted, noisy, grainy, poorly drawn, out of focus, unclear eyes, deformed, disfigured, complex shapes, uncanny hair, uncanny, malformed hands, incorrect number of fingers, featureless fingers, blurred finger lines, unshaped knuckles, no finger detail"
 
         # Payload with model override
         payload = {
-            "prompt": f"{prompt}, (masterpiece), (clean skin), (clean lines), (best quality), (high resolution), (illustration), (detailed character), (sharp lines), (vibrant colors), (clean lines), (dynamic pose), (expressive eyes), (detailed face), (smooth shading), (intricate clothing), (stylized hair), (anime style), (artstation), (pixiv fanbox), (8K), masterpiece, high score, great score, absurdres",
+            "prompt": f"{prompt}, (masterpiece), (clean skin), (clean lines), (best quality), (high resolution), (illustration), (detailed character), (sharp lines), (dynamic pose), (expressive eyes), (detailed face), (smooth shading), high score, great score, absurdres, (intricate clothing), (stylized hair), (anime style), (artstation), (pixiv fanbox), (8K), (vibrant), smooth skin",
             "negative_prompt": negative_prompt,
-            "steps": 28,  # Increased for refinement
+            "steps": 28, 
+            "cfg_scale": 7,
             "width": width,
             "height": height,
             "seed": -1,
