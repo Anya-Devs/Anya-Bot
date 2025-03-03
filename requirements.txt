@@ -8,10 +8,13 @@ fuzzywuzzy==0.18.0
 motor==3.7.0
 numpy==2.2.3
 openai==1.65.2
+opencv_python_headless==4.11.0.86
 pandas==2.2.3
+Pillow==11.1.0
 psutil==6.1.0
 pymongo==4.11.1
 python-dotenv==1.0.1
 redis==5.2.1
+Requests==2.32.3
 rich==13.9.4
 tqdm==4.67.1
