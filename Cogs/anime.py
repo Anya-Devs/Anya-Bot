@@ -17,6 +17,7 @@ logging.basicConfig(
 class Anime(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.api_url = "https://api.jikan.moe/v4/anime/"
 
     @commands.command(name="anime")
     async def anime_search(self, ctx, *, query=None):
@@ -116,7 +117,7 @@ class Anime(commands.Cog):
                 await message.edit(embed=error_embed)
                 return
 
-        url = f"https://api.jikan.moe/v4/characters?q={query}"
+        url = f"{self.api_url}characters?q={query}"
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -177,7 +178,7 @@ class Anime(commands.Cog):
                 await message.edit(embed=error_embed)
                 return
 
-        url = f"https://api.jikan.moe/v4/manga?q={query}"
+        url = f"{self.api_url}manga?q={query}"
 
         try:
             async with aiohttp.ClientSession() as session:
