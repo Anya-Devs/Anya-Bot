@@ -40,17 +40,13 @@ class Ai(commands.Cog):
         await ctx.send(f"{ctx.author.mention}, you're already in the process of generating an image. Please wait until it finishes.")
         return
     
-     # Add user to the queue
      self.queue.append(ctx.author.id)
     
      try:
         async with ctx.typing():
-            # Generate a single image based on the prompt
             custom_prompt = f"{prompt}"
-            # Directly call the synchronous method
             output_path = await self.image_gen.generate_image_sync(custom_prompt)
 
-            # Save the generated image
             new_file = self.image_gen.output_dir / "1.png"
             if new_file.exists():
                 new_file.unlink()
@@ -188,10 +184,10 @@ class ImageGenerator:
             "width": width,
             "height": height,
             "seed": -1,
-            "style_preset": "Anim4gine",  # Apply the desired style
+            "style_preset": "Anim4gine", 
             "sampler_name": "DPM++ 2M SDE Karras",
             "override_settings": {
-                "sd_model_checkpoint": "animagine-xl-4.0",  # Ensures correct model usage
+                "sd_model_checkpoint": "animagine-xl-4.0", 
 
             }
         }
