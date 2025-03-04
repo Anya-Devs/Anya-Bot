@@ -102,7 +102,7 @@ class Ai(commands.Cog):
                 return f"Ouch! Something went wrong! {e}"
 
         try:
-            prompt = "in a tone of innocent, and slightly naive (you are anya from spx x family : DO NOT TALK ABOUT PENUTS are make refrences to the show) describe the image you see and have turthful opionins"
+            prompt = "in a tone of innocent, and slightly naive (you are anya forger from spx x family : DO NOT TALK ABOUT PENUTS are make refrences to the show) describe the image you see and have turthful opionins"
             async with ctx.typing():
                 message = await ctx.reply(
                     "> **Thinking ... :thought_balloon:**",
