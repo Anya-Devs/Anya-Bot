@@ -121,19 +121,11 @@ class Select(discord.ui.Select):
             f"[{param.name}]" if param.default is not param.empty else f"<{param.name}>"
             for param in cmd.clean_params.values()
         ]
-
-        # Truncate to 3 arguments, and append '...' if there are more
         if len(cmd_args) > 3:
             cmd_args = cmd_args[:3] + ['...']
-
-        # Convert list to a space-separated string (to avoid list syntax)
         cmd_args_str = ' '.join(cmd_args)
-
-        # Main category is derived from the first part of the command name
         main_category = cmd.name.split('_')[0]  
         print(cmd_args_str)
-
-        # Format the command output based on the main category
         if main_category != cmd.name:  
             if main_category not in seen_commands:
                 seen_commands.add(main_category)
@@ -154,42 +146,27 @@ class Select(discord.ui.Select):
      return self.organize_info(output.strip())
     
     def organize_info(self, help_info):
-     
      lines = help_info.strip().split('\n')
-    
-     
      organized = {}
-    
      for line in lines:
         parts = line.split(' ')
         command_name = parts[0]
-        
-        
         if command_name.startswith('-'):
-            
             base_command = line.split(' ')[1].split('_')[0]
             if base_command not in organized:
                 organized[base_command] = []
             organized[base_command].append(line.strip())
         else:
-            
             if command_name not in organized:
                 organized[command_name] = []
-            organized[command_name].append(line.strip())
-
-     
+            organized[command_name].append(line.strip())     
      sorted_output = []
      for command_group in organized:
-        
         sorted_output.append(command_group)
-        
         sub_commands = sorted(organized[command_group][1:])  
         for sub_command in sub_commands:
             sorted_output.append(sub_command)
-
-     
      return '\n'.join(sorted_output)
-
 
     async def callback(self, interaction: discord.Interaction):
         try:
@@ -240,10 +217,8 @@ class Select(discord.ui.Select):
 class HelpMenu(discord.ui.View):
     def __init__(self, bot, primary_color, select_view, *, timeout=None):
         super().__init__(timeout=timeout)
-
         self.bot = bot
         self.primary_color = primary_color
-
         cog_commands = {}  
         self.add_item(select_view)
         
@@ -254,7 +229,6 @@ class HelpMenu(discord.ui.View):
 
 class Options_ImageGenerator:
     def __init__(self, cog_name):
-        """Initialize the ImageGenerator with cog-specific data and load resources."""
         
         self.font_path_header = (
             "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
@@ -269,18 +243,14 @@ class Options_ImageGenerator:
             "Data/commands/help/menu/initial/style/assets/background.png"
         )
 
-        
         self.header_font_size = 35
         self.base_font_size = 12
 
-        
         self.header_font_color = "white"
         self.base_font_color = "black"
 
-        
         self.character_scale = 0.4
 
-        
         self.cog_name = cog_name
         self.header_text = f"{cog_name.replace('_', ' ')}"
         self.description_text = self._wrap_text(
@@ -288,19 +258,15 @@ class Options_ImageGenerator:
             max_width=500,
         )
 
-        
         self.character_pos = (5, 5)
         self.text_x_offset = 10
         self.text_y_offset = 27
         self.text_spacing = 20
 
-        
         self.color_replacements_map = {
-            
-            
+            # hash maps switch
         }
-
-        
+      
         self._load_resources()
         self._apply_color_replacements()
 
@@ -313,8 +279,6 @@ class Options_ImageGenerator:
             self.font_path_base, self.base_font_size)
         self.character = Image.open(self.character_path).convert("RGBA")
         self.background = Image.open(self.background_path).convert("RGBA")
-
-        
         self._resize_character()
 
     def _resize_character(self):
@@ -324,9 +288,7 @@ class Options_ImageGenerator:
         self.character = self.character.resize((new_width, new_height))
 
     def _apply_color_replacements(self):
-        """Replace specific colors in the background image with colors from replacement images, solid colors, or transparency."""
         bg_array = np.array(self.background)
-
         for old_hex, replacement in self.color_replacements_map.items():
             old_color = tuple(int(old_hex[i: i + 2], 16) for i in (0, 2, 4))
             if replacement == "transparent":  
@@ -335,7 +297,6 @@ class Options_ImageGenerator:
                     np.array(old_color) - 10,
                     np.array(old_color) + 10,
                 )
-                
                 bg_array[mask > 0] = [0, 0, 0, 0]
             elif replacement.startswith("http"):  
                 replacement_img = self._download_image(replacement)
@@ -343,7 +304,6 @@ class Options_ImageGenerator:
                     (self.background.width, self.background.height)
                 )
                 replacement_array = np.array(replacement_img)[:, :, :3]
-
                 mask = cv2.inRange(
                     bg_array[:, :, :3],
                     np.array(old_color) - 10,
@@ -364,7 +324,6 @@ class Options_ImageGenerator:
         self.background = Image.fromarray(bg_array, "RGBA")
 
     def _wrap_text(self, text, max_width):
-        """Wrap text to fit within the specified width."""
         lines = []
         words = text.split()
         current_line = []
@@ -387,12 +346,9 @@ class Options_ImageGenerator:
 
         if current_line:
             lines.append(" ".join(current_line))
-
         return "\n".join(lines)
 
     def _draw_text(self, draw, text_x, text_y):
-        """Draw all text on the image."""
-        
         draw.text(
             (text_x, text_y),
             self.header_text,
@@ -400,8 +356,7 @@ class Options_ImageGenerator:
             fill=self.header_font_color,
         )
         text_y += self.header_font.size + self.text_spacing
-
-        
+    
         draw.text(
             (text_x, text_y),
             self.description_text,
@@ -411,21 +366,17 @@ class Options_ImageGenerator:
 
     @staticmethod
     def _download_image(url):
-        """Download an image from a URL."""
         response = requests.get(url)
         response.raise_for_status()  
         return Image.open(BytesIO(response.content)).convert("RGBA")
 
     def create_image(self):
-        """Generate the complete image with the background, character, and text."""
         bg = self.background.copy()
         draw = ImageDraw.Draw(bg)
-
         
         character_x, character_y = self.character_pos
         bg.paste(self.character, (character_x, character_y), self.character)
 
-        
         text_x = self.character.width + self.text_x_offset
         text_y = self.text_y_offset
         self._draw_text(draw, text_x, text_y)
@@ -433,13 +384,11 @@ class Options_ImageGenerator:
         return bg
 
     def save_image(self, file_path):
-        """Save the generated image to the given file path."""
         img = self.create_image()
         img.save(file_path)
         return file_path
 
     def show_image(self):
-        """Display the generated image within the notebook (for Jupyter environments)."""
         img = self.create_image()
         img_bytes = BytesIO()
         img.save(img_bytes, format="PNG")
@@ -451,7 +400,6 @@ class ImageGenerator:
         """Initialize the ImageGenerator with user-specific data and load resources."""
         self.user_name = ctx.author.display_name
 
-        
         self.font_path_header = (
             "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
         )
@@ -465,14 +413,10 @@ class ImageGenerator:
             "Data/commands/help/menu/initial/style/assets/background.png"
         )
 
-        
         self.color_replacements_map = {
-            
-            
-            
+            # hash map switch
         }
 
-        
         self.header_font_size = 35
         self.base_font_size = 22
         self.command_font_size = 13
@@ -498,7 +442,6 @@ class ImageGenerator:
         self.text2 = f"Hello {self.user_name}, {random.choice(self.text2_options)}"
         self.text3 = "Command: [option]?"
 
-        
         self.character_pos = (5, 5)
         self.text_x_offset = 10
         self.text_y_offset = 25
