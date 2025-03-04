@@ -6,9 +6,7 @@ from Imports.discord_imports import *
 from subcogs.anime import Recommendation
 
 logging.basicConfig(
-    
     level=logging.ERROR,
-    
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",  
 )
@@ -206,7 +204,7 @@ class Anime(commands.Cog):
             logging.error(f"An unexpected error occurred: {e}")
             await ctx.send(f"An unexpected error occurred: {e}")
 
-    class AnimeButton(discord.ui.Button):
+    class Anime_Btn(discord.ui.Button):
         def __init__(
             self,
             label,
@@ -251,7 +249,7 @@ class Anime(commands.Cog):
             self.clear_items()
             if self.current_page > 0:
                 self.add_item(
-                    Anime.AnimeButton(
+                    Anime.Anime_Btn(
                         "Previous",
                         discord.ButtonStyle.primary,
                         "previous",
@@ -263,7 +261,7 @@ class Anime(commands.Cog):
                 )
             if self.current_page < self.max_pages:
                 self.add_item(
-                    Anime.AnimeButton(
+                    Anime.Anime_Btn(
                         "Next",
                         discord.ButtonStyle.primary,
                         "next",
@@ -313,7 +311,7 @@ class Anime(commands.Cog):
                     return image_url
             return None
 
-    class CharacterButton(discord.ui.Button):
+    class Character_Btn(discord.ui.Button):
         def __init__(
             self,
             label,
@@ -361,7 +359,7 @@ class Anime(commands.Cog):
             self.clear_items()
             if self.current_page > 0:
                 self.add_item(
-                    Anime.CharacterButton(
+                    Anime.Character_Btn(
                         "Previous",
                         discord.ButtonStyle.primary,
                         "previous",
@@ -373,7 +371,7 @@ class Anime(commands.Cog):
                 )
             if self.current_page < self.max_pages:
                 self.add_item(
-                    Anime.CharacterButton(
+                    Anime.Character_Btn(
                         "Next",
                         discord.ButtonStyle.primary,
                         "next",
@@ -410,25 +408,22 @@ class Anime(commands.Cog):
 
             return embed
 
-    class MangaButton(discord.ui.Button):
+    class Manga_Btn(discord.ui.Button):
         def __init__(self, label, style, action):
             super().__init__(label=label, style=style)
             self.action = action
 
         async def callback(self, interaction: discord.Interaction):
-            
             view = self.view
-
+            
             if self.action == "previous" and view.current_page > 0:
                 view.current_page -= 1
             elif self.action == "next" and view.current_page < view.max_pages:
                 view.current_page += 1
-
-            
+                
             view.current_index = view.current_page
-
-            
             view.update_buttons()
+            
             embed = await view.update_embed()
             await interaction.response.edit_message(embed=embed, view=view)
 
@@ -446,26 +441,22 @@ class Anime(commands.Cog):
             
             if self.current_page > 0:
                 self.add_item(
-                    Anime.MangaButton(
+                    Anime.Manga_Btn(
                         "Previous", discord.ButtonStyle.primary, "previous"
                     )
                 )
             if self.current_page < self.max_pages:
                 self.add_item(
-                    Anime.MangaButton(
+                    Anime.Manga_Btn(
                         "Next", discord.ButtonStyle.primary, "next")
                 )
 
         async def update_embed(self):
             manga = self.manga_data["data"][self.current_index]
             embed = discord.Embed(title=manga["title"])
-
-            
             image_url = self.get_image_url(manga["images"])
             if image_url:
                 embed.set_image(url=image_url)
-
-            
             embed.add_field(
                 name=" ",
                 value=f"**Chapters:** `{manga['chapters']}`\n"
@@ -475,14 +466,11 @@ class Anime(commands.Cog):
                 f"{'▰' * int(manga.get('score', 0) * 10 / 10)}{'▱' * (10 - int(manga.get('score', 0) * 10 / 10))}```",
                 inline=False,
             )
-
-            
             embed.description = manga.get(
                 "synopsis", "> <:anya_angy:1268976144548630608> Synopsis not available"
             )
             embed.set_footer(
                 text=f"Page {self.current_page + 1}/{self.max_pages + 1}")
-
             return embed
 
         @staticmethod
