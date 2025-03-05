@@ -167,14 +167,14 @@ class ImageGenerator:
         print("Using Stable Diffusion API via aiohttp...")
         self.API_URL  = os.getenv("Stable_Diffusion_API_URL")
 
-    async def generate_image_sync(self, prompt: str, width: int = 1344, height: int = 768) -> Path:
+    async def generate_image_sync(self, prompt: str, width: int = 1216, height: int = 768) -> Path:
         
         negative_prompt = "(bad-artist-anime:0.9), (bad-artist:0.9), watermark, text, error, blurry, jpeg artifacts, cropped, worst quality, low quality, normal quality, signature, username, artist name, (worst quality, low quality:1.4), bad anatomy, bad hands, missing fingers, extra digits, fewer digits, lowres, bad composition, ugly, dull colors, distorted, noisy, grainy, poorly drawn, out of focus, unclear eyes, deformed, disfigured, complex shapes, uncanny hair, uncanny, malformed hands, incorrect number of fingers, featureless fingers, blurred finger lines, unshaped knuckles, no finger detail"
        
         payload = {
-            "prompt": f"{prompt}, (masterpiece), (clean skin), (clean lines), (best quality), (high resolution), (illustration), (detailed character), (sharp lines), (dynamic pose), (expressive eyes), (detailed face), (smooth shading), high score, great score, absurdres, (intricate clothing), (stylized hair), (anime style), (artstation), (pixiv fanbox), (8K), (vibrant), smooth skin",
+            "prompt": f"{prompt}, (masterpiece), (clean skin), (perfect skin), (clean lines), (best quality), (high resolution), (illustration), (detailed character), (sharp lines), (dynamic pose), (expressive eyes), (detailed face), (smooth shading), high score, great score, absurdres, (intricate clothing), (stylized hair), (anime style), (artstation), (pixiv fanbox), (8K), (vibrant), smooth skin, (realistic pose)",
             "negative_prompt": negative_prompt,
-            "steps": 28, 
+            "steps": 30, 
             "cfg_scale": 7,
             "width": width,
             "height": height,

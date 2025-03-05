@@ -1,6 +1,8 @@
 import os
 from motor.motor_asyncio import AsyncIOMotorClient
 
+prefix = "..."
+
 async def get_bot_token():
 
     mongo_url = os.getenv("MONGO_URI")

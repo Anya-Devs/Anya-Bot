@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 import socket  
 
 # Import the function to get the bot token
-from Data.utils.token_utils import get_bot_token
+from Data.utils.token_utils import get_bot_token, prefix
 
 # Load environment variables from the .env file inside the ".github" directory.
 if __name__ == "__main__":
@@ -42,7 +42,7 @@ class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         intents.members = True
-        self.prefix = "..."
+        self.prefix = prefix
         super().__init__(
             command_prefix=commands.when_mentioned_or(self.prefix),
             intents=intents,

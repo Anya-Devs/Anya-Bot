@@ -13,16 +13,12 @@ def generate_requirements():
 
 
 def start():
-    # Install opencv-python-headless
+    install_package('pipreqs')
     install_package('opencv-python-headless')
-
-    # Generate or update the requirements.txt file
+    install_package('python-Levenshtein')
     generate_requirements()
 
-    # Install pipreqs if not already installed
-    install_package('pipreqs')
-
-    # Upgrade pip and install packages from requirements.txt
+    # upgrade pip and install packages from requirements.txt
     subprocess.run(['pip', 'install', '--upgrade', '-r', 'requirements.txt', 'pip'], check=True)
 
 
