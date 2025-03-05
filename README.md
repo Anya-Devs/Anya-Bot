@@ -1,11 +1,5 @@
 
-![Discord Bots](https://top.gg/api/widget/owner/1234247716243112100.svg)[![Discord Bots](https://discordbots.org/api/widget/servers/1234247716243112100.svg?noavatar=true)](https://discordbots.org/bot/1234247716243112100)[![Discord Bots](https://discordbots.org/api/widget/status/1234247716243112100.svg?noavatar=true)](https://discordbots.org/bot/1234247716243112100)
-
-
-> **IMPORTANT:**  
-> Bot is still undergoing development.
-
-## Anya Bot
+#  Anya Bot
 
 | Command                | Description                                                                                                   | Image                                         |
 |------------------------|---------------------------------------------------------------------------------------------------------------|-----------------------------------------------|
@@ -15,7 +9,8 @@
 | `...balance`    | Use the `...balance` command to check your status in the server. It shows how many Stella Stars / Stella Points you've earned and your class ranking, so others can recognize your dedication and respect your progress. While you can also view your balance in `...shop`, think of this command as more of a status indicator than just a balance check. After all, spies need a specialized, verified wallet! > w < | ![Balance Image](.github/repo/images/balance.webp) |
 
 ---
-### ⚙️ Setup `.github`
+## Setup 
+Go to `.github`
 
 1. **Create a `.env` file**  
    Add the following keys to your `.env` file. You will need to go to the provided links to generate or retrieve these API keys:
@@ -25,4 +20,14 @@
    HUGGINGFACE_API_KEY= https://huggingface.co/settings/tokens  # Go to Hugging Face to generate your API key
    OPENAI_KEY= https://openai.com/index/openai-api/  # Go to OpenAI to get your API key
    Stable_Diffusion_API_URL= https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/API  # Go to the Stable Diffusion API documentation for the URL
+   ```
+
+
+
+## Status
+![Discord Bots](https://top.gg/api/widget/owner/1234247716243112100.svg)[![Discord Bots](https://discordbots.org/api/widget/servers/1234247716243112100.svg?noavatar=true)](https://discordbots.org/bot/1234247716243112100)[![Discord Bots](https://discordbots.org/api/widget/status/1234247716243112100.svg?noavatar=true)](https://discordbots.org/bot/1234247716243112100)
+
+
+> [!IMPORTANT]  
+> Bot is still undergoing development.
 
