@@ -51,7 +51,7 @@ class Ai(commands.Cog):
             if new_file.exists():
                 new_file.unlink()
             if output_path == None:
-                await ctx.reply("❌ Error genrating prompt, please try again (change some things).")
+                await ctx.reply("❌ Error generating prompt, please try again.")
                 return
             output_path.rename(new_file)
 
@@ -72,9 +72,7 @@ class Ai(commands.Cog):
     
      except Exception as e:
         await ctx.send(f"An error occurred: {e}")
-    
      finally:
-        # Remove the user from the queue once done
         self.queue.remove(ctx.author.id)
 
     @commands.command(
