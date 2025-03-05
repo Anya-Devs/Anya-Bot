@@ -172,7 +172,7 @@ class ImageGenerator:
         negative_prompt = "(bad-artist-anime:0.9), (bad-artist:0.9), watermark, text, error, blurry, jpeg artifacts, cropped, worst quality, low quality, normal quality, signature, username, artist name, (worst quality, low quality:1.4), bad anatomy, bad hands, missing fingers, extra digits, fewer digits, lowres, bad composition, ugly, dull colors, distorted, noisy, grainy, poorly drawn, out of focus, unclear eyes, deformed, disfigured, complex shapes, uncanny hair, uncanny, malformed hands, incorrect number of fingers, featureless fingers, blurred finger lines, unshaped knuckles, no finger detail"
        
         payload = {
-            "prompt": f"{prompt}, (masterpiece), (clean skin), (perfect skin), (clean lines), (best quality), (high resolution), (illustration), (detailed character), (sharp lines), (dynamic pose), (expressive eyes), (detailed face), (smooth shading), high score, great score, absurdres, (intricate clothing), (stylized hair), (anime style), (artstation), (pixiv fanbox), (8K), (vibrant), smooth skin, (realistic pose)",
+            "prompt": f"{prompt}, (masterpiece), (clean skin), (perfect skin), (clean lines), (best quality), (high resolution), (illustration), (detailed character), (sharp lines), (expressive eyes), (detailed face), (smooth shading), high score, great score, absurdres, (intricate clothing), (stylized hair), (anime style), (artstation), (pixiv fanbox), (8K), (vibrant), smooth skin, (realistic pose), very detailed, amazing image,",
             "negative_prompt": negative_prompt,
             "steps": 30, 
             "cfg_scale": 7,
