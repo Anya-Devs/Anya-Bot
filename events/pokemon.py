@@ -25,7 +25,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     filename=os.path.join(log_dir, "bot.log"),
-    filemode="a"  # Append to the file instead of overwriting
+    filemode="a"  
 )
 
 # Create a logger instance

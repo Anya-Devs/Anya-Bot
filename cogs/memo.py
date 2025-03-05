@@ -7,7 +7,7 @@ from pymongo.errors import PyMongoError
 from datetime import datetime, timezone, timedelta
 
 from Imports.discord_imports import *
-from Cogs.quest import Quest_Data, primary_color
+from cogs.quest import Quest_Data, primary_color
 from Data.const import error_custom_embed
 
 

@@ -51,11 +51,7 @@ class BotSetup(commands.AutoShardedBot):
             shard_reconnect_interval=10,
             heartbeat_timeout=120,
         )
-        self.mongo_client = None
-        self.DB_NAME = "Bot"
-        self.COLLECTION_NAME = "information"
-        self.token_field = "Test_Token"
-
+   
     async def on_ready(self):
         avatar_url = self.user.avatar
         art_generator = AvatarToTextArt(avatar_url, new_width=50)
@@ -86,8 +82,8 @@ class BotSetup(commands.AutoShardedBot):
             await self.close()
 
     async def setup(self):
-        await self.import_cogs("Cogs")
-        await self.import_cogs("Events")
+        await self.import_cogs("cogs")
+        await self.import_cogs("events")
         print("\033[94m===== Setup Completed =====\033[0m")
 
     async def import_cogs(self, dir_name):

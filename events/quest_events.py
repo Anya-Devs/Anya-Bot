@@ -8,7 +8,7 @@ import traceback
 from fuzzywuzzy import fuzz
 
 
-from Cogs.quest import Quest_Data
+from cogs.quest import Quest_Data
 from Data.const import Quest_Completed_Embed
 from Imports.discord_imports import *
 

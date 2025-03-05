@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import motor.motor_asyncio
 from pymongo.errors import PyMongoError
 import redis
-from Cogs.quest import Quest_Data
+from cogs.quest import Quest_Data
 from Imports.discord_imports import * 
 from datetime import datetime, timedelta, timezone
 
