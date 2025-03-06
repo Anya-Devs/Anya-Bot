@@ -1156,8 +1156,8 @@ class AvatarToTextArt:
         
         # Custom ASCII characters from light to dark.
         # We will invert the brightness mapping so that dark regions use the densest characters.
-        self.custom_ascii_chars = '@%#*+=-:. ' # .,:;irsXA253hMHGS#9B&@
-
+        self.custom_ascii_chars = '@%#*+=-:. '
+    
     def fetch_image(self):
         """Fetches the image from the URL and converts it to an RGB NumPy array."""
         response = requests.get(self.avatar_url)
@@ -1172,31 +1172,33 @@ class AvatarToTextArt:
             self.gray_img = cv2.cvtColor(self.img, cv2.COLOR_RGB2GRAY)
     
     def resize_image(self):
-        """Resizes both the grayscale and colored images while maintaining aspect ratio."""
+        """Resizes the image while maintaining a square aspect ratio."""
         if self.gray_img is not None:
             original_height, original_width = self.gray_img.shape
-            aspect_ratio = original_width / float(original_height)
-            new_height = int(self.new_width / aspect_ratio)
+            # Use the smaller dimension of the image for resizing to make it square
+            new_size = min(original_height, original_width, self.new_width)
             # Resize grayscale image for ASCII mapping
-            self.gray_img = cv2.resize(self.gray_img, (self.new_width, new_height))
+            self.gray_img = cv2.resize(self.gray_img, (new_size, new_size))
             # Also resize the colored image to match the grayscale dimensions
-            self.resized_img = cv2.resize(self.img, (self.new_width, new_height))
+            self.resized_img = cv2.resize(self.img, (new_size, new_size))
     
     def map_grayscale_to_ascii(self):
-     if self.gray_img is not None:
-        num_chars = len(self.custom_ascii_chars)
-        # Ensure pixel values are within valid range [0, 255]
-        ascii_chars = [
-            self.custom_ascii_chars[(num_chars - 1) - (min(int(pixel), 255) * (num_chars - 1) // 255)]
-            for pixel in self.gray_img.flatten()
-        ]
-        self.ascii_art = ''.join(ascii_chars)
-    
+        """Maps grayscale values to custom ASCII characters."""
+        if self.gray_img is not None:
+            num_chars = len(self.custom_ascii_chars)
+            # Ensure pixel values are within valid range [0, 255]
+            ascii_chars = [
+                self.custom_ascii_chars[(num_chars - 1) - (min(int(pixel), 255) * (num_chars - 1) // 255)]
+                for pixel in self.gray_img.flatten()
+            ]
+            self.ascii_art = ''.join(ascii_chars)
     
     def rgb_to_ansi(self, r, g, b):
+        """Converts RGB values to ANSI escape codes."""
         return f'\033[38;2;{r};{g};{b}m'
     
     def colored_ascii_art(self):
+        """Generates the colored ASCII art by mapping colors to the ASCII characters."""
         if self.resized_img is not None and self.ascii_art is not None:
             colored_art = ""
             new_width = self.gray_img.shape[1]
@@ -1223,5 +1225,3 @@ class AvatarToTextArt:
     def get_colored_ascii_art(self):
         """Returns the final colored ASCII art string."""
         return self.colored_art
-
-
