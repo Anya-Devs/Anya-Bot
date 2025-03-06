@@ -7,38 +7,25 @@ start()
 
 import os
 import gc
-import shutil
 import asyncio
 import aiohttp
 import traceback
+import socket
 from aiohttp import web
-from art import *
-from rich.tree import Tree
-from rich.console import Console
-from motor.motor_asyncio import AsyncIOMotorClient
-from Data.const import AvatarToTextArt
+from dotenv import load_dotenv
+from Data.utils.token_utils import get_bot_token, prefix
 from Imports.log_imports import logger
 from Imports.discord_imports import *
 from Imports.depend_imports import *
-from dotenv import load_dotenv
-import socket  
 
-# Import the function to get the bot token
-from Data.utils.token_utils import get_bot_token, prefix
-
-# Load environment variables from the .env file inside the ".github" directory.
+# Load environment variables from .env file inside ".github" directory.
 if __name__ == "__main__":
     load_dotenv(dotenv_path=os.path.join(".github", ".env"))
 
-#print("\033[93mLoaded Environment Variables:\033[0m")
-#for key, value in os.environ.items():
-#    if key.startswith(("TOKEN", "PASSWORD", "SECRET")):
-#        print(f"{key} = [REDACTED]")
-#    else:
-#        print(f"{key} = {value}")
-
 
 class BotSetup(commands.AutoShardedBot):
+    """Main bot class handling setup, startup, and events."""
+
     def __init__(self):
         intents = discord.Intents.all()
         intents.members = True
@@ -51,21 +38,16 @@ class BotSetup(commands.AutoShardedBot):
             shard_reconnect_interval=10,
             heartbeat_timeout=120,
         )
-   
+
     async def on_ready(self):
-        avatar_url = self.user.avatar
-        art_generator = AvatarToTextArt(avatar_url, new_width=50)
-        art_generator.create_art()
-        print(art_generator.get_colored_ascii_art())
-        print("\033[38;2;88;101;242mWelcome to Discord!\033[0m")
-        Login_Text = text2art(f"{self.user.name.title()[:10]}", "sub-zero")
-        print(f"\033[92m{Login_Text}\033[0m")
+        """Triggered when the bot successfully connects to Discord."""
+        print(f"Logged in as {self.user} (ID: {self.user.id})")
 
     async def start_bot(self):
+        """Starts the bot, handling setup and login."""
         await self.setup()
         try:
-            # Fetch token using the utility function
-            token = await get_bot_token()  
+            token = await get_bot_token()  # Fetch token securely
             if not token:
                 logger.error("No token found. Check database.")
                 return
@@ -82,33 +64,28 @@ class BotSetup(commands.AutoShardedBot):
             await self.close()
 
     async def setup(self):
+        """Loads all cogs and event handlers."""
         await self.import_cogs("cogs")
         await self.import_cogs("events")
         print("\033[94m===== Setup Completed =====\033[0m")
 
     async def import_cogs(self, dir_name):
-        console = Console()
-        tree = Tree(f"[bold blue]{dir_name}[/bold blue]")
-
+        """Dynamically loads all cogs from the specified directory."""
         for filename in os.listdir(dir_name):
             if filename.endswith(".py"):
-                file_branch = tree.add(f"[cyan]{filename}[/cyan]")
                 module_name = os.path.splitext(filename)[0]
                 module = __import__(f"{dir_name}.{module_name}", fromlist=[""])
-
                 for obj_name in dir(module):
                     obj = getattr(module, obj_name)
                     if isinstance(obj, commands.CogMeta):
                         if not self.get_cog(obj_name):
                             await self.add_cog(obj(self))
-                            file_branch.add(f"[green]{obj_name}[/green]")
 
-        console.print(tree)
 
 async def check_rate_limit():
+    """Checks Discord API rate limits and waits if necessary."""
     url = "https://discord.com/api/v10/users/@me"
-    bot_instance = BotSetup()
-    token = await get_bot_token()  # Fetch token using the utility function
+    token = await get_bot_token()  # Fetch token securely
     headers = {"Authorization": f"Bot {token}"}
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers) as response:
@@ -122,7 +99,9 @@ async def check_rate_limit():
             else:
                 logger.error(f"Failed to check rate limit. Status code: {response.status}")
 
+
 async def start_http_server():
+    """starts a simple web server to keep ender.com service alive."""
     app = web.Application()
 
     async def handle_index(request):
@@ -132,27 +111,15 @@ async def start_http_server():
     runner = web.AppRunner(app)
     await runner.setup()
 
+    # Render assigns a dynamic port; use it
     port = int(os.getenv("PORT", 8080))
-
-    if not is_port_available(port):
-        print(f"Port {port} is already in use. Please free up the port or specify another one.")
-        return
-
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
     print(f"HTTP server started on port {port}")
 
-def is_port_available(port):
-    """Checks if a port is available by attempting to bind to it."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.bind(("0.0.0.0", port))
-            return True
-        except socket.error:
-            return False
-
 
 async def run_bot():
+    """Runs the bot in a loop, restarting it if it crashes."""
     while True:
         bot = BotSetup()
         try:
@@ -163,12 +130,15 @@ async def run_bot():
             print("Bot crashed, restarting in 10 seconds.")
             await asyncio.sleep(10)
 
+
 async def start_server():
-    gc.collect() 
+    """Starts both the bot and HTTP server for uptime monitoring."""
+    gc.collect()  
     await asyncio.gather(
         start_http_server(),
-        run_bot(),
+        run_bot(),  
     )
+
 
 if __name__ == "__main__":
     asyncio.run(start_server())
