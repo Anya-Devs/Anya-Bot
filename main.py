@@ -10,7 +10,6 @@ import gc
 import asyncio
 import aiohttp
 import traceback
-import socket
 from aiohttp import web
 from dotenv import load_dotenv
 from Data.utils.token_utils import get_bot_token, prefix
@@ -41,7 +40,15 @@ class BotSetup(commands.AutoShardedBot):
 
     async def on_ready(self):
         """Triggered when the bot successfully connects to Discord."""
-        print(f"Logged in as {self.user} (ID: {self.user.id})")
+        print(f"✅ Logged in as {self.user} (ID: {self.user.id})")
+
+    async def on_disconnect(self):
+        """Triggered when the bot disconnects."""
+        print("⚠️ Bot disconnected! Attempting to reconnect...")
+
+    async def on_resumed(self):
+        """Triggered when the bot resumes after a disconnection."""
+        print("✅ Bot session successfully resumed.")
 
     async def start_bot(self):
         """Starts the bot, handling setup and login."""
@@ -52,8 +59,6 @@ class BotSetup(commands.AutoShardedBot):
                 logger.error("No token found. Check database.")
                 return
             await self.start(token)
-        except KeyboardInterrupt:
-            await self.close()
         except Exception as e:
             logger.error(f"Error during bot start: {e}\n{traceback.format_exc()}")
         finally:
@@ -94,28 +99,27 @@ async def check_rate_limit():
                 reset_after = float(response.headers.get("X-RateLimit-Reset-After", 0))
                 if remaining <= 0:
                     logger.error(f"Rate limit exceeded. Retry after {reset_after} seconds.")
-                    print(f"Rate limit exceeded. Waiting {reset_after} seconds.")
+                    print(f"⚠️ Rate limit exceeded. Waiting {reset_after} seconds.")
                     await asyncio.sleep(reset_after)
             else:
                 logger.error(f"Failed to check rate limit. Status code: {response.status}")
 
 
 async def start_http_server():
-    """starts a simple web server to keep ender.com service alive."""
+    """Starts a simple web server to keep Render.com service alive."""
     app = web.Application()
 
     async def handle_index(request):
-        return web.Response(text="Bot is running", content_type="text/html")
+        return web.Response(text="✅ Bot is running", content_type="text/html")
 
     app.router.add_get("/", handle_index)
     runner = web.AppRunner(app)
     await runner.setup()
 
-    # Render assigns a dynamic port; use it
     port = int(os.getenv("PORT", 8080))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    print(f"HTTP server started on port {port}")
+    print(f"🌍 HTTP server started on port {port}")
 
 
 async def run_bot():
@@ -126,18 +130,23 @@ async def run_bot():
             await check_rate_limit()
             await bot.start_bot()
         except Exception as e:
-            logger.error(f"Bot crashed: {e}\n{traceback.format_exc()}")
-            print("Bot crashed, restarting in 10 seconds.")
-            await asyncio.sleep(10)
-
+            logger.error(f"❌ Bot crashed: {e}\n{traceback.format_exc()}")
+            print("⚠️ Bot crashed, restarting in 5 seconds.")
+            await asyncio.sleep(5)  
 
 async def start_server():
     """Starts both the bot and HTTP server for uptime monitoring."""
-    gc.collect()  
-    await asyncio.gather(
-        start_http_server(),
-        run_bot(),  
-    )
+    gc.collect()
+    while True:
+        try:
+            await asyncio.gather(
+                start_http_server(),
+                run_bot(),  
+            )
+        except Exception as e:
+            logger.error(f"🔥 Fatal error in main loop: {e}\n{traceback.format_exc()}")
+            print("⚠️ Critical error! Restarting in 10 seconds...")
+            await asyncio.sleep(10)  
 
 
 if __name__ == "__main__":
