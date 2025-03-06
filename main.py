@@ -7,15 +7,22 @@ start()
 
 import os
 import gc
+import shutil
 import asyncio
 import aiohttp
 import traceback
 from aiohttp import web
-from dotenv import load_dotenv
+from art import *
+from rich.tree import Tree
+from rich.console import Console
+from motor.motor_asyncio import AsyncIOMotorClient
+from Data.const import AvatarToTextArt
 from Data.utils.token_utils import get_bot_token, prefix
 from Imports.log_imports import logger
 from Imports.discord_imports import *
 from Imports.depend_imports import *
+from dotenv import load_dotenv
+import socket  
 
 # Load environment variables from .env file inside ".github" directory.
 if __name__ == "__main__":
@@ -40,7 +47,14 @@ class BotSetup(commands.AutoShardedBot):
 
     async def on_ready(self):
         """Triggered when the bot successfully connects to Discord."""
-        print(f"✅ Logged in as {self.user} (ID: {self.user.id})")
+        avatar_url = self.user.avatar
+        art_generator = AvatarToTextArt(avatar_url, new_width=50)
+        art_generator.create_art()
+        print(art_generator.get_colored_ascii_art())
+        print("\033[38;2;88;101;242mWelcome to Discord!\033[0m")
+        Login_Text = text2art(f"{self.user.name.title()[:10]}", "sub-zero")
+        print(f"\033[92m{Login_Text}\033[0m")
+
 
     async def on_disconnect(self):
         """Triggered when the bot disconnects."""
@@ -75,16 +89,23 @@ class BotSetup(commands.AutoShardedBot):
         print("\033[94m===== Setup Completed =====\033[0m")
 
     async def import_cogs(self, dir_name):
-        """Dynamically loads all cogs from the specified directory."""
+        console = Console()
+        tree = Tree(f"[bold blue]{dir_name}[/bold blue]")
+
         for filename in os.listdir(dir_name):
             if filename.endswith(".py"):
+                file_branch = tree.add(f"[cyan]{filename}[/cyan]")
                 module_name = os.path.splitext(filename)[0]
                 module = __import__(f"{dir_name}.{module_name}", fromlist=[""])
+
                 for obj_name in dir(module):
                     obj = getattr(module, obj_name)
                     if isinstance(obj, commands.CogMeta):
                         if not self.get_cog(obj_name):
                             await self.add_cog(obj(self))
+                            file_branch.add(f"[green]{obj_name}[/green]")
+
+        console.print(tree)
 
 
 async def check_rate_limit():
