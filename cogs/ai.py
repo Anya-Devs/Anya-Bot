@@ -169,7 +169,7 @@ class ImageGenerator:
 
     async def generate_image_sync(self, prompt: str, width: int = 1216, height: int = 768) -> Path:
         
-        negative_prompt = "(bad-artist-anime:0.9), (bad-artist:0.9), watermark, text, error, blurry, jpeg artifacts, cropped, worst quality, low quality, normal quality, signature, username, artist name, (worst quality, low quality:1.4), bad anatomy, bad hands, missing fingers, extra digits, fewer digits, lowres, bad composition, ugly, dull colors, distorted, noisy, grainy, poorly drawn, out of focus, unclear eyes, deformed, disfigured, complex shapes, uncanny hair, uncanny, malformed hands, incorrect number of fingers, featureless fingers, blurred finger lines, unshaped knuckles, no finger detail, (incorrect head placement:1.5), (incorrect anatomy:1.5), (incorrect human body proportions:1.4), (wrong head positioning:1.5)"
+        negative_prompt = "(bad-artist-anime:0.9), (bad-artist:0.9), watermark, text, error, blurry, jpeg artifacts, cropped, worst quality, low quality, normal quality, signature, username, artist name, (worst quality, low quality:1.4), bad anatomy, bad hands, missing fingers, extra digits, fewer digits, lowres, bad composition, ugly, dull colors, distorted, noisy, grainy, poorly drawn, out of focus, unclear eyes, deformed, disfigured, complex shapes, uncanny hair, uncanny, malformed hands, incorrect number of fingers, featureless fingers, blurred finger lines, unshaped knuckles, no finger detail, (incorrect head placement:1.5), (incorrect anatomy:1.5), (incorrect human body proportions:1.4), (wrong head positioning:1.5), (bad hair:1.4), (unnatural environment:1.5), (poorly drawn landscape:1.4), (unrealistic lighting:1.5), (poor composition:1.6), (cluttered scene:1.5), (low-detail background:1.5), (no depth:1.5)"
        
         payload = {
             "prompt": f"{prompt}, (masterpiece), (clean skin), (perfect skin), (clean lines), (best quality), (high resolution), (illustration), (detailed character), (sharp lines), (expressive eyes), (detailed face), (smooth shading), high score, great score, absurdres, (intricate clothing), (stylized hair), (anime style), (artstation), (pixiv fanbox), (8K), (vibrant), smooth skin, (realistic pose), very detailed, amazing image,",
@@ -207,6 +207,20 @@ class ImageGenerator:
         except aiohttp.ClientError as e:
             print(f"❌ Request failed: {str(e)}")
             return None
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 """
 class ImageGenerator:

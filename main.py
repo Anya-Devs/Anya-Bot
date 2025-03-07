@@ -126,8 +126,17 @@ async def check_rate_limit():
                 logger.error(f"Failed to check rate limit. Status code: {response.status}")
 
 
+async def find_available_port(start=8000, end=9000):
+    """Finds an available port within a range."""
+    for port in range(start, end):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(("127.0.0.1", port)) != 0:  # Port is free
+                return port
+    raise RuntimeError("No available ports found.")
+
+
 async def start_http_server():
-    """Starts a simple web server to keep Render.com service alive."""
+    """Starts a simple web server with an available port."""
     app = web.Application()
 
     async def handle_index(request):
@@ -137,7 +146,8 @@ async def start_http_server():
     runner = web.AppRunner(app)
     await runner.setup()
 
-    port = int(os.getenv("PORT", 8080))
+    # Automatically find an open port
+    port = await find_available_port()
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
     print(f"🌍 HTTP server started on port {port}")
@@ -154,6 +164,7 @@ async def run_bot():
             logger.error(f"❌ Bot crashed: {e}\n{traceback.format_exc()}")
             print("⚠️ Bot crashed, restarting in 5 seconds.")
             await asyncio.sleep(5)  
+
 
 async def start_server():
     """Starts both the bot and HTTP server for uptime monitoring."""
