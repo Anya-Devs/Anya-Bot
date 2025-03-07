@@ -1,7 +1,7 @@
 import os
 from motor.motor_asyncio import AsyncIOMotorClient
 
-prefix = "."
+prefix = ","
 
 async def get_bot_token():
 
