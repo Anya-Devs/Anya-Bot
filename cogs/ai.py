@@ -19,15 +19,15 @@ from Data.const import error_custom_embed, primary_color
 class Ai(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.api_key = os.getenv("OPENAI_KEY")
-        self.h_api_key =  os.getenv("HUGGINGFACE_API_KEY")
+        self.OPENAI_KEY = os.getenv("OPENAI_KEY")
+        self.HUGGINGFACE_API_KEY =  os.getenv("HUGGINGFACE_API_KEY")
         self.queue = []  
 
-        if not self.api_key:
+        if not self.OPENAI_KEY:
             raise ValueError("API key is not set in environment variables.")
 
         self.openai_client = AsyncOpenAI(
-            api_key=self.api_key,
+            api_key=self.OPENAI_KEY,
             base_url="https://api.naga.ac/v1",
         )
         self.image_gen = ImageGenerator()  
@@ -168,13 +168,13 @@ class ImageGenerator:
         self.API_URL  = os.getenv("Stable_Diffusion_API_URL")
 
     async def generate_image_sync(self, prompt: str, width: int = 1216, height: int = 768) -> Path:
-        # negative_prompt = "(bad-artist:0.9), watermark, text, error, blurry, jpeg artifacts, cropped, signature, username, artist name, (bad score:1.5), (bad quality:1.5), lowres, noisy, distorted, poorly drawn, out of focus, (uncanny:1.5), (robotic appearance:1.5), (unnatural pose:1.5), stiff posture, (incorrect anatomy:1.5), (bad hands:1.3), malformed hands, (incorrect head placement:1.5), unnatural skin texture, uneven features, (muddy colors:1.3), (bad clothing:1.4), wrinkled clothing, ill-fitting clothes, (unfinished details:1.5), (bad lighting), (flat colors), (skin imperfections), (mechanical appearance)"
+        negative_prompt = "(bad-artist:0.9), watermark, text, error, blurry, jpeg artifacts, cropped, signature, username, artist name, (bad score:1.5), (bad quality:1.5), lowres, noisy, distorted, poorly drawn, out of focus, (uncanny:1.5), (robotic appearance:1.5), (unnatural pose:1.5), stiff posture, (incorrect anatomy:1.5), (bad hands:1.3), malformed hands, (incorrect head placement:1.5), unnatural skin texture, uneven features, (muddy colors:1.3), (bad clothing:1.4), wrinkled clothing, ill-fitting clothes, (unfinished details:1.5), (bad lighting), (flat colors), (skin imperfections), (mechanical appearance) (bad generation) (unreal), unclear art, "
 
-        negative_prompt = "(bad-artist:0.9), watermark, text, error, blurry, jpeg artifacts, cropped, signature, username, artist name, (bad score:1.5), (bad quality:1.5), (bad image:1.5), (bad environment:1.5), boring, dull, inconsistent, lowres, noisy, distorted, poorly drawn, out of focus, (uncanny:1.5), (incorrect anatomy:1.5), (bad hands:1.3), malformed hands, (incorrect head placement:1.5), unnatural skin texture, uneven features, (muddy colors:1.3), (bad clothing:1.4), wrinkled clothing, ill-fitting clothes, (unfinished details:1.5), (bad lighting), (flat colors), (skin imperfections), (blotchy skin), (uneven skin tone)"
+        # negative_prompt = "(bad-artist:0.9), watermark, text, error, blurry, jpeg artifacts, cropped, signature, username, artist name, (bad score:1.5), (bad quality:1.5), (bad image:1.5), (bad environment:1.5), boring, dull, inconsistent, lowres, noisy, distorted, poorly drawn, out of focus, (uncanny:1.5), (incorrect anatomy:1.5), (bad hands:1.3), malformed hands, (incorrect head placement:1.5), unnatural skin texture, uneven features, (muddy colors:1.3), (bad clothing:1.4), wrinkled clothing, ill-fitting clothes, (unfinished details:1.5), (bad lighting), (flat colors), (skin imperfections), (blotchy skin), (uneven skin tone)"
         payload = {
-            "prompt": f"{prompt}, (masterpiece), (clean skin), (perfect skin), (clean lines), (best quality), (high resolution), (illustration), (detailed character), (sharp lines), (expressive eyes), (detailed face), (smooth shading), high score, great score, absurdres, (intricate clothing), (stylized hair), (anime style), (artstation), (pixiv fanbox), (8K), (vibrant), smooth skin, (realistic pose), very detailed, amazing image, best_score, (in-character)",
+            "prompt": f"{prompt}, (masterpiece), (clean skin), (perfect skin), (clean lines), (best quality), (high resolution), (illustration), (detailed character), (sharp lines), (expressive eyes), (detailed face), (smooth shading), high score, great score, absurdres, (intricate clothing), (stylized hair), (anime style), (artstation), (pixiv fanbox), (8K), (vibrant), smooth skin, (realistic pose), very detailed, amazing image, best_score, (real)",
             "negative_prompt": negative_prompt,
-            "steps": 25, 
+            "steps": 45, 
             "cfg_scale": 5, # decimals seem to split characters, higher the 
             "width": width,
             "height": height,

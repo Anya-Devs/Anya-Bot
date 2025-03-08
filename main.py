@@ -48,7 +48,7 @@ class BotSetup(commands.AutoShardedBot):
     async def on_ready(self):
         """Triggered when the bot successfully connects to Discord."""
         avatar_url = self.user.avatar
-        art_generator = AvatarToTextArt(avatar_url, new_width=75)
+        art_generator = AvatarToTextArt(avatar_url, new_size=75)
         art_generator.create_art()
         print(art_generator.get_colored_ascii_art())
         print("\033[38;2;88;101;242mWelcome to Discord!\033[0m")

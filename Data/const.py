@@ -1032,7 +1032,7 @@ async def sdxl(prompt):
 
 def primary_color(image_path="Data/Images/bot_icon.png"):
     image = Image.open(image_path)
-    # Resize the image to 1x1 pixel to get the dominant color
+    image = image.convert("RGB")
     resized_image = image.resize((1, 1))
     dominant_color = resized_image.getpixel((0, 0))
     return discord.Color.from_rgb(
@@ -1145,9 +1145,9 @@ def timestamp_gen(timestamp: int) -> str:
 
 
 class AvatarToTextArt:
-    def __init__(self, avatar_url, new_width=80):
+    def __init__(self, avatar_url, new_size=80):
         self.avatar_url = avatar_url
-        self.new_width = new_width
+        self.new_size = new_size
         self.img = None             # Original colored image (as a NumPy array, in RGB order)
         self.gray_img = None        # Grayscale version of the image
         self.resized_img = None     # Resized colored image for proper color mapping
@@ -1155,7 +1155,6 @@ class AvatarToTextArt:
         self.colored_art = None     # Final ANSI-colored ASCII art
         
         # Custom ASCII characters from light to dark.
-        # We will invert the brightness mapping so that dark regions use the densest characters.
         self.custom_ascii_chars = '@%#*+=-:. '
     
     def fetch_image(self):
@@ -1163,7 +1162,6 @@ class AvatarToTextArt:
         response = requests.get(self.avatar_url)
         img_data = io.BytesIO(response.content)
         img = Image.open(img_data)
-        # Ensure the image is in RGB mode
         self.img = np.array(img.convert('RGB'))
     
     def convert_to_grayscale(self):
@@ -1172,21 +1170,24 @@ class AvatarToTextArt:
             self.gray_img = cv2.cvtColor(self.img, cv2.COLOR_RGB2GRAY)
     
     def resize_image(self):
-        """Resizes the image while maintaining a square aspect ratio."""
+        """Resizes the image while maintaining a better aspect ratio for ASCII art."""
         if self.gray_img is not None:
             original_height, original_width = self.gray_img.shape
-            # Use the smaller dimension of the image for resizing to make it square
-            new_size = min(original_height, original_width, self.new_width)
+            # Adjust width-to-height ratio for terminal display (characters are usually taller than wide)
+            aspect_ratio = original_width / original_height
+            new_height = self.new_size
+            new_width = int(new_height * aspect_ratio)
+            
             # Resize grayscale image for ASCII mapping
-            self.gray_img = cv2.resize(self.gray_img, (new_size, new_size))
+            self.gray_img = cv2.resize(self.gray_img, (new_width, new_height))
             # Also resize the colored image to match the grayscale dimensions
-            self.resized_img = cv2.resize(self.img, (new_size, new_size))
+            self.resized_img = cv2.resize(self.img, (new_width, new_height))
     
     def map_grayscale_to_ascii(self):
         """Maps grayscale values to custom ASCII characters."""
         if self.gray_img is not None:
             num_chars = len(self.custom_ascii_chars)
-            # Ensure pixel values are within valid range [0, 255]
+            # Map grayscale pixel values to ASCII characters
             ascii_chars = [
                 self.custom_ascii_chars[(num_chars - 1) - (min(int(pixel), 255) * (num_chars - 1) // 255)]
                 for pixel in self.gray_img.flatten()
@@ -1213,7 +1214,8 @@ class AvatarToTextArt:
                 if x == new_width - 1:
                     colored_art += "\n"
             self.colored_art = colored_art
-    
+
+            
     def create_art(self):
         """Executes the complete pipeline to generate colored ASCII art from the avatar URL."""
         self.fetch_image()
