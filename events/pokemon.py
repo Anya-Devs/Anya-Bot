@@ -128,7 +128,8 @@ class EventGate(commands.Cog):
         self.timeout_duration = datetime.timedelta(hours=3)
         self.detect_bot_id = 716390085896962058   
         self.logger_channel_id = 1278580578593148976
-        self.wait_time = 30                                    
+        self.wait_time = 30
+        self.timeout_in_sec = 180
         self.primary_color = primary_color()                         
         self.active_events = {}                                         
         self.handled_congrats = set()                                         
@@ -306,7 +307,7 @@ class EventGate(commands.Cog):
         GUILD_ID = message.guild.id
         USER_ID = user.id
 
-        timeout_duration = 180           
+        timeout_duration = self.timeout_in_sec           
         timeout_end = datetime.datetime.utcnow() + datetime.timedelta(minutes=timeout_duration)
 
         headers = {
