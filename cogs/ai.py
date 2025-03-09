@@ -81,7 +81,7 @@ class Ai(commands.Cog):
         async def vision(image_link: str, prompt: str = " ") -> str:
             try:
                 response = await self.openai_client.chat.completions.create(
-                    model="gemini-1.5-pro",  
+                    model="gemini-2.0-flash-lite",  
                     messages=[
                         {
                             "role": "user",
