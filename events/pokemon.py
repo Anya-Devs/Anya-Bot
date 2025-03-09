@@ -286,7 +286,7 @@ class EventGate(commands.Cog):
             await self.delete_embed_on_catch(original_message)
         else:
             logger.warning(f"No shiny hunter found for user {mentioned_user_id}.")
-            await catch_channel.send("⚠️ No shiny hunter detected for the quest. Please double-check.")
+            await catch_channel.send("⚠️ No shiny hunter detected for the channel. Please double-check.")
 
      except Exception as e:
         logger.error(f"Unexpected error in process_congratulations: {e}")
