@@ -66,7 +66,6 @@ class Ping_Pokemon(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        """ Listen for messages and check for Pokémon names with percentages."""
                                                            
         if message.author.id != self.user_author_id:
             return
