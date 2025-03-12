@@ -1,7 +1,5 @@
 import aiohttp
 import discord
-from discord.ext import commands
-from discord.ui import Button, View
 
 from Imports.discord_imports import *
 from Data.const import primary_color
