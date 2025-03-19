@@ -11,6 +11,9 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",  
 )
 
+left_button_emoji = "<:point_left:1351851216153350145>"
+right_button_emoji = "<:point_right:1351851206103928948>"
+
 
 class Anime(commands.Cog):
     def __init__(self, bot):
@@ -210,12 +213,13 @@ class Anime(commands.Cog):
             label,
             style,
             custom_id,
+            emoji,
             anime_data,
             current_index,
             current_page,
             max_pages,
         ):
-            super().__init__(label=label, style=style, custom_id=custom_id)
+            super().__init__(label=label, style=style, custom_id=custom_id, emoji=emoji)
             self.anime_data = anime_data
             self.current_index = current_index
             self.current_page = current_page
@@ -251,8 +255,9 @@ class Anime(commands.Cog):
                 self.add_item(
                     Anime.Anime_Btn(
                         "Previous",
-                        discord.ButtonStyle.primary,
+                        discord.ButtonStyle.gray,
                         "previous",
+                        right_button_emoji,
                         self.anime_data,
                         self.current_index,
                         self.current_page,
@@ -263,8 +268,9 @@ class Anime(commands.Cog):
                 self.add_item(
                     Anime.Anime_Btn(
                         "Next",
-                        discord.ButtonStyle.primary,
+                        discord.ButtonStyle.gray,
                         "next",
+                        left_button_emoji,
                         self.anime_data,
                         self.current_index,
                         self.current_page,
@@ -367,6 +373,7 @@ class Anime(commands.Cog):
                         self.current_index,
                         self.current_page,
                         self.max_pages,
+                        emoji=left_button_emoji
                     )
                 )
             if self.current_page < self.max_pages:
@@ -379,6 +386,7 @@ class Anime(commands.Cog):
                         self.current_index,
                         self.current_page,
                         self.max_pages,
+                        emoji=right_button_emoji
                     )
                 )
 
@@ -442,13 +450,13 @@ class Anime(commands.Cog):
             if self.current_page > 0:
                 self.add_item(
                     Anime.Manga_Btn(
-                        "Previous", discord.ButtonStyle.primary, "previous"
+                        "Previous", discord.ButtonStyle.primary, "previous" ,emoji=left_button_emoji
                     )
                 )
             if self.current_page < self.max_pages:
                 self.add_item(
                     Anime.Manga_Btn(
-                        "Next", discord.ButtonStyle.primary, "next")
+                        "Next", discord.ButtonStyle.primary, "next", emoji=right_button_emoji)
                 )
 
         async def update_embed(self):
