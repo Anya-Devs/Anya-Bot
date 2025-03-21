@@ -35,7 +35,7 @@ Use the `<prefix>balance` command to check your status in the server. It shows h
 
 ## ⚙️ Setup
 
-> Go to `.github`
+> Go to `.github` and create `.env`
 
 ```env
 MONGO_URI= https://cloud.mongodb.com  # Go to MongoDB to create a database called 'Bot' and a collection named 'information'
