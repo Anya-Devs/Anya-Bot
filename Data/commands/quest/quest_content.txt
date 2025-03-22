@@ -1,55 +1,55 @@
-Hey {member} how's it going
-What's up {member}
-Hi {member}
-Howdy {member}
-Good to see you {member}
-Hey {member} what's new
-Hello {member}
-Hey {member} how have you been
-Hi {member} ready to chat
-Hey there {member}
-Greetings {member}
-Hey {member} got plans today
-Hello {member}
-Hey {member} hear about current event
-Hi {member} want to talk about topic
-Hey {member} what's your favorite hobby
-Hello {member} how was your weekend
-Hey {member} seen any good movies
-Hi {member} how's work/school
-Hey {member} how's the weather
-Hello {member}
-Hey {member} got stories to share
-Hi {member} what do you do in your free time
-Hey {member} want to hear a joke
-Hello {member}
-Hey {member} want to discuss topic
-Hi {member} how's life
-Hey there {member}
-Hello {member}
-Hey {member} want to play a game
-Hi {member} read any good books
-Hey {member} best meal you've had
-Hello {member}
-Hey {member} plans for the weekend
-Hi {member} how's your family
-Hey there {member}
-Hello {member}
-Hey {member} dream vacation
-Hi {member} favorite recipe
-Hey {member} how do you relax
-Hello {member}
-Hey {member} coolest place visited
-Hi {member} tips for motivation
-Hey there {member}
-Hello {member}
-Hey {member} favorite way to unwind
-Hi {member} talk about funny topic
-Hey {member} how do you stay positive
+Hey {member}, how's it going?
+What's up, {member}?
+Hi {member}.
+Howdy {member}!
+Good to see you, {member}.
+Hey {member}, what's new?
+Hello {member}.
+Hey {member}, how have you been?
+Hi {member}, ready to chat?
+Hey there, {member}.
+Greetings, {member}.
+Hey {member}, got plans today?
+Hello {member}.
+Hey {member}, hear about the current event?
+Hi {member}, want to talk about a topic?
+Hey {member}, what's your favorite hobby?
+Hello {member}, how was your weekend?
+Hey {member}, seen any good movies?
+Hi {member}, how's work/school?
+Hey {member}, how's the weather?
+Hello {member}.
+Hey {member}, got stories to share?
+Hi {member}, what do you do in your free time?
+Hey {member}, want to hear a joke?
+Hello {member}.
+Hey {member}, want to discuss a topic?
+Hi {member}, how's life?
+Hey there, {member}.
+Hello {member}.
+Hey {member}, want to play a game?
+Hi {member}, read any good books?
+Hey {member}, what's the best meal you've had?
+Hello {member}.
+Hey {member}, any plans for the weekend?
+Hi {member}, how's your family?
+Hey there, {member}.
+Hello {member}.
+Hey {member}, what's your dream vacation?
+Hi {member}, favorite recipe?
+Hey {member}, how do you relax?
+Hello {member}.
+Hey {member}, coolest place you've visited?
+Hi {member}, any tips for motivation?
+Hey there, {member}.
+Hello {member}.
+Hey {member}, what's your favorite way to unwind?
+Hi {member}, let's talk about something funny.
+Hey {member}, how do you stay positive?
 Hey {member}, what's new?
 What's on your mind, {member}?
 How's your week going, {member}?
-What's your favorite thing about [current season], {member}?
+What's your favorite thing about the current season, {member}?
 Any exciting plans for the weekend, {member}?
 What's one thing you're grateful for today, {member}?
 What's your go-to stress reliever, {member}?
@@ -66,7 +66,7 @@ What's your favorite thing about your job/school, {member}?
 What's your favorite hobby or pastime, {member}?
 What's the best book you've read recently, {member}?
 What's your favorite way to travel, {member}?
-What's your favorite thing about living in [your city/state], {member}?
+What's your favorite thing about living in your city/state, {member}?
 What's your favorite way to start your day, {member}?
 What's your favorite way to end your day, {member}?
 What's your favorite thing about your family, {member}?
@@ -99,90 +99,61 @@ What's your biggest doubt, {member}?
 What's your biggest risk, {member}?
 What's your biggest reward, {member}?
 What's your biggest sacrifice, {member}?
-What's your favorite season?
-What's your favorite color?
-What's your favorite animal?
-What's your favorite music genre?
-What's your favorite movie?
-What's your favorite TV show?
-What's your favorite book?
-What's your favorite food?
-What's your favorite drink?
-What's your favorite hobby?
-What's your favorite sport?
-What's your favorite game?
-What's your favorite holiday?
-What's your favorite memory?
-What's your favorite place?
-What's your favorite thing about yourself?
-What's your favorite thing about others?
-What's your favorite thing about life?
-What's your favorite thing about love?
-What's your favorite thing about friendship?
-What's your favorite thing about family?
-What's your favorite thing about work?
-What's your favorite thing about school?
-What's your favorite thing about the future?
-What's your favorite thing about the past?
-What's your favorite thing about the present?
-What's your favorite thing about today?
-What's your favorite thing about tomorrow?
-What's your favorite color?
-What's your favorite animal?
-What's your favorite music genre?
-What's your favorite movie?
-What's your favorite book?
-What's your favorite food?
-What's your favorite drink?
-What's your favorite season?
-What's your favorite holiday?
-What's your favorite thing to do on a weekend?
-What's your favorite thing to do on a rainy day?
-What's your favorite thing to do on a sunny day?
-What's your favorite thing to do with friends?
-What's your favorite thing to do alone?
-What's your favorite thing about yourself?
-What's your favorite thing about others?
-What's your favorite thing about life?
-What's your favorite thing about the world?
-What's your favorite thing about the future?
-What's your favorite thing about the past?
-What's your favorite thing about the present?
-What's your favorite thing about technology?
-What's your favorite thing about nature?
-What's your favorite thing about art?
-What's your favorite thing about music?
-What's your favorite thing about literature?
-What's your favorite thing about history?
-What's your favorite thing about science?
-What's your favorite thing about math?
-What's your favorite thing about language?
-What's your favorite thing about philosophy?
-What's your favorite thing about religion?
-What's your favorite thing about politics?
-What's your favorite thing about sports?
-What's your favorite thing about games?
-What's your favorite thing about travel?
-What's your favorite thing about food?
-What's your favorite thing about drink?
-What's your favorite thing about fashion?
-What's your favorite thing about beauty?
-What's your favorite thing about health?
-What's your favorite thing about fitness?
-What's your favorite thing about money?
-What's your favorite thing about work?
-What's your favorite thing about school?
-What's your favorite thing about learning?
-What's your favorite thing about teaching?
-What's your favorite thing about helping others?
-What's your favorite thing about making a difference?
-What's your favorite thing about being yourself?
-What's your favorite thing about being human?
-What's your favorite thing about being alive?
-What's your favorite thing about love?
-What's your favorite thing about friendship?
-What's your favorite thing about family?
-What's your favorite thing about community?
-What's your favorite thing about the world?
-What's your favorite thing about the universe?
-What's your favorite thing about life, the universe, and everything?
+What's your favorite season, {member}?
+What's your favorite color, {member}?
+What's your favorite animal, {member}?
+What's your favorite music genre, {member}?
+What's your favorite movie, {member}?
+What's your favorite TV show, {member}?
+What's your favorite book, {member}?
+What's your favorite food, {member}?
+What's your favorite drink, {member}?
+What's your favorite hobby, {member}?
+What's your favorite sport, {member}?
+What's your favorite game, {member}?
+What's your favorite holiday, {member}?
+What's your favorite memory, {member}?
+What's your favorite place, {member}?
+What's your favorite thing about yourself, {member}?
+What's your favorite thing about others, {member}?
+What's your favorite thing about life, {member}?
+What's your favorite thing about love, {member}?
+What's your favorite thing about friendship, {member}?
+What's your favorite thing about family, {member}?
+What's your favorite thing about work, {member}?
+What's your favorite thing about school, {member}?
+What's your favorite thing about the future, {member}?
+What's your favorite thing about the past, {member}?
+What's your favorite thing about the present, {member}?
+What's your favorite thing about today, {member}?
+What's your favorite thing about tomorrow, {member}?
+What's your favorite thing about the world, {member}?
+What's your favorite thing about technology, {member}?
+What's your favorite thing about nature, {member}?
+What's your favorite thing about art, {member}?
+What's your favorite thing about music, {member}?
+What's your favorite thing about literature, {member}?
+What's your favorite thing about history, {member}?
+What's your favorite thing about science, {member}?
+What's your favorite thing about math, {member}?
+What's your favorite thing about language, {member}?
+What's your favorite thing about philosophy, {member}?
+What's your favorite thing about sports, {member}?
+What's your favorite thing about games, {member}?
+What's your favorite thing about travel, {member}?
+What's your favorite thing about food, {member}?
+What's your favorite thing about drink, {member}?
+What's your favorite thing about fashion, {member}?
+What's your favorite thing about health, {member}?
+What's your favorite thing about fitness, {member}?
+What's your favorite thing about money, {member}?
+What's your favorite thing about learning, {member}?
+What's your favorite thing about teaching, {member}?
+What's your favorite thing about helping others, {member}?
+What's your favorite thing about making a difference, {member}?
+What's your favorite thing about being yourself, {member}?
+What's your favorite thing about being human, {member}?
+What's your favorite thing about being alive, {member}?
+What's your favorite thing about love, {member}?
+What's your favorite thing about the universe, {member}?
+What's your favorite thing about life, the universe, and everything, {member}?
