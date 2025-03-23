@@ -168,23 +168,20 @@ class ImageGenerator:
         self.API_URL  = os.getenv("Stable_Diffusion_API_URL")
 
     async def generate_image_sync(self, prompt: str, width: int = 1216, height: int = 768) -> Path:
-        negative_prompt = "(bad-artist:0.9), watermark, text, error, blurry, jpeg artifacts, cropped, signature, username, artist name, (bad score:1.5), (bad quality:1.5), lowres, noisy, distorted, poorly drawn, out of focus, (uncanny:1.5), (robotic appearance:1.5), (unnatural pose:1.5), stiff posture, (incorrect anatomy:1.5), (bad hands:1.3), malformed hands, (incorrect head placement:1.5), unnatural skin texture, uneven features, (muddy colors:1.3), (bad clothing:1.4), wrinkled clothing, ill-fitting clothes, (unfinished details:1.5), (bad lighting), (flat colors), (skin imperfections), (mechanical appearance) (bad generation) (unreal), unclear art, "
-
-        # negative_prompt = "(bad-artist:0.9), watermark, text, error, blurry, jpeg artifacts, cropped, signature, username, artist name, (bad score:1.5), (bad quality:1.5), (bad image:1.5), (bad environment:1.5), boring, dull, inconsistent, lowres, noisy, distorted, poorly drawn, out of focus, (uncanny:1.5), (incorrect anatomy:1.5), (bad hands:1.3), malformed hands, (incorrect head placement:1.5), unnatural skin texture, uneven features, (muddy colors:1.3), (bad clothing:1.4), wrinkled clothing, ill-fitting clothes, (unfinished details:1.5), (bad lighting), (flat colors), (skin imperfections), (blotchy skin), (uneven skin tone)"
+        negative_prompt = "(bad-artist:1.5), watermark, text, error, blurry, jpeg artifacts, cropped, signature, username, artist name, (bad score:1.5), (bad quality:1.5), lowres, noisy, distorted, poorly drawn, out of focus, (uncanny:1.5), (robotic appearance:1.5), (unnatural pose:1.5), stiff posture, (incorrect anatomy:1.5), (bad hands:1.3), malformed hands, (incorrect head placement:1.5), uneven features, (bad clothing:1.5), wrinkled clothing, ill-fitting clothes, (unfinished details:1.5), (bad lighting), logo, artist logo, extra limbs, extra digit, extra legs, extra arms, disfigured, missing arms, extra fingers, fused fingers, missing fingers, unclear eyes, blur, (abstract background:1.5), (messy background:1.5), (unrealistic background:1.5), (chaotic background:1.5), (blurry background:1.5), (low quality background:1.5), (distracting background:1.5), (bad limbs:1.5), (disproportionate limbs:1.5), (unnatural limb position:1.5), (wrong limb count:1.5), (malformed limbs:1.5), (missing limbs:1.5), (incorrect limb anatomy:1.5)"
         payload = {
-            "prompt": f"{prompt}, (masterpiece), (clean skin), (perfect skin), (clean lines), (best quality), (high resolution), (illustration), (detailed character), (sharp lines), (expressive eyes), (detailed face), (smooth shading), high score, great score, absurdres, (intricate clothing), (stylized hair), (anime style), (artstation), (pixiv fanbox), (8K), (vibrant), smooth skin, (realistic pose), very detailed, amazing image, best_score, (real)",
-            "negative_prompt": negative_prompt,
-            "steps": 45, 
-            "cfg_scale": 5, # decimals seem to split characters, higher the 
-            "width": width,
-            "height": height,
-            "seed": -1,
-            "style_preset": "Anim4gine", 
-            "sampler_name": "DPM++ 2M SDE Karras",
-            "override_settings": {
-                "sd_model_checkpoint": "animagine-xl-4.0", 
-
-            }
+        "prompt": f"{prompt}, (masterpiece), amazing image, perfect skin,(best quality), (high resolution), (8K), best quality, masterpiece quality,absurdres, great score, high score, (best clothing)",
+        "negative_prompt": negative_prompt,
+        "steps": 50,  
+        "cfg_scale": 6,  
+        "width": width,
+        "height": height,
+        "seed": -1,  
+        "style_preset": "Anim4gine", 
+        "sampler_name": "DPM++ 2M Karras",
+        "override_settings": {
+         "sd_model_checkpoint": "animagine-xl-4.0",
+           }
         }
 
         try:
