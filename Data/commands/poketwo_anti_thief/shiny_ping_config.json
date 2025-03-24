@@ -1,3 +1,6 @@
 {
-    "shiny_ping_phrase": "Shiny hunt pings: "
+    "shiny_ping_phrase": [
+        "Shiny hunt pings: ",
+        "✨ Shiny Hunt Pings:"
+    ]
 }
