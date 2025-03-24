@@ -74,7 +74,7 @@ class Anti_Thief(commands.Cog):
         logger.warning("Guild not found!")
         return shiny_hunters
 
-     if self.shiny_ping_phrase in message_content:
+     if  any(phrase in message_content for phrase in self.shiny_ping_phrase) in message_content:
         mention_start_index = message_content.find(self.shiny_ping_phrase) + len(self.shiny_ping_phrase)
         mention_part = message_content[mention_start_index:].split("\n")[0].strip()                                            
 
