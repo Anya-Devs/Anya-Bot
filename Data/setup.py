@@ -44,9 +44,7 @@ def start():
     install_package('opencv-python-headless')
     install_package('python-Levenshtein')
     
-    os.system("pip install diffusers transformers accelerate safetensors --upgrade")
-
-
+    
     update_all_packages()
     clean_requirements()
 
