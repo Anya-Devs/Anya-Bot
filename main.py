@@ -8,6 +8,7 @@ import aiohttp
 import traceback
 import uvicorn
 from aiohttp import web
+import aiohttp_asgi  # New import for ASGI compatibility
 from motor.motor_asyncio import AsyncIOMotorClient
 from Data.const import AvatarToTextArt
 from Data.utils.token_utils import get_bot_token, prefix
@@ -101,13 +102,12 @@ async def periodic_ping():
 async def handle_index(request):
     return web.Response(text="✅ Bot is running", content_type="text/html")
 
+# This function will wrap the aiohttp app as ASGI-compatible
 def create_app():
     """Returns an ASGI app instance for Uvicorn."""
     app = web.Application()
     app.router.add_get("/", handle_index)
-    return app
-
-app = create_app()
+    return aiohttp_asgi.ASGIApp(app)  # Wrap app to be ASGI-compatible
 
 async def start_services():
     """Starts both the bot and HTTP server tasks."""
@@ -122,7 +122,7 @@ async def start_services():
 
 async def start_uvicorn():
     """Run the Uvicorn ASGI server."""
-    config = uvicorn.Config(app, host="0.0.0.0", port=8080, loop="asyncio")
+    config = uvicorn.Config(create_app(), host="0.0.0.0", port=8080, loop="asyncio")
     server = uvicorn.Server(config)
     await server.serve()
 
