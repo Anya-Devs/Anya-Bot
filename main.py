@@ -6,6 +6,7 @@ import gc
 import asyncio
 import aiohttp
 import traceback
+import uvicorn
 from aiohttp import web
 from motor.motor_asyncio import AsyncIOMotorClient
 from Data.const import AvatarToTextArt
@@ -137,4 +138,11 @@ async def start_services():
 
 
 if __name__ == "__main__":
-    asyncio.run(start_services())
+    # Run the HTTP server with Uvicorn and start the bot
+    server = uvicorn.Server(
+        uvicorn.Config("main:app", host="0.0.0.0", port=8080, loop="asyncio", reload=True)
+    )
+
+    loop = asyncio.get_event_loop()
+    loop.create_task(start_services())
+    loop.run_until_complete(server.serve())
