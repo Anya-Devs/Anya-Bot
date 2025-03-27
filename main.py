@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 if __name__ == "__main__":
     load_dotenv(dotenv_path=os.path.join(".github", ".env"))
 
+
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
@@ -74,6 +75,7 @@ class BotSetup(commands.AutoShardedBot):
                         if not self.get_cog(obj_name):
                             await self.add_cog(obj(self))
 
+
 async def check_rate_limit():
     url = "https://discord.com/api/v10/users/@me"
     token = await get_bot_token()
@@ -86,6 +88,7 @@ async def check_rate_limit():
                 if remaining <= 0:
                     await asyncio.sleep(reset_after)
 
+
 async def periodic_ping():
     while True:
         try:
@@ -96,15 +99,6 @@ async def periodic_ping():
             logger.error(f"Ping failed: {e}")
         await asyncio.sleep(300)
 
-async def start_http_server():
-    app = web.Application()
-    app.router.add_get("/", lambda request: web.Response(text="✅ Bot is running"))
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", 8080)
-    await site.start()
-    asyncio.create_task(periodic_ping())
-    print("🌍 HTTP server started on port 8080")
 
 async def run_bot():
     while True:
@@ -116,16 +110,31 @@ async def run_bot():
             logger.error(f"❌ Bot crashed: {e}\n{traceback.format_exc()}")
             await asyncio.sleep(5)
 
-async def start_server():
-    while True:
-        gc.collect()
-        try:
-            http_task = asyncio.create_task(start_http_server())
-            bot_task = asyncio.create_task(run_bot())
-            await asyncio.gather(http_task, bot_task)
-        except Exception as e:
-            logger.error(f"🔥 Fatal error in main loop: {e}\n{traceback.format_exc()}")
-            await asyncio.sleep(10)
+
+# === Uvicorn Compatible HTTP Server ===
+async def handle_index(request):
+    return web.Response(text="✅ Bot is running", content_type="text/html")
+
+def create_app():
+    """Returns an ASGI app instance for Uvicorn."""
+    app = web.Application()
+    app.router.add_get("/", handle_index)
+    return app
+
+app = create_app()
+
+
+async def start_services():
+    """Starts both the bot and HTTP server tasks."""
+    gc.collect()
+    try:
+        bot_task = asyncio.create_task(run_bot())
+        ping_task = asyncio.create_task(periodic_ping())
+        await asyncio.gather(bot_task, ping_task)
+    except Exception as e:
+        logger.error(f"🔥 Fatal error in main loop: {e}\n{traceback.format_exc()}")
+        await asyncio.sleep(10)
+
 
 if __name__ == "__main__":
-    asyncio.run(start_server())
+    asyncio.run(start_services())
