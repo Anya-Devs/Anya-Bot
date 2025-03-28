@@ -88,23 +88,19 @@ async def check_rate_limit():
                     await asyncio.sleep(reset_after)
 
 async def periodic_ping():
-    """Periodically pings the server to ensure it's up."""
-    retries = 5  # Maximum number of retries
+    retries = 5 
     while retries > 0:
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get("http://localhost:8080"):
                     print("Ping successful!")
-                    return  # Exit once the ping is successful
+                    return 
         except Exception as e:
             logger.error(f"Ping failed: {e}")
             retries -= 1
-            await asyncio.sleep(5)  # Wait 5 seconds before retrying
-
-    # If we exhausted all retries and still couldn't ping the server
+            await asyncio.sleep(5)  
     logger.error("Failed to ping server after multiple attempts.")
 
-# === Uvicorn Compatible HTTP Server ===
 async def handle_index(request):
     return web.Response(text="✅ Bot is running", content_type="text/html")
 
@@ -119,13 +115,11 @@ async def start_services():
     gc.collect()
     try:
         bot_setup = BotSetup()
-        bot_task = asyncio.create_task(bot_setup.start_bot())  # Start bot
+        bot_task = asyncio.create_task(bot_setup.start_bot()) 
        
-        # Start Uvicorn and wait until it's fully ready
-        uvicorn_task = asyncio.create_task(start_uvicorn())  # Start Uvicorn server
-        await asyncio.gather(bot_task, uvicorn_task)  # Wait for both tasks to complete
+        uvicorn_task = asyncio.create_task(start_uvicorn()) 
+        await asyncio.gather(bot_task, uvicorn_task)  
        
-        # Start the periodic ping task after Uvicorn is ready
         ping_task = asyncio.create_task(periodic_ping())
         await ping_task  # Let it run
     except Exception as e:
@@ -133,7 +127,6 @@ async def start_services():
         await asyncio.sleep(10)
 
 async def start_uvicorn():
-    """Run the Uvicorn ASGI server."""
     config = uvicorn.Config(create_app(), host="0.0.0.0", port=8080, loop="asyncio")
     server = uvicorn.Server(config)
     print("Starting Uvicorn server...")
@@ -141,5 +134,5 @@ async def start_uvicorn():
     print("Uvicorn server started.")
 
 if __name__ == "__main__":
-    asyncio.run(start_services())  # Use asyncio.run instead of get_event_loop
-    asyncio.run(start_uvicorn())  # Runs Uvicorn
+    asyncio.run(start_services()) 
+    asyncio.run(start_uvicorn()) 
