@@ -108,7 +108,7 @@ def create_app():
     """Returns an ASGI app instance for Uvicorn."""
     app = web.Application()
     app.router.add_get("/", handle_index)
-    return app  # Directly return the app
+    return app 
 
 async def start_services():
     """Starts both the bot and HTTP server tasks."""
@@ -121,7 +121,8 @@ async def start_services():
         await asyncio.gather(bot_task, uvicorn_task)  
        
         ping_task = asyncio.create_task(periodic_ping())
-        await ping_task  # Let it run
+        await ping_task 
+        
     except Exception as e:
         logger.error(f"🔥 Fatal error in main loop: {e}\n{traceback.format_exc()}")
         await asyncio.sleep(10)
