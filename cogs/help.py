@@ -63,7 +63,7 @@ class Help_Thumbnails:
 
 
 class Select(discord.ui.Select):
-    def __init__(self, cog_commands, bot, primary_color):
+    def __init__(self, cog_commands, bot, primary_color, ctx):
         options = [
             discord.SelectOption(
                 label=cog_name.replace("_", " "),
@@ -82,6 +82,7 @@ class Select(discord.ui.Select):
         self.primary_color = primary_color
         self.command_mapping_file = "Data/commands/help/command_map.json"
         self.set_thumbnail_file = "Data/commands/help/help_embed_images.json"
+        self.ctx = ctx
 
     def _ensure_file_exists(self):
         os.makedirs(os.path.dirname(self.command_mapping_file), exist_ok=True)
@@ -111,62 +112,84 @@ class Select(discord.ui.Select):
         self._save_command_mapping(mapping)
 
     def _build_commands_info(self, cog):
-     output = ""
-     seen_commands = set()  
-     main_category_commands = {}
+        output = ""
+        seen_commands = set()  
+        main_category_commands = {}
 
-     for cmd in [cmd for cmd in cog.get_commands() if not cmd.hidden]:
-        # Properly format the command arguments
-        cmd_args = [
-            f"[{param.name}]" if param.default is not param.empty else f"<{param.name}>"
-            for param in cmd.clean_params.values()
-        ]
-        if len(cmd_args) > 3:
-            cmd_args = cmd_args[:3] + ['...']
-        cmd_args_str = ' '.join(cmd_args)
-        main_category = cmd.name.split('_')[0]  
-        print(cmd_args_str)
-        if main_category != cmd.name:  
-            if main_category not in seen_commands:
-                seen_commands.add(main_category)
-                output += f"{main_category} {cmd_args_str}\n"  
+        for cmd in [cmd for cmd in cog.get_commands() if not cmd.hidden]:
+            # Properly format the command arguments
+            cmd_args = [
+                f"[{param.name}]" if param.default is not param.empty else f"<{param.name}>"
+                for param in cmd.clean_params.values()
+            ]
+            if len(cmd_args) > 3:
+                cmd_args = cmd_args[:3] + ['...']
+            cmd_args_str = ' '.join(cmd_args)
+            main_category = cmd.name.split('_')[0]  
+            print(cmd_args_str)
+            if main_category != cmd.name:  
+                if main_category not in seen_commands:
+                    seen_commands.add(main_category)
+                    output += f"{main_category} {cmd_args_str}\n"  
 
-            if cmd.name not in seen_commands:
-                seen_commands.add(cmd.name)
-                main_category_commands.setdefault(main_category, []).append(f"- {cmd.name} {cmd_args_str}")
-        else:  
-            if cmd.name not in seen_commands:
-                seen_commands.add(cmd.name)
-                output += f"{cmd.name} {cmd_args_str}\n"
+                if cmd.name not in seen_commands:
+                    seen_commands.add(cmd.name)
+                    main_category_commands.setdefault(main_category, []).append(f"- {cmd.name} {cmd_args_str}")
+            else:  
+                if cmd.name not in seen_commands:
+                    seen_commands.add(cmd.name)
+                    output += f"{cmd.name} {cmd_args_str}\n"
 
-     # Add any subcommands under their main category
-     for main_category, subcommands in main_category_commands.items():
-        output += "\n".join(subcommands) + "\n"
+        # Add any subcommands under their main category
+        for main_category, subcommands in main_category_commands.items():
+            output += "\n".join(subcommands) + "\n"
 
-     return self.organize_info(output.strip())
+        return self.organize_info(output.strip())
     
     def organize_info(self, help_info):
-     lines = help_info.strip().split('\n')
-     organized = {}
-     for line in lines:
-        parts = line.split(' ')
-        command_name = parts[0]
-        if command_name.startswith('-'):
-            base_command = line.split(' ')[1].split('_')[0]
-            if base_command not in organized:
-                organized[base_command] = []
-            organized[base_command].append(line.strip())
-        else:
-            if command_name not in organized:
-                organized[command_name] = []
-            organized[command_name].append(line.strip())     
-     sorted_output = []
-     for command_group in organized:
-        sorted_output.append(command_group)
-        sub_commands = sorted(organized[command_group][1:])  
-        for sub_command in sub_commands:
-            sorted_output.append(sub_command)
-     return '\n'.join(sorted_output)
+        lines = help_info.strip().split('\n')
+        organized = {}
+        for line in lines:
+            parts = line.split(' ')
+            command_name = parts[0]
+            if command_name.startswith('-'):
+                base_command = line.split(' ')[1].split('_')[0]
+                if base_command not in organized:
+                    organized[base_command] = []
+                organized[base_command].append(line.strip())
+            else:
+                if command_name not in organized:
+                    organized[command_name] = []
+                organized[command_name].append(line.strip())     
+        sorted_output = []
+        for command_group in organized:
+            sorted_output.append(command_group)
+            sub_commands = sorted(organized[command_group][1:])  
+            for sub_command in sub_commands:
+                sorted_output.append(sub_command)
+        return '\n'.join(sorted_output)
+
+    def _build_cog_fields(self, cog_name, cog):
+        """Build fields for the cog based on its commands, organized in a structured way."""
+        fields = []
+        main_category_commands = {}
+
+        for cmd in [cmd for cmd in cog.get_commands() if not cmd.hidden]:
+            cmd_args = [
+                f"[{param.name}]" if param.default is not param.empty else f"<{param.name}>"
+                for param in cmd.clean_params.values()
+            ]
+            if len(cmd_args) > 3:
+                cmd_args = cmd_args[:3] + ['...']
+            cmd_args_str = ' '.join(cmd_args)
+            main_category = cmd.name.split('_')[0]
+            main_category_commands.setdefault(main_category, []).append(f"{self.ctx.prefix}{cmd.name} {cmd_args_str}")
+
+        # Create new fields with the structured commands
+        for category, commands in main_category_commands.items():
+            fields.append((f"{category}", '```' + "\n".join(commands) + '```'))
+
+        return fields
 
     async def callback(self, interaction: discord.Interaction):
         try:
@@ -200,8 +223,12 @@ class Select(discord.ui.Select):
            
             if cog:
                 commands_info = self._build_commands_info(cog)
+                cog_fields = self._build_cog_fields(cog_name, cog)
+
                 if commands_info:
                     self.cog_embed2.description = f"```\n{commands_info}```"
+                for name, value in cog_fields:
+                    self.cog_embed2.add_field(name=name, value=value, inline=False)
 
             if file:
                 await interaction.response.edit_message(embed=self.cog_embed2, attachments=[file])
@@ -213,9 +240,10 @@ class Select(discord.ui.Select):
             print(traceback_str)
             logger.debug(f"An error occurred: {traceback_str}")
 
-            
+
+
 class HelpMenu(discord.ui.View):
-    def __init__(self, bot, primary_color, select_view, *, timeout=None):
+    def __init__(self, bot, primary_color, select_view,*, timeout=None):
         super().__init__(timeout=timeout)
         self.bot = bot
         self.primary_color = primary_color
@@ -732,7 +760,7 @@ class Help(commands.Cog):
 
                     select_view = Select(
                         self.cog_commands, self.bot, primary_color_value
-                    )
+                    , ctx)
                     options = HelpMenu(
                         self.bot, primary_color_value, select_view)
 
