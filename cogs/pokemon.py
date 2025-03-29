@@ -797,7 +797,7 @@ class Pokemon(commands.Cog):
     @commands.command(
         help="Displays Pokemon dex information.", aliases=["pokdex", "dex", "d", "p"]
     )
-    async def pokemon(self, ctx, *, args=None, form=None):
+    async def pokemon(self, ctx, *, pokemon=None, form=None):
         
         primary_color = self.primary_color()
         async with ctx.typing():
@@ -805,18 +805,18 @@ class Pokemon(commands.Cog):
             is_form = False
             is_mega = None
 
-            if not args:
+            if not pokemon:
                 pokemon_id = random.randint(1, 1021)
-            elif args.lower() == "shiny":
+            elif pokemon.lower() == "shiny":
                 is_shiny = True
                 pokemon_id = random.randint(1, 1021)
             else:
-                args = args.lower().replace(" ", "-").replace("shiny-", "shiny ")
-                is_shiny = args.startswith("shiny ")
+                pokemon = pokemon.lower().replace(" ", "-").replace("shiny-", "shiny ")
+                is_shiny = pokemon.startswith("shiny ")
                 is_form = form is not None
 
-                args = args.replace("shiny ", "")
-                pokemon_id = args
+                pokemon = pokemon.replace("shiny ", "")
+                pokemon_id = pokemon
 
             folder_path = "Data/commands"
             os.makedirs(folder_path, exist_ok=True)
@@ -2515,7 +2515,7 @@ class Strength_weakness(discord.ui.View):
 
                 embed.add_field(
                     name=f"(Level {level}) : {move_name}",
-                    value=f"`Power:` **{move_power}**\n`Accuracy:` **{move_accuracy}**\n> ```Effect: {move_effect}```",
+                    value=f"`Power:` **{move_power}**\n`Accuracy:` **{move_accuracy}**\n```Effect: {move_effect}```",
                     inline=True,
                 )
 
