@@ -2514,10 +2514,15 @@ class Strength_weakness(discord.ui.View):
                 move_effect = move_info["effect"]
 
                 embed.add_field(
-                    name=f"(Level {level}) : {move_name}",
-                    value=f"`Power:` **{move_power}**\n`Accuracy:` **{move_accuracy}**\n```Effect: {move_effect}```",
-                    inline=True,
-                )
+                          name=f"{move_name} (lvl.{level})",
+                          value=(
+                              f"{move_effect}\n\n"
+                              f"**`Power`**: {move_power}\n"
+                              f"**`Accuracy`**: {move_accuracy}\n"
+                              f"──────────────────"
+                          ),
+                          inline=True,
+                      )
 
             await interaction.followup.send(embed=embed, ephemeral=True)
 
