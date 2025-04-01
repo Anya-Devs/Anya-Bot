@@ -63,6 +63,8 @@ class GlitchSolver(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.target_id = 716390085896962058  
+        self.delete_target_id = 854233015475109888  # Add the missing ID
+        self.delete_target_phrase = "@Pokétwo#8236 afd fix"
         self.embed_footer_message = "You have 45 seconds to fix this glitch. Any incense active in this channel will be paused til then."
 
     @commands.command()
@@ -93,7 +95,7 @@ class GlitchSolver(commands.Cog):
     async def on_message(self, message):
         if message.author.id == self.target_id:
             for embed in message.embeds:
-                if self.embed_footer_message in embed.footer.text:
+                if self.embed_footer_message in (embed.footer.text or ""):
                     if embed.image:
                         image_url = embed.image.url
                         solver = ImgPuzzle(image_url)
@@ -108,5 +110,12 @@ class GlitchSolver(commands.Cog):
                         except Exception as e:
                             await message.channel.send(f"[ERROR] Failed to process image: {e}")
 
+        if message.author.id == self.delete_target_id and self.delete_target_phrase in message.content:
+            try:
+                await message.delete()
+            except discord.Forbidden:
+                print("Bot lacks permission to delete messages.")
+            except discord.HTTPException as e:
+                print(f"Failed to delete message: {e}")
 def setup(bot):
     bot.add_cog(GlitchSolver(bot))
