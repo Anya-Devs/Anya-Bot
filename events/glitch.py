@@ -102,7 +102,7 @@ class GlitchSolver(commands.Cog):
 
                             embed = discord.Embed(
                                 title="Puzzle Solved!",
-                                description=f"Puzzle solved! Best arrangement: ```{solution}```",
+                                description=f"Best arrangement: ```{solution}```",
                                 color=primary_color()
                             )
                             await message.channel.send(embed=embed)
