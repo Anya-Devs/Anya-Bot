@@ -101,7 +101,7 @@ class GlitchSolver(commands.Cog):
                             solution = solver.solve()
                             embed = discord.Embed(
                                 title="Puzzle Solved!",
-                                description=f"@Pokétwo#8236 afd fix {solution}",
+                                description=f"@Pokétwo#8236 afd fix {solution.lower()}",
                                 color=primary_color()
                             )
                             await message.channel.send(embed=embed)
