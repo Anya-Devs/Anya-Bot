@@ -27,8 +27,7 @@ class ImgPuzzle:
         h, w = self.i.shape[:2]
         mx, my = w // 2, h // 2
         self.p = [self.i[:my, :mx], self.i[:my, mx:], self.i[my:, :mx], self.i[my:, mx:]]
-
-        # Save each part into the directory
+        
         [cv2.imwrite(os.path.join(self.image_dir, f"part_{chr(65+i)}.png"), p) for i, p in enumerate(self.p)]
 
     def check(self, i):
