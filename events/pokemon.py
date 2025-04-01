@@ -63,7 +63,8 @@ class Anti_Thief(commands.Cog):
         self.shiny_hunters = []
         self.shiny_ping_phrase = load_ping_phrase()                                    
         self.shiny_regex = r"<@(\d+)>"
-        self.primary_color = primary_color()                         
+        self.primary_color = primary_color()
+        self.ignore_channel = 'incense'
 
     async def process_pings(self, guild, message_content):
      shiny_hunters = []
@@ -116,6 +117,7 @@ class Anti_Thief(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+      if 'incense' not in message.channel.name.lower():
         if message.author.id in self.bot_id and message.guild:                                    
             self.shiny_hunters = await self.process_pings(message.guild, message.content)
             if self.shiny_hunters:
@@ -132,7 +134,7 @@ class EventGate(commands.Cog):
         self.primary_color = primary_color()                         
         self.active_events = {}                                         
         self.handled_congrats = set()                                         
-        self.shiny_ping_phrase = load_ping_phrase()                                    
+        self.shiny_ping_phrase = load_ping_phrase()
 
 
     @staticmethod
