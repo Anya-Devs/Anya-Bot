@@ -2,9 +2,6 @@ from Data.const import primary_color
 from Imports.discord_imports import *
 import cv2, numpy as np, requests, os, itertools, logging
 
-# Set up logging
-logging.basicConfig(level=logging.DEBUG)  # You can change this level to INFO or ERROR for less verbose output
-logger = logging.getLogger(__name__)
 
 class ImgPuzzle:
     def __init__(self, url, w=800):
@@ -64,7 +61,7 @@ class ImgPuzzle:
 class GlitchSolver(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.target_id = None  
+        self.target_id = 716390085896962058  
         self.embed_footer_message = "You have 45 seconds to fix this glitch. Any incense active in this channel will be paused til then."
 
     @commands.command()
@@ -93,7 +90,7 @@ class GlitchSolver(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.id == self.bot.user.id:
+        if message.author.id == self.target_id:
             for embed in message.embeds:
                 if self.embed_footer_message in embed.footer.text:
                     if embed.image:
