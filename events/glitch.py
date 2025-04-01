@@ -44,7 +44,7 @@ class ImgPuzzle:
             y, x = ps[idx]
             ni[y:y+my, x:x+mx] = s.p[p]
         sc, f = s.check(ni)
-        return sc + f, (sc / (h * w)) * 100 
+        return sc + f, (sc / (h * w)) * 100  
 
     def solve(s):
         s.load()
