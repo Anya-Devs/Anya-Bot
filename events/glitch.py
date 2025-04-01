@@ -5,10 +5,9 @@ import cv2, numpy as np, requests, os, itertools
 class ImgPuzzle:
     def __init__(self, url, w=800):
         self.u, self.w, self.i, self.p, self.s = url, w, None, [], {}
-        self.image_dir = "Data/commands/pokemon/events/glitched/images"  # Define your image directory
+        self.image_dir = "Data/commands/pokemon/events/glitched/images"  
 
     def load(self):
-        # Ensure the directory exists
         os.makedirs(self.image_dir, exist_ok=True)
 
         try:
