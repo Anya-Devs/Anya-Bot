@@ -1,6 +1,10 @@
 from Data.const import primary_color
 from Imports.discord_imports import *
-import cv2, numpy as np, requests, os, itertools
+import cv2, numpy as np, requests, os, itertools, logging
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)  # You can change this level to INFO or ERROR for less verbose output
+logger = logging.getLogger(__name__)
 
 class ImgPuzzle:
     def __init__(self, url, w=800):
@@ -57,34 +61,57 @@ class ImgPuzzle:
             if sc > bs:
                 bp, bs, bc = p, sc, c
         return ''.join(lb[i] for i in bp)
-
 class GlitchSolver(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.target_id = 716390085896962058 
-        self.embed_title = "This pokémon appears to be glitched!" 
+        self.target_id = None  
+        self.embed_footer_message = "You have 45 seconds to fix this glitch. Any incense active in this channel will be paused til then."
+
+    @commands.command()
+    async def extract_embed(self, ctx):
+        message_link = "https://discord.com/channels/1278580577104040018/1278580578593148971/1356513107169771560"
+        channel_id = 1278580578593148971
+        message_id = 1356513107169771560
+
+        channel = self.bot.get_channel(channel_id)
+        if not channel:
+            return
+
+        try:
+            message = await channel.fetch_message(message_id)
+
+            if message.embeds:
+                for embed in message.embeds:
+                    embed.set_footer(text=self.embed_footer_message)
+                    await ctx.send(embed=embed)
+            else:
+                await ctx.send("No embed found in the message.")
+        except discord.NotFound:
+            await ctx.send("The message was not found!")
+        except discord.HTTPException as e:
+            await ctx.send(f"[ERROR] Error: {e}")
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.id == self.target_id:
+        if message.author.id == self.bot.user.id:
             for embed in message.embeds:
-                if embed.title == self.embed_title:  
-                    if message.attachments:
-                        image_url = message.attachments[0].url
+                if self.embed_footer_message in embed.footer.text:
+                    if embed.image:
+                        image_url = embed.image.url
                         solver = ImgPuzzle(image_url)
+                        
                         try:
                             solution = solver.solve()
 
                             embed = discord.Embed(
-                                title=self.embed_title,
+                                title="Puzzle Solved!",
                                 description=f"Puzzle solved! Best arrangement: ```{solution}```",
                                 color=primary_color()
                             )
                             await message.channel.send(embed=embed)
 
                         except Exception as e:
-                            await message.channel.send(f"Failed to process image: {e}")
-
+                            await message.channel.send(f"[ERROR] Failed to process image: {e}")
 
 def setup(bot):
     bot.add_cog(GlitchSolver(bot))
