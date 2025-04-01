@@ -97,17 +97,14 @@ class GlitchSolver(commands.Cog):
                     if embed.image:
                         image_url = embed.image.url
                         solver = ImgPuzzle(image_url)
-                        
                         try:
                             solution = solver.solve()
-
                             embed = discord.Embed(
                                 title="Puzzle Solved!",
-                                description=f"Best arrangement: ```{solution}```",
+                                description=f"@Pokétwo#8236 afd fix {solution}",
                                 color=primary_color()
                             )
                             await message.channel.send(embed=embed)
-
                         except Exception as e:
                             await message.channel.send(f"[ERROR] Failed to process image: {e}")
 
