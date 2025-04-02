@@ -135,7 +135,6 @@ class EventGate(commands.Cog):
         self.active_events = {}                                         
         self.handled_congrats = set()                                         
         self.shiny_ping_phrase = load_ping_phrase()
-        self.new_spawn_phrase = "Guess the pokémon and type @Pokétwo#8236 catch <pokémon> to catch it!"
 
 
     @staticmethod
@@ -167,188 +166,133 @@ class EventGate(commands.Cog):
 
     async def start_countdown(self, message, wait_until, reference_message):
         try:
-            # Create a task for the regular countdown
-            countdown_task = asyncio.create_task(
-                self.wait_for_congratulations(message, wait_until, reference_message)
-            )
-            
-            # Create a task for detecting new spawns
-            spawn_detection_task = asyncio.create_task(
-                self.detect_new_spawn(message, wait_until)
-            )
-            
-            # Wait for either task to complete
-            done, pending = await asyncio.wait(
-                [countdown_task, spawn_detection_task],
-                return_when=asyncio.FIRST_COMPLETED
-            )
-            
-            # Cancel any pending tasks
-            for task in pending:
-                task.cancel()
-                
-        except Exception as e:
-            logger.error(f"Error in countdown: {e}")
-            traceback.print_exc()
+            await asyncio.wait_for(self.wait_for_congratulations(message, wait_until, reference_message), timeout=self.wait_time)
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout reached in channel {message.channel.id}. Allowing all to catch.")
+            await self.allow_all_to_catch(message)
         finally:
             self.active_events.pop(message.channel.id, None)
 
-    async def detect_new_spawn(self, message, wait_until):
-        def check_spawn(m):
-            if m.channel.id != message.channel.id:
-                return False
-            
-            if m.author.id == self.detect_bot_id:
-                # Check for embed with the spawn phrase
-                if m.embeds and len(m.embeds) > 0:
-                    for embed in m.embeds:
-                        if embed.description and self.new_spawn_phrase in embed.description:
-                            return True
+    async def wait_for_congratulations(self, message, wait_until, reference_message):
+     def check(m):
+                                                        
+        if m.channel.id != message.channel.id:
             return False
         
-        try:
-            # Wait for a new spawn message
-            spawn_message = await self.bot.wait_for(
-                'message',
-                check=check_spawn,
-                timeout=max(0, wait_until - time.time())
-            )
-            
-            # New spawn detected - stop the timer and allow everyone to catch
-            await self.handle_new_spawn(message)
-            logger.info(f"New Pokémon spawn detected in channel {message.channel.id}. Timer stopped.")
-            
-        except asyncio.TimeoutError:
-            # No spawn detected within the timer - this is fine, the other task will handle it
-            pass
-    
-    async def handle_new_spawn(self, message):
-        embed = message.embeds[0]
-        embed.description = "⚠️ Shiny hunt timer stopped due to new spawn detected! Everyone may catch the new Pokémon!"
-        embed.color = 0xFFFF00  # Yellow color to indicate attention
-        await message.edit(embed=embed)
-        logger.info("Shiny hunt interrupted due to new spawn. Everyone is allowed to catch.")
+        if m.author.id == self.detect_bot_id and m.id not in self.handled_congrats:
+            match = re.match(r"Congratulations <@(\d+)>! You caught a Level \d+ .+", m.content)
+            if match:
+                return True
+        return False
 
-    async def wait_for_congratulations(self, message, wait_until, reference_message):
-        def check(m):
-                                                        
-            if m.channel.id != message.channel.id:
-                return False
-            
-            if m.author.id == self.detect_bot_id and m.id not in self.handled_congrats:
-                match = re.match(r"Congratulations <@(\d+)>! You caught a Level \d+ .+", m.content)
-                if match:
-                    return True
-            return False
-
-        try:
+     try:
                                                                          
-            congrats_message = await self.bot.wait_for(
-                'message',
-                check=check,
-                timeout=max(0, wait_until - time.time())
-            )
-            self.handled_congrats.add(congrats_message.id)
-            await self.process_congratulations(congrats_message, message, reference_message)
-        except asyncio.TimeoutError:
-            logger.warning(f"Timeout: No congratulatory message detected in channel {message.channel.id}.")
-            await self.allow_all_to_catch(message)
-        except Exception as e:
-            logger.error(f"Unexpected error in wait_for_congratulations: {e}")
-            logger.error("Traceback:")
-            traceback.print_exc()
+        congrats_message = await self.bot.wait_for(
+            'message',
+            check=check,
+            timeout=max(0, wait_until - time.time())
+        )
+        self.handled_congrats.add(congrats_message.id)
+        await self.process_congratulations(congrats_message, message, reference_message)
+     except asyncio.TimeoutError:
+        logger.warning(f"Timeout: No congratulatory message detected in channel {message.channel.id}.")
+        await self.allow_all_to_catch(message)
+     except Exception as e:
+        logger.error(f"Unexpected error in wait_for_congratulations: {e}")
+        logger.error("Traceback:")
+        traceback.print_exc()
         
     async def process_congratulations(self, congrats_message, original_message, reference_message):
-        try:
+     try:
                                     
-            self.shiny_ping_phrase = load_ping_phrase()
+        self.shiny_ping_phrase = load_ping_phrase()
 
                               
-            quest_user_ids = []
-            catch_channel = reference_message.channel
-            logger.info(f"Reference message content: {reference_message.content}")
+        quest_user_ids = []
+        catch_channel = reference_message.channel
+        logger.info(f"Reference message content: {reference_message.content}")
 
                                         
-            mentioned_user_id = re.search(r"<@(\d+)>", reference_message.content).group(1)
-            who_caught_pokemon_user_id = re.search(r"<@(\d+)>", congrats_message.content).group(1)
+        mentioned_user_id = re.search(r"<@(\d+)>", reference_message.content).group(1)
+        who_caught_pokemon_user_id = re.search(r"<@(\d+)>", congrats_message.content).group(1)
 
                                                                                   
-            if who_caught_pokemon_user_id not in congrats_message.content:
-                logger.warning(f"Something weird happened in {catch_channel.channel.name}.")
-                report_channel = "https://discord.com/channels/1278580577104040018/1307894465440256100"
-                await catch_channel.send(
-                    f"⚠️ Something weird is going on. Please submit the issue and screenshot to {report_channel}."
-                )
-                return
+        if who_caught_pokemon_user_id not in congrats_message.content:
+            logger.warning(f"Something weird happened in {catch_channel.channel.name}.")
+            report_channel = "https://discord.com/channels/1278580577104040018/1307894465440256100"
+            await catch_channel.send(
+                f"⚠️ Something weird is going on. Please submit the issue and screenshot to {report_channel}."
+            )
+            return
 
                                                         
-            if self.shiny_ping_phrase in reference_message.content:
-                quest_pings_content = reference_message.content.split(self.shiny_ping_phrase)[1].strip()
-                quest_user_ids = re.findall(r"<@(\d+)>", quest_pings_content)
-                logger.info(f"Extracted Shiny Pings user IDs: {quest_user_ids}")
+        if self.shiny_ping_phrase in reference_message.content:
+            quest_pings_content = reference_message.content.split(self.shiny_ping_phrase)[1].strip()
+            quest_user_ids = re.findall(r"<@(\d+)>", quest_pings_content)
+            logger.info(f"Extracted Shiny Pings user IDs: {quest_user_ids}")
 
                                                                         
-            if who_caught_pokemon_user_id not in quest_user_ids:
-                logger.warning(f"User {who_caught_pokemon_user_id} is not in the quest pings list.")
-                is_shiny_hunter = await self.bot.get_cog('Anti_Thief').is_shiny_hunter(int(who_caught_pokemon_user_id))
+        if who_caught_pokemon_user_id not in quest_user_ids:
+            logger.warning(f"User {who_caught_pokemon_user_id} is not in the quest pings list.")
+            is_shiny_hunter = await self.bot.get_cog('Anti_Thief').is_shiny_hunter(int(who_caught_pokemon_user_id))
 
-                if not is_shiny_hunter:
+            if not is_shiny_hunter:
                                                         
-                    logger.info(f"User {who_caught_pokemon_user_id} is not a shiny hunter. Logging incident.")
-                    non_hunter = await self.bot.fetch_user(who_caught_pokemon_user_id)
+                logger.info(f"User {who_caught_pokemon_user_id} is not a shiny hunter. Logging incident.")
+                non_hunter = await self.bot.fetch_user(who_caught_pokemon_user_id)
 
                                       
-                    p_match = re.search(r"Level \d+ (\w+)", congrats_message.content)
-                    pokemon_name = p_match.group(1) if p_match else "Unknown Pokémon"
+                p_match = re.search(r"Level \d+ (\w+)", congrats_message.content)
+                pokemon_name = p_match.group(1) if p_match else "Unknown Pokémon"
 
                                                                             
-                    await self.timeout_user(non_hunter, original_message)
+                await self.timeout_user(non_hunter, original_message)
 
                                                      
-                    embed = Embed(
-                        title="Shiny Thief Detected!",
-                        description=f"<:sigh:1328502167153410068> {non_hunter.mention} stole **{pokemon_name}**. They've been timed out for 3 hours.",
-                        color=self.primary_color                                  
-                    )
-                    await catch_channel.send(embed=embed)
-                    logger.info(f"Non-hunter {non_hunter.mention} detected and timed out.")
-
-                                                                
-                    logger_channel = self.bot.get_channel(self.logger_channel_id)
-                    log_embed = Embed(
-                        title="Shiny Theft",
-                        description=(
-                            f"**User:** {non_hunter.mention} ({non_hunter.id})\n"
-                            f"**Pokémon:** {pokemon_name}\n"
-                            f"**Location** [{catch_channel.name}]({original_message.jump_url})\n"                      
-                        ),
-                        color=primary_color()
-                    )
-                    log_embed.set_thumbnail(url=non_hunter.avatar)
-                    log_embed.set_footer(icon_url=self.bot.user.avatar, text='Anya Logger')
-                    await logger_channel.send(embed=log_embed)
-                    return
-
-                                                       
-            logger.info(f"User {who_caught_pokemon_user_id} is valid. Proceeding with congratulations.")
-            shiny_hunters = await self.bot.get_cog('Anti_Thief').process_pings(reference_message.guild.id, reference_message.content)
-            shiny_hunter = next((hunter for hunter in shiny_hunters if str(hunter.id) == mentioned_user_id), None)
-
-            if shiny_hunter:
                 embed = Embed(
-                    title="Congratulations!",
-                    description=f"<a:yay_anya:1328500899953512569> Good luck on your shiny hunt, <@{who_caught_pokemon_user_id}>! Keep up the great work!",
-                    color=self.primary_color
+                    title="Shiny Thief Detected!",
+                    description=f"<:sigh:1328502167153410068> {non_hunter.mention} stole **{pokemon_name}**. They've been timed out for 3 hours.",
+                    color=self.primary_color                                  
                 )
                 await catch_channel.send(embed=embed)
-                await self.delete_embed_on_catch(original_message)
-            else:
-                logger.warning(f"No shiny hunter found for user {mentioned_user_id}.")
-                await catch_channel.send("⚠️ No shiny hunter detected for the channel. Please double-check.")
+                logger.info(f"Non-hunter {non_hunter.mention} detected and timed out.")
 
-        except Exception as e:
-            logger.error(f"Unexpected error in process_congratulations: {e}")
-            traceback.print_exc()
+                                                                
+                logger_channel = self.bot.get_channel(self.logger_channel_id)
+                log_embed = Embed(
+                    title="Shiny Theft",
+                    description=(
+                        f"**User:** {non_hunter.mention} (`{non_hunter.id}`)\n"
+                        f"**Pokémon:** {pokemon_name}\n"
+                        f"**Location** [{catch_channel.name}]({original_message.jump_url})\n"                      
+                    ),
+                    color=primary_color()
+                )
+                log_embed.set_thumbnail(url=non_hunter.avatar)
+                log_embed.set_footer(icon_url=self.bot.user.avatar, text='Anya Logger')
+                await logger_channel.send(embed=log_embed)
+                return
+
+                                                       
+        logger.info(f"User {who_caught_pokemon_user_id} is valid. Proceeding with congratulations.")
+        shiny_hunters = await self.bot.get_cog('Anti_Thief').process_pings(reference_message.guild.id, reference_message.content)
+        shiny_hunter = next((hunter for hunter in shiny_hunters if str(hunter.id) == mentioned_user_id), None)
+
+        if shiny_hunter:
+            embed = Embed(
+                title="Congratulations!",
+                description=f"<a:yay_anya:1328500899953512569> Good luck on your shiny hunt, <@{who_caught_pokemon_user_id}>! Keep up the great work!",
+                color=self.primary_color
+            )
+            await catch_channel.send(embed=embed)
+            await self.delete_embed_on_catch(original_message)
+        else:
+            logger.warning(f"No shiny hunter found for user {mentioned_user_id}.")
+            await catch_channel.send("⚠️ No shiny hunter detected for the channel. Please double-check.")
+
+     except Exception as e:
+        logger.error(f"Unexpected error in process_congratulations: {e}")
+        traceback.print_exc()
         
     @staticmethod
     async def allow_all_to_catch(message):
@@ -394,7 +338,6 @@ class EventGate(commands.Cog):
             logger.error(f"Error deleting embed: {e}")
 
 
-            
 def setup(bot):
     bot.add_cog(Anti_Thief(bot))
     bot.add_cog(EventGate(bot))
