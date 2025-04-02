@@ -2,68 +2,65 @@ from Data.const import primary_color
 from Imports.discord_imports import *
 import cv2, numpy as np, requests, os, itertools, logging
 
-
 class ImgPuzzle:
     def __init__(s, url, w=800):
-        s.u, s.w, s.i, s.p, s.s = url, w, None, [], {}
+        s.url = url
+        s.w = w
+        s.orb = cv2.ORB_create()
 
-    def load(s):
-        try:
-            r = requests.get(s.u, stream=True)
-            r.raise_for_status()
-            a = np.asarray(bytearray(r.content), dtype=np.uint8)
-            i = cv2.imdecode(a, cv2.IMREAD_COLOR)
-        except requests.RequestException:
-            i = cv2.imread("test_image.png", cv2.IMREAD_COLOR)
-        if i is None: raise ValueError("Image load failed")
-        ar = i.shape[1] / i.shape[0]
-        s.i = cv2.resize(i, (s.w, int(s.w / ar)))
+    async def load(s):
+        async with s.bot.session.get(s.url) as r:
+            if r.status != 200:
+                raise ValueError("Failed to fetch image")
+            return cv2.imdecode(np.asarray(bytearray(await r.read()), dtype=np.uint8), cv2.IMREAD_COLOR)
 
-    def split(s):
-        h, w = s.i.shape[:2]
+    def split(s, img):
+        h, w = img.shape[:2]
         mx, my = w // 2, h // 2
-        s.p = [s.i[:my, :mx], s.i[:my, mx:], s.i[my:, :mx], s.i[my:, mx:]]
-        os.makedirs("pieces", exist_ok=True)
-        [cv2.imwrite(f"pieces/{chr(65+i)}.png", p) for i, p in enumerate(s.p)]
+        return [img[:my, :mx], img[:my, mx:], img[my:, :mx], img[my:, mx:]]
 
-    def check(s, i):
-        orb = cv2.ORB_create()
-        g = cv2.cvtColor(i, cv2.COLOR_BGR2GRAY)
-        kp, des = orb.detectAndCompute(g, None)
+    def check(s, img):
+        g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         _, t = cv2.threshold(g, 100, 255, cv2.THRESH_BINARY)
         c, _ = cv2.findContours(t, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        e = cv2.Canny(g, 50, 150)
+        return sum(cv2.contourArea(x) for x in c), np.count_nonzero(e)
 
-        return len(kp), sum(cv2.contourArea(x) for x in c)
+    def edge_consistency(s, p1, p2, axis):
+        b1, b2 = (p1[:, -1], p2[:, 0]) if axis == 'vertical' else (p1[-1, :], p2[0, :])
+        return np.sum(np.abs(b1 - b2))
 
-    def eval(s, perm):
-        ni = np.zeros_like(s.i)
-        h, w = ni.shape[:2]
+    def process(s, img, parts, perm):
+        h, w = img.shape[:2]
         mx, my = w // 2, h // 2
+        ni = np.zeros((h, w, 3), dtype=img.dtype)
         ps = [(0, 0), (0, mx), (my, 0), (my, mx)]
-        for idx, p in enumerate(perm):
-            y, x = ps[idx]
-            ni[y:y+my, x:x+mx] = s.p[p]
-        sc, f = s.check(ni)
-        return sc + f, (sc / (h * w)) * 100  
+        edge_score = 0
+        
+        for i, p in enumerate(perm):
+            y, x = ps[i]
+            ni[y:y + my, x:x + mx] = parts[p]
+            if i % 2 == 1:
+                edge_score += s.edge_consistency(parts[perm[i - 1]], parts[p], 'vertical')
+            if i >= 2:
+                edge_score += s.edge_consistency(parts[perm[i - 2]], parts[p], 'horizontal')
 
-    def solve(s):
-        s.load()
-        s.split()
-        lb, bp, bs, bc = ['A', 'B', 'C', 'D'], None, 0, 0
-        for p in itertools.permutations(range(4)):
-            sc, c = s.eval(p)
-            s.s[p] = (sc, c)
-            if sc > bs: bp, bs, bc = p, sc, c
-        return ''.join(lb[i] for i in bp)
-    
+        contour_score, edge_count = s.check(ni)
+        return (contour_score * 0.4) + (edge_count * 0.2) - (edge_score * 0.4)
 
+    async def solve(s):
+        img = await s.load()
+        parts = s.split(img)
+        labels = 'ABCD'
+        best_p = max(itertools.permutations(range(4)), key=lambda p: s.process(img, parts, p))
+        return ''.join(labels[i] for i in reversed(best_p))
 
 
 class GlitchSolver(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.target_id = 716390085896962058  
-        self.delete_target_id = 854233015475109888  # Add the missing ID
+        self.delete_target_id = 854233015475109888 
         self.delete_target_phrase = "@Pokétwo#8236 afd fix"
         self.embed_footer_message = "You have 45 seconds to fix this glitch. Any incense active in this channel will be paused til then."
 
