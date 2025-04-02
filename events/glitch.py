@@ -108,7 +108,7 @@ class GlitchSolver(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.id == self.bot.user.id: #self.target_id:
+        if message.author.id == self.target_id:
             for embed in message.embeds:
                 if self.embed_footer_message in (embed.footer.text or ""):
                     if embed.image:
