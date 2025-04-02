@@ -1,7 +1,7 @@
 import os
 from motor.motor_asyncio import AsyncIOMotorClient
 
-prefix = "..."
+prefix = ">"
 
 async def get_bot_token():
 
@@ -12,7 +12,7 @@ async def get_bot_token():
     client = AsyncIOMotorClient(mongo_url)
     db = client["Bot"] 
     collection = db["information"]
-    token_flavor = "Token"
+    token_flavor = "Test_Token"
     
     token_data = await collection.find_one({token_flavor: {"$exists": True}})
     if token_data:

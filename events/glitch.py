@@ -2,24 +2,23 @@ from Data.const import primary_color
 from Imports.discord_imports import *
 import cv2, numpy as np, requests, os, itertools, logging
 
+
 class ImgPuzzle:
     def __init__(self):
         self.orb = cv2.ORB_create()
-        
-    async def load(self, url):
-        async with self.bot.session.get(url) as response:
-            if response.status != 200:
-                raise ValueError("Failed to fetch image")
-            data = await response.read()
-            image = np.asarray(bytearray(data), dtype=np.uint8)
-            return cv2.imdecode(image, cv2.IMREAD_COLOR)
 
+    def load(self, url):
+        response = requests.get(url)
+        if response.status_code != 200:
+            raise ValueError("Failed to fetch image")
+        data = response.content
+        image = np.asarray(bytearray(data), dtype=np.uint8)
+        return cv2.imdecode(image, cv2.IMREAD_COLOR)
 
     def split(self, image):
         h, w = image.shape[:2]
         mx, my = w // 2, h // 2
         return [image[:my, :mx], image[:my, mx:], image[my:, :mx], image[my:, mx:]]
-
 
     def check(self, img):
         g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -29,7 +28,6 @@ class ImgPuzzle:
         edge_count = np.count_nonzero(edges)
         return sum(cv2.contourArea(x) for x in c), edge_count
 
-
     def edge_consistency(self, part1, part2, axis):
         if axis == 'vertical':
             border1 = part1[:, -1]
@@ -38,6 +36,7 @@ class ImgPuzzle:
             border1 = part1[-1, :]
             border2 = part2[0, :]
         return np.sum(np.abs(border1 - border2))
+
     def process(self, image, parts, perm):
         h, w = image.shape[:2]
         mx, my = w // 2, h // 2
@@ -45,6 +44,7 @@ class ImgPuzzle:
         ps = [(0, 0), (0, mx), (my, 0), (my, mx)]
         total_similarity = 0
         total_edge_consistency = 0
+        
         for idx, p in enumerate(perm):
             y, x = ps[idx]
             ni[y:y + my, x:x + mx] = parts[p]
@@ -52,13 +52,14 @@ class ImgPuzzle:
                 total_edge_consistency += self.edge_consistency(parts[perm[idx - 1]], parts[p], 'vertical')
             if idx >= 2:
                 total_edge_consistency += self.edge_consistency(parts[perm[idx - 2]], parts[p], 'horizontal')
+        
         contour_score, edge_count = self.check(ni)
         combined_score = (contour_score * 0.4) + (edge_count * 0.2) - (total_edge_consistency * 0.4)
         return combined_score, total_similarity
 
-
-    async def solve(self, url):
-        image = await self.load(url)
+    def solve(self, url):
+        print("activated")
+        image = self.load(url)
         parts = self.split(image)
         labels = ['A', 'B', 'C', 'D']
         best_score = -1
@@ -69,9 +70,9 @@ class ImgPuzzle:
             if process_score > best_score:
                 best_score = process_score
                 best_part = p
-
+        
         return ''.join(labels[i] for i in reversed(best_part))
-
+    
 
 class GlitchSolver(commands.Cog):
     def __init__(self, bot):
@@ -107,15 +108,15 @@ class GlitchSolver(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.id == self.target_id:
+        if message.author.id == self.bot.user.id: #self.target_id:
             for embed in message.embeds:
                 if self.embed_footer_message in (embed.footer.text or ""):
                     if embed.image:
                         image_url = embed.image.url
                         s = ImgPuzzle()
-                        solver = await s.solve(image_url)
+                        solved = s.solve(image_url)
                         try:
-                            solution = solver.solve()
+                            solution = solved
                             embed = discord.Embed(
                                 title="Puzzle Solved!",
                                 description=f"@Pokétwo#8236 afd fix {solution.lower()}",
