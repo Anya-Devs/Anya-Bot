@@ -1144,6 +1144,8 @@ def timestamp_gen(timestamp: int) -> str:
 
 
 
+
+
 class AvatarToTextArt:
     def __init__(self, avatar_url, new_size=80):
         self.avatar_url = avatar_url

@@ -67,104 +67,27 @@ class Information(commands.Cog):
 
 
     @commands.command(name="about", aliases=["info", "details"])
-    async def about(self, ctx, topic: Union[discord.Member, int, str] = None):
-        if topic is None:
-            topic = ctx.bot.user
-        embed = await self.get_information_embed(topic, self.bot)  # Pass 'topic' instead of 'id'
+    async def about(self, ctx, args: Union[discord.Member, int, str] = None):
+        if args is None:
+            args = ctx.bot.user
+        embed = await self.get_information_embed(args, self.bot)
         await ctx.reply(embed=embed, mention_author=False)
         
- 
-
-    @commands.command(name="json")
-    async def json(self, ctx, member: discord.Member = None):
-        """Command to generate a JSON report of a member's info."""
-        if not member:
-            member = ctx.author  
-
-        
-        member_info = {
-            "username": member.name,
-            "nickname": member.nick or "None",
-            "current_name": member.display_name,
-            "joined_at": self.format_time(member.joined_at),
-            "created_at": self.format_time(member.created_at),
-            "status": member.status.name.capitalize(),
-            "presence": member.activity.name if member.activity else "None",
-            "top_role": member.top_role.name,
-            "permissions": await self.get_permissions(member),  
-            "roles": [role.name for role in member.roles if role.name != "@everyone"],
-            "last_message": await self.get_last_message(member, ctx),
-            "pinged_by": await self.get_pinged_by(ctx, member),
-            "avatar_url": str(member.avatar),
-        }
-
-        
-        embed = discord.Embed(
-            title=f"{member.name}'s Info",
-            description=f"```json\n{json.dumps(member_info, indent=4)}\n```",
-            color=primary_color(),
-            timestamp=datetime.now()
-        )
-        embed.set_footer(icon_url=ctx.author.avatar ,text=f"User: {ctx.author}・ID: {ctx.author.id}")
-
-        
-        await ctx.reply(embed=embed,mention_author=False)
-
-    def format_time(self, time):
-        """Formats a datetime object into a human-readable format."""
-        return time.strftime("%A, %B %d, %Y at %I:%M %p")
-
-    async def get_permissions(self, member):
-        """Returns a formatted list of permissions for the member."""
-        permissions = member.guild_permissions
-        perms = []
-        for perm, value in permissions:
-            if value:
-                perms.append(f"{perm.replace('_', ' ').capitalize()}")
-        return perms or ["No special permissions"]
 
 
-
-    async def get_last_message(self, member, ctx):
-     """Fetches the last message sent by the member in the current channel."""
-     async for message in ctx.channel.history(limit=100):
-        
-        if message.author == self.bot.user or message.content.startswith(ctx.prefix):
-            continue
-
-        
-        if message.author == member:
-            return f"[{message.content}]({message.jump_url})"
-    
-     return "No messages found"
-
-    async def get_pinged_by(self, ctx, member):
-     """Fetches who mentioned the member in the current channel."""
-     mentioned_by = []
-     async for message in ctx.channel.history(limit=100):
-        
-        if message.author == self.bot.user or message.content.startswith(ctx.prefix):
-            continue
-
-        
-        if member.mention in message.content and message.author != member:
-            mentioned_by.append(message.author.name)
-    
-     return mentioned_by or ["No one"]
-    
     @staticmethod
-    async def get_information_embed(id, bot):
-        if isinstance(id, discord.Member):
-            return await Information_Embed.get_member_embed(bot, id)
-        elif isinstance(id, int):
-            guild = bot.get_guild(id)
+    async def get_information_embed(args, bot):
+        if isinstance(args, discord.Member):
+            return await Information_Embed.get_member_embed(bot, args)
+        elif isinstance(args, int):
+            guild = bot.get_guild(args)
             if guild:
                 return await Information_Embed.get_guild_embed(guild)
             else:
                 raise ValueError("Invalid server ID provided.")
-        elif isinstance(id, str):
+        elif isinstance(args, str):
             async with aiohttp.ClientSession() as session:
-                invite = await bot.fetch_invite(id)
+                invite = await bot.fetch_invite(args)
                 return await Information_Embed.get_invite_embed(invite)
         else:
             return await Information_Embed.get_bot_embed(bot.user, bot)
@@ -267,8 +190,6 @@ class Information(commands.Cog):
 
     @commands.command(name="invite")
     async def invite(self, ctx, link: str = None):
-        """Command to fetch an invite link or generate a new one if invalid."""
-
         if link:
             
             try:
@@ -283,9 +204,7 @@ class Information(commands.Cog):
             
             await self.create_and_send_invite(ctx)
 
-    async def create_and_send_invite(self, ctx):
-        """Generates a new infinite invite link and sends it."""
-        
+    async def create_and_send_invite(self, ctx):        
         if ctx.channel.permissions_for(ctx.guild.me).create_instant_invite:
             invite = await ctx.channel.create_invite(max_uses=0, temporary=False, unique=True)
             await ctx.reply(f"Here is your permanent invite link: {invite.url}", mention_author=False)
@@ -306,18 +225,13 @@ class Information(commands.Cog):
             )
             return
 
-        
         view = PermissionsView(self, ctx, permissions, target)
-
-        
         embed = view.build_perms_embed()
-
-        
         await ctx.reply(embed=embed, view=view, mention_author=False)
 
-    @commands.command(name="emojis")
+
+    @commands.command(name="list_emojis")
     async def list_emojis(self, ctx):
-        """Lists all server emojis with pagination."""
         emojis = ctx.guild.emojis
         if not emojis:
             await ctx.reply("This server has no custom emojis!", mention_author=False)
@@ -371,7 +285,6 @@ class Information(commands.Cog):
 
     @commands.command(name="server_roles")
     async def role_select(self, ctx):
-        """Command to let users select roles and navigate members."""
         guild = ctx.guild
         roles = sorted(
             guild.roles,
@@ -386,14 +299,9 @@ class Information(commands.Cog):
         if not select_roles:
             await ctx.send("No roles available for selection.")
             return
-
         
         select_view = Select_Role(roles=select_roles, cog=self, members_per_page=self.members_per_page)
-
-        
         embed = self.create_role_embed(select_roles[0], 0)
-
-        
         await ctx.send(embed=embed, view=select_view)
 
     def create_role_embed(self, role, current_page):
@@ -573,7 +481,6 @@ class Select_Role(discord.ui.View):
         self.selected_role = self.roles[0]  
         self.members_per_page = members_per_page  
 
-        
         select = discord.ui.Select(
             placeholder="Select a role to view details...",
             options=[
@@ -588,78 +495,55 @@ class Select_Role(discord.ui.View):
         select.callback = self.select_callback
         self.add_item(select)
 
-        
-        self.add_item(discord.ui.Button(emoji="◀️", style=discord.ButtonStyle.primary, custom_id="prev", row=1))
-        self.add_item(discord.ui.Button(emoji="▶️", style=discord.ButtonStyle.primary, custom_id="next", row=1))
+        self.prev_button = discord.ui.Button(emoji="◀️", style=discord.ButtonStyle.primary, custom_id="prev", row=1)
+        self.next_button = discord.ui.Button(emoji="▶️", style=discord.ButtonStyle.primary, custom_id="next", row=1)
 
-        
-        for button in self.children:
-            if isinstance(button, discord.ui.Button):
-                button.callback = self.button_callback
+        self.prev_button.callback = self.prev_page
+        self.next_button.callback = self.next_page
 
-        self.update_navigation_buttons()  
+        self.add_item(self.prev_button)
+        self.add_item(self.next_button)
+
+        self.update_navigation_buttons()
 
     def update_navigation_buttons(self):
-        """Enable/Disable navigation buttons based on current page and total pages."""
         total_pages = self.get_total_pages(self.selected_role)
 
-        
-        prev_button = next((btn for btn in self.children if btn.custom_id == "prev"), None)
-        next_button = next((btn for btn in self.children if btn.custom_id == "next"), None)
-
-        
-        if prev_button:
-            prev_button.disabled = self.current_page <= 0
-
-        
-        if next_button:
-            next_button.disabled = self.current_page >= total_pages - 1
+        self.prev_button.disabled = self.current_page <= 0
+        self.next_button.disabled = self.current_page >= total_pages - 1
 
     async def select_callback(self, interaction: discord.Interaction):
-        """Handles role selection from the dropdown menu."""
         role_id = int(interaction.data["values"][0])
         self.selected_role = discord.utils.get(interaction.guild.roles, id=role_id)
 
         if self.selected_role:
             self.current_page = 0  
             embed = self.cog.create_role_embed(self.selected_role, self.current_page)
-            self.update_navigation_buttons()  
-            if not interaction.response.is_done():
-                await interaction.response.edit_message(embed=embed, view=self)
-
-    async def button_callback(self, interaction: discord.Interaction):
-        """Handle the navigation buttons (previous/next)."""
-        
-        if not interaction.response.is_done():
-            await interaction.response.defer()
-
-        
-        if interaction.data["custom_id"] == "prev" and self.current_page > 0:
-            self.current_page -= 1
-        elif interaction.data["custom_id"] == "next":
-            total_pages = self.get_total_pages(self.selected_role)
-            if self.current_page < total_pages - 1:
-                self.current_page += 1
-
-        
-        embed = self.cog.create_role_embed(self.selected_role, self.current_page)  
-
-        
-        self.update_navigation_buttons()  
-
-        
-        if not interaction.response.is_done():
+            self.update_navigation_buttons()
             await interaction.response.edit_message(embed=embed, view=self)
 
+    async def prev_page(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        if self.current_page > 0:
+            self.current_page -= 1
+            embed = self.cog.create_role_embed(self.selected_role, self.current_page)
+            self.update_navigation_buttons()
+            await interaction.message.edit(embed=embed, view=self)
+
+    async def next_page(self, interaction: discord.Interaction):
+        """Handles the next page button."""
+        await interaction.response.defer()
+        total_pages = self.get_total_pages(self.selected_role)
+        if self.current_page < total_pages - 1:
+            self.current_page += 1
+            embed = self.cog.create_role_embed(self.selected_role, self.current_page)
+            self.update_navigation_buttons()
+            await interaction.message.edit(embed=embed, view=self)
+
     def get_total_pages(self, role):
-        """Calculate the total number of pages needed to display members."""
         members = [member for member in role.members if not member.bot]
         total_members = len(members)
         return (total_members // self.members_per_page) + (1 if total_members % self.members_per_page != 0 else 0)
-    
-    
-    
-    
     
     
 def setup(bot):

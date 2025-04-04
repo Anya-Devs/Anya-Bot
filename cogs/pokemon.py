@@ -603,11 +603,11 @@ class Pokemon(commands.Cog):
     @commands.command(name="predict")
     
     @commands.cooldown(1, 6, commands.BucketType.user)
-    async def predict(self, ctx, *, arg=None):
+    async def predict(self, ctx, *, image_url=None):
         image_url = None
 
-        if arg:
-            image_url = arg
+        if image_url:
+            image_url = image_url
         elif ctx.message.attachments:
             image_url = ctx.message.attachments[0].url
         elif ctx.message.reference:

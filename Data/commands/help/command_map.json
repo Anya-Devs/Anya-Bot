@@ -26,7 +26,8 @@
         "set_image": " ",
         "get_image": " ",
         "optimize": " ",
-        "memory_info": " "
+        "memory_info": " ",
+        "memory": " "
     },
     "Pokemon": {
         "predict": "Predict Pok\u00e9mon details.",
@@ -45,7 +46,8 @@
         "perms": " ",
         "emojis": " ",
         "json": " ",
-        "server_roles": " "
+        "server_roles": " ",
+        "list_emojis": " "
     },
     "PokemonBot": {
         "predict": " "
@@ -82,5 +84,8 @@
         "get_emoji": " ",
         "delete_all_emojis": " ",
         "clear_emojis": " "
+    },
+    "GlitchSolver": {
+        "extract_embed": " "
     }
 }

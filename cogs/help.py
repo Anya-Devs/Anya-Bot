@@ -40,13 +40,11 @@ class Help_Thumbnails:
             }
 
     def save_images(self):
-        """Saves the current help_embed images data back to the JSON file."""
         os.makedirs(os.path.dirname(self.json_file_path), exist_ok=True)
         with open(self.json_file_path, "w") as f:
             json.dump({"help_embed": self.help_embed}, f, indent=4)
 
     def update_image_url(self, cog_name, url):
-        """Updates the image URL for a specific cog in the help_embed."""
         cog_name = cog_name.lower()
         if cog_name in self.help_embed:
             self.help_embed[cog_name]["thumbnail_url"] = url
@@ -56,9 +54,9 @@ class Help_Thumbnails:
             return f"Cog '{cog_name}' not found."
 
     def get_image_url(self, cog_name):
-        """Returns the image URL for the given cog."""
         cog_name = cog_name.lower()
         return self.help_embed.get(cog_name, {}).get("thumbnail_url", None)
+
 
 
 
@@ -126,21 +124,19 @@ class Select(discord.ui.Select):
                 cmd_args = cmd_args[:3] + ['...']
             cmd_args_str = ' '.join(cmd_args)
             main_category = cmd.name.split('_')[0]  
-            print(cmd_args_str)
             if main_category != cmd.name:  
                 if main_category not in seen_commands:
                     seen_commands.add(main_category)
-                    output += f"{main_category} {cmd_args_str}\n"  
+                    output += f"{main_category}\n"  
 
                 if cmd.name not in seen_commands:
                     seen_commands.add(cmd.name)
-                    main_category_commands.setdefault(main_category, []).append(f"- {cmd.name} {cmd_args_str}")
+                    main_category_commands.setdefault(main_category, []).append(f"{cmd.name}")
             else:  
                 if cmd.name not in seen_commands:
                     seen_commands.add(cmd.name)
-                    output += f"{cmd.name} {cmd_args_str}\n"
+                    output += f"{cmd.name}\n"
 
-        # Add any subcommands under their main category
         for main_category, subcommands in main_category_commands.items():
             output += "\n".join(subcommands) + "\n"
 
@@ -170,7 +166,6 @@ class Select(discord.ui.Select):
         return '\n'.join(sorted_output)
 
     def _build_cog_fields(self, cog_name, cog):
-        """Build fields for the cog based on its commands, organized in a structured way."""
         fields = []
         main_category_commands = {}
 
@@ -185,9 +180,9 @@ class Select(discord.ui.Select):
             main_category = cmd.name.split('_')[0]
             main_category_commands.setdefault(main_category, []).append(f"{self.ctx.prefix}{cmd.name} {cmd_args_str}")
 
-        # Create new fields with the structured commands
         for category, commands in main_category_commands.items():
-            fields.append((f"{category}", '```' + "\n".join(commands) + '```'))
+
+            fields.append((f" ", "\n".join(commands), False)) # (name, value, inline)
 
         return fields
 
@@ -222,13 +217,14 @@ class Select(discord.ui.Select):
             cog = self.bot.get_cog(cog_name)
            
             if cog:
-                commands_info = self._build_commands_info(cog)
+                #commands_info = self._build_commands_info(cog)
                 cog_fields = self._build_cog_fields(cog_name, cog)
-
+                """
                 if commands_info:
                     self.cog_embed2.description = f"```\n{commands_info}```"
-                for name, value in cog_fields:
-                    self.cog_embed2.add_field(name=name, value=value, inline=False)
+                """
+                for name, value, inline in cog_fields:
+                    self.cog_embed2.add_field(name=name, value=value, inline=inline)
 
             if file:
                 await interaction.response.edit_message(embed=self.cog_embed2, attachments=[file])
@@ -428,39 +424,32 @@ class ImageGenerator:
         """Initialize the ImageGenerator with user-specific data and load resources."""
         self.user_name = ctx.author.display_name
 
-        self.font_path_header = (
-            "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
-        )
-        self.font_path_base = (
-            "Data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
-        )
-        self.character_path = (
-            "Data/commands/help/menu/initial/style/assets/character.png"
-        )
-        self.background_path = (
-            "Data/commands/help/menu/initial/style/assets/background.png"
-        )
-
-        self.color_replacements_map = {
-            # hash map switch
-        }
-
-        self.header_font_size = 35
-        self.base_font_size = 22
-        self.command_font_size = 13
-
+        # Font Paths
+        self.font_path_header = "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
+        self.font_path_base = "Data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
         
+        # Image Paths
+        self.character_path = "Data/commands/help/menu/initial/style/assets/character.png"
+        self.background_path = "Data/commands/help/menu/initial/style/assets/background.png"
+
+        # Scaling factor for larger images
+        self.scale_factor = 1.5  # Adjust as needed (1.5x original size)
+
+        # Font Sizes (Scaled)
+        self.header_font_size = int(35 * self.scale_factor)
+        self.base_font_size = int(22 * self.scale_factor)
+        self.command_font_size = int(13 * self.scale_factor)
+
+        # Font Colors
         self.header_font_color = "white"
         self.base_font_color = "black"
         self.command_font_color = "white"
 
-        
-        self.character_scale = 0.4
+        # Character Scale
+        self.character_scale = 0.6  # Increased for better proportion
 
-        
-        self.text1 = self._truncate_text(
-            f"{ctx.me.display_name} Help", 350
-        )  
+        # Text
+        self.text1 = self._truncate_text(f"{ctx.me.display_name} Help", 350 * self.scale_factor)
         self.text2_options = [
             "how can I help you today?",
             "need help with something?",
@@ -470,27 +459,21 @@ class ImageGenerator:
         self.text2 = f"Hello {self.user_name}, {random.choice(self.text2_options)}"
         self.text3 = "Command: [option]?"
 
-        self.character_pos = (5, 5)
-        self.text_x_offset = 10
-        self.text_y_offset = 25
-        self.text_spacing = 20
+        # Positions & Margins (Scaled)
+        self.character_pos = (int(5 * self.scale_factor), int(5 * self.scale_factor))
+        self.text_x_offset = int(10 * self.scale_factor)
+        self.text_y_offset = int(25 * self.scale_factor)
+        self.text_spacing = int(20 * self.scale_factor)
+        self.command_text_margin = int(40 * self.scale_factor)
+        self.command_text_bottom_margin = int(30 * self.scale_factor)
 
-        self.command_text_margin = 40
-        self.command_text_bottom_margin = 30
-
-        
         self._load_resources()
 
     def _truncate_text(self, text, max_width):
         """Truncate text to fit within the specified width."""
-        draw = ImageDraw.Draw(
-            Image.new("RGBA", (1, 1))
-        )  
-        font = ImageFont.truetype(
-            self.font_path_header, self.header_font_size
-        )  
+        draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))  # Dummy image for text measurement
+        font = ImageFont.truetype(self.font_path_header, self.header_font_size)
 
-        
         while draw.textbbox((0, 0), text, font=font)[2] > max_width:
             text = text[:-1]  
             if len(text) == 0:  
@@ -499,93 +482,38 @@ class ImageGenerator:
 
     def _load_resources(self):
         """Load the fonts and images required for generating the help menu image."""
-        self.font = ImageFont.truetype(
-            self.font_path_header, self.header_font_size)
-        self.base_font = ImageFont.truetype(
-            self.font_path_base, self.base_font_size)
-        self.command_font = ImageFont.truetype(
-            self.font_path_base, self.command_font_size
-        )
+        self.font = ImageFont.truetype(self.font_path_header, self.header_font_size)
+        self.base_font = ImageFont.truetype(self.font_path_base, self.base_font_size)
+        self.command_font = ImageFont.truetype(self.font_path_base, self.command_font_size)
+
         self.character = Image.open(self.character_path).convert("RGBA")
         self.background = Image.open(self.background_path).convert("RGBA")
 
-        
-        if self.color_replacements_map:
-            self._apply_color_replacements()
+        # Resize background
+        new_bg_size = (int(self.background.width * self.scale_factor), int(self.background.height * self.scale_factor))
+        self.background = self.background.resize(new_bg_size, Image.LANCZOS)
 
+        # Resize character
         self._resize_character()
 
-    @staticmethod
-    def _download_image(url):
-        """Download an image from a URL and return it as a PIL Image."""
-        response = requests.get(url)
-        response.raise_for_status()
-        return Image.open(BytesIO(response.content))
-
-    def _apply_color_replacements(self):
-        """Replace specific colors in the background image with colors from replacement images, solid colors, or transparency."""
-        bg_array = np.array(self.background)
-
-        for old_hex, replacement in self.color_replacements_map.items():
-            old_color = tuple(int(old_hex[i: i + 2], 16) for i in (0, 2, 4))
-            if replacement == "transparent":  
-                mask = cv2.inRange(
-                    bg_array[:, :, :3],
-                    np.array(old_color) - 10,
-                    np.array(old_color) + 10,
-                )
-                
-                bg_array[mask > 0] = [0, 0, 0, 0]
-            elif replacement.startswith("http"):  
-                replacement_img = self._download_image(replacement)
-                replacement_img = replacement_img.resize(
-                    (self.background.width, self.background.height)
-                )
-                replacement_array = np.array(replacement_img)[:, :, :3]
-
-                mask = cv2.inRange(
-                    bg_array[:, :, :3],
-                    np.array(old_color) - 10,
-                    np.array(old_color) + 10,
-                )
-                bg_array[mask > 0, :3] = replacement_array[mask > 0]
-            else:  
-                replacement_color = tuple(
-                    int(replacement[i: i + 2], 16) for i in (1, 3, 5)
-                )
-                mask = cv2.inRange(
-                    bg_array[:, :, :3],
-                    np.array(old_color) - 10,
-                    np.array(old_color) + 10,
-                )
-                bg_array[mask > 0, :3] = replacement_color
-
-        self.background = Image.fromarray(bg_array, "RGBA")
-
     def _resize_character(self):
-        """Resize the character image to a percentage of its original size."""
+        """Resize the character image proportionally."""
         new_width = round(self.character.width * self.character_scale)
         new_height = round(self.character.height * self.character_scale)
-        self.character = self.character.resize((new_width, new_height))
+        self.character = self.character.resize((new_width, new_height), Image.LANCZOS)
 
     def _draw_text(self, draw, text_x, text_y):
         """Draw all text on the image."""
-        draw.text(
-            (text_x, text_y), self.text1, font=self.font, fill=self.header_font_color
-        )
+        draw.text((text_x, text_y), self.text1, font=self.font, fill=self.header_font_color)
         text_y += self.font.size + self.text_spacing
-        draw.text(
-            (text_x, text_y), self.text2, font=self.base_font, fill=self.base_font_color
-        )
+        draw.text((text_x, text_y), self.text2, font=self.base_font, fill=self.base_font_color)
         text_y += self.base_font.size + self.text_spacing
 
+        # Command Text (Bottom-Right)
         textbbox = draw.textbbox((0, 0), self.text3, font=self.command_font)
         w, h = textbbox[2] - textbbox[0], textbbox[3] - textbbox[1]
         draw.text(
-            (
-                self.background.width - w - self.command_text_margin,
-                self.background.height - h - self.command_text_bottom_margin,
-            ),
+            (self.background.width - w - self.command_text_margin, self.background.height - h - self.command_text_bottom_margin),
             self.text3,
             font=self.command_font,
             fill=self.command_font_color,
@@ -596,11 +524,11 @@ class ImageGenerator:
         bg = self.background.copy()
         draw = ImageDraw.Draw(bg)
 
-        
+        # Paste Character
         character_x, character_y = self.character_pos
         bg.paste(self.character, (character_x, character_y), self.character)
 
-        
+        # Draw Text
         text_x = self.character.width + self.text_x_offset
         text_y = self.text_y_offset
         self._draw_text(draw, text_x, text_y)
@@ -616,9 +544,8 @@ class ImageGenerator:
     def show_image(self):
         """Display the generated image within the notebook (for Jupyter environments)."""
         img = self.create_image()
-        img_bytes = BytesIO()
-        img.save(img_bytes, format="PNG")
-        
+        img.show()
+
 
 
 class Help(commands.Cog):
