@@ -105,13 +105,11 @@ async def handle_index(request):
     return web.Response(text="✅ Bot is running", content_type="text/html")
 
 def create_app():
-    """Returns an ASGI app instance for Uvicorn."""
     app = web.Application()
     app.router.add_get("/", handle_index)
     return app 
 
 async def start_services():
-    """Starts both the bot and HTTP server tasks."""
     gc.collect()
     try:
         bot_setup = BotSetup()
