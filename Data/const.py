@@ -1229,3 +1229,16 @@ class AvatarToTextArt:
     def get_colored_ascii_art(self):
         """Returns the final colored ASCII art string."""
         return self.colored_art
+    
+    
+    
+bot_config = {
+    True: { 
+        "prefix": ".",
+        "token_key": "Test_Token"
+    },
+    False: { 
+        "prefix": ">",
+        "token_key": "Token"
+    }
+}

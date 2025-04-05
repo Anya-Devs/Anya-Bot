@@ -3,17 +3,30 @@ from Imports.discord_imports import *
 import cv2, numpy as np, requests, os, itertools, logging
 
 
+import aiohttp
+import cv2
+import numpy as np
+import itertools
+
+
+test_mode = False
+
+
 class ImgPuzzle:
-    def __init__(self):
+    def __init__(self, bot):
+        self.bot = bot
         self.orb = cv2.ORB_create()
 
-    def load(self, url):
-        response = requests.get(url)
-        if response.status_code != 200:
-            raise ValueError("Failed to fetch image")
-        data = response.content
-        image = np.asarray(bytearray(data), dtype=np.uint8)
-        return cv2.imdecode(image, cv2.IMREAD_COLOR)
+        if not hasattr(self.bot, "session") or self.bot.session is None:
+            self.bot.session = aiohttp.ClientSession()
+
+    async def load(self, url):
+        async with self.bot.session.get(url) as response:
+            if response.status != 200:
+                raise ValueError("Failed to fetch image")
+            data = await response.read()
+            image = np.asarray(bytearray(data), dtype=np.uint8)
+            return cv2.imdecode(image, cv2.IMREAD_COLOR)
 
     def split(self, image):
         h, w = image.shape[:2]
@@ -44,7 +57,7 @@ class ImgPuzzle:
         ps = [(0, 0), (0, mx), (my, 0), (my, mx)]
         total_similarity = 0
         total_edge_consistency = 0
-        
+
         for idx, p in enumerate(perm):
             y, x = ps[idx]
             ni[y:y + my, x:x + mx] = parts[p]
@@ -52,14 +65,13 @@ class ImgPuzzle:
                 total_edge_consistency += self.edge_consistency(parts[perm[idx - 1]], parts[p], 'vertical')
             if idx >= 2:
                 total_edge_consistency += self.edge_consistency(parts[perm[idx - 2]], parts[p], 'horizontal')
-        
+
         contour_score, edge_count = self.check(ni)
         combined_score = (contour_score * 0.4) + (edge_count * 0.2) - (total_edge_consistency * 0.4)
         return combined_score, total_similarity
 
-    def solve(self, url):
-        print("activated")
-        image = self.load(url)
+    async def solve(self, url):
+        image = await self.load(url)
         parts = self.split(image)
         labels = ['A', 'B', 'C', 'D']
         best_score = -1
@@ -70,9 +82,9 @@ class ImgPuzzle:
             if process_score > best_score:
                 best_score = process_score
                 best_part = p
-        
+
         return ''.join(labels[i] for i in reversed(best_part))
-    
+ 
 
 class GlitchSolver(commands.Cog):
     def __init__(self, bot):
@@ -81,6 +93,7 @@ class GlitchSolver(commands.Cog):
         self.delete_target_id = 854233015475109888 
         self.delete_target_phrase = "@Pokétwo#8236 afd fix"
         self.embed_footer_message = "You have 45 seconds to fix this glitch. Any incense active in this channel will be paused til then."
+        self.test_mode = test_mode
 
     @commands.command()
     async def extract_embed(self, ctx):
@@ -108,13 +121,18 @@ class GlitchSolver(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.id == self.target_id:
+        if self.test_mode:
+            target =  self.bot.user.id
+        else: 
+            target = self.target_id
+
+        if message.author.id == target:
             for embed in message.embeds:
                 if self.embed_footer_message in (embed.footer.text or ""):
                     if embed.image:
                         image_url = embed.image.url
-                        s = ImgPuzzle()
-                        solved = s.solve(image_url)
+                        s = ImgPuzzle(self.bot)
+                        solved = await s.solve(image_url)
                         try:
                             solution = solved
                             embed = discord.Embed(
