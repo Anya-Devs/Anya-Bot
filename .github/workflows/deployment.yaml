@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: anya-bot  # The name of your bot deployment
+  name: anya-bot 
 spec:
-  replicas: 1  # Set the number of pods to run (1 pod for now)
+  replicas: 1 
   selector:
     matchLabels:
-      app: anya-bot  # Label selector to match the pod's label
+      app: anya-bot 
   template:
     metadata:
       labels:
-        app: anya-bot  # Label the pod with the 'anya-bot' label
+        app: anya-bot 
     spec:
       containers:
-      - name: anya-bot  # Name of the container inside the pod
-        image: anya-devs/anya-bot:latest  # Replace with your actual image name
+      - name: anya-bot
+        image: anya-devs/anya-bot:latest  
         ports:
-        - containerPort: 80  # Port the container will expose (adjust as needed)
+        - containerPort: 80  
         envFrom:
         - configMapRef:
-            name: anya-bot-config  # Reference to the ConfigMap for environment variables
+            name: anya-bot-config  

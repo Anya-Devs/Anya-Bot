@@ -1079,12 +1079,9 @@ async def banner_url(bot, user):
 # Get Banner Color
 async def get_banner_color(bot, user: discord.User):
     try:
-        # Fetch user data from Discord API
         req = await bot.http.request(
             discord.http.Route("GET", "/users/{uid}", uid=user.id)
         )
-
-        # Extract banner color if it exists
         banner_color = req.get("banner_color")
 
         if banner_color:

@@ -92,7 +92,7 @@ class GlitchSolver(commands.Cog):
         self.target_id = 716390085896962058  
         self.delete_target_id = 854233015475109888 
         self.delete_target_phrase = "@Pokétwo#8236 afd fix"
-        self.embed_footer_message = "You have 45 seconds to fix this glitch. Any incense active in this channel will be paused til then."
+        self.embed_footer_message = "fix this glitch"
         self.test_mode = test_mode
 
     @commands.command()
