@@ -1,6 +1,6 @@
 from Data.const import primary_color
 from Imports.discord_imports import *
-import cv2, numpy as np, requests, os, itertools, logging, aiohttp
+import cv2, numpy as np, requests, os, itertools, logging, aiohttp, re
 
 test_mode = False
 
