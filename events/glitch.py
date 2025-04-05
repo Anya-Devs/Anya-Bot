@@ -102,28 +102,32 @@ class GlitchSolver(commands.Cog):
         self.test_mode = test_mode
 
     @commands.command()
-    async def extract_embed(self, ctx):
-        message_link = "https://discord.com/channels/1278580577104040018/1278580578593148971/1356513107169771560"
-        channel_id = 1278580578593148971
-        message_id = 1356513107169771560
+    async def extract_embed(self, ctx, message_link: str):
+        pattern = r'https://discord.com/channels/(\d+)/(\d+)/(\d+)'
+        match = re.match(pattern, message_link)
 
-        channel = self.bot.get_channel(channel_id)
-        if not channel:
-            return
+        if match:
+            guild_id, channel_id, message_id = map(int, match.groups())
 
-        try:
-            message = await channel.fetch_message(message_id)
+            channel = self.bot.get_channel(channel_id)
+            if not channel:
+                return await ctx.send("Channel not found!")
 
-            if message.embeds:
-                for embed in message.embeds:
-                    embed.set_footer(text=self.embed_footer_message)
-                    await ctx.send(embed=embed)
-            else:
-                await ctx.send("No embed found in the message.")
-        except discord.NotFound:
-            await ctx.send("The message was not found!")
-        except discord.HTTPException as e:
-            await ctx.send(f"[ERROR] Error: {e}")
+            try:
+                message = await channel.fetch_message(message_id)
+
+                if message.embeds:
+                    for embed in message.embeds:
+                        embed.set_footer(text=self.embed_footer_message)
+                        await ctx.send(embed=embed)
+                else:
+                    await ctx.send("No embed found in the message.")
+            except discord.NotFound:
+                await ctx.send("The message was not found!")
+            except discord.HTTPException as e:
+                await ctx.send(f"[ERROR] Error: {e}")
+        else:
+            await ctx.send("Invalid message link format!")
 
     @commands.Cog.listener()
     async def on_message(self, message):
