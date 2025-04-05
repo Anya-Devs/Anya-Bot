@@ -242,8 +242,8 @@ class EventGate(commands.Cog):
                 non_hunter = await self.bot.fetch_user(who_caught_pokemon_user_id)
 
                                       
-                p_match = re.search(r"Level \d+ (\w+)", congrats_message.content)
-                pokemon_name = p_match.group(1) if p_match else "Unknown Pokémon"
+                p_match = re.search(r"Level \d+ ((?:[A-Z][a-z]*\s*)+)", congrats_message)
+                pokemon_name = p_match.group(1).strip() if p_match else "Unknown Pokémon"
 
                                                                             
                 await self.timeout_user(non_hunter, original_message)
