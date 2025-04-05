@@ -31,6 +31,12 @@ class ImgPuzzle:
     def split(self, image):
         h, w = image.shape[:2]
         mx, my = w // 2, h // 2
+        
+        if w % 2 != 0:
+            mx += 1
+        if h % 2 != 0:
+            my += 1
+
         return [image[:my, :mx], image[:my, mx:], image[my:, :mx], image[my:, mx:]]
 
     def check(self, img):
@@ -84,7 +90,14 @@ class ImgPuzzle:
                 best_part = p
 
         return ''.join(labels[i] for i in reversed(best_part))
- 
+
+
+
+
+
+
+
+
 
 class GlitchSolver(commands.Cog):
     def __init__(self, bot):
