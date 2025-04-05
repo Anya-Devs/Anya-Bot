@@ -29,7 +29,12 @@ class ImgPuzzle:
         if h % 2 != 0:
             my += 1
 
-        return [image[:my, :mx], image[:my, mx:], image[my:, :mx], image[my:, mx:]]
+        top_left = image[:my, :mx]
+        top_right = image[:my, mx:]
+        bottom_left = image[my:, :mx]
+        bottom_right = image[my:, mx:]
+        
+        return [top_left, top_right, bottom_left, bottom_right]
 
     def check(self, img):
         g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -82,8 +87,6 @@ class ImgPuzzle:
                 best_part = p
 
         return ''.join(labels[i] for i in reversed(best_part))
-
-
 
 
 
