@@ -2,15 +2,7 @@ from Data.const import primary_color
 from Imports.discord_imports import *
 import cv2, numpy as np, requests, os, itertools, logging
 
-
-import aiohttp
-import cv2
-import numpy as np
-import itertools
-
-
 test_mode = False
-
 
 class ImgPuzzle:
     def __init__(self, bot):
@@ -90,6 +82,7 @@ class ImgPuzzle:
                 best_part = p
 
         return ''.join(labels[i] for i in reversed(best_part))
+
 
 
 
