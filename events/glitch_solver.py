@@ -153,8 +153,8 @@ class GlitchSolver(commands.Cog):
                 if self.embed_footer_message in (embed.footer.text or ""):
                     if embed.image:
                         image_url = embed.image.url
-                        s = ImgPuzzle(self.bot)
-                        solved = s.solve(image_url)  # Synchronously solving
+                        s = ImgPuzzle(url=image_url)
+                        solved = s.solve()
                         try:
                             solution = solved
                             embed = discord.Embed(
