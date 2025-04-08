@@ -7,102 +7,80 @@ from collections import Counter
 test_mode = False
 
 class ImgPuzzle:
-    def __init__(self, url: str, w: int = 800):
-        self.u = url
-        self.w = w
-        self.i = None
-        self.p = []
-        self.s = {}
-        self.d = "Data/commands/pokemon/events/glitched/images"
-        os.makedirs(self.d, exist_ok=True)
+    def __init__(s, url, w=800):
+        s.u, s.w, s.i, s.p, s.s = url, w, None, [], {}
 
-    def load(self):
+    def load(s):
         try:
-            r = requests.get(self.u, stream=True, timeout=5)
+            r = requests.get(s.u, stream=True)
             r.raise_for_status()
             a = np.asarray(bytearray(r.content), dtype=np.uint8)
             i = cv2.imdecode(a, cv2.IMREAD_COLOR)
-        except Exception:
+        except requests.RequestException:
             i = cv2.imread("test_image.png", cv2.IMREAD_COLOR)
-
-        if i is None:
-            raise ValueError("Image load failed")
+        if i is None: raise ValueError("Image load failed")
         
         ar = i.shape[1] / i.shape[0]
-        self.i = cv2.resize(i, (self.w, int(self.w / ar)))
+        s.i = cv2.resize(i, (s.w, int(s.w / ar)))
+        print(f"Image loaded and resized to {s.i.shape}")
 
-    def split(self):
-        h, w = self.i.shape[:2]
+    def split(s):
+        h, w = s.i.shape[:2]
         mx, my = w // 2, h // 2
-        self.p = [self.i[:my, :mx], self.i[:my, mx:], self.i[my:, :mx], self.i[my:, mx:]]
-        
-        for idx, part in enumerate(self.p):
-            cv2.imwrite(os.path.join(self.d, f"{chr(65 + idx)}.png"), part)
+        s.p = [s.i[:my, :mx], s.i[:my, mx:], s.i[my:, :mx], s.i[my:, mx:]]
+        os.makedirs("pieces", exist_ok=True)
+        [cv2.imwrite(f"pieces/{chr(65+i)}.png", p) for i, p in enumerate(s.p)]
+        print("Pieces saved to disk")
 
-    def _score(self, i):
+    def check(s, i):
+        orb = cv2.ORB_create()
         g = cv2.cvtColor(i, cv2.COLOR_BGR2GRAY)
+        kp, des = orb.detectAndCompute(g, None)
         _, t = cv2.threshold(g, 100, 255, cv2.THRESH_BINARY)
         c, _ = cv2.findContours(t, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        return sum(cv2.contourArea(x) for x in c)
 
-    def _check_alignment(self, pieces):
-        ni = np.zeros_like(self.i)
+        return len(kp), sum(cv2.contourArea(x) for x in c)
+
+    def eval(s, perm):
+        ni = np.zeros_like(s.i)
         h, w = ni.shape[:2]
         mx, my = w // 2, h // 2
         ps = [(0, 0), (0, mx), (my, 0), (my, mx)]
-        for idx, pi in enumerate(pieces):
-            y, x = ps[idx]
-            ni[y:y+my, x:x+mx] = self.p[pi]
         
-        gray = cv2.cvtColor(ni, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 100, 200)
-        return edges
-
-    def eval(self, p):
-        ni = np.zeros_like(self.i)
-        h, w = ni.shape[:2]
-        mx, my = w // 2, h // 2
-        ps = [(0, 0), (0, mx), (my, 0), (my, mx)]
-        for idx, pi in enumerate(p):
-            y, x = ps[idx]
-            ni[y:y+my, x:x+mx] = self.p[pi]
+        print(f"Evaluating arrangement: {perm}")
         
-        edge_image = self._check_alignment(p)
-        sc = np.sum(edge_image)
-        return sc, (sc / (h * w)) * 100
+        for idx, p in enumerate(perm):
+            y, x = ps[idx]
+            ni[y:y+my, x:x+mx] = s.p[p]
+        
+        sc, f = s.check(ni)
+        
+        
+        return sc + f, (sc / (h * w)) * 100  
 
-    def solve(self):
-        self.load()
-        self.split()
-        lb, bs, bc = ['A', 'B', 'C', 'D'], -1, 0
+    def solve(s):
+        s.load()
+        s.split()
+        lb, bp, bs, bc = ['A', 'B', 'C', 'D'], None, 0, 0
         for p in itertools.permutations(range(4)):
-            sc, c = self.eval(p)
-            self.s[p] = (sc, c)
-            if sc > bs:
-                bs, bc = sc, c
-                bp = p
-        return ''.join(lb[i] for i in reversed(bp))
-
-    
-    def check_completed(self):
-        final_image = np.zeros_like(self.i)
-        h, w = final_image.shape[:2]
+            sc, c = s.eval(p)
+            s.s[p] = (sc, c)
+            if sc > bs: 
+                bp, bs, bc = p, sc, c
+        
+        solution_image = np.zeros_like(s.i)
+        h, w = solution_image.shape[:2]
         mx, my = w // 2, h // 2
         ps = [(0, 0), (0, mx), (my, 0), (my, mx)]
         
-        for idx, p in enumerate(self.s.keys()):
+        for idx, p in enumerate(bp):
             y, x = ps[idx]
-            final_image[y:y+my, x:x+mx] = self.p[p]
+            solution_image[y:y+my, x:x+mx] = s.p[p]
         
-        gray = cv2.cvtColor(final_image, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 100, 200)
-        
-        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
-        if len(contours) > 0:
-            return True  
-        return False
-    
+        # Save the solution image
+        #cv2.imwrite("solution_image.png", solution_image)        
+        return ''.join(lb[i] for i in bp)
+
 
 
 class GlitchSolver(commands.Cog):
