@@ -6,7 +6,6 @@ from collections import Counter
 
 test_mode = False
 
-
 class ImgPuzzle:
     def __init__(self, url: str, w: int = 800):
         self.u = url
@@ -38,13 +37,26 @@ class ImgPuzzle:
         self.p = [self.i[:my, :mx], self.i[:my, mx:], self.i[my:, :mx], self.i[my:, mx:]]
         
         for idx, part in enumerate(self.p):
-            cv2.imwrite(os.path.join(self.d, f"part{chr(65 + idx)}.png"), part)
+            cv2.imwrite(os.path.join(self.d, f"{chr(65 + idx)}.png"), part)
 
     def _score(self, i):
         g = cv2.cvtColor(i, cv2.COLOR_BGR2GRAY)
         _, t = cv2.threshold(g, 100, 255, cv2.THRESH_BINARY)
         c, _ = cv2.findContours(t, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return sum(cv2.contourArea(x) for x in c)
+
+    def _check_alignment(self, pieces):
+        ni = np.zeros_like(self.i)
+        h, w = ni.shape[:2]
+        mx, my = w // 2, h // 2
+        ps = [(0, 0), (0, mx), (my, 0), (my, mx)]
+        for idx, pi in enumerate(pieces):
+            y, x = ps[idx]
+            ni[y:y+my, x:x+mx] = self.p[pi]
+        
+        gray = cv2.cvtColor(ni, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 100, 200)
+        return edges
 
     def eval(self, p):
         ni = np.zeros_like(self.i)
@@ -54,7 +66,9 @@ class ImgPuzzle:
         for idx, pi in enumerate(p):
             y, x = ps[idx]
             ni[y:y+my, x:x+mx] = self.p[pi]
-        sc = self._score(ni)
+        
+        edge_image = self._check_alignment(p)
+        sc = np.sum(edge_image)
         return sc, (sc / (h * w)) * 100
 
     def solve(self):
@@ -67,8 +81,28 @@ class ImgPuzzle:
             if sc > bs:
                 bs, bc = sc, c
                 bp = p
-        return ''.join(lb[i] for i in bp)
-  
+        return ''.join(lb[i] for i in reversed(bp))
+
+    
+    def check_completed(self):
+        final_image = np.zeros_like(self.i)
+        h, w = final_image.shape[:2]
+        mx, my = w // 2, h // 2
+        ps = [(0, 0), (0, mx), (my, 0), (my, mx)]
+        
+        for idx, p in enumerate(self.s.keys()):
+            y, x = ps[idx]
+            final_image[y:y+my, x:x+mx] = self.p[p]
+        
+        gray = cv2.cvtColor(final_image, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 100, 200)
+        
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        if len(contours) > 0:
+            return True  
+        return False
+    
 
 
 class GlitchSolver(commands.Cog):
