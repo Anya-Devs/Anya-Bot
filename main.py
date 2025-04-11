@@ -16,7 +16,7 @@ from Imports.discord_imports import *
 from Imports.depend_imports import *
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path=os.path.join(".github", ".env"))  # Moved out of __main__
+load_dotenv(dotenv_path=os.path.join(".github", ".env"))  
 
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
