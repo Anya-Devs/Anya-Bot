@@ -1,4 +1,4 @@
-from Data.setup import start  # Set everything up first
+from Data.setup import start
 start()
 
 import os
@@ -16,8 +16,7 @@ from Imports.discord_imports import *
 from Imports.depend_imports import *
 from dotenv import load_dotenv
 
-if __name__ == "__main__":
-    load_dotenv(dotenv_path=os.path.join(".github", ".env"))
+load_dotenv(dotenv_path=os.path.join(".github", ".env"))  # Moved out of __main__
 
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
@@ -75,63 +74,43 @@ class BotSetup(commands.AutoShardedBot):
                         if not self.get_cog(obj_name):
                             await self.add_cog(obj(self))
 
-async def check_rate_limit():
-    url = "https://discord.com/api/v10/users/@me"
-    token = await get_bot_token()
-    headers = {"Authorization": f"Bot {token}"}
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=headers) as response:
-            if response.status == 200:
-                remaining = int(response.headers.get("X-RateLimit-Remaining", 1))
-                reset_after = float(response.headers.get("X-RateLimit-Reset-After", 0))
-                if remaining <= 0:
-                    await asyncio.sleep(reset_after)
-
 async def periodic_ping():
-    retries = 5 
-    while retries > 0:
+    while True:
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get("http://localhost:8080"):
-                    print("Ping successful!")
-                    return 
+                async with session.get("http://localhost:8080") as response:
+                    if response.status == 200:
+                        print("✅ Ping successful!")
         except Exception as e:
             logger.error(f"Ping failed: {e}")
-            retries -= 1
-            await asyncio.sleep(5)  
-    logger.error("Failed to ping server after multiple attempts.")
-
+        await asyncio.sleep(60) 
+        
 async def handle_index(request):
     return web.Response(text="✅ Bot is running", content_type="text/html")
 
 def create_app():
     app = web.Application()
     app.router.add_get("/", handle_index)
-    return app 
-
-async def start_services():
-    gc.collect()
-    try:
-        bot_setup = BotSetup()
-        bot_task = asyncio.create_task(bot_setup.start_bot()) 
-       
-        uvicorn_task = asyncio.create_task(start_uvicorn()) 
-        await asyncio.gather(bot_task, uvicorn_task)  
-       
-        ping_task = asyncio.create_task(periodic_ping())
-        await ping_task 
-        
-    except Exception as e:
-        logger.error(f"🔥 Fatal error in main loop: {e}\n{traceback.format_exc()}")
-        await asyncio.sleep(10)
+    return app
 
 async def start_uvicorn():
     config = uvicorn.Config(create_app(), host="0.0.0.0", port=8080, loop="asyncio")
     server = uvicorn.Server(config)
     print("Starting Uvicorn server...")
     await server.serve()
-    print("Uvicorn server started.")
+
+async def start_all_services():
+    gc.collect()
+    try:
+        bot_setup = BotSetup()
+        await asyncio.gather(
+            bot_setup.start_bot(),
+            start_uvicorn(),
+            periodic_ping()
+        )
+    except Exception as e:
+        logger.error(f"🔥 Fatal error in main loop: {e}\n{traceback.format_exc()}")
+        await asyncio.sleep(10)
 
 if __name__ == "__main__":
-    asyncio.run(start_services()) 
-    asyncio.run(start_uvicorn()) 
+    asyncio.run(start_all_services()) 
