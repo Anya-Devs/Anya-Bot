@@ -1,20 +1,24 @@
 from Data.setup import start
 start()
 
+# Standard Library
 import os
 import gc
 import asyncio
-import aiohttp
 import traceback
-import uvicorn
+
+import aiohttp
 from aiohttp import web
-from motor.motor_asyncio import AsyncIOMotorClient
+
+from art import *
+from rich.tree import Tree
+from rich.console import Console
+from dotenv import load_dotenv
 from Data.const import AvatarToTextArt
 from Data.utils.token_utils import get_bot_token, prefix
 from Imports.log_imports import logger
 from Imports.discord_imports import *
 from Imports.depend_imports import *
-from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=os.path.join(".github", ".env"))  
 
@@ -33,11 +37,14 @@ class BotSetup(commands.AutoShardedBot):
         )
 
     async def on_ready(self):
+        """Triggered when the bot successfully connects to Discord."""
         avatar_url = self.user.avatar
-        art_generator = AvatarToTextArt(avatar_url, new_size=75)
+        art_generator = AvatarToTextArt(avatar_url)
         art_generator.create_art()
         print(art_generator.get_colored_ascii_art())
-        print("\033[38;2;88;101;242mWelcome to Discord!\033[0m")
+        print(f"\n\033[38;2;88;101;242m{'Welcome to Discord!':^80}\033[0m\n\033[92m{''.join([f'{line:^80}\n' for line in text2art(self.user.name.title()[:11], 'sub-zero').splitlines()])}\033[0m")
+
+
 
     async def on_disconnect(self):
         print("⚠️ Bot disconnected! Attempting to reconnect...")
@@ -64,15 +71,23 @@ class BotSetup(commands.AutoShardedBot):
         print("\033[94m===== Setup Completed =====\033[0m")
 
     async def import_cogs(self, dir_name):
+        console = Console()
+        tree = Tree(f"[bold blue]{dir_name}[/bold blue]")
+
         for filename in os.listdir(dir_name):
             if filename.endswith(".py"):
+                file_branch = tree.add(f"[cyan]{filename}[/cyan]")
                 module_name = os.path.splitext(filename)[0]
                 module = __import__(f"{dir_name}.{module_name}", fromlist=[""])
+
                 for obj_name in dir(module):
                     obj = getattr(module, obj_name)
                     if isinstance(obj, commands.CogMeta):
                         if not self.get_cog(obj_name):
                             await self.add_cog(obj(self))
+                            file_branch.add(f"[green]{obj_name}[/green]")
+
+        console.print(tree)
 
 async def periodic_ping():
     while True:
@@ -80,7 +95,7 @@ async def periodic_ping():
             async with aiohttp.ClientSession() as session:
                 async with session.get("http://localhost:8080") as response:
                     if response.status == 200:
-                        print("✅ Ping successful!")
+                        return
         except Exception as e:
             logger.error(f"Ping failed: {e}")
         await asyncio.sleep(60) 
@@ -93,24 +108,42 @@ def create_app():
     app.router.add_get("/", handle_index)
     return app
 
-async def start_uvicorn():
-    config = uvicorn.Config(create_app(), host="0.0.0.0", port=8080, loop="asyncio")
-    server = uvicorn.Server(config)
-    print("Starting Uvicorn server...")
-    await server.serve()
+async def start_web_server():
+    app = create_app()
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 8080)
+    await site.start()
+    print("Web server started on http://0.0.0.0:8080")
+    return runner  
+
+async def cleanup(runner):
+    await runner.cleanup()
 
 async def start_all_services():
     gc.collect()
+    runner = None
     try:
         bot_setup = BotSetup()
+        runner = await start_web_server()
+        
         await asyncio.gather(
             bot_setup.start_bot(),
-            start_uvicorn(),
             periodic_ping()
         )
     except Exception as e:
         logger.error(f"🔥 Fatal error in main loop: {e}\n{traceback.format_exc()}")
-        await asyncio.sleep(10)
+    finally:
+        if runner:
+            await cleanup(runner)
+        await asyncio.sleep(1)
 
 if __name__ == "__main__":
-    asyncio.run(start_all_services()) 
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(start_all_services())
+    except KeyboardInterrupt:
+        pass
+    finally:
+        loop.close()
