@@ -26,9 +26,8 @@ class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         intents.members = True
-        self.prefix = prefix
         super().__init__(
-            command_prefix=commands.when_mentioned_or(self.prefix),
+            command_prefix=commands.when_mentioned_or(prefix),
             intents=intents,
             help_command=None,
             shard_count=5,
