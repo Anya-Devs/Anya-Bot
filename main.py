@@ -1,7 +1,6 @@
 from Data.setup import start
 start()
 
-# Standard Library
 import os
 import gc
 import asyncio
@@ -47,8 +46,6 @@ class BotSetup(commands.AutoShardedBot):
         print(f"\033[38;2;88;101;242m{'Welcome to Discord!'.center(__import__('shutil').get_terminal_size().columns)}\033[0m")
         print("\033[92m" + "\n".join(line.center(__import__('shutil').get_terminal_size().columns) for line in text2art(self.user.name.title()[:11], 'sub-zero').splitlines()) + "\033[0m")
         print("\033[96m" + f"🌐  Connected: {guild_count} server{'s' if guild_count != 1 else ''}  |  Users served: ~{user_count}".center(__import__('shutil').get_terminal_size().columns) + "\033[0m")
-
-
 
     async def on_disconnect(self):
         print("⚠️ Bot disconnected! Attempting to reconnect...")
@@ -106,17 +103,6 @@ class BotSetup(commands.AutoShardedBot):
 
         aligned_output = Align(tree, align=self.ALIGNMENT, width=console.width)
         console.print(aligned_output)
-
-
-
-
-
-
-
-
-
-
-
 
 async def periodic_ping():
     while True:
