@@ -277,10 +277,11 @@ class EventGate(commands.Cog):
 
         if shiny_hunter:
             embed = Embed(
-                title="Congratulations!",
-                description=f"<a:yay_anya:1328500899953512569> Good luck on your shiny hunt, <@{who_caught_pokemon_user_id}>! Keep up the great work!",
+                title=":sparkles: Congratulations!",
+                description=f":four_leaf_clover: Best of luck on your shiny hunt, <@{who_caught_pokemon_user_id}>!",
                 color=self.primary_color
             )
+            embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1328500899953512569.webp?size=96&animated=true")
             await catch_channel.send(embed=embed)
             await self.delete_embed_on_catch(original_message)
         else:
