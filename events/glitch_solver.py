@@ -108,7 +108,7 @@ class GlitchSolver(commands.Cog):
         self.embed_footer_message = "fix this glitch"
         self.test_mode = test_mode
 
-    @commands.command()
+    @commands.command(hidden=True)
     async def extract_embed(self, ctx, message_link: str):
         pattern = r'https://discord.com/channels/(\d+)/(\d+)/(\d+)'
         match = re.match(pattern, message_link)
