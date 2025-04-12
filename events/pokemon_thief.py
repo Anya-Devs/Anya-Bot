@@ -278,7 +278,7 @@ class EventGate(commands.Cog):
         if shiny_hunter:
             embed = Embed(
                 title=":sparkles: Congratulations!",
-                description=f":four_leaf_clover: Best of luck on your shiny hunt, <@{who_caught_pokemon_user_id}>!",
+                description=f"Best of luck on your shiny hunt, <@{who_caught_pokemon_user_id}>!",
                 color=self.primary_color
             )
             embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1328500899953512569.webp?size=96&animated=true")
