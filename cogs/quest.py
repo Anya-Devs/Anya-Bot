@@ -142,9 +142,9 @@ class Quest(commands.Cog):
                 )
 
                 image_generator.save_image(
-                    file_path="Data/Images/generated_image.png")
+                    file_path="Data/images/generated_image.png")
                 file = discord.File(
-                    "Data/Images/generated_image.png", filename="image.png"
+                    "Data/images/generated_image.png", filename="image.png"
                 )
 
                 
@@ -557,7 +557,7 @@ class Quest_View(View):
 
         
         file = discord.File(
-            "Data/Images/generated_image.png", filename="image.png")
+            "Data/images/generated_image.png", filename="image.png")
         embed.set_image(url=f"attachment://image.png")
 
         return embed

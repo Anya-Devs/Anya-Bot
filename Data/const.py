@@ -1035,7 +1035,7 @@ async def sdxl(prompt):
     return response.data[0].url
 
 
-def primary_color(image_path="Data/Images/bot_icon.png"):
+def primary_color(image_path="Data/images/bot_icon.png"):
     image = Image.open(image_path)
     image = image.convert("RGB")
     resized_image = image.resize((1, 1))

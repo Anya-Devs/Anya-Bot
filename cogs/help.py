@@ -207,7 +207,7 @@ class Select(discord.ui.Select):
 
             image_generator = Options_ImageGenerator(cog_name)
             
-            image_path = "Data/Images/help_images/cog_image.png" 
+            image_path = "Data/images/help_images/cog_image.png" 
             saved_image_path = image_generator.save_image(image_path)
 
             if os.path.exists(image_path):
@@ -630,7 +630,7 @@ class Help(commands.Cog):
                         return await ctx.reply("Failed to get bot avatar.")
                     data = await resp.read()
             avatar_image = Image.open(BytesIO(data))
-            temp_image_dir = "Data/Images"
+            temp_image_dir = "Data/images"
             temp_image_path = os.path.join(temp_image_dir, "bot_icon.png")
             os.makedirs(temp_image_dir, exist_ok=True)
             avatar_image.save(temp_image_path)
