@@ -179,12 +179,11 @@ class Help_Select_Embed_Mapping:
             "color": None,
             "thumbnail_url": AnyaImages.help_information_thumbnail,
         },
-        "minigame": {
+        "mini_games": {
             "title": "Minigame",
             "description": "Engage in a fun and interactive minigame! Choose the type of minigame you'd like to play and compete for rewards and fun challenges.",
-            "color": None,  # Customize color as needed
+            "color": None,  
             "thumbnail_url": AnyaImages.help_minigame_thumbnail,
-            "image_url": None,  # Replace with an actual image URL
         },
         "Cog2": {
             "title": "Title for Cog2",
@@ -202,7 +201,7 @@ class Help_Select_Embed_Mapping:
         "pokemon": "<:Pokeball:1261208239891156992>",
         "anime": "<:neko_lurk:1320306198075015201>",
         "information": "<:help_info:1268971820988764272>",
-        "minigame": "🎲",  # Replace with the actual emoji code for minigame
+        "mini_games": "🎲",  # Replace with the actual emoji code for minigame
         # Add more emoji mappings for other cogs as needed
     }
 class TutorialMission:
