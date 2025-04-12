@@ -41,7 +41,8 @@ class BotSetup(commands.AutoShardedBot):
         art_generator = AvatarToTextArt(avatar_url)
         art_generator.create_art()
         print(art_generator.get_colored_ascii_art())
-        print(f"\n\033[38;2;88;101;242m{'Welcome to Discord!':^80}\033[0m\n\033[92m{''.join([f'{line:^80}\n' for line in text2art(self.user.name.title()[:11], 'sub-zero').splitlines()])}\033[0m")
+        print("\033[38;2;88;101;242mWelcome to Discord!\033[0m")
+        print("\033[92m" + text2art(self.user.name.title()[:11], 'sub-zero') + "\033[0m")
 
 
 
