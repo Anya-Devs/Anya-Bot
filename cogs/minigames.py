@@ -20,7 +20,7 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 
-class Memo_Game(commands.Cog):
+class Mini_Games(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.correct_emojis = {}  
@@ -510,4 +510,4 @@ class MemoEmbeds:
 
 
 def setup(bot):
-    bot.add_cog(Memo_Game(bot))
+    bot.add_cog(Mini_Games(bot))
