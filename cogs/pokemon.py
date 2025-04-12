@@ -53,7 +53,7 @@ class Pokemon_Emojis(commands.Cog):
         ]
         self.POKEMON_IMAGES_FOLDER = "Data/commands/pokemon/pokemon_emojis"
         self.POKE_API_URL = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{}.png"
-        self.emoji_json_path = os.path.join("Data", "pokemon", "pokemon_emojis.json")
+        self.emoji_json_path = os.path.join("Data", "commands","pokemon", "pokemon_emojis.json")
         self.owner_id = [1124389055598170182,1320515815270907957]
         
         
@@ -2176,7 +2176,7 @@ class PokeSelect(discord.ui.Select):
     ):
         self.emoji_mapping = self.load_emoji_mapping()
         self.pokemon_df = pd.read_csv("Data/commands/pokemon/pokemon_description.csv")
-        self.emoji_json_path = os.path.join("Data", "pokemon", "pokemon_emojis.json")
+        self.emoji_json_path = os.path.join("Data", "commands", "pokemon", "pokemon_emojis.json")
         self.bot = bot
         
         options = []

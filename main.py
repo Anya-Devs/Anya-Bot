@@ -12,10 +12,12 @@ from aiohttp import web
 import shutil
 from art import *
 from rich.tree import Tree
+from rich.panel import Panel
+from rich.align import Align
 from rich.console import Console
 from dotenv import load_dotenv
 from Data.const import AvatarToTextArt
-from Data.utils.token_utils import get_bot_token, prefix
+from Data.token import get_bot_token, prefix
 from Imports.log_imports import logger
 from Imports.discord_imports import *
 from Imports.depend_imports import *
@@ -69,39 +71,53 @@ class BotSetup(commands.AutoShardedBot):
             await self.close()
 
     async def setup(self):
+        print("\033[94m" + " Loading Cogs ".center(__import__('shutil').get_terminal_size().columns, "=") + "\033[0m")
         await self.import_cogs("cogs")
         await self.import_cogs("events")
         print("\033[94m" + " Setup Completed ".center(__import__('shutil').get_terminal_size().columns, "=") + "\033[0m")
 
 
     async def import_cogs(self, dir_name):
-     console = Console()
-     tree = Tree(f"📁 {dir_name}")
+        print('\n\n\n')
 
-     for filename in os.listdir(dir_name):
-        if filename.endswith(".py"):
-            module_name = os.path.splitext(filename)[0]
-            status_emoji = "❌"
-            file_branch = tree.add(f"{status_emoji} {filename}")
-            found = False
+        self.ALIGNMENT = 'center'  
 
-            try:
-                module = __import__(f"{dir_name}.{module_name}", fromlist=[""])
+        console = Console()
+        tree = Tree(f"[bold cyan]◇ {dir_name}[/bold cyan]")
 
-                for obj_name in dir(module):
-                    obj = getattr(module, obj_name)
-                    if isinstance(obj, commands.CogMeta):
-                        if not self.get_cog(obj_name):
-                            await self.add_cog(obj(self))
-                            if not found:
-                                status_emoji = "✅"
-                                file_branch.label = f"{status_emoji} {filename}"
-                                found = True
-                            file_branch.add(f"→ {obj_name}")
-            except Exception:
-                pass
+        for filename in os.listdir(dir_name):
+            if filename.endswith(".py"):
+                module_name = os.path.splitext(filename)[0]
+                file_branch = tree.add(f"[red]{filename}[/red]")
+                found = False
 
-     console.print(tree)
+                try:
+                    module = __import__(f"{dir_name}.{module_name}", fromlist=[""])
+                    for obj_name in dir(module):
+                        obj = getattr(module, obj_name)
+                        if isinstance(obj, commands.CogMeta):
+                            if not self.get_cog(obj_name):
+                                await self.add_cog(obj(self))
+                                if not found:
+                                    file_branch.label = f"[green]□ {filename}[/green]"
+                                    found = True
+                                file_branch.add(f"[cyan]→[/cyan] [bold white]{obj_name}[/bold white]")
+                except Exception as e:
+                    file_branch.add(f"[red]Error: {type(e).__name__}: {e}[/red]")
+
+        aligned_output = Align(tree, align=self.ALIGNMENT, width=console.width)
+        console.print(aligned_output)
+
+
+
+
+
+
+
+
+
+
+
 
 async def periodic_ping():
     while True:

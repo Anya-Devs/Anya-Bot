@@ -642,9 +642,7 @@ class Pokemon(commands.Cog):
                 args = args.replace("shiny ", "")
                 pokemon_id = args
 
-            folder_path = "Data"
-            os.makedirs(folder_path, exist_ok=True)
-            pokemon_folder_path = os.path.join(folder_path, "pokemon")
+            pokemon_folder_path = "Data/commands/pokemon"
             os.makedirs(pokemon_folder_path, exist_ok=True)
             file_path = os.path.join(pokemon_folder_path, "pokemon.json")
 

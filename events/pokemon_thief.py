@@ -11,16 +11,14 @@ import json
                 
 from Imports.discord_imports import *
 from Data.const import primary_color
-from Data.utils.token_utils import get_bot_token
+from Data.token import get_bot_token
 
 
                               
-# Ensure the directory exists before logging
 log_dir = "Data"
 if not os.path.exists(log_dir):
     os.makedirs(log_dir)
 
-# Set up logging configuration
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -28,7 +26,6 @@ logging.basicConfig(
     filemode="a"  
 )
 
-# Create a logger instance
 logger = logging.getLogger(__name__)
                     
 def timestamp_gen(timestamp: int) -> str:

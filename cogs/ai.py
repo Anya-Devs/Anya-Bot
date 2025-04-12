@@ -164,7 +164,7 @@ class ImageGenerator:
         """Initialize the image generator with API settings."""
         self.output_dir = Path("Data/commands/ai/images")
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        print("Using Stable Diffusion API via aiohttp...")
+        #print("Using Stable Diffusion API via aiohttp...")
         self.API_URL  = os.getenv("Stable_Diffusion_API_URL")
 
     async def generate_image_sync(self, prompt: str, width: int = 1216, height: int = 768) -> Path:
