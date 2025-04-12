@@ -17,7 +17,6 @@ def update_all_packages():
         package_name = package.split('==')[0]
         install_package(package_name)
 
-    # Ensure no duplicate versions exist
     subprocess.run(['pip', 'check'], capture_output=True, text=True)
 
 
@@ -48,7 +47,6 @@ def start():
     update_all_packages()
     clean_requirements()
 
-    # Ensure all dependencies are installed with the latest versions
     subprocess.run(['pip', 'install', '--upgrade', '--no-cache-dir', '-r', 'requirements.txt'], check=True)
 
 
