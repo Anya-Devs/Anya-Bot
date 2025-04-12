@@ -39,14 +39,20 @@ def clean_requirements():
 
 
 def start():
+    # Upgrade pip and setuptools
+    os.system("pip install --upgrade pip")
+    
     install_package('pipreqs')
     install_package('opencv-python-headless')
     install_package('python-Levenshtein')
-    
+
     
     update_all_packages()
     clean_requirements()
 
+   
+
+    
     subprocess.run(['pip', 'install', '--upgrade', '--no-cache-dir', '-r', 'requirements.txt'], check=True)
 
 

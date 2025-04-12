@@ -20,7 +20,6 @@ from Data.const import AvatarToTextArt
 from Data.token import get_bot_token, prefix
 from Imports.log_imports import logger
 from Imports.discord_imports import *
-from Imports.depend_imports import *
 
 load_dotenv(dotenv_path=os.path.join(".github", ".env"))  
 
