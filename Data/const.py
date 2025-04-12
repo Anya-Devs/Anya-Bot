@@ -71,6 +71,7 @@ class AnyaImages:
     help_information_thumbnail = (
         "https://i.pinimg.com/474x/ae/95/91/ae9591cf2700cedc2ca63c2b5eb85990.jpg"
     )
+    help_minigame_thumbnail = ("https://comicbook.com/wp-content/uploads/sites/4/2025/02/Spy-x-Family-Damian-Anya.jpeg")
     quest_completed_anya = (
         "https://i.pinimg.com/236x/26/3b/90/263b90473c3651b4fc3d30b462152c0b.jpg"
     )
@@ -168,7 +169,7 @@ class Help_Select_Embed_Mapping:
         },
         "anime": {
             "title": "Anime",
-            "description": "Waku waku! Anya offers a taste of anime of weeb content for all who seek it. Get information about your favorite anime or play around and be show off some manga.",
+            "description": "Waku waku! Anya offers a taste of anime or weeb content for all who seek it. Get information about your favorite anime or play around and show off some manga.",
             "color": None,
             "thumbnail_url": AnyaImages.help_anime_thumbnail,
         },
@@ -177,6 +178,13 @@ class Help_Select_Embed_Mapping:
             "description": "Gather the status of a member in the Discord server and stay informed to avoid looking silly. Anya can assist you with information such as server links, member details, word definitions, and more.",
             "color": None,
             "thumbnail_url": AnyaImages.help_information_thumbnail,
+        },
+        "minigame": {
+            "title": "Minigame",
+            "description": "Engage in a fun and interactive minigame! Choose the type of minigame you'd like to play and compete for rewards and fun challenges.",
+            "color": None,  # Customize color as needed
+            "thumbnail_url": AnyaImages.help_minigame_thumbnail,
+            "image_url": None,  # Replace with an actual image URL
         },
         "Cog2": {
             "title": "Title for Cog2",
@@ -188,17 +196,15 @@ class Help_Select_Embed_Mapping:
     }
 
     emojis = {
-        # "<:system_icon:1238536111266201610>",
         "system": "<:system:1261208067085959320>",
         "quest": "<:anyasus:1258563706518765669> ",
         "ai": "✨",
         "pokemon": "<:Pokeball:1261208239891156992>",
         "anime": "<:neko_lurk:1320306198075015201>",
         "information": "<:help_info:1268971820988764272>",
+        "minigame": "🎲",  # Replace with the actual emoji code for minigame
         # Add more emoji mappings for other cogs as needed
     }
-
-
 class TutorialMission:
     def __init__(self, bot):
         self.bot = bot
