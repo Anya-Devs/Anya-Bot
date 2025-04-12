@@ -1,40 +1,51 @@
-2025-02-28 03:56:32 | INFO     | stable_diffusion | 🎨 Generating image with prompt: a cute cat, high quality, detailed... ✨
-2025-02-28 03:56:32 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check... 🔄
-2025-02-28 03:56:32 | ERROR    | stable_diffusion | ❌ Health check failed for http://localhost:7860: Cannot connect to host localhost:7860 ssl:default [Multiple exceptions: [Errno 111] Connect call failed ('::1', 7860, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 7860)] ❌
+2025-02-28 03:56:32 | INFO     | stable_diffusion | 🎨 Generating image with prompt: a cute cat, high quality, detailed...
+2025-02-28 03:56:32 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check...
+2025-02-28 03:56:32 | ERROR    | stable_diffusion | ❌ Health check failed for http://localhost:7860: Cannot connect to host
 2025-02-28 03:56:32 | WARNING  | stable_diffusion | ❌ No Stable Diffusion servers are available.
-2025-02-28 03:56:32 | INFO     | stable_diffusion | 👋 Session closed 👋
-2025-02-28 04:58:13 | INFO     | stable_diffusion | 🎨 Generating image with prompt: a cute cat, high quality, detailed... ✨
-2025-02-28 04:58:13 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check... 🔄
-2025-02-28 04:58:13 | ERROR    | stable_diffusion | ❌ Health check failed for http://localhost:7860: Cannot connect to host localhost:7860 ssl:default [Multiple exceptions: [Errno 111] Connect call failed ('::1', 7860, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 7860)] ❌
+2025-02-28 03:56:32 | INFO     | stable_diffusion | 👋 Session closed
+
+2025-02-28 04:58:13 | INFO     | stable_diffusion | 🎨 Generating image with prompt: a cute cat, high quality, detailed...
+2025-02-28 04:58:13 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check...
+2025-02-28 04:58:13 | ERROR    | stable_diffusion | ❌ Health check failed for http://localhost:7860: Cannot connect to host
 2025-02-28 04:58:13 | WARNING  | stable_diffusion | ❌ No Stable Diffusion servers are available.
-2025-02-28 04:58:13 | INFO     | stable_diffusion | 👋 Session closed 👋
-2025-02-28 06:50:27 | INFO     | stable_diffusion | 🎨 Generating image with prompt: a cute cat, high quality, detailed... ✨
-2025-02-28 06:50:27 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check... 🔄
-2025-02-28 06:50:40 | INFO     | stable_diffusion | 👋 Session closed 👋
-2025-02-28 06:55:28 | INFO     | stable_diffusion | 🎨 Generating image with prompt: 1 girl, Gawr Gura character with blue hair, wearin... ✨
-2025-02-28 06:55:28 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check... 🔄
-2025-02-28 06:55:40 | INFO     | stable_diffusion | 👋 Session closed 👋
-2025-02-28 07:11:12 | INFO     | stable_diffusion | 🎨 Generating image with prompt: 1girl, souryuu asuka langley, neon genesis evangel... ✨
-2025-02-28 07:11:12 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check... 🔄
-2025-02-28 07:11:41 | INFO     | stable_diffusion | 👋 Session closed 👋
-2025-02-28 07:12:23 | INFO     | stable_diffusion | 🎨 Generating image with prompt: 1girl, izumi sagiri, blush, closed eyes, simple ba... ✨
-2025-02-28 07:12:23 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check... 🔄
-2025-02-28 07:12:35 | INFO     | stable_diffusion | 👋 Session closed 👋
-2025-02-28 07:14:08 | INFO     | stable_diffusion | 🎨 Generating image with prompt: 1 girl, Gawr Gura character with blue hair, wearin... ✨
-2025-02-28 07:14:08 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check... 🔄
-2025-02-28 07:14:39 | INFO     | stable_diffusion | 👋 Session closed 👋
-2025-02-28 07:18:23 | INFO     | stable_diffusion | 🎨 Generating image with prompt: 4girls, multiple girls, gotoh hitori, ijichi nijik... ✨
-2025-02-28 07:18:23 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check... 🔄
-2025-02-28 07:19:31 | INFO     | stable_diffusion | 👋 Session closed 👋
-2025-02-28 07:21:45 | INFO     | stable_diffusion | 🎨 Generating image with prompt: best quality, Teal theme, outline, (chibi:1.2) , (... ✨
-2025-02-28 07:21:45 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check... 🔄
-2025-02-28 07:22:19 | INFO     | stable_diffusion | 👋 Session closed 👋
-2025-02-28 07:23:47 | INFO     | stable_diffusion | 🎨 Generating image with prompt: atdan, hatsune miku, vocaloid, 1girl, absurdres, a... ✨
-2025-02-28 07:23:47 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check... 🔄
-2025-02-28 07:24:23 | INFO     | stable_diffusion | 👋 Session closed 👋
-2025-02-28 07:28:51 | INFO     | stable_diffusion | 🎨 Generating image with prompt: ...imagine 1 girl , miku, nude, cowgirl stlye, rid... ✨
-2025-02-28 07:28:51 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check... 🔄
-2025-02-28 07:29:16 | INFO     | stable_diffusion | 👋 Session closed 👋
-2025-02-28 07:30:15 | INFO     | stable_diffusion | 🎨 Generating image with prompt: 1girl, blush, closed eyes, simple background, faci... ✨
-2025-02-28 07:30:15 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check... 🔄
-2025-02-28 07:30:23 | INFO     | stable_diffusion | 👋 Session closed 👋
+2025-02-28 04:58:13 | INFO     | stable_diffusion | 👋 Session closed
+
+2025-02-28 06:50:27 | INFO     | stable_diffusion | 🎨 Generating image with prompt: a cute cat, high quality, detailed...
+2025-02-28 06:50:27 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check...
+2025-02-28 06:50:40 | INFO     | stable_diffusion | 👋 Session closed
+
+2025-02-28 06:55:28 | INFO     | stable_diffusion | 🎨 Generating image with prompt: [REDACTED]
+2025-02-28 06:55:28 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check...
+2025-02-28 06:55:40 | INFO     | stable_diffusion | 👋 Session closed
+
+2025-02-28 07:11:12 | INFO     | stable_diffusion | 🎨 Generating image with prompt: [REDACTED]
+2025-02-28 07:11:12 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check...
+2025-02-28 07:11:41 | INFO     | stable_diffusion | 👋 Session closed
+
+2025-02-28 07:12:23 | INFO     | stable_diffusion | 🎨 Generating image with prompt: [REDACTED]
+2025-02-28 07:12:23 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check...
+2025-02-28 07:12:35 | INFO     | stable_diffusion | 👋 Session closed
+
+2025-02-28 07:14:08 | INFO     | stable_diffusion | 🎨 Generating image with prompt: [REDACTED]
+2025-02-28 07:14:08 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check...
+2025-02-28 07:14:39 | INFO     | stable_diffusion | 👋 Session closed
+
+2025-02-28 07:18:23 | INFO     | stable_diffusion | 🎨 Generating image with prompt: [REDACTED]
+2025-02-28 07:18:23 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check...
+2025-02-28 07:19:31 | INFO     | stable_diffusion | 👋 Session closed
+
+2025-02-28 07:21:45 | INFO     | stable_diffusion | 🎨 Generating image with prompt: best quality, teal theme, chibi style...
+2025-02-28 07:21:45 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check...
+2025-02-28 07:22:19 | INFO     | stable_diffusion | 👋 Session closed
+
+2025-02-28 07:23:47 | INFO     | stable_diffusion | 🎨 Generating image with prompt: [REDACTED]
+2025-02-28 07:23:47 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check...
+2025-02-28 07:24:23 | INFO     | stable_diffusion | 👋 Session closed
+
+2025-02-28 07:28:51 | INFO     | stable_diffusion | 🎨 Generating image with prompt: [REDACTED]
+2025-02-28 07:28:51 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check...
+2025-02-28 07:29:16 | INFO     | stable_diffusion | 👋 Session closed
+
+2025-02-28 07:30:15 | INFO     | stable_diffusion | 🎨 Generating image with prompt: 1girl, blush, closed eyes, simple background...
+2025-02-28 07:30:15 | WARNING  | stable_diffusion | 🔄 No alive servers found, performing immediate health check...
+2025-02-28 07:30:23 | INFO     | stable_diffusion | 👋 Session closed
