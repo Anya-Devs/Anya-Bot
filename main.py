@@ -9,7 +9,7 @@ import traceback
 
 import aiohttp
 from aiohttp import web
-
+import shutil
 from art import *
 from rich.tree import Tree
 from rich.console import Console
@@ -36,13 +36,16 @@ class BotSetup(commands.AutoShardedBot):
         )
 
     async def on_ready(self):
-        """Triggered when the bot successfully connects to Discord."""
         avatar_url = self.user.avatar
         art_generator = AvatarToTextArt(avatar_url)
         art_generator.create_art()
+        guild_count = len(self.guilds)
+        user_count = sum(guild.member_count for guild in self.guilds if guild.member_count)
+        print('\n\n\n')
         print(art_generator.get_colored_ascii_art())
-        print("\033[38;2;88;101;242mWelcome to Discord!\033[0m")
-        print("\033[92m" + text2art(self.user.name.title()[:11], 'sub-zero') + "\033[0m")
+        print(f"\033[38;2;88;101;242m{'Welcome to Discord!'.center(__import__('shutil').get_terminal_size().columns)}\033[0m")
+        print("\033[92m" + "\n".join(line.center(__import__('shutil').get_terminal_size().columns) for line in text2art(self.user.name.title()[:11], 'sub-zero').splitlines()) + "\033[0m")
+        print("\033[96m" + f"🌐  Connected: {guild_count} server{'s' if guild_count != 1 else ''}  |  Users served: ~{user_count}".center(__import__('shutil').get_terminal_size().columns) + "\033[0m")
 
 
 
@@ -68,16 +71,21 @@ class BotSetup(commands.AutoShardedBot):
     async def setup(self):
         await self.import_cogs("cogs")
         await self.import_cogs("events")
-        print("\033[94m===== Setup Completed =====\033[0m")
+        print("\033[94m" + " Setup Completed ".center(__import__('shutil').get_terminal_size().columns, "=") + "\033[0m")
+
 
     async def import_cogs(self, dir_name):
-        console = Console()
-        tree = Tree(f"[bold blue]{dir_name}[/bold blue]")
+     console = Console()
+     tree = Tree(f"📁 {dir_name}")
 
-        for filename in os.listdir(dir_name):
-            if filename.endswith(".py"):
-                file_branch = tree.add(f"[cyan]{filename}[/cyan]")
-                module_name = os.path.splitext(filename)[0]
+     for filename in os.listdir(dir_name):
+        if filename.endswith(".py"):
+            module_name = os.path.splitext(filename)[0]
+            status_emoji = "❌"
+            file_branch = tree.add(f"{status_emoji} {filename}")
+            found = False
+
+            try:
                 module = __import__(f"{dir_name}.{module_name}", fromlist=[""])
 
                 for obj_name in dir(module):
@@ -85,9 +93,15 @@ class BotSetup(commands.AutoShardedBot):
                     if isinstance(obj, commands.CogMeta):
                         if not self.get_cog(obj_name):
                             await self.add_cog(obj(self))
-                            file_branch.add(f"[green]{obj_name}[/green]")
+                            if not found:
+                                status_emoji = "✅"
+                                file_branch.label = f"{status_emoji} {filename}"
+                                found = True
+                            file_branch.add(f"→ {obj_name}")
+            except Exception:
+                pass
 
-        console.print(tree)
+     console.print(tree)
 
 async def periodic_ping():
     while True:
