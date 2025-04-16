@@ -11,23 +11,19 @@ import traceback
 from datetime import datetime, timezone
 
 
-# Third-Party Imports
 import aiohttp
 from PIL import Image
 import psutil
-from psutil import *  # Import all functions from psutil
+from psutil import *  
 import cv2
 
 
-# Custom Imports
-# Import all necessary Discord-related classes/functions
+
 from Imports.discord_imports import *
 from openai import (
     AsyncOpenAI,
-)  # Assuming AsyncOpenAI is the correct import from your module
+) 
 
-
-# Constants
 class AnyaImages:
     shocked_anya = "https://img-03.stickers.cloud/packs/20d46227-dcb0-4583-8d66-ee78d4743129/webp/a65e28be-a5fd-4654-8e7d-736dbd809df2.webp"
     awake_anya = "https://media.tenor.com/9kLYJilshNMAAAAe/spy-x-family-anya.png"
