@@ -52,7 +52,7 @@ class AnyaImages:
         "https://i.pinimg.com/236x/5d/d7/d1/5dd7d1d91933d59b8f21732efba70368.jpg"
     )
     help_thumbnail = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzvquP9P7dIi5DFyTmtenWQwDyAqOu98l_juVOo6ah5Q_8N5KqT3VAdZ8twJ7L2TexN7k&usqp=CAU"
-    help_ai_thumbnail = None  # Because its local
+    help_ai_thumbnail = None  
     help_system_thumbnail = (
         "https://i.pinimg.com/564x/f4/38/ef/f438ef92875df915c8d019780a76a346.jpg"
     )
@@ -74,7 +74,7 @@ class AnyaImages:
     agree_to_terms_anya = (
         "https://i.pinimg.com/474x/09/47/bc/0947bc96fe6f6af4a9779d994c0a2df0.jpg"
     )
-    # 'https://i.pinimg.com/236x/38/b5/89/38b5893e071f60a9dbcc3074cbf70016.jpg'
+    
     no_quest_anya = (
         "https://th.bing.com/th/id/OIP.iwQwh6xaDNpS2519HlwV8gHaKg?rs=1&pid=ImgDetMain"
     )
@@ -89,7 +89,7 @@ class AnyaImages:
     )
 
 
-# Embed Avatar
+
 class EmbedFactory:
     @staticmethod
     async def change_avatar_prompt():
@@ -140,26 +140,26 @@ class Help_Select_Embed_Mapping:
         "system": {
             "title": "System",
             "description": "View the status of the bot, including information about its current performance, system resources usage, and configuration settings.",
-            "color": discord.Color.red(),  # Customize color as needed
+            "color": discord.Color.red(),  
             "thumbnail_url": AnyaImages.help_system_thumbnail,
             "image_url": "https://i.pinimg.com/564x/f4/38/ef/f438ef92875df915c8d019780a76a346.jpg",
         },
         "quest": {
             "title": "Quest",
             "description": "Manages quest tracking, balance points, and a shop in a Discord bot. It allows users to view and track quests, configure mission channels, and manage balance.",
-            "color": None,  # Customize color as needed
+            "color": None,  
             "thumbnail_url": AnyaImages.help_quest_thumbnail,
         },
         "ai": {
             "title": "AI",
             "description": "Interact with advanced artificial intelligence functionalities, capable of handling various tasks including natural language processing, image recognition, and more.",
-            "color": discord.Color.green(),  # Customize color as needed
+            "color": discord.Color.green(),  
             "thumbnail_url": AnyaImages.help_ai_thumbnail,
         },
         "pokemon": {
             "title": "Pokemon",
             "description": "Uncover and investigate Pokémon by exploring comprehensive details and sharing your insights with others.",
-            "color": discord.Color.red(),  # Customize color as needed
+            "color": discord.Color.red(),  
             "thumbnail_url": AnyaImages.help_pokemon_thumbnail,
         },
         "anime": {
@@ -183,10 +183,10 @@ class Help_Select_Embed_Mapping:
         "Cog2": {
             "title": "Title for Cog2",
             "description": "Description for Cog2",
-            "color": discord.Color.blue(),  # Customize color as needed
+            "color": discord.Color.blue(),  
             "thumbnail_url": "Thumbnail URL for Cog2",
         },
-        # Add more embed mappings for other cogs as needed
+        
     }
 
     emojis = {
@@ -196,15 +196,15 @@ class Help_Select_Embed_Mapping:
         "pokemon": "<:Pokeball:1261208239891156992>",
         "anime": "<:neko_lurk:1320306198075015201>",
         "information": "<:help_info:1268971820988764272>",
-        "mini_games": "🎲",  # Replace with the actual emoji code for minigame
-        # Add more emoji mappings for other cogs as needed
+        "mini_games": "🎲",  
+        
     }
 class TutorialMission:
     def __init__(self, bot):
         self.bot = bot
         self.color = (
             primary_color()
-        )  # Assuming primary_color() is defined somewhere to get the color
+        )  
         self.steps = [
             {
                 "action": "send",
@@ -231,31 +231,31 @@ class TutorialMission:
                 "description": 'Finally, react to a message with the emoji "😍" in the current channel.',
             },
         ]
-        self.current_step_index = 0  # Track the current step
-        self.current_message = None  # Track the current step message
+        self.current_step_index = 0  
+        self.current_message = None  
 
     async def check_completion(self, message, user, step, ctx):
         """Check if the user has completed the current tutorial mission step."""
         if step["channel"] == str(message.channel.id):
             if step["method"] == "message":
-                # Replace {member} with actual mention
+                
                 member_id_pattern = r"<@!?(\d+)>"
                 message_content = message.content
                 member_ids = re.findall(member_id_pattern, message_content)
                 for member_id in member_ids:
                     message_content = message_content.replace(
                         f"<@{member_id}>", f"<@{member_id}>"
-                    )  # Ensure mentions are properly formatted
+                    )  
 
                 quest_content_replaced = step["content"].replace(
                     "{member}", f"<@{member_ids[0]}>" if member_ids else "{member}"
-                )  # Replace {member} with a placeholder for mention
+                )  
 
                 if quest_content_replaced in message_content:
                     await self.handle_completion(user, step, ctx)
 
             elif step["method"] == "emoji":
-                # Extract custom emoji IDs
+                
                 message_emojis = re.findall(
                     r"<:[\w~]+:(\d+)>", message.content)
                 message_emoji_names = [
@@ -263,7 +263,7 @@ class TutorialMission:
                     for emoji_id in message_emojis
                 ]
 
-                # Extract Unicode emojis
+                
                 unicode_emojis = re.findall(
                     r"[\U0001F600-\U0001F64F]", message.content)
 
@@ -274,7 +274,7 @@ class TutorialMission:
                     await self.handle_completion(user, step, ctx)
 
             elif step["method"] == "reaction":
-                # Check if the reaction matches the required emoji
+                
                 if str(message.reaction.emoji) == step["content"]:
                     await self.handle_completion(user, step, ctx)
 
@@ -285,27 +285,27 @@ class TutorialMission:
         )
         channel = ctx.channel
 
-        # Send feedback about the completed step
+        
         await channel.send(feedback_message)
 
-        # Attempt to delete the current step message if it exists
+        
         if self.current_message:
             try:
                 await self.current_message.delete()
             except discord.NotFound:
-                # Log error or handle it if needed
+                
 
                 return
                 pass
 
-        # Move to the next step
+        
         self.current_step_index += 1
 
-        # Proceed to the next step if there are more steps
+        
         if self.current_step_index < len(self.steps):
             await self.wait_for_user_action(ctx)
         else:
-            # Notify the user when all steps are completed
+            
             await ctx.send(
                 f"Congratulations {user.mention}! You have completed all tutorial steps."
             )
@@ -323,7 +323,7 @@ class TutorialMission:
             color=self.color,
         )
 
-        # Customize the embed based on the step
+        
         if step["method"] == "message":
             embed.add_field(
                 name="Instruction",
@@ -339,16 +339,16 @@ class TutorialMission:
                 value=f"React to a message with the emoji: `{step['content']}`",
             )
 
-        # Send the embed message
+        
         if self.current_message:
             try:
                 await self.current_message.delete()
             except discord.NotFound:
-                # Log error or handle it if needed
+                
                 pass
         self.current_message = await ctx.reply(embed=embed)
 
-        # Set the channel for this step dynamically
+        
         self.steps[step_index]["channel"] = str(ctx.channel.id)
 
         def check_message(message):
@@ -364,40 +364,40 @@ class TutorialMission:
         while True:
             try:
                 if step["method"] == "message":
-                    # Wait for a message from the user
+                    
                     user_message = await self.bot.wait_for(
                         "message", timeout=60.0, check=check_message
                     )
 
-                    # Check for cancel command
+                    
                     if user_message.content.lower() == "c":
                         await ctx.send("Tutorial canceled.")
                         if self.current_message:
                             try:
                                 await self.current_message.delete()
                             except discord.NotFound:
-                                # Log error or handle it if needed
+                                
                                 pass
                         return
 
                     await self.check_completion(user_message, ctx.author, step, ctx)
-                    break  # Exit the loop to proceed to the next step
+                    break  
 
                 elif step["method"] == "emoji":
-                    # Wait for a message from the user containing the emoji
+                    
                     user_message = await self.bot.wait_for(
                         "message", timeout=60.0, check=check_message
                     )
                     await self.check_completion(user_message, ctx.author, step, ctx)
-                    break  # Exit the loop to proceed to the next step
+                    break  
 
                 elif step["method"] == "reaction":
-                    # Wait for a reaction from the user
+                    
                     reaction, user = await self.bot.wait_for(
                         "reaction_add", timeout=60.0, check=check_reaction
                     )
                     await self.check_completion(reaction.message, ctx.author, step, ctx)
-                    break  # Exit the loop to proceed to the next step
+                    break  
 
             except asyncio.TimeoutError:
                 await ctx.send("Time's up! You didn't complete the task in time.")
@@ -405,14 +405,14 @@ class TutorialMission:
                     try:
                         await self.current_message.delete()
                     except discord.NotFound:
-                        # Log error or handle it if needed
+                        
                         pass
-                return  # Exit the loop but allow other commands and interactions to continue
+                return  
 
 
 QUEST_PROMPT_EMBED = {
     "title": None,
-    "color": discord.Color.yellow(),  # You can specify a color in hex format if needed
+    "color": discord.Color.yellow(),  
     "footer_text": "Quest Terms Agreement",
 }
 
@@ -420,7 +420,7 @@ QUEST_PROMPT_EMBED = {
 class Quest_Prompt:
     @staticmethod
     async def get_embed(bot):
-        # terms_emoji = discord.utils.get(bot.emojis, id=1244193792400031835)
+        
         fair_emoji = discord.utils.get(bot.emojis, id=1244196046565802015)
         tracking_emoji = discord.utils.get(bot.emojis, id=1244195699331960863)
         respect_emoji = discord.utils.get(bot.emojis, id=1244196427828301825)
@@ -439,7 +439,7 @@ class Quest_Prompt:
             color=QUEST_PROMPT_EMBED["color"],
             timestamp=datetime.now(),
         )
-        # embed.set_thumbnail(url=AnyaImages.look_radiant_anya)
+        
         embed.set_footer(
             text=QUEST_PROMPT_EMBED["footer_text"],
             icon_url=AnyaImages.look_radiant_anya,
@@ -448,7 +448,7 @@ class Quest_Prompt:
 
 
 class Quest_Progress:
-    # Dictionary to store progress bar mappings
+    
     Progress_Bar_MAPPING = {
         "front_empty": 1237456749674364969,
         "front_full": 1237456617776218205,
@@ -458,7 +458,7 @@ class Quest_Progress:
         "back_full": 1237456619143696395,
     }
 
-    # Function to generate progress bar emojis
+    
     @staticmethod
     async def generate_progress_bar(progress, bot):
         bar = ""
@@ -493,14 +493,14 @@ class Quest_Progress:
             )
             or ":_:"
         )
-        bar += f"{back_emoji}"  # Back part emoji
+        bar += f"{back_emoji}"  
         return bar
 
 
 class QuestEmbed:
     @staticmethod
     async def create_quest_embed(
-        bot: discord.Client,  # Add bot parameter
+        bot: discord.Client,  
         quest: str,
         quest_id: int,
         action: str,
@@ -510,7 +510,7 @@ class QuestEmbed:
         content: str,
         user: discord.User,
     ) -> discord.Embed:
-        # Construct a more readable description
+        
         description = (
             f"**Quest ID:** `{quest_id}`\n"
             f"**Action:** `{action.title()}`\n"
@@ -520,21 +520,21 @@ class QuestEmbed:
             f"**Content:** `{content}`"
         )
 
-        # Retrieve the emoji
+        
         added_emoji = discord.utils.get(bot.emojis, id=1244440519514521600)
 
-        # Create the embed
+        
         embed = discord.Embed(
-            # title=f"{added_emoji}  New Quest",
+            
             description=description,
             color=discord.Color.green(),
             timestamp=datetime.now(),
         )
 
-        # Set the author using the user parameter
+        
         embed.set_author(name=user.name, icon_url=user.avatar)
 
-        # Set the footer and thumbnail
+        
         embed.set_footer(text="Quest Created")
         embed.set_thumbnail(url=AnyaImages.new_mission_anya)
 
@@ -581,7 +581,7 @@ class QuestEmbed:
         help_emoji = discord.utils.get(bot.emojis, id=1245611790176616510)
 
         embed = discord.Embed(
-            # description='{member}: Mention someone in your server (excluding bots and yourself)',
+            
             timestamp=datetime.now()
         )
         embed.set_footer(text="Server Quest\n",
@@ -589,7 +589,7 @@ class QuestEmbed:
         embed.set_author(
             name=f"{ctx.author.display_name} quests", icon_url=ctx.author.avatar
         )
-        # embed.set_thumbnail(url=AnyaImages.show_quest_anya)
+        
         return embed
 
 
@@ -606,26 +606,26 @@ class Quest_Completed_Embed:
         reward="N/A",
         balance=None,
     ):
-        # Define emoji ids
+        
         check_emoji_id = 1243403342722371645
         reward_emoji_id = 1247800150479339581
 
-        # Get emojis
+        
         check_emoji = discord.utils.get(bot.emojis, id=check_emoji_id)
         reward_emoji = discord.utils.get(bot.emojis, id=reward_emoji_id)
-        # Text art
+        
         amount = "times" if times > 1 else "time"
 
         quest_completed = f'-# {check_emoji} {user.mention} : {method.title()} "{quest_content.replace("`", "")}", {times} {amount}'
 
         reward_text = f"`{reward} stp`"
 
-        # Create embed
+        
         embed = discord.Embed(
             timestamp=datetime.now(), description=quest_completed, color=primary_color()
         )
 
-        # embed.add_field(name=f'{check_emoji} Completed', value=f'**You {quest_completed}!**', inline=True)
+        
 
         embed.add_field(
             name=f"Reward ", value=f"{reward_emoji} {reward_text}", inline=True
@@ -633,7 +633,7 @@ class Quest_Completed_Embed:
         embed.add_field(name=f"Stella Points:",
                         value=f"{balance:,}", inline=True)
 
-        # Set thumbnail image
+        
         embed.set_thumbnail(url=user.avatar)
         embed.set_footer(text=f"Congrats, you've completed quest {quest_id}!")
         return embed
@@ -645,7 +645,7 @@ class ShopEmbed:
         embed = discord.Embed(
             title="<:shop:1272249831120965753>    Spy Shop", color=primary_color()
         )
-        # f"*Remember these tools might make or break relshinships, so please be careful.*"
+        
         embed.description = f"```py\nStella Points: {balance}```"
         embed.set_footer(
             text=f"Use the {bot.user.name}'s option menu to acquire your spy tool."
@@ -665,7 +665,7 @@ class LogConstants:
 
 
 class PingConstants:
-    thumbnail_url = None  # AnyaImages.ping_thumbnail
+    thumbnail_url = None  
     image_url = AnyaImages.ping_image
     footer_icon = None
     embed_color = None
@@ -695,7 +695,7 @@ class PingConstants:
             return f"+ {value}\n"
 
 
-# Classes
+
 class Emojis:
     emoji_paths = {
         "cpu_emoji": "Emojis/cpu.png",
@@ -711,7 +711,7 @@ class Emojis:
             emoji = await Emojis.create_emoji(ctx, file_path, emoji_name)
             emoji_id = emoji.split(":")[-1][:-1]
             emoji_format = f"<:_:{emoji_id}>"
-            # Store emoji format with emoji ID as key
+            
             emojis[emoji_id] = emoji_format
             print(emoji_format)
 
@@ -723,31 +723,31 @@ class Emojis:
 
     @staticmethod
     async def create_emoji(ctx, file_path, emoji_name):
-        # Check if emoji.json file exists, create if not
+        
         if not os.path.exists("Data"):
             os.makedirs("Data")
         if not os.path.exists("Data/emoji.json"):
             with open("Data/emoji.json", "w") as f:
-                json.dump({}, f)  # Empty json file
+                json.dump({}, f)  
 
-        # Load emoji data from emoji.json
+        
         with open("Data/emoji.json", "r") as f:
             emoji_data = json.load(f)
 
-        # Check if emoji exists in the json
+        
         if emoji_name in emoji_data and "emoji_id" in emoji_data[emoji_name]:
-            # Emoji ID exists in json, return the emoji format
+            
             emoji_id = emoji_data[emoji_name]["emoji_id"]
             return f"<:_:{emoji_id}>"
 
-        # Check if emoji exists in the guild
+        
         existing_emoji = discord.utils.get(ctx.guild.emojis, name=emoji_name)
         if existing_emoji:
-            # Delete existing emoji from the guild
+            
             await existing_emoji.delete()
             print(f"Deleted existing emoji: {existing_emoji.name}")
 
-        # Create new emoji
+        
         with open(file_path, "rb") as f:
             image = Image.open(f)
             img_byte_array = io.BytesIO()
@@ -759,14 +759,14 @@ class Emojis:
             )
             print(f"Emoji created successfully: {new_emoji.name}")
 
-            # Update emoji data
+            
             emoji_data[emoji_name] = {
                 "emoji_id": new_emoji.id, "emoji_name": "_"}
             with open("Data/emoji.json", "w") as f:
-                # Save updated json with indentation
+                
                 json.dump(emoji_data, f, indent=4)
 
-        # Return the emoji format
+        
         return f"<:_:{new_emoji.id}>"
 
 
@@ -783,7 +783,7 @@ class Information_Embed:
             ram_percent = psutil.virtual_memory().percent
             cpu_cores = psutil.cpu_count(logical=True)
             cpu_text = f"{cpu_percent:.0f}% of {cpu_cores} cores"
-            total_ram_gb = psutil.virtual_memory().total / (1024**3)  # Convert to GB
+            total_ram_gb = psutil.virtual_memory().total / (1024**3)  
             ram_text = f"{ram_percent:.0f}% of {total_ram_gb:.0f}GB ({total_ram_gb * ram_percent / 100:.0f}GB)"
             total_guilds = len(bot.guilds)
             total_users = sum(guild.member_count for guild in bot.guilds)
@@ -854,7 +854,7 @@ class Information_Embed:
         type_is = "🤖" if member.bot else "👤"
         category_text = category if category else "Member"
 
-        # Get the bot owner's information
+        
         bot_owner_mention = ""
         if member.bot:
             owner_id = await Information_Embed.get_bot_owner_id(bot, member.id)
@@ -919,7 +919,7 @@ class Information_Embed:
 
     @staticmethod
     async def get_bot_owner_id(bot, bot_id):
-        # Fetch bot user information
+        
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 f"https://discord.com/api/v10/users/{bot_id}",
@@ -928,7 +928,7 @@ class Information_Embed:
                 if response.status == 200:
                     data = await response.json()
                     print(data)
-                    # The owner ID is stored in the 'id' field
+                    
                     return data.get("id")
                 else:
                     print(
@@ -1013,19 +1013,19 @@ class Information_Embed:
         return None
 
 
-# Functions
+
 async def sdxl(prompt):
     openai_client = AsyncOpenAI(
-        # API key remains the same as provided
+        
         api_key="ng-YgkaT8abn2sWaqZRUmVPzs07BdtrE",
         base_url="https://api.naga.ac/v1",
     )
 
     response = await openai_client.images.generate(
-        model="playground-v2.5",  # Using a valid model for image generation
+        model="playground-v2.5",  
         prompt=prompt,
-        n=1,  # images count
-        size="1024x1024",  # Standard size for image generation
+        n=1,  
+        size="1024x1024",  
     )
     return response.data[0].url
 
@@ -1040,7 +1040,7 @@ def primary_color(image_path="Data/images/bot_icon.png"):
     )
 
 
-# Async Functions
+
 def generate_invite_link(bot, missing_perms):
     permissions = discord.Permissions()
     text_permissions = [
@@ -1058,11 +1058,11 @@ def generate_invite_link(bot, missing_perms):
     for perm in text_permissions:
         setattr(permissions, perm, True)
 
-    # return discord.utils.oauth_url(bot.user.id, permissions=permissions)
+    
     return "https://discord.com/oauth2/authorize?client_id=1234247716243112100&permissions=1689934340028480&integration_type=0&scope=bot"
 
 
-# Bot Banner Url
+
 async def banner_url(bot, user):
     req = await bot.http.request(discord.http.Route("GET", "/users/{uid}", uid=user.id))
     banner_id = req.get("banner")
@@ -1076,7 +1076,7 @@ async def banner_url(bot, user):
     return None
 
 
-# Get Banner Color
+
 async def get_banner_color(bot, user: discord.User):
     try:
         req = await bot.http.request(
@@ -1116,7 +1116,7 @@ async def error_custom_embed(
     error_embed.set_thumbnail(url=thumbnail_url)
 
     try:
-        # Check if messageable is a Context (ctx) object or Interaction object and send message accordingly
+        
         if isinstance(ctx, commands.Context):
             await ctx.reply(embed=error_embed)
         elif isinstance(ctx, discord.Interaction):
@@ -1124,7 +1124,7 @@ async def error_custom_embed(
     except discord.errors.Forbidden:
         missing_perms = [
             "embed_links"
-        ]  # Add any other permissions the bot might be missing
+        ]  
         invite_link = generate_invite_link(bot, ctx, missing_perms)
         error_message = f"I don't have the necessary permissions to send an embed.[Fix Permission]({invite_link})."
 

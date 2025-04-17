@@ -39,7 +39,7 @@ def clean_requirements():
 
 
 def start():
-    # Upgrade pip and setuptools
+    
     os.system("pip install --upgrade pip")
     
     install_package('pipreqs')

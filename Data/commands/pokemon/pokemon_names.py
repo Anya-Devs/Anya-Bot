@@ -4,7 +4,7 @@ import os
 import csv
 import logging
 
-# Setup the logger
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -12,7 +12,7 @@ class PokemonNamesDownloader:
     def __init__(self):
         self.pokemon_species_url = "https://pokeapi.co/api/v2/pokemon-species"
         self.csv_file = 'Data/commands/pokemon/pokemon_special_names.csv'
-        self.regional_terms = ["alola", "galar", "hisui", "paldea"]  # List of regions to search for
+        self.regional_terms = ["alola", "galar", "hisui", "paldea"]  
 
     async def fetch_pokemon_species(self):
         """Fetch all Pokémon species from the API."""
@@ -40,11 +40,11 @@ class PokemonNamesDownloader:
                 async with session.get(species["url"]) as response:
                     if response.status == 200:
                         data = await response.json()
-                        # Check for rarity (e.g., legendary or mythical)
+                        
                         if data["is_legendary"] or data["is_mythical"]:
                             rare_pokemon.append(data["name"])
 
-                        # Check for regional forms in varieties
+                        
                         for variety in data["varieties"]:
                             if any(region in variety["pokemon"]["name"] for region in self.regional_terms):
                                 regional_pokemon.append(variety["pokemon"]["name"])
@@ -59,7 +59,7 @@ class PokemonNamesDownloader:
         with open(self.csv_file, 'w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
             writer.writerow(["Rare Pokémon", "Regional Pokémon"])
-            # Create rows by combining rare and regional Pokémon names
+            
             max_rows = max(len(rare_pokemon), len(regional_pokemon))
             for i in range(max_rows):
                 rare_name = rare_pokemon[i] if i < len(rare_pokemon) else ""
@@ -77,7 +77,7 @@ class PokemonNamesDownloader:
 
         await self.save_to_csv(rare_pokemon, regional_pokemon)
 
-# Main execution
+
 async def main():
     downloader = PokemonNamesDownloader()
     await downloader.generate_pokemon_csv()

@@ -48,7 +48,6 @@ class CustomFormatter(logging.Formatter):
         return f"{color}{message}{LogColors.ENDC}"
 
 
-# Configure logger
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 for handler in logging.getLogger().handlers:

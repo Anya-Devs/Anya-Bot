@@ -4,14 +4,14 @@ import os
 import aiofiles
 import logging
 
-# Setup the logger
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class Pokemon_Image_Downloader:
     def __init__(self):
         self.image_folder = 'Data/pokemon/pokemon_images'
-        self.local_color_memory = []  # Binary local color comparator memory
+        self.local_color_memory = []  
         self.pokemon_api_url = "https://pokeapi.co/api/v2/pokemon"
         self.pokemon_info_url = "https://pokeapi.co/api/v2/pokemon/{}/"
 
