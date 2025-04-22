@@ -41,6 +41,7 @@ def clean_requirements():
 def start():
     
     os.system("pip install --upgrade pip")
+    os.system("pip install git+https://github.com/facebookresearch/detectron2.git --no-build-isolation")
     
     install_package('pipreqs')
     install_package('opencv-python-headless')

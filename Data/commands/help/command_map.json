@@ -12,7 +12,8 @@
     "Ai": {
         "vision_model": "Get the current vision model.",
         "imagine": "Generate an image based on a prompt.",
-        "vision": "Show Anya a image and get her response."
+        "vision": "Show Anya a image and get her response.",
+        "detect": " "
     },
     "Anime": {
         "anime": "Get information about an anime.",
@@ -87,5 +88,11 @@
     },
     "GlitchSolver": {
         "extract_embed": " "
+    },
+    "Mini_Games": {
+        "memo": " "
+    },
+    "Detection": {
+        "detect": " "
     }
 }
