@@ -22,7 +22,7 @@ def update_all_packages():
 
 def clean_requirements():
     """Regenerates requirements.txt with the latest versions and removes duplicates."""
-    subprocess.run(['pipreqs', '--force', '--ignore', 'venv,.venv', '.', 'detectron2'], check=True)
+    subprocess.run(['pipreqs', '--force', '--ignore', 'venv,.venv', '.'], check=True)
 
     with open('requirements.txt', 'r') as file:
         lines = file.readlines()
