@@ -5,6 +5,7 @@ import os
 import gc
 import asyncio
 import traceback
+import socket
 
 import aiohttp
 from aiohttp import web
@@ -124,13 +125,30 @@ def create_app():
     return app
 
 async def start_web_server():
+    port = 8080
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    # Allow reuse of address and port
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    try:
+        sock.bind(('0.0.0.0', port))
+        sock.listen(1)
+    except socket.error as e:
+        logger.error(f"Failed to bind port {port}: {e}")
+        return
+
+    # Create the aiohttp web server and reuse the pre-bound socket
     app = create_app()
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 8080)
+
+    # Use a pre-bound socket instead of host/port
+    site = web.SockSite(runner, sock)
     await site.start()
-    print("Web server started on http://0.0.0.0:8080")
-    return runner  
+    print(f"Web server started on http://0.0.0.0:{port}")
+    return runner
+
 
 async def cleanup(runner):
     await runner.cleanup()

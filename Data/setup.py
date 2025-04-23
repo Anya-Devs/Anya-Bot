@@ -22,7 +22,7 @@ def update_all_packages():
 
 def clean_requirements():
     """Regenerates requirements.txt with the latest versions and removes duplicates."""
-    subprocess.run(['pipreqs', '--force', '--ignore', 'venv,.venv', '.'], check=True)
+    subprocess.run(['pipreqs', '--force', '--ignore', 'venv,.venv', '.', 'detectron2'], check=True)
 
     with open('requirements.txt', 'r') as file:
         lines = file.readlines()
@@ -41,7 +41,7 @@ def clean_requirements():
 def start():
     
     os.system("pip install --upgrade pip")
-    os.system("pip install git+https://github.com/facebookresearch/detectron2.git --no-build-isolation")
+    #os.system("pip install git+https://github.com/facebookresearch/detectron2.git --no-build-isolation")
     
     install_package('pipreqs')
     install_package('opencv-python-headless')
