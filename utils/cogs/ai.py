@@ -1,4 +1,4 @@
-import os, base64, asyncio, requests
+import os, base64, asyncio, requests, concurrent
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
@@ -26,7 +26,6 @@ class Processor:
 
             if media_type == 'image':
                 return await self.process_image(output_filename)
-
             elif media_type == 'gif':
                 return await self.load_and_process_gif(output_filename)
 
@@ -50,8 +49,10 @@ class Processor:
 
         try:
             while True:
-                frame = gif.convert("RGB") 
+                frame = gif.convert("RGB")
                 frame_np = np.array(frame)
+                if frame_np is None or frame_np.size == 0:
+                    continue
                 frame_bgr = cv.cvtColor(frame_np, cv.COLOR_RGB2BGR)
                 frames.append(frame_bgr)
                 durations.append(gif.info.get('duration', 100))
@@ -63,7 +64,7 @@ class Processor:
 
     async def process_gif(self, frames, durations):
         processed_frames = []
-        for frame in tqdm(frames, desc="Drawling on frames", unit="frame"):
+        for frame in tqdm(frames, desc="Drawing on frames", unit="frame"):
             processed_frame = await asyncio.to_thread(self.process_frame, frame)
             processed_frames.append(processed_frame)
         await self.save_gif_with_detections(processed_frames, durations)
@@ -88,91 +89,84 @@ class Processor:
 
     async def process_image(self, image_path):
         img_np = cv.imread(image_path)
-        img_h, img_w = img_np.shape[:2]
-        processed_img = self.process_frame(img_np)
-        return processed_img
+        if img_np is None:
+            raise ValueError(f"Failed to load image: {image_path}")
+        return self.process_frame(img_np)
 
     def process_frame(self, img_np):
-        if img_np is None or img_np.size == 0:
+        try:
+            if img_np is None or img_np.size == 0:
+                return img_np
+
+            if len(img_np.shape) == 2:  # Grayscale
+                img_np = cv.cvtColor(img_np, cv.COLOR_GRAY2BGR)
+
+            img_h, img_w = img_np.shape[:2]
+
+            face_blob = cv.dnn.blobFromImage(img_np, 1.0, (300, 300), (104.0, 177.0, 123.0), swapRB=True, crop=False)
+            body_blob = cv.dnn.blobFromImage(img_np, 1.0 / 255.0, (416, 416), (0, 0, 0), swapRB=True, crop=False)
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                executor.submit(self.face_net.setInput, face_blob).result()
+                executor.submit(self.body_net.setInput, body_blob).result()
+                face_detections = self.face_net.forward()
+                body_detections = self.body_net.forward()
+
+            if face_detections is None or face_detections.shape[2] == 0:
+                face_detections = np.array([])
+
+            highest_confidence = 0
+            best_face_coords = None
+            if face_detections.size > 0:
+                for i in range(face_detections.shape[2]):
+                    confidence = face_detections[0, 0, i, 2]
+                    if confidence > 0.15 and confidence > highest_confidence:
+                        highest_confidence = confidence
+                        x1 = int(face_detections[0, 0, i, 3] * img_w)
+                        y1 = int(face_detections[0, 0, i, 4] * img_h)
+                        x2 = int(face_detections[0, 0, i, 5] * img_w)
+                        y2 = int(face_detections[0, 0, i, 6] * img_h)
+                        best_face_coords = (x1, y1, x2, y2)
+
+            if best_face_coords:
+                x1, y1, x2, y2 = best_face_coords
+                cv.rectangle(img_np, (x1, y1), (x2, y2), (200, 0, 0), 2)
+                cv.putText(img_np, f'Face: {highest_confidence:.2f}', (x1, y1 - 10),
+                           cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+
+            detected_bodies = []
+            if body_detections is not None and body_detections.size > 0:
+                for detection in body_detections:
+                    confidence = detection[4]
+                    if confidence >= 0.15:
+                        center_x = int(detection[0] * img_w)
+                        center_y = int(detection[1] * img_h)
+                        width = int(detection[2] * img_w)
+                        height = int(detection[3] * img_h)
+                        x1, y1 = max(0, center_x - width // 2), max(0, center_y - height // 2)
+                        x2, y2 = min(img_w, center_x + width // 2), min(img_h, center_y + height // 2)
+                        if height / width >= 1.2:
+                            detected_bodies.append((x1, y1, x2, y2))
+
+            nms_indices = cv.dnn.NMSBoxes([box for box in detected_bodies], [1] * len(detected_bodies), 0.5, 0.4)
+            if len(nms_indices) > 0:
+                for i in nms_indices.flatten():
+                    x1, y1, x2, y2 = detected_bodies[i]
+                    cv.rectangle(img_np, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                    cv.putText(img_np, 'Body', (x1, y1 - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
+            self.save_faces_to_file()
             return img_np
 
-        if isinstance(img_np, Image.Image):
-            img_np = np.array(img_np)
-
-        img_h, img_w = img_np.shape[:2]
-
-        face_blob = cv.dnn.blobFromImage(img_np, 1.0, (300, 300), (104, 177, 123), swapRB=True)
-        body_blob = cv.dnn.blobFromImage(img_np, 1.0 / 255.0, (416, 416), (0, 0, 0), swapRB=True)
-
-        self.face_net.setInput(face_blob)
-        self.body_net.setInput(body_blob)
-
-        layer_names = self.body_net.getLayerNames()
-        output_layers = [layer_names[i - 1] for i in self.body_net.getUnconnectedOutLayers()]
-
-        with ThreadPoolExecutor() as executor:
-            face_future = executor.submit(self.face_net.forward)
-            body_future = executor.submit(self.body_net.forward, output_layers)
-
-        face_detections = face_future.result()
-        body_detections = np.vstack(body_future.result())
-
-        face_coords = self.detect_face(face_detections, img_w, img_h)
-        body_coords = self.detect_body(body_detections, img_w, img_h)
-
-        if face_coords:
-            cv.rectangle(img_np, face_coords[:2], face_coords[2:4], (200, 0, 0), 2)
-            cv.putText(img_np, f'Face: {face_coords[4]:.2f}', (face_coords[0], face_coords[1] - 10),
-                       cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-
-        if body_coords:
-            for coord in body_coords:
-                cv.rectangle(img_np, coord[:2], coord[2:], (0, 0, 255), 2)
-                cv.putText(img_np, 'Body', (coord[0], coord[1] - 10),
-                           cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-
+        except cv.error as e:
+            print(f"OpenCV error in process_frame: {e}")
+        except Exception as e:
+            print(f"Unexpected error in process_frame: {e}")
         return img_np
 
-    def detect_face(self, face_detections, img_w, img_h):
-        if face_detections.shape[2] == 0:
-            return None
-        best_face = None
-        highest_confidence = 0
-        for i in range(face_detections.shape[2]):
-            confidence = face_detections[0, 0, i, 2]
-            if confidence > 0.15 and confidence > highest_confidence:
-                x1, y1, x2, y2 = [
-                    int(face_detections[0, 0, i, j] * (img_w if j % 2 == 0 else img_h))
-                    for j in range(3, 7)
-                ]
-                best_face = (x1, y1, x2, y2, confidence)
-                highest_confidence = confidence
-        return best_face
-
-    def detect_body(self, body_detections, img_w, img_h):
-        boxes, confidences = [], []
-        for det in body_detections:
-            scores = det[5:]
-            class_id = np.argmax(scores)
-            confidence = scores[class_id]
-            if confidence > 0.15:
-                cx, cy, w, h = (
-                    int(det[0] * img_w), int(det[1] * img_h),
-                    int(det[2] * img_w), int(det[3] * img_h)
-                )
-                x, y = cx - w // 2, cy - h // 2
-                boxes.append([x, y, w, h])
-                confidences.append(float(confidence))
-
-        indices = cv.dnn.NMSBoxes(boxes, confidences, 0.15, 0.4)
-        detected = []
-        for i in indices:
-            i = i[0] if isinstance(i, (tuple, list, np.ndarray)) else i
-            x, y, w, h = boxes[i]
-            if h / w >= 1.2:
-                detected.append((x, y, x + w, y + h))
-        return detected
-
+    def save_faces_to_file(self):
+        pass 
+    
     def detect_media_type(self, media_url):
         if any(media_url.lower().endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.bmp', '.tiff')):
             return 'image'
@@ -180,8 +174,7 @@ class Processor:
             return 'gif'
         elif media_url.lower().endswith(('.mp4', '.mov', '.avi', '.mkv')):
             return 'video'
-
-
+        return 'unknown'
 class ImageGenerator:
     def __init__(self):
         """Initialize the image generator with API settings."""
