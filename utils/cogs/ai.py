@@ -9,12 +9,6 @@ from PIL import Image, ImageSequence
 from tqdm import tqdm
 
 
-
-
-
-
-
-
 class Processor:
     def __init__(self, face_model, body_model):
         self.face_net = cv.dnn.readNetFromCaffe(*face_model)
@@ -56,7 +50,7 @@ class Processor:
 
         try:
             while True:
-                frame = gif.convert("RGB")  # keep full color here
+                frame = gif.convert("RGB") 
                 frame_np = np.array(frame)
                 frame_bgr = cv.cvtColor(frame_np, cv.COLOR_RGB2BGR)
                 frames.append(frame_bgr)

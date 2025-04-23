@@ -12,7 +12,7 @@ from openai import AsyncOpenAI
 from Imports.discord_imports import *
 from Imports.log_imports import logger
 from Data.const import error_custom_embed, primary_color
-from utils.ai import Processor, ImageGenerator
+from utils.cogs.ai import Processor, ImageGenerator
 
 
 
@@ -211,7 +211,6 @@ class Ai(commands.Cog):
                 await ctx.reply(embed=embed)
         except Exception as e:
             await message.edit(content=f"An error occurred: {e}")
-
 
 
 

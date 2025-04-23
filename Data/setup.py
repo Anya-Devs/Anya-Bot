@@ -51,9 +51,6 @@ def start():
     update_all_packages()
     clean_requirements()
 
-   
-
-    
     subprocess.run(['pip', 'install', '--upgrade', '--no-cache-dir', '-r', 'requirements.txt'], check=True)
 
 

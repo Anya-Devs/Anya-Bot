@@ -5,7 +5,6 @@ import os
 import gc
 import asyncio
 import traceback
-import socket
 
 import aiohttp
 from aiohttp import web
@@ -16,10 +15,13 @@ from rich.panel import Panel
 from rich.align import Align
 from rich.console import Console
 from dotenv import load_dotenv
+from utils.main import TaskManager
 from Data.const import AvatarToTextArt
 from Data.token import get_bot_token, prefix
 from Imports.log_imports import logger
 from Imports.discord_imports import *
+
+
 
 load_dotenv(dotenv_path=os.path.join(".github", ".env"))  
 
@@ -27,6 +29,8 @@ class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         intents.members = True
+        self.task_manager = TaskManager()
+
         super().__init__(
             command_prefix=commands.when_mentioned_or(prefix),
             intents=intents,
@@ -105,6 +109,8 @@ class BotSetup(commands.AutoShardedBot):
         aligned_output = Align(tree, align=self.ALIGNMENT, width=console.width)
         console.print(aligned_output)
 
+
+
 async def periodic_ping():
     while True:
         try:
@@ -125,30 +131,13 @@ def create_app():
     return app
 
 async def start_web_server():
-    port = 8080
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    # Allow reuse of address and port
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-    try:
-        sock.bind(('0.0.0.0', port))
-        sock.listen(1)
-    except socket.error as e:
-        logger.error(f"Failed to bind port {port}: {e}")
-        return
-
-    # Create the aiohttp web server and reuse the pre-bound socket
     app = create_app()
     runner = web.AppRunner(app)
     await runner.setup()
-
-    # Use a pre-bound socket instead of host/port
-    site = web.SockSite(runner, sock)
+    site = web.TCPSite(runner, '0.0.0.0', 8080)
     await site.start()
-    print(f"Web server started on http://0.0.0.0:{port}")
-    return runner
-
+    print("Web server started on http://0.0.0.0:8080")
+    return runner  
 
 async def cleanup(runner):
     await runner.cleanup()
