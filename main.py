@@ -15,7 +15,6 @@ from rich.panel import Panel
 from rich.align import Align
 from rich.console import Console
 from dotenv import load_dotenv
-from utils.main import TaskManager
 from Data.const import AvatarToTextArt
 from Data.token import get_bot_token, prefix
 from Imports.log_imports import logger
