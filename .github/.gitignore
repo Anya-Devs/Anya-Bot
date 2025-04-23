@@ -165,4 +165,5 @@ cython_debug/
 **/.env
 .github/.env
 
+Data/token.py
 
