@@ -49,8 +49,7 @@ Stable_Diffusion_API_URL= https://github.com/AUTOMATIC1111/stable-diffusion-webu
 ## ☁️ Status
 
 ![Discord Bots](https://top.gg/api/widget/owner/1234247716243112100.svg)
-[![Discord Bots](https://discordbots.org/api/widget/servers/1234247716243112100.svg?noavatar=true)](https://discordbots.org/bot/1234247716243112100)
-[![Discord Bots](https://discordbots.org/api/widget/status/1234247716243112100.svg?noavatar=true)](https://discordbots.org/bot/1234247716243112100)
+![Discord Bots](https://discordbots.org/api/widget/status/1234247716243112100.svg?noavatar=true)
 
 > [!IMPORTANT]  
 > Bot is still undergoing development.
