@@ -1,10 +1,9 @@
-import os, base64, asyncio, requests, concurrent
+import os, base64, asyncio, requests, concurrent, aiohttp
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 import cv2 as cv
 import numpy as np
-import aiohttp
 from PIL import Image, ImageSequence
 from tqdm import tqdm
 
@@ -98,14 +97,11 @@ class Processor:
             if img_np is None or img_np.size == 0:
                 return img_np
 
-            if len(img_np.shape) == 2:  # Grayscale
+            if len(img_np.shape) == 2: 
                 img_np = cv.cvtColor(img_np, cv.COLOR_GRAY2BGR)
-
             img_h, img_w = img_np.shape[:2]
-
             face_blob = cv.dnn.blobFromImage(img_np, 1.0, (300, 300), (104.0, 177.0, 123.0), swapRB=True, crop=False)
             body_blob = cv.dnn.blobFromImage(img_np, 1.0 / 255.0, (416, 416), (0, 0, 0), swapRB=True, crop=False)
-
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 executor.submit(self.face_net.setInput, face_blob).result()
                 executor.submit(self.body_net.setInput, body_blob).result()
@@ -175,6 +171,18 @@ class Processor:
         elif media_url.lower().endswith(('.mp4', '.mov', '.avi', '.mkv')):
             return 'video'
         return 'unknown'
+
+
+
+
+
+
+
+
+
+
+
+
 class ImageGenerator:
     def __init__(self):
         """Initialize the image generator with API settings."""
