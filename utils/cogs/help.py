@@ -146,7 +146,7 @@ class Options_ImageGenerator:
         self.image_width = image_width
         self.image_height = image_height
         self.header_font_size = int(image_width * 0.04)
-        self.base_font_size = int(image_width * 0.0198)
+        self.base_font_size = int(image_width * 0.0199)
 
         self.header_font_color = "white"
         self.base_font_color = "black"
