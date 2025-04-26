@@ -146,7 +146,7 @@ class Help_Select_Embed_Mapping:
         },
         "quest": {
             "title": "Quest",
-            "description": "Manages quest tracking, balance points, and a shop in a Discord bot. It allows users to view and track quests, configure mission channels, and manage balance.",
+            "description": "Progress on interactions, they are awarding and fulfilling Anya's wish for you to make new friends and engage within the community.",
             "color": None,  
             "thumbnail_url": AnyaImages.help_quest_thumbnail,
         },

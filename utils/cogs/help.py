@@ -71,10 +71,10 @@ class Select(discord.ui.Select):
                 if len(cmd_args) > 3:
                     cmd_args = cmd_args[:3] + ['...']
                 cmd_args_str = ' '.join(cmd_args)
-                command_line = f"{self.ctx.prefix}{cmd.name} {cmd_args_str}".strip()
+                command_line = f"`{cmd.name}`"   #{self.ctx.prefix}{cmd.name} {cmd_args_str}".strip()
                 command_lines.append(command_line)
 
-            fields.append((cog.qualified_name, "\n".join(command_lines)))
+            fields.append((cog.qualified_name, " ".join(command_lines)))
 
         return fields
 
@@ -136,7 +136,7 @@ class HelpMenu(discord.ui.View):
 
 
 class Options_ImageGenerator:
-    def __init__(self, cog_name, image_width=800, image_height=600):
+    def __init__(self, cog_name, image_width=800, image_height=800):
         self.font_path_header = "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
         self.font_path_base = "Data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
         self.character_path = "Data/commands/help/menu/initial/style/assets/character.png"
@@ -146,7 +146,7 @@ class Options_ImageGenerator:
         self.image_width = image_width
         self.image_height = image_height
         self.header_font_size = int(image_width * 0.04)
-        self.base_font_size = int(image_width * 0.02)
+        self.base_font_size = int(image_width * 0.0198)
 
         self.header_font_color = "white"
         self.base_font_color = "black"
@@ -166,7 +166,8 @@ class Options_ImageGenerator:
         self.text_spacing = 20
 
         self.color_replacements_map = {}
-
+        self.min_font_size = 5  
+        
         self._load_resources()
         self._apply_color_replacements()
 
@@ -243,7 +244,32 @@ class Options_ImageGenerator:
             lines.append(" ".join(current_line))
         return "\n".join(lines)
 
+    def adjust_font_size_for_text(self, text, max_width):
+        """Adjust the font size dynamically to prevent overflow."""
+        draw = ImageDraw.Draw(
+            Image.new("RGBA", (1, 1))
+        )
+        font_size = self.base_font_size
+        font = ImageFont.truetype(self.font_path_base, font_size)
+
+        while True:
+            # Wrap the text based on the current font size
+            wrapped_text = self._wrap_text(text, max_width)
+            # Check the width of the longest line
+            lines = wrapped_text.split("\n")
+            longest_line = max(lines, key=lambda line: draw.textbbox((0, 0), line, font=font)[2])
+            if draw.textbbox((0, 0), longest_line, font=font)[2] <= max_width or font_size <= self.min_font_size:
+                break
+            font_size -= 1
+            font = ImageFont.truetype(self.font_path_base, font_size)
+
+        return font_size
+
     def _draw_text(self, draw, text_x, text_y):
+        # Adjust base font size dynamically
+        dynamic_font_size = self.adjust_font_size_for_text(self.description_text, self.text_wrap_max)
+        dynamic_font = ImageFont.truetype(self.font_path_base, dynamic_font_size)
+
         draw.text(
             (text_x, text_y),
             self.header_text,
@@ -255,15 +281,9 @@ class Options_ImageGenerator:
         draw.text(
             (text_x, text_y),
             self.description_text,
-            font=self.base_font,
+            font=dynamic_font,
             fill=self.base_font_color,
         )
-
-    @staticmethod
-    def _download_image(url):
-        response = requests.get(url)
-        response.raise_for_status()
-        return Image.open(BytesIO(response.content)).convert("RGBA")
 
     def calculate_image_height(self):
         text_lines = self.description_text.split("\n")
@@ -293,14 +313,6 @@ class Options_ImageGenerator:
         img_bytes = BytesIO()
         img.save(img_bytes, format="PNG")
         return img_bytes.getvalue()
-    
-
-
-
-
-
-
-
 
 
     
