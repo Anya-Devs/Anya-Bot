@@ -1,0 +1,199 @@
+{
+    "redirect": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "quest": {
+        "aliases": [
+            "q"
+        ],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "quest_roles": {
+        "aliases": [],
+        "description": "Command for admins to set or list roles that a target can get randomly.",
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "inventory": {
+        "aliases": [
+            "inv"
+        ],
+        "description": "Displays the user's tool inventory.",
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "balance": {
+        "aliases": [
+            "bal",
+            "points",
+            "stars",
+            "stp"
+        ],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "shop": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "anime": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "character": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "manga": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "anime_recommend": {
+        "aliases": [
+            "ar"
+        ],
+        "description": "Fetches a random anime and sends the recommendation.",
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "about": {
+        "aliases": [
+            "info",
+            "details"
+        ],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "server": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "pfp": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "banner": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "invite": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "perms": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "list_emojis": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "server_roles": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "predict": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "hunt": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "pokemon": {
+        "aliases": [
+            "pokdex",
+            "dex",
+            "d",
+            "p"
+        ],
+        "description": "Displays Pokemon dex information.",
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "detect": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "imagine": {
+        "aliases": [
+            "i"
+        ],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "vision": {
+        "aliases": [
+            "v"
+        ],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "memory": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "ping": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "uptime": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "credit": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    },
+    "memo": {
+        "aliases": [],
+        "description": null,
+        "example": "Provide example",
+        "related_commands": "Provide related commands"
+    }
+}
