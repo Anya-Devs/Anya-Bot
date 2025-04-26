@@ -4,23 +4,23 @@ start()
 import os
 import gc
 import asyncio
-import socket
-import shutil
 import traceback
 
 import aiohttp
 from aiohttp import web
+import shutil
 from art import *
-from dotenv import load_dotenv
 from rich.tree import Tree
 from rich.panel import Panel
 from rich.align import Align
 from rich.console import Console
-
+from dotenv import load_dotenv
 from Data.const import AvatarToTextArt
 from Data.token import get_bot_token, prefix
 from Imports.log_imports import logger
 from Imports.discord_imports import *
+
+
 
 load_dotenv(dotenv_path=os.path.join(".github", ".env"))  
 
@@ -132,18 +132,10 @@ async def start_web_server():
     app = create_app()
     runner = web.AppRunner(app)
     await runner.setup()
-
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(('0.0.0.0', 0))
-    port = server_socket.getsockname()[1]
-    server_socket.close()
-
-    site = web.TCPSite(runner, '0.0.0.0', port)
+    site = web.TCPSite(runner, '0.0.0.0', 8080)
     await site.start()
-
-    print(f"Web server started on http://0.0.0.0:{port}")
-    return runner
-
+    print("Web server started on http://0.0.0.0:8080")
+    return runner  
 
 async def cleanup(runner):
     await runner.cleanup()
