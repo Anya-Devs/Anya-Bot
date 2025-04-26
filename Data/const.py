@@ -152,25 +152,25 @@ class Help_Select_Embed_Mapping:
         },
         "ai": {
             "title": "AI",
-            "description": "Interact with advanced artificial intelligence functionalities, capable of handling various tasks including natural language processing, image recognition, and more.",
+            "description": "Interact with advanced artificial intelligence functionalities, capable of handling various tasks.",
             "color": discord.Color.green(),  
             "thumbnail_url": AnyaImages.help_ai_thumbnail,
         },
         "pokemon": {
             "title": "Pokemon",
-            "description": "Uncover and investigate Pokémon by exploring comprehensive details and sharing your insights with others.",
+            "description": "Provides a set of Pokémon-focused commands for image recognition, hunt ping, and detailed form lookups.",
             "color": discord.Color.red(),  
             "thumbnail_url": AnyaImages.help_pokemon_thumbnail,
         },
         "anime": {
             "title": "Anime",
-            "description": "Waku waku! Anya offers a taste of anime or weeb content for all who seek it. Get information about your favorite anime or play around and show off some manga.",
+            "description": "Waku waku! Anya throws in a dash of anime or weeb material into the mix for those who are interested.",
             "color": None,
             "thumbnail_url": AnyaImages.help_anime_thumbnail,
         },
         "information": {
             "title": "Information",
-            "description": "Gather the status of a member in the Discord server and stay informed to avoid looking silly. Anya can assist you with information such as server links, member details, word definitions, and more.",
+            "description": "Gather the status of a member in the Discord server and stay informed to avoid looking silly.",
             "color": None,
             "thumbnail_url": AnyaImages.help_information_thumbnail,
         },
@@ -199,6 +199,19 @@ class Help_Select_Embed_Mapping:
         "mini_games": "🎲",  
         
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
 class TutorialMission:
     def __init__(self, bot):
         self.bot = bot

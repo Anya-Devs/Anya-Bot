@@ -8,16 +8,10 @@ from datetime import datetime, timezone, timedelta
 
 from Imports.discord_imports import *
 from cogs.quest import Quest_Data, primary_color
+from Imports.log_imports import *
 from Data.const import error_custom_embed
 
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-ch.setFormatter(formatter)
-logger.addHandler(ch)
 
 
 class Mini_Games(commands.Cog):
@@ -163,11 +157,9 @@ class Memo(discord.ui.View):
         self.setup_task = asyncio.create_task(self.setup())
 
     async def setup(self):
-        """Asynchronous setup for the Memo game."""
         self.max_emojis_to_remember = await self.calculate_emojis_to_remember()
 
     async def calculate_emojis_to_remember(self):
-        """Calculate the number of emojis to remember based on the streak."""
         current_streak = await self.memo_data.get_streak(
             self.ctx.guild.id, self.ctx.author.id
         )
@@ -439,7 +431,6 @@ class MemoEmbeds:
 
     @staticmethod
     def incorrect_embed(streak):
-        """Returns the embed for incorrect answers."""
         embed = discord.Embed(
             title="Incorrect",
             description=f"Your streak has ended.\n```End Streak: {streak}```",
@@ -468,7 +459,6 @@ class MemoEmbeds:
 
     @staticmethod
     async def continue_game_embed(points, streak, balance, user, bot):
-        """Returns the embed when the user chooses to continue."""
         embed = discord.Embed(color=primary_color())
         
         check_emoji_id = 1243403342722371645
@@ -491,7 +481,6 @@ class MemoEmbeds:
 
     @staticmethod
     def new_round_embed(chosen_emoji):
-        """Returns the embed for a new round."""
         embed = discord.Embed(
             description=f"Remember this emoji: {chosen_emoji}",
             color=primary_color(),  
@@ -500,7 +489,6 @@ class MemoEmbeds:
 
     @staticmethod
     async def timeout_embed():
-        """Returns the embed for a timeout scenario."""
         embed = discord.Embed(
             title="Time's Up!",
             description="You took too long to respond. Your streak has been reset to `0`.",

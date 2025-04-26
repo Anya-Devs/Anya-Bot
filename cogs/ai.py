@@ -1,6 +1,5 @@
-import os, asyncio, base64,tempfile
+import os, asyncio, tempfile
 from io import BytesIO
-from pathlib import Path
 from datetime import datetime
 
 import aiohttp
@@ -11,7 +10,7 @@ from openai import AsyncOpenAI
 
 from Imports.discord_imports import *
 from Imports.log_imports import logger
-from Data.const import error_custom_embed, primary_color
+from Data.const import primary_color
 from utils.cogs.ai import Processor, ImageGenerator
 
 
