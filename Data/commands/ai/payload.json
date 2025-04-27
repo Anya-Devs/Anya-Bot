@@ -1,7 +1,6 @@
 {
     "width": "1216",
     "height": "768",
-    
     "sampler_name": "DPM++ 2M Karras",
     "steps": 45,
     "cfg_scale": 7,

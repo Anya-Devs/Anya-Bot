@@ -16,7 +16,7 @@ from rich.align import Align
 from rich.console import Console
 from dotenv import load_dotenv
 from Data.const import AvatarToTextArt
-from utils.token import get_bot_token, prefix
+from utils.token import get_bot_token, prefix, use_test_bot as ut
 from Imports.log_imports import logger
 from Imports.discord_imports import *
 
@@ -132,7 +132,7 @@ async def start_web_server():
     app = create_app()
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 8080)
+    site = web.TCPSite(runner, '0.0.0.0', 0 if ut else 8080) # 0 for testing set port 
     await site.start()
     print("Web server started on http://0.0.0.0:8080")
     return runner  
