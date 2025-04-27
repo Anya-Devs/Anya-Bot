@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-
+ 
 def install_package(package):
     subprocess.run(['pip', 'install', '--quiet', '--upgrade', package], check=True)
 
