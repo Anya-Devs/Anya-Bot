@@ -542,19 +542,25 @@ class Sub_Helper:
         usage = f"{ctx.prefix}{command.qualified_name} {command.signature.replace('[', '<').replace(']', '>').replace('=None', '')}"
 
         markdown_help = f"""```md
-< {usage} >
 
-{"# Aliases\n" + ', '.join(aliases) if len(aliases) > 0 else ""}
-{"\n# Description\n" + (description if description is not None else "")}
-{"\n# Example Command(s)\n" + (example.format(self.prefix) if example is not None else "")}
-{"\n# Related Command(s)\n" + (related if related is not None else "")}
+{usage} 
+
+# Aliases
+{', '.join(aliases) if aliases else "No aliases available."}
+
+# Description
+{description if description else "No description provided."}
+
+# Example Command(s)
+{ " ".join([example.format(*[self.prefix] * example.count('{}')) if example else "No example provided."])}
+
+# Related Command(s)
+{" ".join([related.format(*[self.prefix] * related.count('{}')) if related else "No related commands provided."])}
 
 > Remove brackets when typing commands
 > <> = required arguments
 > [] = optional arguments
-> {{}} = optional user input
 ```"""
-
 
         return markdown_help
 

@@ -109,10 +109,10 @@
         "example": "{}perms",
         "related_commands": "Provide related commands"
     },
-    "list_emojis": {
+    "server_emojis": {
         "aliases": [],
         "description": null,
-        "example": "{}list_emojis",
+        "example": "{}server_emojis",
         "related_commands": "Provide related commands"
     },
     "server_roles": {

@@ -8,7 +8,7 @@ import traceback
 
 import aiohttp
 from aiohttp import web
-import shutil
+import psutil, signal, shutil
 from art import *
 from rich.tree import Tree
 from rich.panel import Panel
@@ -132,10 +132,17 @@ async def start_web_server():
     app = create_app()
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 8080)
+
+    site = web.TCPSite(runner, '0.0.0.0', 0) 
     await site.start()
-    print("Web server started on http://0.0.0.0:8080")
-    return runner  
+
+    # Get the chosen port
+    port = site._server.sockets[0].getsockname()[1]
+    
+    print(f"Web server started on http://0.0.0.0:{port}")
+    return runner
+ 
+
 
 async def cleanup(runner):
     await runner.cleanup()

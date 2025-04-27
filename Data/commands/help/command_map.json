@@ -48,7 +48,8 @@
         "emojis": " ",
         "json": " ",
         "server_roles": " ",
-        "list_emojis": " "
+        "list_emojis": " ",
+        "server_emojis": " "
     },
     "PokemonBot": {
         "predict": " "
