@@ -166,4 +166,4 @@ cython_debug/
 .github/.env
 
 # Comment this out if needded
-Anya-Bot/Data/token.py
+utils/token.py
