@@ -7,7 +7,6 @@ def install_package(package):
 
 
 def update_all_packages():
-    """Upgrades all installed packages to their latest versions and removes duplicates."""
     outdated_packages = subprocess.run(
         ['pip', 'list', '--outdated', '--format=freeze'],
         capture_output=True, text=True
@@ -21,7 +20,6 @@ def update_all_packages():
 
 
 def clean_requirements():
-    """Regenerates requirements.txt with the latest versions and removes duplicates."""
     subprocess.run(['pipreqs', '--force', '--ignore', 'venv,.venv', '.'], check=True)
 
     with open('requirements.txt', 'r') as file:
