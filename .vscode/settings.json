@@ -1,35 +1,4 @@
 {
-  "workbench.colorTheme": "Default Dark Modern",
-  "editor.fontFamily": "Fira Code, Consolas, 'Courier New', monospace",
-  "editor.fontLigatures": true,
-  "editor.fontSize": 14,
-  "editor.lineHeight": 22,
-  "editor.cursorBlinking": "smooth",
-  "editor.cursorStyle": "line",
-  "editor.renderWhitespace": "all",
-  "editor.renderControlCharacters": true,
-  "editor.minimap.enabled": true,
-  "editor.minimap.scale": 1,
-  "editor.minimap.showSlider": "always",
-  "editor.tabSize": 2,
-  "editor.detectIndentation": false,
-  "editor.formatOnSave": true,
-  "editor.codeActionsOnSave": {
-    "source.fixAll": true,
-    "source.organizeImports": true
-  },
-  "files.trimTrailingWhitespace": true,
-  "files.insertFinalNewline": true,
-  "files.autoSave": "onFocusChange",
-  "terminal.integrated.fontFamily": "Fira Code, monospace",
-  "terminal.integrated.cursorBlinking": true,
-  "workbench.iconTheme": "material-icon-theme",
-  "workbench.editor.enablePreview": false,
-  "explorer.compactFolders": false,
-  "breadcrumbs.enabled": true,
-  "window.zoomLevel": 0,
-  "git.confirmSync": false,
-  "git.autofetch": true,
-  "DockerRun.DisableDockerrc": true,
-  "python.REPL.enableREPLSmartSend": false
+    "DockerRun.DisableDockerrc": true,
+    "python.REPL.enableREPLSmartSend": false
 }
