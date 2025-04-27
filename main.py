@@ -1,6 +1,6 @@
 from Data.setup import start
 start()
- 
+
 import os
 import gc
 import asyncio
@@ -22,7 +22,7 @@ from Imports.discord_imports import *
 
 
 
-load_dotenv(dotenv_path=os.path.join(".github", ".env"))  
+load_dotenv(dotenv_path=os.path.join(".github", ".env"))
 
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
@@ -79,7 +79,7 @@ class BotSetup(commands.AutoShardedBot):
     async def import_cogs(self, dir_name):
         print('\n\n\n')
 
-        self.ALIGNMENT = 'center'  
+        self.ALIGNMENT = 'center'
 
         console = Console()
         tree = Tree(f"[bold cyan]◇ {dir_name}[/bold cyan]")
@@ -109,40 +109,42 @@ class BotSetup(commands.AutoShardedBot):
 
 
 
-async def periodic_ping():
-    while True:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get("http://localhost:8080") as response:
-                    if response.status == 200:
-                        return
-        except Exception as e:
-            logger.error(f"Ping failed: {e}")
-        await asyncio.sleep(60) 
-        
+
 async def handle_index(request):
     return web.Response(text="✅ Bot is running", content_type="text/html")
+
+
+
 
 def create_app():
     app = web.Application()
     app.router.add_get("/", handle_index)
     return app
 
+
 async def start_web_server():
     app = create_app()
     runner = web.AppRunner(app)
     await runner.setup()
 
-    site = web.TCPSite(runner, '0.0.0.0', 0) 
+    site = web.TCPSite(runner, '0.0.0.0', 0)
     await site.start()
 
-    # Get the chosen port
     port = site._server.sockets[0].getsockname()[1]
-    
-    print(f"Web server started on http://0.0.0.0:{port}")
-    return runner
- 
 
+    print(f"Web server started on http://0.0.0.0:{port}")
+    return runner, port
+
+async def periodic_ping(port):
+    while True:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"http://localhost:{port}") as response:
+                    if response.status == 200:
+                        return
+        except Exception as e:
+            logger.error(f"Ping failed: {e}")
+        await asyncio.sleep(60)
 
 async def cleanup(runner):
     await runner.cleanup()
@@ -152,11 +154,11 @@ async def start_all_services():
     runner = None
     try:
         bot_setup = BotSetup()
-        runner = await start_web_server()
-        
+        runner, port = await start_web_server()
+
         await asyncio.gather(
             bot_setup.start_bot(),
-            periodic_ping()
+            periodic_ping(port)
         )
     except Exception as e:
         logger.error(f"🔥 Fatal error in main loop: {e}\n{traceback.format_exc()}")
@@ -173,4 +175,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
     finally:
-        loop.close()  
+        loop.close()
