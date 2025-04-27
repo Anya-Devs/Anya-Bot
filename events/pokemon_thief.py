@@ -8,23 +8,23 @@ import traceback
 import logging
 import json
 
-                
+
 from Imports.discord_imports import *
 from Data.const import primary_color
 from Imports.log_imports import *
 from utils.token import get_bot_token
 
 
-                              
+
 log_dir = "Data"
 if not os.path.exists(log_dir):
     os.makedirs(log_dir)
-      
+
 def timestamp_gen(timestamp: int) -> str:
     dt = datetime.datetime.utcfromtimestamp(timestamp).replace(tzinfo=datetime.timezone.utc)
-    return f'<t:{int(dt.timestamp())}:R>'                                                        
+    return f'<t:{int(dt.timestamp())}:R>'
 
-                                         
+
 def load_ping_phrase():
     config_path = "Data/commands/poketwo_anti_thief/shiny_ping_config.json"
     if os.path.exists(config_path):
@@ -34,12 +34,12 @@ def load_ping_phrase():
     else:
         return "**:sparkles: Shiny Hunt Pings:**"
 
-                                       
+
 def save_ping_phrase(new_phrase):
     config_path = "Data/commands/poketwo_anti_thief/shiny_ping_config.json"
     if not os.path.exists(os.path.dirname(config_path)):
         os.makedirs(os.path.dirname(config_path))
-    
+
     config = {"shiny_ping_phrase": new_phrase}
     with open(config_path, 'w') as file:
         json.dump(config, file, indent=4)
@@ -48,9 +48,9 @@ def save_ping_phrase(new_phrase):
 class Anti_Thief(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.bot_id = [874910942490677270, 1234247716243112100, 854233015475109888]                                            
+        self.bot_id = [874910942490677270, 1234247716243112100, 854233015475109888]
         self.shiny_hunters = []
-        self.shiny_ping_phrase = load_ping_phrase()                                    
+        self.shiny_ping_phrase = load_ping_phrase()
         self.shiny_regex = r"<@(\d+)>"
         self.primary_color = primary_color()
         self.ignore_channel = 'incense'
@@ -59,14 +59,14 @@ class Anti_Thief(commands.Cog):
      shiny_hunters = []
      if isinstance(guild, int):
         guild = self.bot.get_guild(guild)
-    
+
      if not guild:
         logger.warning("Guild not found!")
         return shiny_hunters
 
      if self.shiny_ping_phrase in message_content:
         mention_start_index = message_content.find(self.shiny_ping_phrase) + len(self.shiny_ping_phrase)
-        mention_part = message_content[mention_start_index:].split("\n")[0].strip()                                            
+        mention_part = message_content[mention_start_index:].split("\n")[0].strip()
 
         if mention_part:
             try:
@@ -80,7 +80,7 @@ class Anti_Thief(commands.Cog):
                 logger.error(f"Regex error: {e}")
 
      return shiny_hunters
-    
+
     async def get_member(self, guild, user_id):
         try:
             if isinstance(guild, int):
@@ -93,21 +93,21 @@ class Anti_Thief(commands.Cog):
 
     async def is_shiny_hunter(self, user_id):
         return any(hunter.id == user_id for hunter in self.shiny_hunters)
-    
+
     @commands.command(name='set_phrase', hidden=True)
     async def set_ping_phrase(self, ctx, *, new_phrase: str):
 
         if ctx.author.id != 1124389055598170182:
             return
-        
+
         self.shiny_ping_phrase = new_phrase
-        save_ping_phrase(new_phrase)                                      
+        save_ping_phrase(new_phrase)
         await ctx.reply(f"Shiny hunt ping phrase updated to: {new_phrase}", mention_author=False)
 
     @commands.Cog.listener()
     async def on_message(self, message):
       if 'incense' not in message.channel.name.lower():
-        if message.author.id in self.bot_id and message.guild:                                    
+        if message.author.id in self.bot_id and message.guild:
             self.shiny_hunters = await self.process_pings(message.guild, message.content)
             if self.shiny_hunters:
                 await self.bot.get_cog('EventGate').send_shiny_hunt_embed(message.channel, self.shiny_hunters, reference_message=message)
@@ -277,6 +277,42 @@ class EventGate(commands.Cog):
         embed = message.embeds[0]
         embed.description = ":white_check_mark: Everyone may catch the Pokémon now! No restrictions."
         await message.edit(embed=embed)
+
+    @staticmethod
+    async def timeout_user(user, message):
+        BOT_TOKEN = await get_bot_token()
+        GUILD_ID = message.guild.id
+        USER_ID = user.id
+
+        timeout_duration = 180
+        timeout_end = datetime.datetime.utcnow() + datetime.timedelta(minutes=timeout_duration)
+
+        headers = {
+            "Authorization": f"Bot {BOT_TOKEN}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "communication_disabled_until": timeout_end.isoformat() + "Z",
+        }
+
+        url = f"https://discord.com/api/v10/guilds/{GUILD_ID}/members/{USER_ID}"
+
+        response = requests.patch(url, json=payload, headers=headers)
+
+        if response.status_code == 204:
+            logger.info(f"User {user.mention} timed out for 3 hours.")
+        else:
+            logger.error(f"Failed to timeout user {user.mention}: {response.status_code}")
+
+    @staticmethod
+    async def delete_embed_on_catch(message):
+        try:
+            await message.delete()
+            logger.info("Embed deleted after successful catch.")
+        except Exception as e:
+            logger.error(f"Error deleting embed: {e}")
+
 
 def setup(bot):
     bot.add_cog(Anti_Thief(bot))
