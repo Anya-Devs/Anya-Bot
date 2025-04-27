@@ -1,4 +1,9 @@
 {
+<<<<<<< HEAD
   "DockerRun.DisableDockerrc": true,
   "python.REPL.enableREPLSmartSend": false
+=======
+    "DockerRun.DisableDockerrc": true,
+    "python.REPL.enableREPLSmartSend": false
+>>>>>>> 3f83a9a7a3aaf2f1befc4ce0205ed05fd05e096a
 }

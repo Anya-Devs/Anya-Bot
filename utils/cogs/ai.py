@@ -13,6 +13,7 @@ class ImageGenerator:
         """Initialize the image generator with API settings."""
         self.output_dir = Path("Data/commands/ai/images")
         self.output_dir.mkdir(parents=True, exist_ok=True)
+<<<<<<< HEAD
         # Load prompts from JSON file
         self.prompts = self.load_prompts()
         self.API_URL = os.getenv("Stable_Diffusion_API_URL")
@@ -34,6 +35,19 @@ class ImageGenerator:
             "negative_prompt": negative_prompt,
             "steps": 45,
             "cfg_scale": 7,
+=======
+        #print("Using Stable Diffusion API via aiohttp...")
+        self.API_URL  = os.getenv("Stable_Diffusion_API_URL")
+
+    async def generate_image_sync(self, prompt: str, width: int = 1216, height: int = 768) -> Path:
+        negative_prompt = "(bad-artist:1.5), watermark, text, error, blurry, jpeg artifacts, cropped, signature, username, artist name, (bad score:1.5), (bad quality:1.5), lowres, noisy, distorted, poorly drawn, out of focus, (uncanny:1.5), (robotic appearance:1.5), (unnatural pose:1.5), stiff posture, (incorrect anatomy:1.5), (bad hands:1.3), malformed hands, (incorrect head placement:1.5), uneven features, (bad clothing:1.5), wrinkled clothing, ill-fitting clothes, (unfinished details:1.5), (bad lighting), logo, artist logo, extra limbs, extra digit, extra legs, extra arms, disfigured, missing arms, extra fingers, fused fingers, missing fingers, unclear eyes, blur, (abstract background:1.5), (messy background:1.5), (unrealistic background:1.5), (chaotic background:1.5), (blurry background:1.5), (low quality background:1.5), (distracting background:1.5), (bad limbs:1.5), (disproportionate limbs:1.5), (unnatural limb position:1.5), (wrong limb count:1.5), (malformed limbs:1.5), (missing limbs:1.5), (incorrect limb anatomy:1.5)"
+        # negative_prompt = "(bad-artist:0.9), watermark, text, error, blurry, jpeg artifacts, cropped, signature, username, artist name, (bad score:1.5), (bad quality:1.5), (bad image:1.5), (bad environment:1.5), boring, dull, inconsistent, lowres, noisy, distorted, poorly drawn, out of focus, (uncanny:1.5), (incorrect anatomy:1.5), (bad hands:1.3), malformed hands, (incorrect head placement:1.5), unnatural skin texture, uneven features, (muddy colors:1.3), (bad clothing:1.4), wrinkled clothing, ill-fitting clothes, (unfinished details:1.5), (bad lighting), (flat colors), (skin imperfections), (blotchy skin), (uneven skin tone)"
+        payload = {
+            "prompt": f"{prompt}, (masterpiece), perfect skin, best pose, high resolution, high score, absurdres,  8K, amazing image",
+            "negative_prompt": negative_prompt,
+            "steps": 45,
+            "cfg_scale": 5, # decimals seem to split characters, higher the
+>>>>>>> 3f83a9a7a3aaf2f1befc4ce0205ed05fd05e096a
             "width": width,
             "height": height,
             "seed": -1,
@@ -41,6 +55,10 @@ class ImageGenerator:
             "sampler_name": "DPM++ 2M SDE Karras",
             "override_settings": {
                 "sd_model_checkpoint": "animagine-xl-4.0",
+<<<<<<< HEAD
+=======
+
+>>>>>>> 3f83a9a7a3aaf2f1befc4ce0205ed05fd05e096a
             }
         }
 
@@ -49,6 +67,10 @@ class ImageGenerator:
                 async with session.post(self.API_URL, json=payload) as response:
                     if response.status == 200:
                         r = await response.json()
+<<<<<<< HEAD
+=======
+
+>>>>>>> 3f83a9a7a3aaf2f1befc4ce0205ed05fd05e096a
                         # Decode and save the image
                         image_data = base64.b64decode(r['images'][0])
                         output_path = self.output_dir / f"generated_image_{width}x{height}.png"
@@ -158,6 +180,11 @@ class ImageGenerator:
 
 
 
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> 3f83a9a7a3aaf2f1befc4ce0205ed05fd05e096a
 class Processor:
     def __init__(self, face_model, body_model):
         self.face_net = cv.dnn.readNetFromCaffe(*face_model)
