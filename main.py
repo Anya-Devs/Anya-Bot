@@ -16,7 +16,7 @@ from rich.align import Align
 from rich.console import Console
 from dotenv import load_dotenv
 from Data.const import AvatarToTextArt
-from Data.token import get_bot_token, prefix
+from utils.token import get_bot_token, prefix
 from Imports.log_imports import logger
 from Imports.discord_imports import *
 
