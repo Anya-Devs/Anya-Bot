@@ -2,7 +2,7 @@
     "redirect": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}redirect",
         "related_commands": "Provide related commands"
     },
     "quest": {
@@ -10,13 +10,13 @@
             "q"
         ],
         "description": null,
-        "example": "Provide example",
+        "example": "{}quest",
         "related_commands": "Provide related commands"
     },
     "quest_roles": {
         "aliases": [],
         "description": "Command for admins to set or list roles that a target can get randomly.",
-        "example": "Provide example",
+        "example": "{}quest_roles",
         "related_commands": "Provide related commands"
     },
     "inventory": {
@@ -24,7 +24,7 @@
             "inv"
         ],
         "description": "Displays the user's tool inventory.",
-        "example": "Provide example",
+        "example": "{}inventory",
         "related_commands": "Provide related commands"
     },
     "balance": {
@@ -35,31 +35,31 @@
             "stp"
         ],
         "description": null,
-        "example": "Provide example",
+        "example": "{}balance",
         "related_commands": "Provide related commands"
     },
     "shop": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}shop",
         "related_commands": "Provide related commands"
     },
     "anime": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}anime",
         "related_commands": "Provide related commands"
     },
     "character": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}character",
         "related_commands": "Provide related commands"
     },
     "manga": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}manga",
         "related_commands": "Provide related commands"
     },
     "anime_recommend": {
@@ -67,7 +67,7 @@
             "ar"
         ],
         "description": "Fetches a random anime and sends the recommendation.",
-        "example": "Provide example",
+        "example": "{}anime_recommend",
         "related_commands": "Provide related commands"
     },
     "about": {
@@ -76,61 +76,61 @@
             "details"
         ],
         "description": null,
-        "example": "Provide example",
+        "example": "{}about",
         "related_commands": "Provide related commands"
     },
     "server": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}server",
         "related_commands": "Provide related commands"
     },
     "pfp": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}pfp",
         "related_commands": "Provide related commands"
     },
     "banner": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}banner",
         "related_commands": "Provide related commands"
     },
     "invite": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}invite",
         "related_commands": "Provide related commands"
     },
     "perms": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}perms",
         "related_commands": "Provide related commands"
     },
     "list_emojis": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}list_emojis",
         "related_commands": "Provide related commands"
     },
     "server_roles": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}server_roles",
         "related_commands": "Provide related commands"
     },
     "predict": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}predict",
         "related_commands": "Provide related commands"
     },
     "hunt": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}hunt",
         "related_commands": "Provide related commands"
     },
     "pokemon": {
@@ -141,13 +141,13 @@
             "p"
         ],
         "description": "Displays Pokemon dex information.",
-        "example": "Provide example",
+        "example": "{}pokemon",
         "related_commands": "Provide related commands"
     },
     "detect": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}detect",
         "related_commands": "Provide related commands"
     },
     "imagine": {
@@ -155,7 +155,7 @@
             "i"
         ],
         "description": null,
-        "example": "Provide example",
+        "example": "{}imagine",
         "related_commands": "Provide related commands"
     },
     "vision": {
@@ -163,37 +163,37 @@
             "v"
         ],
         "description": null,
-        "example": "Provide example",
+        "example": "{}vision",
         "related_commands": "Provide related commands"
     },
     "memory": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}memory",
         "related_commands": "Provide related commands"
     },
     "ping": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}ping",
         "related_commands": "Provide related commands"
     },
     "uptime": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}uptime",
         "related_commands": "Provide related commands"
     },
     "credit": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}credit",
         "related_commands": "Provide related commands"
     },
     "memo": {
         "aliases": [],
         "description": null,
-        "example": "Provide example",
+        "example": "{}memo",
         "related_commands": "Provide related commands"
     }
 }

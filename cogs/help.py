@@ -1,13 +1,8 @@
 
 import os
-import traceback
 import json
 
-import cv2
-import numpy as np
 import aiohttp
-import random
-import requests
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 
@@ -80,7 +75,7 @@ class Help(commands.Cog):
 
         if command_name:
             try:
-                sub_helper = Sub_Helper(self.bot)
+                sub_helper = Sub_Helper(self.bot, ctx.prefix)
                 markdown_help = sub_helper.get_command_help_string(ctx, command_name)
                 await ctx.reply(markdown_help)
             except Exception as e:
@@ -101,7 +96,7 @@ class Help(commands.Cog):
             self.cog_commands = cog_commands
             self._update_command_mapping()
 
-            sub_helper = Sub_Helper(self.bot)
+            sub_helper = Sub_Helper(self.bot, ctx.prefix)
             sub_helper.create_command_help_json()
 
             image_generator = ImageGenerator(ctx=ctx)

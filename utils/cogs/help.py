@@ -488,8 +488,9 @@ class Help_Thumbnails:
 
 
 class Sub_Helper:
-    def __init__(self, bot):
+    def __init__(self, bot, prefix):
         self.bot = bot
+        self.prefix = prefix
         self.help_json_path = "Data/commands/help/sub_helper.json"
 
     def _ensure_file_exists(self):
@@ -518,7 +519,7 @@ class Sub_Helper:
                     command_info = {
                         "aliases": cmd.aliases,
                         "description": cmd.help,
-                        "example": "Provide example",
+                        "example": f"{{}}{cmd.name}",
                         "related_commands": "Provide related commands"
                     }
                     help_data[cmd.name] = command_info
@@ -541,61 +542,20 @@ class Sub_Helper:
         usage = f"{ctx.prefix}{command.qualified_name} {command.signature.replace('[', '<').replace(']', '>').replace('=None', '')}"
 
         markdown_help = f"""```md
-< {usage} > 
+< {usage} >
 
-# Aliases
-{', '.join(aliases) if aliases else '[ None Found ]'}
-
-# Description
-{description}
-
-# Example Command(s)
-{example}
-
-# Related Command(s)
-{related}
+{"# Aliases\n" + ', '.join(aliases) if len(aliases) > 0 else ""}
+{"\n# Description\n" + (description if description is not None else "")}
+{"\n# Example Command(s)\n" + (example.format(self.prefix) if example is not None else "")}
+{"\n# Related Command(s)\n" + (related if related is not None else "")}
 
 > Remove brackets when typing commands
 > <> = required arguments
 > [] = optional arguments
 > {{}} = optional user input
 ```"""
+
+
         return markdown_help
 
 
-    def __init__(self, bot):
-        self.bot = bot
-        self.help_json_path = "Data/commands/help/sub_helper.json"
-
-    def _ensure_file_exists(self):
-        os.makedirs(os.path.dirname(self.help_json_path), exist_ok=True)
-        if not os.path.exists(self.help_json_path):
-            with open(self.help_json_path, "w") as f:
-                json.dump({}, f, indent=4)
-
-    def _load_help_json(self):
-        self._ensure_file_exists()
-        with open(self.help_json_path, "r") as f:
-            return json.load(f)
-
-    def _save_help_json(self, data):
-        with open(self.help_json_path, "w") as f:
-            json.dump(data, f, indent=4)
-
-    def create_command_help_json(self):
-        help_data = self._load_help_json()
-
-        for cog_name, cog in self.bot.cogs.items():
-            if isinstance(cog, commands.Cog):
-                for cmd in cog.get_commands():
-                    if cmd.hidden:
-                        continue
-                    command_info = {
-                        "aliases": cmd.aliases,
-                        "description": cmd.help,
-                        "example": "Provide example",
-                        "related_commands": "Provide related commands"
-                    }
-                    help_data[cmd.name] = command_info
-
-        self._save_help_json(help_data)
