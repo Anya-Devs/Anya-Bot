@@ -1,4 +1,4 @@
-import os, base64, asyncio, requests, concurrent, aiohttp
+import os, base64, asyncio, requests, concurrent, aiohttp, json
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
@@ -13,17 +13,27 @@ class ImageGenerator:
         """Initialize the image generator with API settings."""
         self.output_dir = Path("Data/commands/ai/images")
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        #print("Using Stable Diffusion API via aiohttp...")
-        self.API_URL  = os.getenv("Stable_Diffusion_API_URL")
+        # Load prompts from JSON file
+        self.prompts = self.load_prompts()
+        self.API_URL = os.getenv("Stable_Diffusion_API_URL")
 
+    def load_prompts(self):
+        """Load positive and negative prompts from the prompt.json file."""
+        prompt_file = Path("Data/commands/ai/promt.json")
+        if prompt_file.exists():
+            with open(prompt_file, 'r') as f:
+                return json.load(f)
+       
     async def generate_image_sync(self, prompt: str, width: int = 1216, height: int = 768) -> Path:
-        negative_prompt = "(bad-artist:1.5), watermark, text, error, blurry, jpeg artifacts, cropped, signature, username, artist name, (bad score:1.5), (bad quality:1.5), lowres, noisy, distorted, poorly drawn, out of focus, (uncanny:1.5), (robotic appearance:1.5), (unnatural pose:1.5), stiff posture, (incorrect anatomy:1.5), (bad hands:1.3), malformed hands, (incorrect head placement:1.5), uneven features, (bad clothing:1.5), wrinkled clothing, ill-fitting clothes, (unfinished details:1.5), (bad lighting), logo, artist logo, extra limbs, extra digit, extra legs, extra arms, disfigured, missing arms, extra fingers, fused fingers, missing fingers, unclear eyes, blur, (abstract background:1.5), (messy background:1.5), (unrealistic background:1.5), (chaotic background:1.5), (blurry background:1.5), (low quality background:1.5), (distracting background:1.5), (bad limbs:1.5), (disproportionate limbs:1.5), (unnatural limb position:1.5), (wrong limb count:1.5), (malformed limbs:1.5), (missing limbs:1.5), (incorrect limb anatomy:1.5)"
-        # negative_prompt = "(bad-artist:0.9), watermark, text, error, blurry, jpeg artifacts, cropped, signature, username, artist name, (bad score:1.5), (bad quality:1.5), (bad image:1.5), (bad environment:1.5), boring, dull, inconsistent, lowres, noisy, distorted, poorly drawn, out of focus, (uncanny:1.5), (incorrect anatomy:1.5), (bad hands:1.3), malformed hands, (incorrect head placement:1.5), unnatural skin texture, uneven features, (muddy colors:1.3), (bad clothing:1.4), wrinkled clothing, ill-fitting clothes, (unfinished details:1.5), (bad lighting), (flat colors), (skin imperfections), (blotchy skin), (uneven skin tone)"
+        # Use loaded prompts
+        positive_prompt = f"{prompt}, {self.prompts['positive_prompt']}"
+        negative_prompt = self.prompts['negative_prompt']
+        
         payload = {
-            "prompt": f"{prompt}, (masterpiece), perfect skin, high resolution, high score, absurdres,  8K, amazing image",
+            "prompt": positive_prompt,
             "negative_prompt": negative_prompt,
             "steps": 45,
-            "cfg_scale": 5, # decimals seem to split characters, higher the
+            "cfg_scale": 7,
             "width": width,
             "height": height,
             "seed": -1,
@@ -31,7 +41,6 @@ class ImageGenerator:
             "sampler_name": "DPM++ 2M SDE Karras",
             "override_settings": {
                 "sd_model_checkpoint": "animagine-xl-4.0",
-
             }
         }
 
@@ -40,7 +49,6 @@ class ImageGenerator:
                 async with session.post(self.API_URL, json=payload) as response:
                     if response.status == 200:
                         r = await response.json()
-
                         # Decode and save the image
                         image_data = base64.b64decode(r['images'][0])
                         output_path = self.output_dir / f"generated_image_{width}x{height}.png"
@@ -55,8 +63,6 @@ class ImageGenerator:
         except aiohttp.ClientError as e:
             print(f"❌ Request failed: {str(e)}")
             return None
-
-
 
 
 
