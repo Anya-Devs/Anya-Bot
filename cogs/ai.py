@@ -2,7 +2,7 @@ import os, asyncio, tempfile
 from io import BytesIO
 from datetime import datetime
 
-import aiohttp 
+import aiohttp
 import numpy as np
 import cv2 as cv
 from PIL import Image, ImageSequence
@@ -21,6 +21,7 @@ class Ai(commands.Cog):
         self.bot = bot
         self.OPENAI_KEY = os.getenv("OPENAI_KEY")
         self.HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
+        self.queue = []
 
         if not self.OPENAI_KEY:
             raise ValueError("API key is not set in environment variables.")
@@ -91,9 +92,9 @@ class Ai(commands.Cog):
      if ctx.author.id in self.queue:
         await ctx.send(f"{ctx.author.mention}, you're already in the process of generating an image. Please wait until it finishes.")
         return
-    
+
      self.queue.append(ctx.author.id)
-    
+
      try:
         async with ctx.typing():
             custom_prompt = f"{prompt}"
@@ -121,7 +122,7 @@ class Ai(commands.Cog):
             )
 
             await ctx.reply(embed=embed, file=file)
-    
+
      except Exception as e:
         await ctx.send(f"An error occurred: {e}")
      finally:
@@ -133,7 +134,7 @@ class Ai(commands.Cog):
         async def vision(image_link: str, prompt: str = " ") -> str:
             try:
                 response = await self.openai_client.chat.completions.create(
-                    model="gemini-2.0-flash-lite",  
+                    model="gemini-2.0-flash-lite",
                     messages=[
                         {
                             "role": "user",
@@ -169,7 +170,7 @@ class Ai(commands.Cog):
                         if ref_message.attachments:
                             image_url = ref_message.attachments[0].url
                         elif ref_message.embeds:
-                            
+
                             embed = ref_message.embeds[0]
                             if embed.thumbnail and embed.thumbnail.url:
                                 image_url = embed.thumbnail.url
@@ -181,7 +182,7 @@ class Ai(commands.Cog):
                             )
                             return
                     elif ctx.message.embeds:
-                        
+
                         embed = ctx.message.embeds[0]
                         if embed.thumbnail and embed.thumbnail.url:
                             image_url = embed.thumbnail.url

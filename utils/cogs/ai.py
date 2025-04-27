@@ -8,6 +8,150 @@ from PIL import Image, ImageSequence
 from tqdm import tqdm
 
 
+class ImageGenerator:
+    def __init__(self):
+        """Initialize the image generator with API settings."""
+        self.output_dir = Path("Data/commands/ai/images")
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        #print("Using Stable Diffusion API via aiohttp...")
+        self.API_URL  = os.getenv("Stable_Diffusion_API_URL")
+
+    async def generate_image_sync(self, prompt: str, width: int = 1216, height: int = 768) -> Path:
+        negative_prompt = "(bad-artist:1.5), watermark, text, error, blurry, jpeg artifacts, cropped, signature, username, artist name, (bad score:1.5), (bad quality:1.5), lowres, noisy, distorted, poorly drawn, out of focus, (uncanny:1.5), (robotic appearance:1.5), (unnatural pose:1.5), stiff posture, (incorrect anatomy:1.5), (bad hands:1.3), malformed hands, (incorrect head placement:1.5), uneven features, (bad clothing:1.5), wrinkled clothing, ill-fitting clothes, (unfinished details:1.5), (bad lighting), logo, artist logo, extra limbs, extra digit, extra legs, extra arms, disfigured, missing arms, extra fingers, fused fingers, missing fingers, unclear eyes, blur, (abstract background:1.5), (messy background:1.5), (unrealistic background:1.5), (chaotic background:1.5), (blurry background:1.5), (low quality background:1.5), (distracting background:1.5), (bad limbs:1.5), (disproportionate limbs:1.5), (unnatural limb position:1.5), (wrong limb count:1.5), (malformed limbs:1.5), (missing limbs:1.5), (incorrect limb anatomy:1.5)"
+        # negative_prompt = "(bad-artist:0.9), watermark, text, error, blurry, jpeg artifacts, cropped, signature, username, artist name, (bad score:1.5), (bad quality:1.5), (bad image:1.5), (bad environment:1.5), boring, dull, inconsistent, lowres, noisy, distorted, poorly drawn, out of focus, (uncanny:1.5), (incorrect anatomy:1.5), (bad hands:1.3), malformed hands, (incorrect head placement:1.5), unnatural skin texture, uneven features, (muddy colors:1.3), (bad clothing:1.4), wrinkled clothing, ill-fitting clothes, (unfinished details:1.5), (bad lighting), (flat colors), (skin imperfections), (blotchy skin), (uneven skin tone)"
+        payload = {
+            "prompt": f"{prompt}, (masterpiece), perfect skin, high resolution, high score, absurdres,  8K, amazing image",
+            "negative_prompt": negative_prompt,
+            "steps": 45,
+            "cfg_scale": 5, # decimals seem to split characters, higher the
+            "width": width,
+            "height": height,
+            "seed": -1,
+            "style_preset": "Anim4gine",
+            "sampler_name": "DPM++ 2M SDE Karras",
+            "override_settings": {
+                "sd_model_checkpoint": "animagine-xl-4.0",
+
+            }
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.API_URL, json=payload) as response:
+                    if response.status == 200:
+                        r = await response.json()
+
+                        # Decode and save the image
+                        image_data = base64.b64decode(r['images'][0])
+                        output_path = self.output_dir / f"generated_image_{width}x{height}.png"
+                        with open(output_path, 'wb') as f:
+                            f.write(image_data)
+
+                        print(f"✅ Image successfully generated and saved as '{output_path}'")
+                        return output_path
+                    else:
+                        print(f"❌ Error: {response.status}, {await response.text()}")
+                        return None
+        except aiohttp.ClientError as e:
+            print(f"❌ Request failed: {str(e)}")
+            return None
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class Processor:
     def __init__(self, face_model, body_model):
         self.face_net = cv.dnn.readNetFromCaffe(*face_model)
@@ -97,7 +241,7 @@ class Processor:
             if img_np is None or img_np.size == 0:
                 return img_np
 
-            if len(img_np.shape) == 2: 
+            if len(img_np.shape) == 2:
                 img_np = cv.cvtColor(img_np, cv.COLOR_GRAY2BGR)
             img_h, img_w = img_np.shape[:2]
             face_blob = cv.dnn.blobFromImage(img_np, 1.0, (300, 300), (104.0, 177.0, 123.0), swapRB=True, crop=False)
@@ -161,8 +305,8 @@ class Processor:
         return img_np
 
     def save_faces_to_file(self):
-        pass 
-    
+        pass
+
     def detect_media_type(self, media_url):
         if any(media_url.lower().endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.bmp', '.tiff')):
             return 'image'
@@ -175,57 +319,6 @@ class Processor:
 
 
 
-
-
-
-
-
-
-
-
-class ImageGenerator:
-    def __init__(self):
-        """Initialize the image generator with API settings."""
-        self.output_dir = Path("Data/commands/ai/images")
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        #print("Using Stable Diffusion API via aiohttp...")
-        self.API_URL  = os.getenv("Stable_Diffusion_API_URL")
-
-    async def generate_image_sync(self, prompt: str, width: int = 1216, height: int = 768) -> Path:
-        negative_prompt = "(bad-artist:1.5), watermark, text, error, blurry, jpeg artifacts, cropped, signature, username, artist name, (bad score:1.5), (bad quality:1.5), lowres, noisy, distorted, poorly drawn, out of focus, (uncanny:1.5), (robotic appearance:1.5), (unnatural pose:1.5), stiff posture, (incorrect anatomy:1.5), (bad hands:1.3), malformed hands, (incorrect head placement:1.5), uneven features, (bad clothing:1.5), wrinkled clothing, ill-fitting clothes, (unfinished details:1.5), (bad lighting), logo, artist logo, extra limbs, extra digit, extra legs, extra arms, disfigured, missing arms, extra fingers, fused fingers, missing fingers, unclear eyes, blur, (abstract background:1.5), (messy background:1.5), (unrealistic background:1.5), (chaotic background:1.5), (blurry background:1.5), (low quality background:1.5), (distracting background:1.5), (bad limbs:1.5), (disproportionate limbs:1.5), (unnatural limb position:1.5), (wrong limb count:1.5), (malformed limbs:1.5), (missing limbs:1.5), (incorrect limb anatomy:1.5), (unattractive)"
-        payload = {
-        "prompt": f"{prompt}, masterpiece, (best quality), (high resolution), (8K), absurdres, amazing image, perfect skin, (best clothing), (expressive personality)",
-        "negative_prompt": negative_prompt,
-        "steps": 50,  
-        "cfg_scale": 7,  
-        "width": width,
-        "height": height,
-        "seed": -1,  
-        "style_preset": "Anim4gine", 
-        "sampler_name": "DPM++ 2M Karras",
-        "override_settings": {
-         "sd_model_checkpoint": "animagine-xl-4.0",
-           }
-        }
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.API_URL, json=payload) as response:
-                    if response.status == 200:
-                        r = await response.json()
-                        image_data = base64.b64decode(r['images'][0])
-                        output_path = self.output_dir / f"generated_image_{width}x{height}.png"
-                        with open(output_path, 'wb') as f:
-                            f.write(image_data)
-
-                        print(f"✅ Image successfully generated and saved as '{output_path}'")
-                        return output_path
-                    else:
-                        print(f"❌ Error: {response.status}, {await response.text()}")
-                        return None
-        except aiohttp.ClientError as e:
-            print(f"❌ Request failed: {str(e)}")
-            return None
 
 
 
