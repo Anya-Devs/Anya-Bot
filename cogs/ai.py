@@ -8,10 +8,10 @@ import cv2 as cv
 from PIL import Image, ImageSequence
 from openai import AsyncOpenAI
 
+from utils.cogs.ai import *
 from Imports.discord_imports import *
 from Imports.log_imports import logger
 from Data.const import primary_color
-from utils.cogs.ai import Processor, ImageGenerator
 
 
 
@@ -31,61 +31,7 @@ class Ai(commands.Cog):
             base_url="https://api.naga.ac/v1",
         )
         self.image_gen = ImageGenerator()
-        self.detect = Processor(
-            face_model=('Data/commands/ai/detect/deploy.prototxt', 'Data/commands/ai/detect/res10_300x300_ssd_iter_140000.caffemodel'),
-            body_model=('Data/commands/ai/detect/yolov4.cfg', 'Data/commands/ai/detect/yolov4.weights')
-        )
-
-    @commands.command()
-    async def detect(self, ctx, url: str):
-        async with ctx.typing():
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as resp:
-                    if resp.status != 200:
-                        await ctx.send("Failed to fetch image from the provided URL.")
-                        return
-                    content_type = resp.headers.get("Content-Type", "").lower()
-                    data = await resp.read()
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".gif" if "gif" in content_type else ".png") as tmp_file:
-            tmp_file.write(data)
-            temp_path = tmp_file.name
-
-        is_gif = "gif" in content_type
-        output_bytes = BytesIO()
-
-        try:
-            if is_gif:
-                pil_image = Image.open(temp_path)
-                frames = [frame.copy().convert("RGB") for frame in ImageSequence.Iterator(pil_image)]
-                durations = [frame.info.get("duration", 100) for frame in ImageSequence.Iterator(pil_image)]
-
-                processed_frames, durations = await self.detect.process_gif(frames, durations)
-                processed_pil = [Image.fromarray(cv.cvtColor(f, cv.COLOR_BGR2RGB)) for f in processed_frames]
-                processed_pil[0].save(output_bytes, format="GIF", save_all=True, append_images=processed_pil[1:], duration=durations, loop=0)
-
-                filename = "detection_result.gif"
-            else:
-                pil_image = Image.open(temp_path).convert("RGB")
-                np_image = cv.cvtColor(np.array(pil_image), cv.COLOR_RGB2BGR)
-                processed_np = await asyncio.to_thread(self.detect.process_frame, np_image)
-                processed_pil = Image.fromarray(cv.cvtColor(processed_np, cv.COLOR_BGR2RGB))
-                processed_pil.save(output_bytes, format="PNG")
-
-                filename = "detection_result.png"
-
-            output_bytes.seek(0)
-            await ctx.send(
-                embed=Embed(title="Detection Result", description="Detected faces and bodies:"),
-                file=File(fp=output_bytes, filename=filename)
-            )
-
-        except Exception as e:
-            await ctx.send(f"Error during processing: {e}")
-        finally:
-            os.remove(temp_path)
-
-
+     
 
     @commands.command(name="imagine", description="Generate an image", aliases=["i"])
     async def imagine(self, ctx: commands.Context, *, prompt: str):
