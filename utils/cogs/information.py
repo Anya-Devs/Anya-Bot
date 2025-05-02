@@ -3,9 +3,9 @@ import json
 import aiohttp
 from datetime import datetime
 
-from Data.const import *
+from data.const import *
 
-from Data.const import primary_color, Information_Embed
+from data.const import primary_color, Information_Embed
 from discord.ui import View, Select, Button
 from Imports.discord_imports import *
 

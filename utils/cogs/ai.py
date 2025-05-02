@@ -10,8 +10,8 @@ from tqdm import tqdm
 
 class ImageGenerator:
     def __init__(self):
-        self.output_dir = Path("Data/commands/ai/images")
-        self.prompt_path = "Data/commands/ai/prompt.json"
+        self.output_dir = Path("data/commands/ai/images")
+        self.prompt_path = "data/commands/ai/prompt.json"
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.prompts = self.load_prompts()
         self.payload_config = self.load_payload_config()
@@ -24,7 +24,7 @@ class ImageGenerator:
                 return json.load(f)
 
     def load_payload_config(self):
-        payload_file = Path("Data/commands/ai/payload.json")
+        payload_file = Path("data/commands/ai/payload.json")
         if payload_file.exists():
             with open(payload_file, 'r') as f:
                 return json.load(f)

@@ -1,6 +1,8 @@
 import os
 import re
 
+EXCLUDED_DIRS = {'.venv', 'venv', '__pycache__', '.git', '.idea', '.vscode'}
+
 def remove_comments_from_code(code, file_path):
     removed_comments = []
 
@@ -31,7 +33,8 @@ def remove_comments_from_code(code, file_path):
 def remove_comments_in_folder(folder_path):
     py_files = []
 
-    for root, _, files in os.walk(folder_path):
+    for root, dirs, files in os.walk(folder_path):
+        dirs[:] = [d for d in dirs if d not in EXCLUDED_DIRS]
         for file in files:
             if file.endswith('.py'):
                 py_files.append(os.path.join(root, file))
@@ -96,12 +99,13 @@ def organize_imports_in_file(file_path):
 
 
 def organize_imports_in_folder(folder_path):
-    for root, _, files in os.walk(folder_path):
+    for root, dirs, files in os.walk(folder_path):
+        dirs[:] = [d for d in dirs if d not in EXCLUDED_DIRS]
         for file in files:
             if file.endswith('.py'):
                 file_path = os.path.join(root, file)
                 organize_imports_in_file(file_path)
-                print(f"Organized imports in: {file_path}")
+                print(f"Organized _imports in: {file_path}")
 
 
 def replace_paths_in_file(file_path, old_path, new_path):
@@ -116,6 +120,20 @@ def replace_paths_in_file(file_path, old_path, new_path):
     print(f"Replaced all occurrences of '{old_path}' with '{new_path}' in {file_path}")
 
 
+def replace_words_in_folder(folder_path, target, replacement):
+    for root, dirs, files in os.walk(folder_path):
+        dirs[:] = [d for d in dirs if d not in EXCLUDED_DIRS]
+        for file in files:
+            if file.endswith('.py'):
+                path = os.path.join(root, file)
+                with open(path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                updated = content.replace(target, replacement)
+                with open(path, 'w', encoding='utf-8') as f:
+                    f.write(updated)
+                print(f"Updated: {path}")
+
+
 def path_replacement_prompt():
     file_path = input("Enter the file path to update: ").strip()
     old_path = input("Old path to replace: ").strip()
@@ -127,15 +145,33 @@ def path_replacement_prompt():
         print(f"File {file_path} does not exist.")
 
 
+def word_replacement_prompt():
+    word = input("Word to replace: ").strip()
+    new_word = input("Replace with: ").strip()
+
+    print(f"\nWARNING: This will replace all instances of '{word}' with '{new_word}' in all .py files under the current directory (excluding critical folders).")
+    confirm = input("Proceed? (yes/no): ").strip().lower()
+
+    if confirm != "yes":
+        print("Aborted.")
+        return
+
+    folder = os.getcwd()
+    replace_words_in_folder(folder, word, new_word)
+
+    print(f"\nDone. Replaced '{word}' with '{new_word}' in all applicable files.")
+
+
 def main():
     print("\n--- Python Code File Tool ---")
     print("Select a function to run:\n")
     print("1. Remove comments from Python files")
-    print("2. Organize imports in Python files")
+    print("2. Organize _imports in Python files")
     print("3. Replace file paths in a single file")
+    print("4. Replace word in all Python files (excluding critical folders)")
 
     try:
-        choice = int(input("\nEnter choice (1-3): ").strip())
+        choice = int(input("\nEnter choice (1-4): ").strip())
     except ValueError:
         print("Invalid input.")
         return
@@ -151,8 +187,11 @@ def main():
             organize_imports_in_folder(folder_path)
     elif choice == 3:
         path_replacement_prompt()
+    elif choice == 4:
+        word_replacement_prompt()
     else:
         print("Invalid choice.")
+
 
 if __name__ == "__main__":
     main()

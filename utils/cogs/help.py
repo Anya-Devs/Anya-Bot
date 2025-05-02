@@ -13,8 +13,9 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 
 
+from data.const import *
+
 from Imports.discord_imports import *
-from Data.const import *
 from Imports.log_imports import logger
 
 
@@ -24,7 +25,7 @@ class Select(discord.ui.Select):
         self.primary_color = primary_color
         self.ctx = ctx
         self.module_to_cogs = self.map_modules_to_cogs()
-        self.set_thumbnail_file = "Data/commands/help/help_embed_images.json"
+        self.set_thumbnail_file = "data/commands/help/help_embed_images.json"
 
         options = []
         for module, cogs in self.module_to_cogs.items():
@@ -104,7 +105,7 @@ class Select(discord.ui.Select):
                 embed.set_thumbnail(url=thumbnail_url)
 
             image_generator = Options_ImageGenerator(cog_name)
-            image_path = "Data/images/help_images/cog_image.png"
+            image_path = "data/images/help_images/cog_image.png"
             saved_image_path = image_generator.save_image(image_path)
 
             if os.path.exists(image_path):
@@ -137,10 +138,10 @@ class HelpMenu(discord.ui.View):
 
 class Options_ImageGenerator:
     def __init__(self, cog_name, image_width=800, image_height=800):
-        self.font_path_header = "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
-        self.font_path_base = "Data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
-        self.character_path = "Data/commands/help/menu/initial/style/assets/character.png"
-        self.background_path = "Data/commands/help/menu/initial/style/assets/background.png"
+        self.font_path_header = "data/commands/help/menu/initial/style/assets/font/valentine.ttf"
+        self.font_path_base = "data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
+        self.character_path = "data/commands/help/menu/initial/style/assets/character.png"
+        self.background_path = "data/commands/help/menu/initial/style/assets/background.png"
 
         self.character_scale = 0.4
         self.image_width = image_width
@@ -322,12 +323,12 @@ class ImageGenerator:
         self.user_name = ctx.author.display_name
 
         # Font Paths
-        self.font_path_header = "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
-        self.font_path_base = "Data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
+        self.font_path_header = "data/commands/help/menu/initial/style/assets/font/valentine.ttf"
+        self.font_path_base = "data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
         
         # Image Paths
-        self.character_path = "Data/commands/help/menu/initial/style/assets/character.png"
-        self.background_path = "Data/commands/help/menu/initial/style/assets/background.png"
+        self.character_path = "data/commands/help/menu/initial/style/assets/character.png"
+        self.background_path = "data/commands/help/menu/initial/style/assets/background.png"
 
         # Scaling factor for larger images
         self.scale_factor = 1.5  # Adjust as needed (1.5x original size)
@@ -491,7 +492,7 @@ class Sub_Helper:
     def __init__(self, bot, prefix):
         self.bot = bot
         self.prefix = prefix
-        self.help_json_path = "Data/commands/help/sub_helper.json"
+        self.help_json_path = "data/commands/help/sub_helper.json"
 
     def _ensure_file_exists(self):
         os.makedirs(os.path.dirname(self.help_json_path), exist_ok=True)

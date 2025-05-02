@@ -21,7 +21,7 @@ from pymongo.errors import PyMongoError
 
 
 
-from Data.const import *
+from data.const import *
 from Imports.discord_imports import *
 from Imports.log_imports import *
 from utils.cogs.quest import *
@@ -183,7 +183,7 @@ class Quest_View(View):
 
         
         file = discord.File(
-            "Data/images/generated_image.png", filename="image.png")
+            "data/images/generated_image.png", filename="image.png")
         embed.set_image(url=f"attachment://image.png")
 
         return embed
@@ -507,16 +507,16 @@ class ImageGenerator:
         """Initialize the ImageGenerator with cog-specific data and load resources."""
         
         self.font_path_header = (
-            "Data/commands/help/menu/initial/style/assets/font/valentine.ttf"
+            "data/commands/help/menu/initial/style/assets/font/valentine.ttf"
         )
         self.font_path_base = (
-            "Data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
+            "data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
         )
         self.character_path = (
-            "Data/commands/help/menu/initial/style/assets/character_quest.png"
+            "data/commands/help/menu/initial/style/assets/character_quest.png"
         )
         self.background_path = (
-            "Data/commands/help/menu/initial/style/assets/background.png"
+            "data/commands/help/menu/initial/style/assets/background.png"
         )
 
         
@@ -699,7 +699,7 @@ class Quest_Data(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.DB_NAME = "Quest"
-        self.quest_content_file = "Data/commands/quest/quest_content.txt"
+        self.quest_content_file = "data/commands/quest/quest_content.txt"
 
         
         mongo_url = os.getenv("MONGO_URI")

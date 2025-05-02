@@ -1,35 +1,33 @@
-from Data.setup import start
-start()
+__import__('data.setup').setup.start()
 
 import os
 import gc
 import asyncio
-import requests
 import traceback
+import importlib
+import pkgutil
 
 import aiohttp
 from aiohttp import web
-import shutil
 from art import *
 from rich.tree import Tree
 from rich.panel import Panel
 from rich.align import Align
 from rich.console import Console
 from dotenv import load_dotenv
-from Data.const import AvatarToTextArt
+
+from data.const import AvatarToTextArt
 from utils.token import get_bot_token, prefix, use_test_bot as ut
-from Imports.log_imports import logger
+from Imports.log_imports import *
 from Imports.discord_imports import *
 
-
-
-load_dotenv(dotenv_path=os.path.join(".github", ".env"))  
+load_dotenv(dotenv_path=os.path.join(".github", ".env"))
 
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         intents.members = True
-
+        self.cog_dirs = ['bot.cogs', 'bot.events']
         super().__init__(
             command_prefix=commands.when_mentioned_or(prefix),
             intents=intents,
@@ -44,7 +42,7 @@ class BotSetup(commands.AutoShardedBot):
         art_generator = AvatarToTextArt(avatar_url)
         art_generator.create_art()
         guild_count = len(self.guilds)
-        user_count = sum(guild.member_count for guild in self.guilds if guild.member_count)
+        user_count = sum(g.member_count or 0 for g in self.guilds)
         print('\n\n\n')
         print(art_generator.get_colored_ascii_art())
         print(f"\033[38;2;88;101;242m{'Welcome to Discord!'.center(__import__('shutil').get_terminal_size().columns)}\033[0m")
@@ -72,42 +70,44 @@ class BotSetup(commands.AutoShardedBot):
 
     async def setup(self):
         print("\033[94m" + " Loading Cogs ".center(__import__('shutil').get_terminal_size().columns, "=") + "\033[0m")
-        await self.import_cogs("cogs")
-        await self.import_cogs("events")
+        for dir_name in self.cog_dirs:
+            await self.import_cogs(dir_name)
         print("\033[94m" + " Setup Completed ".center(__import__('shutil').get_terminal_size().columns, "=") + "\033[0m")
 
-
     async def import_cogs(self, dir_name):
-        print('\n\n\n')
-
-        self.ALIGNMENT = 'center'  
-
+        print('\n\n')
+        self.ALIGNMENT = 'center'
         console = Console()
         tree = Tree(f"[bold cyan]◇ {dir_name}[/bold cyan]")
 
-        for filename in os.listdir(dir_name):
-            if filename.endswith(".py"):
-                module_name = os.path.splitext(filename)[0]
-                file_branch = tree.add(f"[red]{filename}[/red]")
+        try:
+            package = importlib.import_module(dir_name)
+        except ModuleNotFoundError as e:
+            tree.add(f"[red]Could not import {dir_name}: {e}[/red]")
+            console.print(tree)
+            return
+
+        for _, module_name, is_pkg in pkgutil.iter_modules(package.__path__):
+            if is_pkg:
+                continue
+            file_branch = tree.add(f"[red]{module_name}.py[/red]")
+            try:
+                mod = importlib.import_module(f"{dir_name}.{module_name}")
                 found = False
+                for obj in vars(mod).values():
+                    if isinstance(obj, type) and issubclass(obj, commands.Cog) and obj is not commands.Cog:
+                        if self.get_cog(obj.__name__):
+                            #file_branch.add(f"[yellow]⚠ Skipped duplicate: {obj.__name__} already loaded[/yellow]")
+                            continue
+                        await self.add_cog(obj(self))
+                        if not found:
+                            file_branch.label = f"[green]□ {module_name}.py[/green]"
+                            found = True
+                        file_branch.add(f"[cyan]→[/cyan] [bold white]{obj.__name__}[/bold white]")
+            except Exception as e:
+                file_branch.add(f"[red]Error: {type(e).__name__}: {e}[/red]")
 
-                try:
-                    module = __import__(f"{dir_name}.{module_name}", fromlist=[""])
-                    for obj_name in dir(module):
-                        obj = getattr(module, obj_name)
-                        if isinstance(obj, commands.CogMeta):
-                            if not self.get_cog(obj_name):
-                                await self.add_cog(obj(self))
-                                if not found:
-                                    file_branch.label = f"[green]□ {filename}[/green]"
-                                    found = True
-                                file_branch.add(f"[cyan]→[/cyan] [bold white]{obj_name}[/bold white]")
-                except Exception as e:
-                    file_branch.add(f"[red]Error: {type(e).__name__}: {e}[/red]")
-
-        aligned_output = Align(tree, align=self.ALIGNMENT, width=console.width)
-        console.print(aligned_output)
-
+        console.print(Align(tree, align=self.ALIGNMENT, width=console.width))
 
 
 async def handle_index(request):
