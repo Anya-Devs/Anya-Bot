@@ -8,7 +8,11 @@ from PIL import Image, ImageSequence
 from tqdm import tqdm
 
 
-class ImageGenerator:
+
+
+
+class Image: 
+  class ImageGenerator:
     def __init__(self):
         self.output_dir = Path("data/commands/ai/images")
         self.prompt_path = "data/commands/ai/prompt.json"
@@ -74,9 +78,16 @@ class ImageGenerator:
 
 
 
-
-
-
+class AiText:
+    IMAGINE_ALREADY_IN_QUEUE = "{}, you're already in the process of generating an image. Please wait until it finishes."
+    ERROR_GENERATING_PROMPT = "❌ Error generating prompt, please try again."
+    NO_IMAGE_URL_FOUND = "No image URL found. Please provide an image URL, attach an image to your message, or reply to a message with an image."
+    THINKING_MESSAGE = "> **Thinking ... :thought_balloon:**"
+    ERROR_OCCURED = "An error occurred: {e}"
+    REQUESTED_BY = "Requested by {ctx.author}"
+    VISION_RESPONSE = "-# Asked by {ctx.author.mention}\n\n**Vision** - {response}"
+    VISION_THANKS = "Thanks for using {self.bot.user.name}"
+    VISION_PROMPT = "in a tone of innocent, and slightly naive (you are anya forger from spx x family : DO NOT TALK ABOUT PENUTS are make refrences to the show) describe the image you see and have turthful opionins"
 
 
 
