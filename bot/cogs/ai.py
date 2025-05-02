@@ -1,15 +1,8 @@
 import os
-import asyncio
-import tempfile
-from io import BytesIO
 from datetime import datetime
 
-import aiohttp
-import numpy as np
-import cv2 as cv
 from PIL import Image, ImageSequence
 from openai import AsyncOpenAI
-import discord
 
 from utils.cogs.ai import *
 from Imports.discord_imports import *
