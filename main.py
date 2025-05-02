@@ -4,6 +4,7 @@ start()
 import os
 import gc
 import asyncio
+import requests
 import traceback
 
 import aiohttp
@@ -109,61 +110,46 @@ class BotSetup(commands.AutoShardedBot):
 
 
 
-async def periodic_ping():
-    while True:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get("http://localhost:8080") as response:
-                    if response.status == 200:
-                        return
-        except Exception as e:
-            logger.error(f"Ping failed: {e}")
-        await asyncio.sleep(60) 
-        
 async def handle_index(request):
     return web.Response(text="✅ Bot is running", content_type="text/html")
 
-def create_app():
+async def start_web_server():
     app = web.Application()
     app.router.add_get("/", handle_index)
-    return app
-
-async def start_web_server():
-    app = create_app()
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 0 if ut else 8080) # 0 for testing set port 
+    site = web.TCPSite(runner, '0.0.0.0', 0 if ut else 8080)
     await site.start()
-    print("Web server started on http://0.0.0.0:8080")
-    return runner  
+    return runner, site
 
-async def cleanup(runner):
-    await runner.cleanup()
+async def periodic_ping(host, port):
+    while True:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"http://{host}:{port}") as r:
+                    if r.status == 200:
+                        return
+        except:
+            pass
+        await asyncio.sleep(60)
 
 async def start_all_services():
     gc.collect()
-    runner = None
+    runner = site = None
     try:
         bot_setup = BotSetup()
-        runner = await start_web_server()
-        
+        runner, site = await start_web_server()
+        port = site._server.sockets[0].getsockname()[1]
         await asyncio.gather(
             bot_setup.start_bot(),
-            periodic_ping()
+            periodic_ping("localhost", port)
         )
-    except Exception as e:
-        logger.error(f"🔥 Fatal error in main loop: {e}\n{traceback.format_exc()}")
+    except Exception:
+        traceback.print_exc()
     finally:
         if runner:
-            await cleanup(runner)
+            await runner.cleanup()
         await asyncio.sleep(1)
 
 if __name__ == "__main__":
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(start_all_services())
-    except KeyboardInterrupt:
-        pass
-    finally:
-        loop.close()
+    asyncio.run(start_all_services())

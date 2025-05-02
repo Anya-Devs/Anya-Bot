@@ -20,10 +20,10 @@ class LogColors:
 
 
 class EmojiIndicator:
-    INFO = "🩶"
-    WARNING = "⚠️"
-    ERROR = "❌"
-    DEBUG = "🔍"
+    INFO = "🩶 "
+    WARNING = "⚠️ "
+    ERROR = "❌ "
+    DEBUG = "🔍 "
 
 
 class CustomFormatter(logging.Formatter):
@@ -44,7 +44,7 @@ class CustomFormatter(logging.Formatter):
             logging.ERROR: LogColors.ERROR,
         }.get(record.levelno, LogColors.HEADER)
 
-        message = f"{level_emoji} | {filename} | {time_now} | {record.getMessage()}"
+        message = f"{level_emoji} | {time_now} | {filename} | {record.getMessage()}"
         return f"{color}{message}{LogColors.ENDC}"
 
 

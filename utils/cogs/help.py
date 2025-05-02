@@ -511,18 +511,18 @@ class Sub_Helper:
     def create_command_help_json(self):
         help_data = self._load_help_json()
 
-        for cog_name, cog in self.bot.cogs.items():
+        for cog in self.bot.cogs.values():
             if isinstance(cog, commands.Cog):
                 for cmd in cog.get_commands():
-                    if cmd.hidden:
-                        continue
-                    command_info = {
+                    if cmd.hidden or cmd.name in help_data:
+                        continue  # Skip hidden or already-documented commands
+
+                    help_data[cmd.name] = {
                         "aliases": cmd.aliases,
-                        "description": cmd.help,
+                        "description": cmd.help or "No description provided.",
                         "example": f"{{}}{cmd.name}",
                         "related_commands": "Provide related commands"
                     }
-                    help_data[cmd.name] = command_info
 
         self._save_help_json(help_data)
 
@@ -541,27 +541,22 @@ class Sub_Helper:
 
         usage = f"{ctx.prefix}{command.qualified_name} {command.signature.replace('[', '<').replace(']', '>').replace('=None', '')}"
 
-        markdown_help = f"""```md
-
-{usage} 
+        return f"""```md
+{usage}
 
 # Aliases
 {', '.join(aliases) if aliases else "No aliases available."}
 
 # Description
-{description if description else "No description provided."}
+{description}
 
 # Example Command(s)
-{ " ".join([example.format(*[self.prefix] * example.count('{}')) if example else "No example provided."])}
+{example.format(*[self.prefix] * example.count('{}')) if '{}' in example else example}
 
 # Related Command(s)
-{" ".join([related.format(*[self.prefix] * related.count('{}')) if related else "No related commands provided."])}
+{related.format(*[self.prefix] * related.count('{}')) if '{}' in related else related}
 
 > Remove brackets when typing commands
 > <> = required arguments
 > [] = optional arguments
 ```"""
-
-        return markdown_help
-
-
