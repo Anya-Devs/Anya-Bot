@@ -998,7 +998,7 @@ class PokeSelect(discord.ui.Select):
                 await interaction.message.edit(embed=embed, view=view)
         except Exception as e:
             print(e)
-            
+
 class Pokebuttons(discord.ui.View):
     def __init__(
         self,
@@ -1072,9 +1072,7 @@ class Pokebuttons(discord.ui.View):
 
     def get_pokemon_forms(self):
         url = f"https://pokeapi.co/api/v2/pokemon-species/{self.pokemon_name.lower()}"
-        print(f"Requesting forms for {self.pokemon_name} from URL: {url}")
         response = requests.get(url)
-        print(f"Response status code: {response.status_code}")
         if response.status_code == 200:
             forms = response.json().get("varieties", [])
             form_details = []
@@ -1608,7 +1606,7 @@ class Strength_weakness(discord.ui.View):
 
         return {}
 
-#########################################################################################
+#######################################################################################################
 
 class PokemonData:
     def __init__(self):

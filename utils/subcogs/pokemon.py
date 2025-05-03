@@ -477,9 +477,9 @@ class Pokemon_Emojis(commands.Cog):
                 emoji_data = server_data[str(pokemon_id)]
                 emoji_name = emoji_data['name']
                 emoji_id = int(emoji_data['id'])  
-                print(f"Emoji found: {emoji_name} (ID: {emoji_id})")  
+                #print(f"Emoji found: {emoji_name} (ID: {emoji_id})")  
                 return f"<:{emoji_name}:{emoji_id}>"
-        print(f"No emoji found for Pokémon ID {pokemon_id}")  
+        #print(f"No emoji found for Pokémon ID {pokemon_id}")  
         
         return None
 
