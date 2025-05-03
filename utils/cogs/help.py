@@ -15,8 +15,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 from data.const import *
 
-from Imports.discord_imports import *
-from Imports.log_imports import logger
+from imports.discord_imports import *
+from imports.log_imports import logger
 
 
 

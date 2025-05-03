@@ -2,8 +2,8 @@ import os,  csv, json, asyncio, traceback
 import aiohttp, requests, motor.motor_asyncio
 import pandas as pd
 
-from Imports.log_imports import *
-from Imports.discord_imports import *
+from imports.log_imports import *
+from imports.discord_imports import *
 from utils.subcogs.pokemon import Pokemon_Emojis
 
 

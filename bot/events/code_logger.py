@@ -11,7 +11,7 @@ from discord.ext import commands
 
 import data.const as const
 from data.const import error_custom_embed
-from Imports.log_imports import logger
+from imports.log_imports import logger
 
 # ─── Suppress Third-Party Logs ──────────────────────────────────────────────
 def suppress_import_logs():

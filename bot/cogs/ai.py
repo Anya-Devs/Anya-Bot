@@ -5,8 +5,8 @@ from PIL import Image, ImageSequence
 from openai import AsyncOpenAI
 
 from utils.cogs.ai import *
-from Imports.discord_imports import *
-from Imports.log_imports import logger
+from imports.discord_imports import *
+from imports.log_imports import logger
 from data.const import primary_color
 
 

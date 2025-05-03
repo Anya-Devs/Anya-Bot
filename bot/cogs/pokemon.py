@@ -2,8 +2,8 @@ import os, json, random, asyncio, requests, aiohttp, aiofiles, concurrent.future
 from urllib.request import urlopen
 import numpy as np, cv2 as cv
 from PIL import Image
-from Imports.log_imports import *
-from Imports.discord_imports import *
+from imports.log_imports import *
+from imports.discord_imports import *
 from utils.cogs.pokemon import *
 from utils.subcogs.pokemon import Ping_Pokemon, Pokemon_Emojis
 from data.const import error_custom_embed as err_embed, primary_color as p_color

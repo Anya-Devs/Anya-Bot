@@ -1,7 +1,7 @@
 import os
 from PIL import Image, ImageDraw
-from Imports.log_imports import logger
-from Imports.discord_imports import *
+from imports.log_imports import logger
+from imports.discord_imports import *
 
 class AvatarChanger(commands.Cog):
     def __init__(self, bot):

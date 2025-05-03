@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 
 from data.const import *
 from utils.cogs.quest import *
-from Imports.log_imports import *
+from imports.log_imports import *
 from data.const import *
 
 

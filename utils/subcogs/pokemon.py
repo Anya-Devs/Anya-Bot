@@ -4,8 +4,8 @@ import os, csv, json, re, asyncio
 from tqdm import tqdm
 
 from fuzzywuzzy import fuzz
-from Imports.log_imports import *
-from Imports.discord_imports import *
+from imports.log_imports import *
+from imports.discord_imports import *
 
 class Ping_Pokemon(commands.Cog):
     def __init__(self, bot):

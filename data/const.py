@@ -1,27 +1,12 @@
-import asyncio
-import requests
-import io
-import json
-import os
-import platform
-import numpy as np
-import re
-import traceback
+import asyncio, io, json, os, platform, re, traceback
 from datetime import datetime, timezone
 
-
-import aiohttp
+import numpy as np, cv2, psutil
+from psutil import *
+import requests, aiohttp
 from PIL import Image
-import psutil
-from psutil import *  
-import cv2
-
-
-
-from Imports.discord_imports import *
-from openai import (
-    AsyncOpenAI,
-) 
+from imports.discord_imports import *
+from openai import AsyncOpenAI
 
 class AnyaImages:
     shocked_anya = "https://img-03.stickers.cloud/packs/20d46227-dcb0-4583-8d66-ee78d4743129/webp/a65e28be-a5fd-4654-8e7d-736dbd809df2.webp"

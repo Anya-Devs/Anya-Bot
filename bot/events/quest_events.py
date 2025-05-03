@@ -10,7 +10,7 @@ from fuzzywuzzy import fuzz
 from bot.cogs.quest import Quest_Data
 from data.const import Quest_Completed_Embed
 
-from Imports.discord_imports import *
+from imports.discord_imports import *
 
 
 logger = logging.getLogger("Quest_Checker")

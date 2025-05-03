@@ -4,7 +4,7 @@ import requests
 from io import BytesIO
 import os
 
-from _imports.discord_imports import *
+from imports.discord_imports import *
 from PIL import Image, ImageDraw, ImageFont
 
 class DiscordMessageConfig:

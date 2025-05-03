@@ -9,7 +9,7 @@ import aiohttp
 import asyncio
 from PIL import Image
 
-from Imports.discord_imports import *
+from imports.discord_imports import *
 
 
 class SelectMenu(Select):

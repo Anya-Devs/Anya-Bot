@@ -7,7 +7,7 @@ from utils.cogs.information import *
 
 from discord.ui import *
 from data.const import primary_color, Information_Embed
-from Imports.discord_imports import *
+from imports.discord_imports import *
 
 
 

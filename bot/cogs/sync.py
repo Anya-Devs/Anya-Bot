@@ -1,5 +1,5 @@
 import traceback
-from Imports.discord_imports import *
+from imports.discord_imports import *
 
 class Sync(commands.Cog):
     def __init__(self, bot):

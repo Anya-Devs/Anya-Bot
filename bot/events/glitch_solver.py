@@ -1,5 +1,5 @@
 from data.const import primary_color
-from Imports.discord_imports import *
+from imports.discord_imports import *
 import cv2, numpy as np, requests, os, itertools, logging, aiohttp, re, io
 from collections import Counter
 

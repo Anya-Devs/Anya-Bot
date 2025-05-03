@@ -1,7 +1,7 @@
 import aiohttp
 import discord
 
-from Imports.discord_imports import *
+from imports.discord_imports import *
 from data.const import primary_color
 
 

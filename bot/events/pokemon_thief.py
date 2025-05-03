@@ -11,8 +11,8 @@ import json
 from data.const import primary_color
 from utils.token import get_bot_token
 
-from Imports.log_imports import *
-from Imports.discord_imports import *
+from imports.log_imports import *
+from imports.discord_imports import *
 
 
 log_dir = "data"

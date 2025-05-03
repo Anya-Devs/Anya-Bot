@@ -24,9 +24,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 # Custom _imports
-from _imports.discord_imports import *
+from imports.discord_imports import *
 from discord.ext import tasks
-from _imports.log_imports import logger
+from imports.log_imports import logger
 from data.const import error_custom_embed, primary_color
 
 

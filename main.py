@@ -18,8 +18,8 @@ from dotenv import load_dotenv
 
 from data.const import AvatarToTextArt
 from utils.token import get_bot_token, prefix, use_test_bot as ut
-from Imports.log_imports import *
-from Imports.discord_imports import *
+from imports.log_imports import *
+from imports.discord_imports import *
 
 load_dotenv(dotenv_path=os.path.join(".github", ".env"))
 

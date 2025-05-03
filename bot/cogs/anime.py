@@ -2,7 +2,7 @@ import asyncio
 import aiohttp
 import logging
 
-from Imports.discord_imports import *
+from imports.discord_imports import *
 from utils.subcogs.anime import Recommendation
 
 left_button_emoji = "<:point_left:1351851216153350145>"

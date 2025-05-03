@@ -8,8 +8,8 @@ import motor.motor_asyncio
 from pymongo.errors import PyMongoError
 import redis
 from bot.cogs.quest import Quest_Data
-from Imports.discord_imports import * 
-from Imports.log_imports import *
+from imports.discord_imports import * 
+from imports.log_imports import *
 from datetime import datetime, timedelta, timezone
 
 

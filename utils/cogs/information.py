@@ -7,7 +7,7 @@ from data.const import *
 
 from data.const import primary_color, Information_Embed
 from discord.ui import View, Select, Button
-from Imports.discord_imports import *
+from imports.discord_imports import *
 
 
 class Helper:
