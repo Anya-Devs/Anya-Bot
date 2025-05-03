@@ -155,11 +155,8 @@ class Pokemon_Commands:
         wes = self.format_strengths_weaknesses(weaknesses, strengths)
         pokemon_type = self.format_pokemon_type(pokemon_type_unformatted)
 
-        
-        
         h_w = f"Height: {height:.2f} m\nWeight: {weight:.2f} kg"
         appearance = h_w
-        
         
         if region:
             region = region.title()
@@ -364,7 +361,6 @@ class PokeSelect(discord.ui.Select):
     def __init__(self, pokemon_forms, default_image_url, alt_names, pokemon_shiny, gender, bot, selected_index=None):
         self.bot = bot
 
-        
         self.emoji_json_path = "data/commands/pokemon/pokemon_emojis.json"
         self.pokemon_csv_path = "data/commands/pokemon/pokemon_description.csv"
         
@@ -668,8 +664,6 @@ class Pokebuttons(discord.ui.View):
         self.gender_info = gender_info
         self.bot = bot
 
-
-        
         pokemon_forms = self.get_pokemon_forms()
 
         if pokemon_forms and len(pokemon_forms) > 1:
@@ -684,7 +678,6 @@ class Pokebuttons(discord.ui.View):
                 )
             )
 
-        
         self.POKEMON_DIR = "data/commands/pokemon"
         os.makedirs(self.POKEMON_DIR, exist_ok=True)
         self.POKEMON_IMAGES_FILE = os.path.join(
@@ -693,8 +686,6 @@ class Pokebuttons(discord.ui.View):
         if not os.path.exists(self.POKEMON_IMAGES_FILE):
             with open(self.POKEMON_IMAGES_FILE, "w") as file:
                 file.write("")  
-
-        
         self.pokemon_images = self.load_pokemon_images()
 
     def get_pokemon_forms(self):
@@ -703,14 +694,11 @@ class Pokebuttons(discord.ui.View):
         if response.status_code == 200:
             forms = response.json().get("varieties", [])
             form_details = []
-
             for form in forms:
                 form_name = form["pokemon"]["name"]
                 form_url = f"https://pokeapi.co/api/v2/pokemon/{form_name.lower()}"
                 form_details.append({"name": form_name, "url": form_url})
-
             return form_details
-
         return []
 
     def load_pokemon_images(self):
@@ -775,12 +763,8 @@ class Pokebuttons(discord.ui.View):
             embed.set_image(url=image_url)
             await interaction.response.edit_message(embed=embed)
 
-            
             male_button.style = discord.ButtonStyle.blurple
             female_button.style = discord.ButtonStyle.gray
-
-            print("Button colors changed successfully.")
-
         except Exception as e:
             await interaction.response.send_message(f"Error: {str(e)}", ephemeral=True)
 
@@ -804,7 +788,6 @@ class Pokebuttons(discord.ui.View):
     async def show_evolutions(self, interaction: discord.Interaction):
      try:
         evolution_chain_data = await self.get_pokemon_evolution_chain(self.pokemon_name)
-        
         if not evolution_chain_data:
             await interaction.response.send_message(f"No evolution chain found for {self.pokemon_name.title()}.", ephemeral=True)
             self.disabled = True
@@ -833,7 +816,7 @@ class Pokebuttons(discord.ui.View):
                 species_data = await response.json()
                 evolution_chain_url = species_data.get(
                     "evolution_chain", {}).get("url")
-
+                
                 if not evolution_chain_url:
                     raise Exception(
                         f"No evolution chain found for {pokemon_name}")
@@ -877,14 +860,12 @@ class Pokebuttons(discord.ui.View):
                 
                 queue.append(evolution)
 
-        
         if final_forms:
             for final_form in final_forms:
                 embed = await self.create_pokemon_embed(
                     final_form, "is the final form", final_form
                 )
                 embeds.append(embed)
-
         return embeds
 
     @staticmethod
