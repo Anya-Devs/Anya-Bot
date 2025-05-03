@@ -3,7 +3,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from data.const import bot_config
 
 
-use_test_bot = False
+use_test_bot = True
 
 
 prefix = bot_config[use_test_bot]["prefix"]
