@@ -19,11 +19,12 @@ from Imports.discord_imports import *
 from Imports.log_imports import logger
 
 
-class Select(discord.ui.Select):
-    def __init__(self, bot, primary_color, ctx):
+
+class Select_Help(discord.ui.Select):
+    def __init__(self, bot, ctx):
         self.bot = bot
-        self.primary_color = primary_color
         self.ctx = ctx
+        self.primary_color = primary_color()
         self.module_to_cogs = self.map_modules_to_cogs()
         self.set_thumbnail_file = "data/commands/help/help_embed_images.json"
 
@@ -124,10 +125,10 @@ class Select(discord.ui.Select):
 
 
 class HelpMenu(discord.ui.View):
-    def __init__(self, bot, primary_color, select_view,*, timeout=None):
+    def __init__(self, bot, select_view,*, timeout=None):
         super().__init__(timeout=timeout)
         self.bot = bot
-        self.primary_color = primary_color
+        self.primary_color = primary_color()
         cog_commands = {}  
         self.add_item(select_view)
         
@@ -487,7 +488,7 @@ class Help_Thumbnails:
 
 
 
-
+ 
 class Sub_Helper:
     def __init__(self, bot, prefix):
         self.bot = bot

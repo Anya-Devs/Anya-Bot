@@ -74,7 +74,7 @@ class Help(commands.Cog):
             logger.error(f"Error getting primary color: {e}")
             await ctx.reply(embed=await error_custom_embed(self.bot, ctx, e, title="Primary Color"))
             return
-
+  
         if command_name:
             try:
                 sub_helper = Sub_Helper(self.bot, ctx.prefix)
@@ -114,8 +114,8 @@ class Help(commands.Cog):
                     ),
                 )
 
-                select_view = Select(self.bot, primary_color_value, ctx)
-                options = HelpMenu(self.bot, primary_color_value, select_view)
+                select_view = Select_Help(self.bot, ctx)
+                options = HelpMenu(self.bot, select_view)
 
                 help_embed.set_image(url="attachment://image.png")
                 await ctx.send(
