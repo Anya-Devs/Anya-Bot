@@ -1,4 +1,4 @@
-import os,  csv, json, asyncio
+import os,  csv, json, asyncio, traceback
 import aiohttp, requests, motor.motor_asyncio
 import pandas as pd
 
@@ -10,585 +10,25 @@ from utils.subcogs.pokemon import Pokemon_Emojis
 
 class Pokemon_Commands:
     def __init__(self, bot):
-     self.bot = bot
-
-    async def send_pokemon_info(self, ctx, data, type, color):
-        name = data["name"].capitalize()
-        id = data["id"]
-
-        types = [t["type"]["name"].capitalize() for t in data["types"]]
-        pokemon_type_unformatted = types
-
-        pokemon_name = name
-        base_url = "https://pokeapi.co/api/v2/pokemon-species/"
-        if type == "mega":
-            mega_url = f"https://pokeapi.co/api/v2/pokemon/{pokemon_name.lower()}-mega"
-            mega_response = requests.get(mega_url)
-            if mega_response.status_code == 200:
-                try:
-                    mega_data = mega_response.json()
-                    data_species = mega_response.json()  
-
-                except json.JSONDecodeError:
-                    await ctx.send(
-                        f"Failed to parse JSON data for mega evolution of `{pokemon_name}`."
-                    )
-            else:
-                await ctx.send(f"Mega evolution data not found for `{pokemon_name}`.")
-        else:
-            url = f"{base_url}{pokemon_name.lower()}/"
-            response_species = requests.get(url)
-            if response_species.status_code != 200:
-                
-                url = f"https://pokeapi.co/api/v2/pokemon-form/{pokemon_name.lower()}/"
-                form_response = requests.get(url)
-                if form_response.status_code == 200:
-                    data_species = form_response.json()
-            else:
-                data_species = response_species.json()
-
-      
-        def get_pokemon_description(
-            pokemon_id, file_path="data/commands/pokemon/pokemon_description.csv"
-        ):
-            with open(file_path, mode="r", encoding="utf-8") as csv_file:
-                reader = csv.DictReader(csv_file)
-
-                for row in reader:
-                    if row["id"] == str(pokemon_id):
-                        return row["description"]
-
-            return "Pokémon ID not found"
-
-        def get_pokemon_region(
-            pokemon_id, file_path="data/commands/pokemon/pokemon_description.csv"
-        ):
-            try:
-                with open(file_path, mode="r", encoding="utf-8") as csv_file:
-                    reader = csv.DictReader(csv_file)
-                    for row in reader:
-                        if row["id"] == str(pokemon_id):
-                            return row["region"]
-            except FileNotFoundError:
-                return None
-            except PermissionError:
-                return None
-            except Exception as e:
-                print(f"An error occurred: {e}")
-                return None
-            return None
-
-        def get_pokemon_alternate_names(data_species, pokemon_name):
-            try:
-                if data_species:
-                    alternate_names = [
-                        (name["name"], name["language"]["name"])
-                        for name in data_species["names"]
-                    ]
-                    return alternate_names
-                else:
-                    print(f"Error: Unable to retrieve data for {pokemon_name}")
-                    return None
-            except KeyError:
-                return None  
-
-        region = get_pokemon_region(id) or None
-
-        pokemon_description = get_pokemon_description(id)
-
-        species_url = data["species"]["url"]
-        species_data = requests.get(species_url).json()
-        species_name = species_data["name"]
-
-        if type == "shiny":
-            image_url = data["sprites"]["other"]["official-artwork"]["front_shiny"]
-            image_thumb = data["sprites"]["versions"]["generation-v"]["black-white"][
-                "animated"
-            ]["front_shiny"]
-        elif type == "mega":
-            mega_url = f"https://pokeapi.co/api/v2/pokemon/{pokemon_name.lower()}-mega"
-            mega_response = requests.get(mega_url)
-            if mega_response.status_code == 200:
-                try:
-                    mega_data = mega_response.json()
-                    
-                    data = mega_data
-                    image_url = mega_data["sprites"]["other"]["official-artwork"][
-                        "front_default"
-                    ]
-                    image_thumb = mega_data["sprites"]["versions"]["generation-v"][
-                        "black-white"
-                    ]["animated"]["front_default"]
-                except json.JSONDecodeError:
-                    await ctx.send(
-                        f"Failed to parse JSON data for mega evolution of `{pokemon_name}`."
-                    )
-            else:
-                await ctx.send(f"Mega evolution data not found for `{pokemon_name}`.")
-        else:
-            image_url = data["sprites"]["other"]["official-artwork"]["front_default"]
-            image_thumb = data["sprites"]["versions"]["generation-v"]["black-white"][
-                "animated"
-            ]["front_default"]
-
-        height, weight = (
-            float(int(data["height"])) / 10,
-            float(int(data["weight"])) / 10,
-        )
-        max_stat = 255
-        bar_length = 13  
-
-        stat_name_mapping = {
-            "hp": "Hp",
-            "special-attack": "Sp. Atk",
-            "special-defense": "Sp. Def",
+        self.bot = bot
+        self.flag_mapping = {
+            "en": "🇬🇧", "fr": "🇫🇷", "es": "🇪🇸", "de": "🇩🇪", "it": "🇮🇹", "ja": "🇯🇵",
+            "ko": "🇰🇷", "zh-Hans": "🇨🇳", "ru": "🇷🇺", "es-MX": "🇲🇽", "pt": "🇵🇹",
+            "nl": "🇳🇱", "tr": "🇹🇷", "ar": "🇸🇦", "th": "🇹🇭", "vi": "🇻🇳", "pl": "🇵🇱",
+            "sv": "🇸🇪", "da": "🇩🇰", "no": "🇳🇴", "fi": "🇫🇮", "el": "🇬🇷", "id": "🇮🇩",
+            "ms": "🇲🇾", "fil": "🇵🇭", "hu": "🇭🇺", "cs": "🇨🇿", "sk": "🇸🇰", "ro": "🇷🇴",
+            "uk": "🇺🇦", "hr": "🇭🇷", "bg": "🇧🇬", "et": "🇪🇪", "lv": "🇱🇻", "lt": "🇱🇹",
+            "sl": "🇸🇮", "mt": "🇲🇹", "sq": "🇦🇱", "mk": "🇲🇰", "bs": "🇧🇦", "sr": "🇷🇸",
+            "cy": "🇨🇾", "ga": "🇮🇪", "gd": "🏴󠁧󠁢󠁳󠁣󠁴󠁿", "kw": "🇰🇾", "br": "🇧🇷", "af": "🇿🇦",
+            "xh": "🇿🇦", "zu": "🇿🇦", "tn": "🇿🇦", "st": "🇿🇦", "ss": "🇿🇦", "nr": "🇿🇦",
+            "nso": "🇿🇦", "ts": "🇿🇦", "ve": "🇿🇦", "xog": "🇺🇬", "lg": "🇺🇬", "ak": "🇬🇭",
+            "tw": "🇬🇭", "bm": "🇧🇫", "my": "🇲🇲", "km": "🇰🇭", "lo": "🇱🇦", "am": "🇪🇹",
+            "ti": "🇪🇹", "om": "🇪🇹", "so": "🇸🇴", "sw": "🇰🇪", "rw": "🇷🇼", "yo": "🇳🇬",
+            "ig": "🇳🇬", "ha": "🇳🇬", "bn": "🇧🇩", "pa": "🇮🇳", "gu": "🇮🇳", "or": "🇮🇳",
+            "ta": "🇮🇳", "te": "🇮🇳", "kn": "🇮🇳", "ml": "🇮🇳", "si": "🇱🇰", "ne": "🇳🇵",
+            "dz": "🇧🇹", "be": "🇧🇾", "kk": "🇰🇿", "uz": "🇺🇿", "ky": "🇰🇬"
         }
-
-        base_stats = [
-            f"{str(stat_name_mapping.get(stat['stat']['name'], stat['stat']['name']).title()).replace('Hp', 'Health'):<10} {str(stat['base_stat']):>5} {'▒' * int(stat['base_stat'] / max_stat * bar_length)}{'░' * (bar_length - int(stat['base_stat'] / max_stat * bar_length))}"
-            for stat in data["stats"]
-        ]
-        formatted_base_stats = "\n".join(base_stats)
-
-        
-
-        def get_pokemon_species_data(name):
-            response = requests.get(
-                f"https://pokeapi.co/api/v2/pokemon-species/{name.lower()}"
-            )
-            if response.status_code == 200:
-                species_data = response.json()
-                return species_data
-            else:
-                return None
-
-        language_codes = ["ja", "ja", "ja", "en", "de", "fr"]
-        
-        flag_mapping = {
-            "en": "🇬🇧",
-            "fr": "🇫🇷",
-            "es": "🇪🇸",
-            "de": "🇩🇪",
-            "it": "🇮🇹",
-            "ja": "🇯🇵",
-            "ko": "🇰🇷",
-            "zh-Hans": "🇨🇳",
-            "ru": "🇷🇺",
-            "es-MX": "🇲🇽",
-            "pt": "🇵🇹",
-            "nl": "🇳🇱",
-            "tr": "🇹🇷",
-            "ar": "🇸🇦",
-            "th": "🇹🇭",
-            "vi": "🇻🇳",
-            "pl": "🇵🇱",
-            "sv": "🇸🇪",
-            "da": "🇩🇰",
-            "no": "🇳🇴",
-            "fi": "🇫🇮",
-            "el": "🇬🇷",
-            "id": "🇮🇩",
-            "ms": "🇲🇾",
-            "fil": "🇵🇭",
-            "hu": "🇭🇺",
-            "cs": "🇨🇿",
-            "sk": "🇸🇰",
-            "ro": "🇷🇴",
-            "uk": "🇺🇦",
-            "hr": "🇭🇷",
-            "bg": "🇧🇬",
-            "et": "🇪🇪",
-            "lv": "🇱🇻",
-            "lt": "🇱🇹",
-            "sl": "🇸🇮",
-            "mt": "🇲🇹",
-            "sq": "🇦🇱",
-            "mk": "🇲🇰",
-            "bs": "🇧🇦",
-            "sr": "🇷🇸",
-            "cy": "🇨🇾",
-            "ga": "🇮🇪",
-            "gd": "🏴󠁧󠁢󠁳󠁣󠁴󠁿",
-            "kw": "🇰🇾",
-            "br": "🇧🇷",
-            "af": "🇿🇦",
-            "xh": "🇿🇦",
-            "zu": "🇿🇦",
-            "tn": "🇿🇦",
-            "st": "🇿🇦",
-            "ss": "🇿🇦",
-            "nr": "🇿🇦",
-            "nso": "🇿🇦",
-            "ts": "🇿🇦",
-            "ve": "🇿🇦",
-            "xog": "🇺🇬",
-            "lg": "🇺🇬",
-            "ak": "🇬🇭",
-            "tw": "🇬🇭",
-            "bm": "🇧🇫",
-            "my": "🇲🇲",
-            "km": "🇰🇭",
-            "lo": "🇱🇦",
-            "am": "🇪🇹",
-            "ti": "🇪🇹",
-            "om": "🇪🇹",
-            "so": "🇸🇴",
-            "sw": "🇰🇪",
-            "rw": "🇷🇼",
-            "yo": "🇳🇬",
-            "ig": "🇳🇬",
-            "ha": "🇳🇬",
-            "bn": "🇧🇩",
-            "pa": "🇮🇳",
-            "gu": "🇮🇳",
-            "or": "🇮🇳",
-            "ta": "🇮🇳",
-            "te": "🇮🇳",
-            "kn": "🇮🇳",
-            "ml": "🇮🇳",
-            "si": "🇱🇰",
-            "ne": "🇳🇵",
-            "dz": "🇧🇹",
-            "ti": "🇪🇷",
-            "be": "🇧🇾",
-            "kk": "🇰🇿",
-            "uz": "🇺🇿",
-            "ky": "🇰🇬",
-        }
-
-        
-        alternate_names = get_pokemon_alternate_names(
-            data_species, species_name)
-
-        desired_pokemon = name  
-
-        if alternate_names:
-            alt_names_info = {}
-
-            for name, lang in alternate_names:
-                
-                key = name.lower()
-
-                flag = flag_mapping.get(
-                    lang, None
-                )  
-
-                
-                if name.lower() != lang.lower() and flag is not None:
-                    if key not in alt_names_info:
-                        alt_names_info[key] = f"{flag} {name}"
-
-            
-            name_list = sorted(
-                list(alt_names_info.values()), key=lambda x: x.split(" ")[-1]
-            )
-
-            
-            alt_names_str = "\n".join(name_list[:6])
-
-        else:
-            alt_names_str = "No alternate names available."
-
-        def organize_pokemon_names_by_region(pokemon_name):
-            region = get_pokemon_region(data_species, pokemon_name)
-
-            if region:
-                result = f"Region: {region.capitalize()}\n"
-
-                
-                alternate_names = get_pokemon_alternate_names(
-                    data_species, pokemon_name
-                )
-
-                if alternate_names:
-                    alt_names_info = {}
-
-                    for name, lang in alternate_names:
-                        key = name.lower()
-
-                        flag = flag_mapping.get(lang, None)
-                        if key not in alt_names_info and flag is not None:
-                            alt_names_info[key] = f"{flag} {name.capitalize()}"
-
-                    name_list = sorted(
-                        list(alt_names_info.values()),
-                        key=lambda x: x.split(" ")[1],
-                        reverse=True,
-                    )
-                    alt_names_str = "\n".join(f"`{name_list}`")
-
-                    result += alt_names_str
-                else:
-                    result += "No alternate names available."
-            else:
-                result = "Region information not available."
-
-            return result
-
-        p = organize_pokemon_names_by_region(name)
-
-
-        async def get_type_chart(max_retries=3):
-            url = "https://pokeapi.co/api/v2/type"
-
-            for attempt in range(max_retries):
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(url) as response:
-                            if response.status == 200:
-                                type_chart = {}
-                                types_data = (await response.json())["results"]
-
-                                for type_data in types_data:
-                                    type_name = type_data["name"]
-                                    effectiveness_url = type_data["url"]
-
-                                    async with session.get(
-                                        effectiveness_url
-                                    ) as effectiveness_response:
-                                        if effectiveness_response.status == 200:
-                                            damage_relations = (
-                                                await effectiveness_response.json()
-                                            )["damage_relations"]
-                                            type_chart[type_name] = {
-                                                "double_damage_to": [],
-                                                "half_damage_to": [],
-                                                "no_damage_to": [],
-                                                "double_damage_from": [],
-                                                "half_damage_from": [],
-                                                "no_damage_from": [],
-                                            }
-
-                                            for key, values in damage_relations.items():
-                                                for value in values:
-                                                    type_chart[type_name][key].append(
-                                                        value["name"]
-                                                    )
-
-                                return type_chart
-                            else:
-                                
-                                print(
-                                    f"Error: HTTP request failed with status code {response.status}"
-                                )
-                                return None
-                except aiohttp.ClientError as e:
-                    print(f"Error: aiohttp client error - {e}")
-                except Exception as e:
-                    print(f"Error: An unexpected error occurred - {e}")
-
-                
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(2**attempt)
-
-        def find_pokemon_weaknesses(pokemon_info, type_chart):
-            if pokemon_info is None:
-                print("Failed to retrieve Pokemon info.")
-                return None, None
-
-            types = [t["type"]["name"] for t in pokemon_info["types"]]
-
-            weaknesses = set()
-            strengths = set()
-
-            for pokemon_type in types:
-                weaknesses.update(
-                    type_chart.get(pokemon_type, {}).get(
-                        "double_damage_from", [])
-                )
-                strengths.update(
-                    type_chart.get(pokemon_type, {}).get(
-                        "double_damage_to", [])
-                )
-
-            weaknesses.discard("")
-
-            
-            weaknesses = {weakness.capitalize() for weakness in weaknesses}
-            strengths = {strength.capitalize() for strength in strengths}
-
-            return weaknesses, strengths
-
-        type_chart = await get_type_chart()
-
-        def get_pokemon_gender_ratio_display(data_species):
-            try:
-                
-                gender_rate = data_species["gender_rate"]
-
-                
-                
-                
-                
-                if gender_rate == -1:
-                    return "Genderless"
-                elif gender_rate == 0:
-                    return "♂️ Male only"
-                else:
-                    female_ratio = (8 - gender_rate) / 8
-                    male_ratio = gender_rate / 8
-                    male_percentage = int(female_ratio * 100)
-                    female_percentage = int(male_ratio * 100)
-                    if female_percentage == 100:
-                        return "♀️ Female only"
-                    elif male_percentage == 100:
-                        return "♂️ Male only"
-
-                    
-
-                    
-                    
-                    gender_ratio_display = (
-                        f"♂ {male_percentage}% - ♀ {female_percentage}%"
-                    )
-
-                    return gender_ratio_display
-            except KeyError:
-                return None  
-
-        gender = get_pokemon_gender_ratio_display(data_species) or None
-
-        def determine_pokemon_category(data_species):
-            try:
-                pokemon_info = data_species
-
-                if pokemon_info:
-                    if pokemon_info["is_legendary"]:
-                        return "Legendary"
-                    elif pokemon_info["is_mythical"]:
-                        return f"Mythical"
-                    else:
-                        flavor_text_entries = pokemon_info["flavor_text_entries"]
-                        english_flavor = next(
-                            (
-                                entry["flavor_text"]
-                                for entry in flavor_text_entries
-                                if entry["language"]["name"] == "en"
-                            ),
-                            None,
-                        )
-                        if english_flavor and "ultra beast" in english_flavor.lower():
-                            return f"Ultra Beast"
-                        else:
-                            return None
-                else:
-                    return None
-            except KeyError:
-                return None  
-
-        rarity = determine_pokemon_category(data_species) or None
-        species_name = data['name']
-
-        if pokemon_description != " ":
-            embed = discord.Embed(
-                title=(
-                    f" #{id} — {species_name.title()}"
-                    if type != "shiny"
-                    else f" #{id} — ✨ {species_name.title()}"
-                ),
-                description=f"\n{pokemon_description}\n",
-                color=color,
-            )  
-        else:
-            embed = discord.Embed(
-                title=(
-                    f" #{id} — {species_name.title()}"
-                    if type != "shiny"
-                    else f" #{id} — ✨ {species_name.title()}"
-                ),
-                color=color,
-            )
-
-        pokemon_dex_name = (
-            f" #{id} — {species_name.title()}"
-            if type != "shiny"
-            else f" #{id} — ✨ {species_name.title()}"
-        )
-        embed.set_image(url=image_url)
-        description = (
-            f"\n{pokemon_description}\n" if pokemon_description != " " else None
-        )
-
-        type_chart = await get_type_chart()
-        pokemon_info = data
-        weaknesses, strengths = find_pokemon_weaknesses(
-            pokemon_info, type_chart)
-
-        result = "● Strengths\n" "{2}" "{3}\n\n" "● Weaknesses\n" "{4}" "{5}"
-        weaknesses = list(weaknesses)
-        strengths = list(strengths)
-
-        if len(weaknesses) == 1:
-            weaknesses_formatted = f"╚ {weaknesses[0]}"
-        else:
-            weaknesses_formatted = "\n".join(
-                [f"╠ {weakness}" for weakness in weaknesses[:-1]]
-            ) + (f"\n╚ {weaknesses[-1]}" if weaknesses else "╚ None")
-        if len(strengths) == 1:
-            strengths_formatted = f"╚ {strengths[0]}"
-        else:
-            strengths_formatted = "\n".join(
-                [f"╠ {strength}" for strength in strengths[:-1]]
-            ) + (f"\n╚ {strengths[-1]}" if strengths else "╚ None")
-        wes = result.format("", "", strengths_formatted,
-                            "", weaknesses_formatted, "")
-
-        pokemon_type_result = "● Type\n" "{2}\n\n"
-        if len(pokemon_type_unformatted) == 1:
-            pokemon_types_formatted = f"╚ {pokemon_type_unformatted[0]}"
-        else:
-            pokemon_types_formatted = "\n".join(
-                [f"╠ {types}" for types in pokemon_type_unformatted[:-1]]
-            ) + (
-                f"\n╚ {pokemon_type_unformatted[-1]}"
-                if pokemon_type_unformatted
-                else "╚ None"
-            )
-
-        pokemon_type = pokemon_type_result.format(
-            "", "", pokemon_types_formatted)
-
-        """" Weakness stuff  """
-        weaknesses, _ = find_pokemon_weaknesses(pokemon_info, type_chart)
-
-        result = "{0}"
-
-        weaknesses_formatted = (
-            "\n".join(
-                [
-                    f"    {i}. {weakness}"
-                    for i, weakness in enumerate(weaknesses, start=1)
-                ]
-            )
-            if weaknesses
-            else "None"
-        )
-
-        output_weak = result.format(weaknesses_formatted)
-
-        """" Strengths stuff  """
-        _, strengths = find_pokemon_weaknesses(pokemon_info, type_chart)
-
-        result = "{0}"
-
-        strengths_formatted = (
-            "\n".join(
-                [
-                    f"    {i}. {strength}"
-                    for i, strength in enumerate(strengths, start=1)
-                ]
-            )
-            if strengths
-            else "None"
-        )
-
-        output_strength = result.format(strengths_formatted)
-        print(output_strength)
-
-        s_and_w = wes
-
-        
-        region_mappings = {
+        self.region_mappings = {
             "Paldea": "<:Paldea:1212335178714980403>",
             "Sinnoh": "<:Sinnoh:1212335180459544607>",
             "Alola": "<:Alola:1212335185228472411>",
@@ -600,124 +40,322 @@ class Pokemon_Commands:
             "Kanto": "<:Kanto:1212335202341363713>",
             "Johto": "<:Kanto:1212335202341363713>",
         }
-        if region:
-            region = region.title()
-        else:
-            region = None
+        self.stat_name_mapping = {
+            "hp": "Hp",
+            "special-attack": "Sp. Atk",
+            "special-defense": "Sp. Def",
+        }
 
-        appearance_info = [
-            f"**Height:** {height:.2f} m",
-            f"**Weight:** {weight:.2f} kg",
+    async def send_pokemon_info(self, ctx, data, type, color):
+        name = data["name"].capitalize()
+        id = data["id"]
+        types = [t["type"]["name"].capitalize() for t in data["types"]]
+        pokemon_type_unformatted = types
+
+        species_url = data["species"]["url"]
+        species_data = requests.get(species_url).json()
+        species_name = species_data["name"]
+        base_url = "https://pokeapi.co/api/v2/pokemon-species/"
+        
+        if type == "mega":
+            mega_url = f"https://pokeapi.co/api/v2/pokemon/{name.lower()}-mega"
+            mega_response = requests.get(mega_url)
+            if mega_response.status_code == 200:
+                try:
+                    mega_data = mega_response.json()
+                    data_species = mega_response.json()
+                except json.JSONDecodeError:
+                    await ctx.send(f"Failed to parse JSON data for mega evolution of `{name}`.")
+            else:
+                await ctx.send(f"Mega evolution data not found for `{name}`.")
+        else:
+            url = f"{base_url}{name.lower()}/"
+            response_species = requests.get(url)
+            if response_species.status_code != 200:
+                url = f"https://pokeapi.co/api/v2/pokemon-form/{name.lower()}/"
+                form_response = requests.get(url)
+                if form_response.status_code == 200:
+                    data_species = form_response.json()
+            else:
+                data_species = response_species.json()
+
+        pokemon_description = self.get_pokemon_description(id)
+        region = self.get_pokemon_region(id)
+        
+        if type == "shiny":
+            image_url = data["sprites"]["other"]["official-artwork"]["front_shiny"]
+            image_thumb = data["sprites"]["versions"]["generation-v"]["black-white"]["animated"]["front_shiny"]
+        elif type == "mega":
+            mega_url = f"https://pokeapi.co/api/v2/pokemon/{name.lower()}-mega"
+            mega_response = requests.get(mega_url)
+            if mega_response.status_code == 200:
+                try:
+                    mega_data = mega_response.json()
+                    data = mega_data
+                    image_url = mega_data["sprites"]["other"]["official-artwork"]["front_default"]
+                    image_thumb = mega_data["sprites"]["versions"]["generation-v"]["black-white"]["animated"]["front_default"]
+                except json.JSONDecodeError:
+                    await ctx.send(f"Failed to parse JSON data for mega evolution of `{name}`.")
+            else:
+                await ctx.send(f"Mega evolution data not found for `{name}`.")
+        else:
+            image_url = data["sprites"]["other"]["official-artwork"]["front_default"]
+            image_thumb = data["sprites"]["versions"]["generation-v"]["black-white"]["animated"]["front_default"]
+
+        height, weight = float(int(data["height"])) / 10, float(int(data["weight"])) / 10
+        max_stat = 255
+        bar_length = 13
+
+        base_stats = [
+            f"{str(self.stat_name_mapping.get(stat['stat']['name'], stat['stat']['name']).title()).replace('Hp', 'Health'):<10} {str(stat['base_stat']):>5} {'▒' * int(stat['base_stat'] / max_stat * bar_length)}{'░' * (bar_length - int(stat['base_stat'] / max_stat * bar_length))}"
+            for stat in data["stats"]
         ]
-        appearance = "\n".join(appearance_info)
+        base_stats = "\n".join(base_stats)
+
+        alternate_names = self.get_pokemon_alternate_names(data_species, species_name)
+        
+        if alternate_names:
+            alt_names_info = {}
+            for name, lang in alternate_names:
+                key = name.lower()
+                flag = self.flag_mapping.get(lang, None)
+                if name.lower() != lang.lower() and flag is not None:
+                    if key not in alt_names_info:
+                        alt_names_info[key] = f"{flag} {name}"
+            name_list = sorted(list(alt_names_info.values()), key=lambda x: x.split(" ")[-1])
+            alt_names_str = "\n".join(name_list[:6])
+        else:
+            alt_names_str = "No alternate names available."
+
+        type_chart = await self.get_type_chart()
+        weaknesses, strengths = self.find_pokemon_weaknesses(data, type_chart)
+
+        gender = self.get_pokemon_gender_ratio_display(data_species)
+        rarity = self.determine_pokemon_category(data_species)
+
+        if pokemon_description != " ":
+            embed_title = f" #{id} — {species_name.title()}" if type != "shiny" else f" #{id} — ✨ {species_name.title()}"
+            embed = discord.Embed(
+                title=embed_title,
+                description=f"\n{pokemon_description}\n",
+                color=color,
+            )
+        else:
+            embed_title = f" #{id} — {species_name.title()}" if type != "shiny" else f" #{id} — ✨ {species_name.title()}"
+            embed = discord.Embed(
+                title=embed_title,
+                color=color,
+            )
+
+        pokemon_dex_name = embed_title
+        embed.set_image(url=image_url)
+        description = f"\n{pokemon_description}\n" if pokemon_description != " " else None
+
+        # Format weaknesses and strengths
+        wes = self.format_strengths_weaknesses(weaknesses, strengths)
+        pokemon_type = self.format_pokemon_type(pokemon_type_unformatted)
 
         
-
-        if region is not None:
-            if region in region_mappings:
-                region_emoji = region_mappings[region]
-                embed.add_field(
-                    name="Region", value=f"{region_emoji} {region}", inline=True
-                )
-                region = f"{region_emoji} {region}" or region
+        # Format appearance info
+        h_w = f"Height: {height:.2f} m\nWeight: {weight:.2f} kg"
+        appearance = h_w
+        
+        # Add region info if available
+        if region:
+            region = region.title()
+            if region in self.region_mappings:
+                region_emoji = self.region_mappings[region]
+                embed.add_field(name="Region", value=f"{region_emoji} {region}", inline=True)
+                region = f"{region_emoji} {region}"
 
         embed.add_field(name="Names", value=alt_names_str, inline=True)
 
+        gender_differ = False
         if gender is not None:
-            gender_differ = bool(
-                gender != "♀️ Female only" or "♂️ Male only" or "Genderless"
-            )
-        else:
-            gender_differ = False
-
-        
-        base_stats = formatted_base_stats
-
-        appearance = (
-            f"Height: {height:.2f} m\nWeight: {weight:.2f} kg\t\t"
-            if gender is not None and gender != "♂ 50% - ♀ 50%"
-            else f"Height: {height:.2f} m\nWeight: {weight:.2f} kg"
-        )
-
+            gender_differ = bool(gender != "♀️ Female only" or "♂️ Male only" or "Genderless")
+            
         gender_info = None
-
         if image_thumb:
-            embed.set_footer(icon_url=image_thumb, text=appearance)
-            gender_info = None
             if gender is not None and gender != "♂ 50% - ♀ 50%":
-                embed.set_footer(
-                    icon_url=image_thumb, text=appearance + f"Gender: {gender}"
-                )
-                appearance_footer = embed.set_footer(
-                    icon_url=image_thumb, text=appearance + f"Gender: {gender}"
-                )
+                embed.set_footer(icon_url=image_thumb, text=appearance + f"Gender: {gender}")
                 gender_info = f"Gender: {gender}"
-
+            else:
+                embed.set_footer(icon_url=image_thumb, text=appearance)
         else:
             if type == "shiny":
-                image_thumb = data["sprites"]["versions"]["generation-v"][
-                    "black-white"
-                ]["front_shiny"]
+                image_thumb = data["sprites"]["versions"]["generation-v"]["black-white"]["front_shiny"]
             else:
-                image_thumb = data["sprites"]["versions"]["generation-v"][
-                    "black-white"
-                ]["front_default"]
+                image_thumb = data["sprites"]["versions"]["generation-v"]["black-white"]["front_default"]
 
             if image_thumb:
-                embed.set_footer(icon_url=image_thumb, text=appearance)
+                if gender and rarity is not None and gender != "♂ 50% - ♀ 50%":
+                    embed.set_footer(
+                        icon_url=image_thumb,
+                        text=f"Rarity: {rarity}\n\n{appearance}Gender: {gender}",
+                    )
+                    gender_info = f"Gender: {gender}"
+                elif gender is not None and gender != "♂ 50% - ♀ 50%":
+                    embed.set_footer(icon_url=image_thumb, text=f"{appearance}Gender: {gender}")
+                    gender_info = f"Gender: {gender}"
+                else:
+                    embed.set_footer(icon_url=image_thumb, text=appearance)
             else:
-                image_thumb = None
                 embed.set_footer(text=appearance)
 
-            if gender and rarity is not None and gender != "♂ 50% - ♀ 50%":
-                embed.set_footer(
-                    icon_url=image_thumb,
-                    text=f"Rarity: {rarity}\n\n" +
-                    appearance + f"Gender: {gender}",
-                )
-                appearance_footer = embed.set_footer(
-                    icon_url=image_thumb,
-                    text=f"Rarity: {rarity}\n\n" +
-                    appearance + f"Gender: {gender}",
-                )
-                gender_info = f"Gender: {gender}"
-
-            elif gender is not None and gender != "♂ 50% - ♀ 50%":
-                embed.set_footer(
-                    icon_url=image_thumb, text=appearance + f"Gender: {gender}"
-                )
-                appearance_footer = embed.set_footer(
-                    icon_url=image_thumb, text=appearance + f"Gender: {gender}"
-                )
-                gender_info = f"Gender: {gender}"
-
-        h_w = f"Height: {height:.2f} m\nWeight: {weight:.2f} kg"
         self.bot.add_view(Pokebuttons(alt_names_str, species_name))
 
         await ctx.reply(
             embed=embed,
             view=Pokebuttons(
-                alt_names_str,
-                species_name,
-                formatted_base_stats,
-                type,
-                wes,
-                pokemon_type,
-                base_stats,
-                image_url,
-                h_w,
-                image_thumb,
-                pokemon_dex_name,
-                color,
-                data,
-                gender_differ,
-                region,
-                description,
-                gender_info,
-                self.bot
+                alt_names_str, species_name, base_stats, type, wes,
+                pokemon_type, image_url, h_w, image_thumb,
+                pokemon_dex_name, color, data, gender_differ, region,
+                description, gender_info, self.bot
             ),
             mention_author=False,
         )
+
+    def get_pokemon_description(self, pokemon_id, file_path="data/commands/pokemon/pokemon_description.csv"):
+        with open(file_path, mode="r", encoding="utf-8") as csv_file:
+            reader = csv.DictReader(csv_file)
+            for row in reader:
+                if row["id"] == str(pokemon_id):
+                    return row["description"]
+        return "Pokémon ID not found"
+
+    def get_pokemon_region(self, pokemon_id, file_path="data/commands/pokemon/pokemon_description.csv"):
+        try:
+            with open(file_path, mode="r", encoding="utf-8") as csv_file:
+                reader = csv.DictReader(csv_file)
+                for row in reader:
+                    if row["id"] == str(pokemon_id):
+                        return row["region"]
+        except (FileNotFoundError, PermissionError, Exception):
+            return None
+        return None
+
+    def get_pokemon_alternate_names(self, data_species, pokemon_name):
+        try:
+            if data_species:
+                alternate_names = [(name["name"], name["language"]["name"]) for name in data_species["names"]]
+                return alternate_names
+            return None
+        except KeyError:
+            return None
+
+    async def get_type_chart(self, max_retries=3):
+        url = "https://pokeapi.co/api/v2/type"
+        for attempt in range(max_retries):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url) as response:
+                        if response.status == 200:
+                            type_chart = {}
+                            types_data = (await response.json())["results"]
+                            for type_data in types_data:
+                                type_name = type_data["name"]
+                                effectiveness_url = type_data["url"]
+                                async with session.get(effectiveness_url) as effectiveness_response:
+                                    if effectiveness_response.status == 200:
+                                        damage_relations = (await effectiveness_response.json())["damage_relations"]
+                                        type_chart[type_name] = {
+                                            "double_damage_to": [],
+                                            "half_damage_to": [],
+                                            "no_damage_to": [],
+                                            "double_damage_from": [],
+                                            "half_damage_from": [],
+                                            "no_damage_from": [],
+                                        }
+                                        for key, values in damage_relations.items():
+                                            for value in values:
+                                                type_chart[type_name][key].append(value["name"])
+                            return type_chart
+            except Exception:
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2**attempt)
+        return None
+
+    def find_pokemon_weaknesses(self, pokemon_info, type_chart):
+        if pokemon_info is None:
+            return None, None
+        types = [t["type"]["name"] for t in pokemon_info["types"]]
+        weaknesses = set()
+        strengths = set()
+        for pokemon_type in types:
+            weaknesses.update(type_chart.get(pokemon_type, {}).get("double_damage_from", []))
+            strengths.update(type_chart.get(pokemon_type, {}).get("double_damage_to", []))
+        weaknesses.discard("")
+        weaknesses = {weakness.capitalize() for weakness in weaknesses}
+        strengths = {strength.capitalize() for strength in strengths}
+        return weaknesses, strengths
+
+    def format_strengths_weaknesses(self, weaknesses, strengths):
+        result = "● Strengths\n{0}\n\n● Weaknesses\n{1}"
+        strengths = list(strengths)
+        weaknesses = list(weaknesses)
+        
+        if len(strengths) == 1:
+            strengths_formatted = f"╚ {strengths[0]}"
+        else:
+            strengths = list(strengths)
+            strengths_formatted = "\n".join([f"╠ {strength}" for strength in strengths[:-1]]) + \
+                      (f"\n╚ {strengths[-1]}" if strengths else "╚ None")
+                                 
+        if len(weaknesses) == 1:
+            weaknesses_formatted = f"╚ {weaknesses[0]}"
+        else:
+            weaknesses_formatted = "\n".join([f"╠ {weakness}" for weakness in weaknesses[:-1]]) + \
+                                  (f"\n╚ {weaknesses[-1]}" if weaknesses else "╚ None")
+                                  
+        return result.format(strengths_formatted, weaknesses_formatted)
+
+    def format_pokemon_type(self, pokemon_type_unformatted):
+        result = "● Type\n{0}\n\n"
+        if len(pokemon_type_unformatted) == 1:
+            types_formatted = f"╚ {pokemon_type_unformatted[0]}"
+        else:
+            types_formatted = "\n".join([f"╠ {types}" for types in pokemon_type_unformatted[:-1]]) + \
+                             (f"\n╚ {pokemon_type_unformatted[-1]}" if pokemon_type_unformatted else "╚ None")
+        return result.format(types_formatted)
+
+    def get_pokemon_gender_ratio_display(self, data_species):
+        try:
+            gender_rate = data_species["gender_rate"]
+            if gender_rate == -1:
+                return "Genderless"
+            elif gender_rate == 0:
+                return "♂️ Male only"
+            else:
+                female_ratio = (8 - gender_rate) / 8
+                male_ratio = gender_rate / 8
+                male_percentage = int(female_ratio * 100)
+                female_percentage = int(male_ratio * 100)
+                if female_percentage == 100:
+                    return "♀️ Female only"
+                elif male_percentage == 100:
+                    return "♂️ Male only"
+                return f"♂ {male_percentage}% - ♀ {female_percentage}%"
+        except KeyError:
+            return None
+
+    def determine_pokemon_category(self, data_species):
+        try:
+            if data_species:
+                if data_species["is_legendary"]:
+                    return "Legendary"
+                elif data_species["is_mythical"]:
+                    return "Mythical"
+                else:
+                    flavor_text_entries = data_species["flavor_text_entries"]
+                    english_flavor = next(
+                        (entry["flavor_text"] for entry in flavor_text_entries 
+                         if entry["language"]["name"] == "en"), None)
+                    if english_flavor and "ultra beast" in english_flavor.lower():
+                        return "Ultra Beast"
+            return None
+        except KeyError:
+            return None
+
 
 #######################################################################################################
 
@@ -1004,11 +642,10 @@ class Pokebuttons(discord.ui.View):
         self,
         alt_names_str=None,
         name=None,
-        formatted_base_stats=None,
+        base_stats=None,
         type=None,
         wes=None,
         pokemon_type=None,
-        base_stats=None,
         image_url=None,
         h_w=None,
         image_thumb=None,
@@ -1025,7 +662,7 @@ class Pokebuttons(discord.ui.View):
         self.alt_names_str = alt_names_str
         self.pokemon_name = name
         self.pokemon_shiny = type
-        self.formatted_base_stats = formatted_base_stats
+        self.base_stats = base_stats
         self.s_and_w = wes
         self.pokemon_type = pokemon_type
         self.base_stats = base_stats
@@ -1499,73 +1136,89 @@ class Strength_weakness(discord.ui.View):
     @discord.ui.button(
         label="S/W", style=discord.ButtonStyle.gray, custom_id="Pokemon_S_and_W_Button"
     )
-    async def strengths_and_weaknesses(
-        self, button: discord.ui.Button, interaction: discord.Interaction
-    ):
+    async def strengths_and_weaknesses(self, button: discord.ui.Button, interaction: discord.Interaction):
         try:
             embed = discord.Embed(color=self.color)
-            embed.add_field(
-                name=" ", value=self.strength_weakness_text, inline=False)
+            embed.add_field(name=" ", value=self.strength_weakness_text, inline=False)
 
             if self.footer is None:
                 embed.set_footer(text=self.footer_text)
             else:
                 embed.set_footer(icon_url=self.footer, text=self.footer_text)
+
             embed.set_thumbnail(url=self.thumbnail_url)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
-            await button.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
-            await button.response.send_message(e, ephemeral=True)
-
-            print(e)
-            return
+            traceback.print_exc()
+            await interaction.response.send_message(
+                f"An error occurred displaying strengths/weaknesses:\n```{e}```",
+                ephemeral=True
+            )
 
     @discord.ui.button(
         label="Moveset",
         style=discord.ButtonStyle.gray,
         custom_id="Pokemon_Moveset_Button",
     )
-    async def moves_button(
-        self, button: discord.ui.Button
-    ):
-        await button.response.defer()
-        await self.show_moves(button)
+    async def moves_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+        try:
+            await button.response.defer(ephemeral=True)
+            await self.show_moves(button)
+        except Exception as e:
+            traceback.print_exc()
+            await button.followup.send(
+                f"An unexpected error occurred loading the moveset:\n```{e}```",
+                ephemeral=True
+            )
 
     async def show_moves(self, interaction: discord.Interaction):
-        try:
-            moves_data = await self.get_pokemon_moves()
-            embed = discord.Embed(
-                title=f"{self.pokemon_data['name'].title().replace('-', ' ')}'s — Moveset",
-                color=self.color,
+     try:
+        moves_data = await self.get_pokemon_moves()
+
+        embed = discord.Embed(
+            title=f"{self.pokemon_data['name'].title().replace('-', ' ')} — Moveset",
+            color=self.color
+        )
+
+        for level, move in sorted(moves_data.items()):
+            name = move["name"].title().replace("-", " ")
+            power = move["power"] or "—"
+            accuracy = move["accuracy"] or "—"
+            effect = move["effect"]
+
+            embed.add_field(
+                name=f"{name}  | Lv. {level}",
+                value=(
+                    f"- Effect: {effect}\n"
+                    f"- Power: {power}\n"
+                    f"- Accuracy: {accuracy}"
+                ),
+                inline=False,
             )
 
-            for level, move_info in sorted(moves_data.items()):
-                move_name = move_info["name"].title().replace("-", " ")
-                move_power = move_info["power"]
-                move_accuracy = move_info["accuracy"]
-                move_effect = move_info["effect"]
+        embed.set_thumbnail(url=self.thumbnail_url)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
-                embed.add_field(
-                          name=f"{move_name} (lvl.{level})",
-                          value=(
-                              f"{move_effect}\n\n"
-                              f"**`Power`**: {move_power}\n"
-                              f"**`Accuracy`**: {move_accuracy}\n"
-                          ),
-                          inline=True,
-                      )
-                embed.set_thumbnail(url=self.thumbnail_url)
-            await interaction.followup.send(embed=embed, ephemeral=True)
+     except requests.exceptions.RequestException as e:
+        await interaction.followup.send(
+            f"Network error fetching moves data:\n```{e}```", ephemeral=True
+        )
+        traceback.print_exc()
 
-        except requests.exceptions.RequestException as e:
-            await interaction.followup.send(
-                f"Error fetching moves data: {str(e)}", ephemeral=True
-            )
-        except IndexError:
-            await interaction.followup.send(
-                "Error: Move data is incomplete or unavailable.", ephemeral=True
-            )
+     except IndexError:
+        await interaction.followup.send(
+            "Error: Move data appears to be incomplete.", ephemeral=True
+        )
+        traceback.print_exc()
 
+     except Exception as e:
+        await interaction.followup.send(
+            f"An error occurred while showing the moveset:\n```{e}```",
+            ephemeral=True
+        )
+        traceback.print_exc()
+    
     async def get_pokemon_moves(self):
         moves_data = {}
         moves = self.pokemon_data.get("moves", [])
@@ -1599,12 +1252,14 @@ class Strength_weakness(discord.ui.View):
 
     @staticmethod
     async def fetch_move_details(move_url):
-        response = requests.get(move_url)
-        if response.status_code == 200:
-            move_data = response.json()
-            return move_data
-
-        return {}
+        try:
+            response = requests.get(move_url)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                raise ValueError(f"Move API returned status code {response.status_code}")
+        except Exception as e:
+            traceback.print_exc()
 
 #######################################################################################################
 
