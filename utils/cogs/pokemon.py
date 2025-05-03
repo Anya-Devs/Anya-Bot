@@ -6,7 +6,7 @@ from Imports.log_imports import *
 from Imports.discord_imports import *
 from utils.subcogs.pokemon import Pokemon_Emojis
 
-#######################################################################################################
+
 
 class Pokemon_Commands:
     def __init__(self, bot):
@@ -151,16 +151,16 @@ class Pokemon_Commands:
         embed.set_image(url=image_url)
         description = f"\n{pokemon_description}\n" if pokemon_description != " " else None
 
-        # Format weaknesses and strengths
+        
         wes = self.format_strengths_weaknesses(weaknesses, strengths)
         pokemon_type = self.format_pokemon_type(pokemon_type_unformatted)
 
         
-        # Format appearance info
+        
         h_w = f"Height: {height:.2f} m\nWeight: {weight:.2f} kg"
         appearance = h_w
         
-        # Add region info if available
+        
         if region:
             region = region.title()
             if region in self.region_mappings:
@@ -359,15 +359,15 @@ class Pokemon_Commands:
 
 #######################################################################################################
 
+
 class PokeSelect(discord.ui.Select):
     def __init__(self, pokemon_forms, default_image_url, alt_names, pokemon_shiny, gender, bot, selected_index=None):
         self.bot = bot
 
-        # Define URLs and file paths as instance variables
+        
         self.emoji_json_path = "data/commands/pokemon/pokemon_emojis.json"
         self.pokemon_csv_path = "data/commands/pokemon/pokemon_description.csv"
         
-        # URL to fetch Pokémon details
         self.pokemon_api_url = "https://pokeapi.co/api/v2/pokemon/"
         self.pokemon_form_api_url = "https://pokeapi.co/api/v2/pokemon-form/"
 
@@ -379,10 +379,8 @@ class PokeSelect(discord.ui.Select):
 
         pokemon_forms.sort(key=lambda f: (not is_base_form(f), f["name"]))
 
-        # Set default index if not provided
         self.selected_index = selected_index if selected_index is not None else 0
         
-        # Store the list of form URLs for later reference
         self.form_urls = []
 
         options = []
@@ -407,7 +405,6 @@ class PokeSelect(discord.ui.Select):
             )
             options.append(option)
 
-        # Initialize Select with options
         super().__init__(
             options=options,
             placeholder=options[0].label if options else "Select a Pokémon form",
@@ -416,7 +413,6 @@ class PokeSelect(discord.ui.Select):
             min_values=0
         )
 
-        # Set additional attributes
         self.default_image_url = default_image_url
         self.alt_names = alt_names
         self.pokemon_type = pokemon_shiny
@@ -528,10 +524,8 @@ class PokeSelect(discord.ui.Select):
             selected_form_url = self.values[0]
             await interaction.response.defer()
 
-            # Update the selected index based on the selected form URL
             if selected_form_url in self.form_urls:
                 new_index = self.form_urls.index(selected_form_url)
-                # Update the selected_index
                 self.selected_index = new_index
 
             response = requests.get(selected_form_url)
@@ -615,10 +609,8 @@ class PokeSelect(discord.ui.Select):
                         embed.add_field(
                             name="Names", value=alt_names_str if len(alt_names_str) > 0 else self.alt_names, inline=True)
 
-                # Create a new View instance
                 view = discord.ui.View()
                 
-                # Create a new PokeSelect with the updated selected_index
                 new_select = PokeSelect(
                     pokemon_forms=[{"name": form_url.split("/")[-1]} for form_url in self.form_urls],
                     default_image_url=self.default_image_url,
@@ -629,10 +621,8 @@ class PokeSelect(discord.ui.Select):
                     selected_index=self.selected_index
                 )
                 
-                # Add the new select to the view
                 view.add_item(new_select)
                 
-                # Update the message with the new view
                 await interaction.message.edit(embed=embed, view=view)
         except Exception as e:
             print(e)

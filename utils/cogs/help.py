@@ -72,7 +72,7 @@ class Select(discord.ui.Select):
                 if len(cmd_args) > 3:
                     cmd_args = cmd_args[:3] + ['...']
                 cmd_args_str = ' '.join(cmd_args)
-                command_line = f"`{cmd.name}`"   #{self.ctx.prefix}{cmd.name} {cmd_args_str}".strip()
+                command_line = f"`{cmd.name}`"   
                 command_lines.append(command_line)
 
             fields.append((cog.qualified_name, " ".join(command_lines)))
@@ -254,9 +254,9 @@ class Options_ImageGenerator:
         font = ImageFont.truetype(self.font_path_base, font_size)
 
         while True:
-            # Wrap the text based on the current font size
+            
             wrapped_text = self._wrap_text(text, max_width)
-            # Check the width of the longest line
+            
             lines = wrapped_text.split("\n")
             longest_line = max(lines, key=lambda line: draw.textbbox((0, 0), line, font=font)[2])
             if draw.textbbox((0, 0), longest_line, font=font)[2] <= max_width or font_size <= self.min_font_size:
@@ -267,7 +267,7 @@ class Options_ImageGenerator:
         return font_size
 
     def _draw_text(self, draw, text_x, text_y):
-        # Adjust base font size dynamically
+        
         dynamic_font_size = self.adjust_font_size_for_text(self.description_text, self.text_wrap_max)
         dynamic_font = ImageFont.truetype(self.font_path_base, dynamic_font_size)
 
@@ -322,31 +322,31 @@ class ImageGenerator:
         """Initialize the ImageGenerator with user-specific data and load resources."""
         self.user_name = ctx.author.display_name
 
-        # Font Paths
+        
         self.font_path_header = "data/commands/help/menu/initial/style/assets/font/valentine.ttf"
         self.font_path_base = "data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
         
-        # Image Paths
+        
         self.character_path = "data/commands/help/menu/initial/style/assets/character.png"
         self.background_path = "data/commands/help/menu/initial/style/assets/background.png"
 
-        # Scaling factor for larger images
-        self.scale_factor = 1.5  # Adjust as needed (1.5x original size)
+        
+        self.scale_factor = 1.5  
 
-        # Font Sizes (Scaled)
+        
         self.header_font_size = int(35 * self.scale_factor)
         self.base_font_size = int(22 * self.scale_factor)
         self.command_font_size = int(13 * self.scale_factor)
 
-        # Font Colors
+        
         self.header_font_color = "white"
         self.base_font_color = "black"
         self.command_font_color = "white"
 
-        # Character Scale
-        self.character_scale = 0.6  # Increased for better proportion
+        
+        self.character_scale = 0.6  
 
-        # Text
+        
         self.text1 = self._truncate_text(f"{ctx.me.display_name} Help", 350 * self.scale_factor)
         self.text2_options = [
             "how can I help you today?",
@@ -357,7 +357,7 @@ class ImageGenerator:
         self.text2 = f"Hello {self.user_name}, {random.choice(self.text2_options)}"
         self.text3 = "Command: [option]?"
 
-        # Positions & Margins (Scaled)
+        
         self.character_pos = (int(5 * self.scale_factor), int(5 * self.scale_factor))
         self.text_x_offset = int(10 * self.scale_factor)
         self.text_y_offset = int(25 * self.scale_factor)
@@ -369,7 +369,7 @@ class ImageGenerator:
 
     def _truncate_text(self, text, max_width):
         """Truncate text to fit within the specified width."""
-        draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))  # Dummy image for text measurement
+        draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))  
         font = ImageFont.truetype(self.font_path_header, self.header_font_size)
 
         while draw.textbbox((0, 0), text, font=font)[2] > max_width:
@@ -387,11 +387,11 @@ class ImageGenerator:
         self.character = Image.open(self.character_path).convert("RGBA")
         self.background = Image.open(self.background_path).convert("RGBA")
 
-        # Resize background
+        
         new_bg_size = (int(self.background.width * self.scale_factor), int(self.background.height * self.scale_factor))
         self.background = self.background.resize(new_bg_size, Image.LANCZOS)
 
-        # Resize character
+        
         self._resize_character()
 
     def _resize_character(self):
@@ -407,7 +407,7 @@ class ImageGenerator:
         draw.text((text_x, text_y), self.text2, font=self.base_font, fill=self.base_font_color)
         text_y += self.base_font.size + self.text_spacing
 
-        # Command Text (Bottom-Right)
+        
         textbbox = draw.textbbox((0, 0), self.text3, font=self.command_font)
         w, h = textbbox[2] - textbbox[0], textbbox[3] - textbbox[1]
         draw.text(
@@ -422,11 +422,11 @@ class ImageGenerator:
         bg = self.background.copy()
         draw = ImageDraw.Draw(bg)
 
-        # Paste Character
+        
         character_x, character_y = self.character_pos
         bg.paste(self.character, (character_x, character_y), self.character)
 
-        # Draw Text
+        
         text_x = self.character.width + self.text_x_offset
         text_y = self.text_y_offset
         self._draw_text(draw, text_x, text_y)
@@ -516,7 +516,7 @@ class Sub_Helper:
             if isinstance(cog, commands.Cog):
                 for cmd in cog.get_commands():
                     if cmd.hidden or cmd.name in help_data:
-                        continue  # Skip hidden or already-documented commands
+                        continue  
 
                     help_data[cmd.name] = {
                         "aliases": cmd.aliases,
