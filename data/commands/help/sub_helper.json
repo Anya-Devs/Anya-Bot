@@ -1,13 +1,13 @@
 {
     "Ai": {
         "imagine": {
-         "aliases": [
-            "i"
-         ],
-         "description": "Model: animagine-xl-4.0\nGenerates images using prompts and returns an anime-styled image.",
-         "example": "{}imagine 1girl, solo, blue archive, long hair, grey hair, red eyes, large breasts, white shirt, collared shirt, long sleeves, halo, v, skirt, outdoors, ruins, standing, sensitive, masterpiece, high score, great score, absurdres",
-         "related_commands": "{}vision"
-    },
+            "aliases": [
+                "i"
+            ],
+            "description": "Model: animagine-xl-4.0\nGenerates images using prompts and returns an anime-styled image.",
+            "example": "{}imagine 1girl, solo, blue archive, long hair, grey hair, red eyes, large breasts, white shirt, collared shirt, long sleeves, halo, v, skirt, outdoors, ruins, standing, sensitive, masterpiece, high score, great score, absurdres",
+            "related_commands": "{}vision"
+        },
         "vision": {
             "aliases": [
                 "v"
@@ -28,79 +28,81 @@
         }
     },
     "Anime": {
-          "anime": {
+        "anime": {
             "aliases": [],
             "description": "Search for anime information specifically about Spy x Family.",
             "example": "{}anime Spy x Family",
             "related_commands": "{}character, {}manga"
-          },
-          "character": {
+        },
+        "character": {
             "aliases": [],
             "description": "Search for information about Spy x Family characters.",
             "example": "{}character Anya Forger",
             "related_commands": "{}anime"
-          },
-          "manga": {
+        },
+        "manga": {
             "aliases": [],
             "description": "Search for manga information specifically about Spy x Family.",
             "example": "{}manga Spy x Family",
             "related_commands": "{}anime"
-          }
-    },
-    "Help": {},
-    "Information": {
-        "about": {
-            "aliases": [
-                "info",
-                "details"
-            ],
-            "description": "No description provided.",
-            "example": "{}about",
-            "related_commands": "Provide related commands"
-        },
-        "server": {
-            "aliases": [],
-            "description": "No description provided.",
-            "example": "{}server",
-            "related_commands": "Provide related commands"
-        },
-        "pfp": {
-            "aliases": [],
-            "description": "No description provided.",
-            "example": "{}pfp",
-            "related_commands": "Provide related commands"
-        },
-        "banner": {
-            "aliases": [],
-            "description": "No description provided.",
-            "example": "{}banner",
-            "related_commands": "Provide related commands"
-        },
-        "invite": {
-            "aliases": [],
-            "description": "No description provided.",
-            "example": "{}invite",
-            "related_commands": "Provide related commands"
-        },
-        "perms": {
-            "aliases": [],
-            "description": "No description provided.",
-            "example": "{}perms",
-            "related_commands": "Provide related commands"
-        },
-        "server_emojis": {
-            "aliases": [],
-            "description": "No description provided.",
-            "example": "{}server_emojis",
-            "related_commands": "Provide related commands"
-        },
-        "server_roles": {
-            "aliases": [],
-            "description": "No description provided.",
-            "example": "{}server_roles",
-            "related_commands": "Provide related commands"
         }
     },
+    "Help": {},
+    
+    "Information": {
+            "about": {
+                "aliases": [
+                    "info",
+                    "details"
+                ],
+                "description": "Retrieve information about *Spy x Family* or your current server.",
+                "example": "{}about @Anya Forger",
+                "related_commands": "{}server, {}pfp"
+            },
+            "server": {
+                "aliases": [],
+                "description": "Fetch details about the current server, including server boosts, owner, and member stats.",
+                "example": "{}server",
+                "related_commands": "{}server_roles, {}server_emojis"
+            },
+            "pfp": {
+                "aliases": [],
+                "description": "View the profile picture of a member or yourself.",
+                "example": "{}pfp @Loid Forger",
+                "related_commands": "{}banner"
+            },
+            "banner": {
+                "aliases": [],
+                "description": "Check the banner of a member or yourself, showcasing their *Spy x Family* fandom!",
+                "example": "{}banner @Yor Forger",
+                "related_commands": "{}pfp"
+            },
+            "invite": {
+                "aliases": [],
+                "description": "Generate a server invite link, perhaps to discuss *Spy x Family* with fellow fans.",
+                "example": "{}invite",
+                "related_commands": "{}server"
+            },
+            "perms": {
+                "aliases": [],
+                "description": "Display the permissions of a specific member or role, essential for managing *Spy x Family*-related server interactions.",
+                "example": "{}perms @Yor Forger",
+                "related_commands": "{}server_roles"
+            },
+            "server_emojis": {
+                "aliases": [],
+                "description": "List all custom emojis in the server, including *Spy x Family* fan art and reactions.",
+                "example": "{}server_emojis",
+                "related_commands": "{}server"
+            },
+            "server_roles": {
+                "aliases": [],
+                "description": "List the roles available in the server. Could be fun for organizing *Spy x Family* factions!",
+                "example": "{}server_roles",
+                "related_commands": "{}server_emojis, {}server"
+            }
+    },
+    
     "Quest_Data": {},
     "Mini_Games": {
         "memo": {
@@ -134,7 +136,7 @@
                 "p"
             ],
             "description": "Displays Pokemon dex information.",
-            "example": "{}pokemon",
+            "example": "{}pokemon ",
             "related_commands": "Provide related commands"
         }
     },

@@ -1,99 +1,47 @@
 {
-    "Quest": {
-        "quest": " View server quest in order to complete them.",
-        "stars": " View how many stellas you have currently.",
-        "shop": "Buy a Spy Tool.",
-        "redirect": " ",
-        "inventory": " ",
-        "q_roles": " ",
-        "quest_roles": " ",
-        "balance": " "
-    },
+
     "Ai": {
-        "vision_model": "Get the current vision model.",
-        "imagine": "Generate an image based on a prompt.",
-        "vision": "Show Anya a image and get her response.",
-        "detect": " "
-    },
-    "Anime": {
-        "anime": "Get information about an anime.",
-        "character": " ",
-        "manga": " "
-    },
-    "System": {
-        "ping": "Check the bot's response time.",
-        "credit": " ",
-        "uptime": " ",
-        "set_image": " ",
-        "get_image": " ",
-        "optimize": " ",
-        "memory_info": " ",
-        "memory": " "
-    },
-    "Pokemon": {
-        "predict": "Predict Pok\u00e9mon details.",
-        "pokemon": "Get information about a Pok\u00e9mon.",
-        "hunt": " "
-    },
-    "Information": {
-        "about": "Get details about users or bot.",
-        "server": " ",
-        "pfp": " ",
-        "role": " ",
-        "banner": " ",
-        "joined": " ",
-        "roles": " ",
-        "invite": " ",
-        "perms": " ",
-        "emojis": " ",
-        "json": " ",
-        "server_roles": " ",
-        "list_emojis": " ",
-        "server_emojis": " "
-    },
-    "PokemonBot": {
-        "predict": " "
-    },
-    "Quest_Data": {},
-    "Quest_Slash": {},
-    "Help": {},
-    "Sync": {},
-    "FileSender": {},
-    "TestCog": {},
-    "AvatarChanger": {},
-    "Logs": {},
-    "Permission": {},
-    "Quest_Checker": {},
-    "Aesthetic": {
-        "embed": "Description to fill out",
-        "reload_aesthetic": "Description to fill out"
-    },
-    "Anti_Theif": {
-        "s_t": " "
-    },
-    "Guide": {
-        "afk": " "
-    },
-    "Memo_Game": {
-        "memo": " "
+        "imagine": " ",
+        "vision": " "
     },
     "Recommendation": {
         "anime_recommend": " "
     },
-    "Pokemon_Emojis": {
-        "create_emojis": " ",
-        "emoji": " ",
-        "get_emoji": " ",
-        "delete_all_emojis": " ",
-        "clear_emojis": " "
+    "Anime": {
+        "anime": " ",
+        "character": " ",
+        "manga": " "
     },
-    "GlitchSolver": {
-        "extract_embed": " "
+    "Information": {
+        "about": " ",
+        "server": " ",
+        "pfp": " ",
+        "banner": " ",
+        "invite": " ",
+        "perms": " ",
+        "server_emojis": " ",
+        "server_roles": " "
     },
     "Mini_Games": {
         "memo": " "
     },
-    "Detection": {
-        "detect": " "
+    "Pokemon": {
+        "predict": " ",
+        "hunt": " ",
+        "pokemon": " "
+    },
+    "Quest": {
+        "redirect": " ",
+        "quest": " ",
+        "quest_roles": " ",
+        "inventory": " ",
+        "balance": " ",
+        "shop": " "
+    },
+    "System": {
+        "memory": " ",
+        "ping": " ",
+        "uptime": " ",
+        "credit": " "
     }
 }
