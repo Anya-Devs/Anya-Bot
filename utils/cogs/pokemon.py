@@ -812,30 +812,23 @@ class Pokebuttons(discord.ui.View):
             )
 
     async def show_evolutions(self, interaction: discord.Interaction):
-        try:
-            
-            evolution_chain_data = await self.get_pokemon_evolution_chain(
-                self.pokemon_name
-            )
+     try:
+        evolution_chain_data = await self.get_pokemon_evolution_chain(self.pokemon_name)
+        
+        if not evolution_chain_data:
+            await interaction.response.send_message(f"No evolution chain found for {self.pokemon_name.title()}.", ephemeral=True)
+            self.disabled = True
+            await interaction.message.edit(view=self.view)
+            return
+        
+        embeds = await self.display_evolution_chain(evolution_chain_data)
+        await interaction.response.send_message(embeds=embeds[:10], ephemeral=True)
+        
+        if len(embeds) > 10:
+            await interaction.followup.send(embeds=embeds[10:], ephemeral=True)
 
-            if not evolution_chain_data:
-                await interaction.response.send_message(
-                    f"No evolution chain found for {self.pokemon_name.title()}.",
-                    ephemeral=True,
-                )
-                
-                self.disabled = True
-                await interaction.message.edit(view=self.view)
-                return
-
-            
-            embeds = await self.display_evolution_chain(evolution_chain_data)
-            await interaction.response.send_message(embeds=embeds, ephemeral=True)
-        except Exception as e:
-            await interaction.response.send_message(
-                f"Error fetching Pokémon evolution chain: {str(e)}", ephemeral=True
-            )
-
+     except Exception as e:
+        await interaction.response.send_message(f"Error fetching Pokémon evolution chain: {str(e)}", ephemeral=True)
     @staticmethod
     async def get_pokemon_evolution_chain(pokemon_name):
         async with aiohttp.ClientSession() as session:
@@ -948,7 +941,6 @@ class Pokebuttons(discord.ui.View):
         sprite_url = (
             f"https://pokemonshowdown.com/sprites/dex/{current_pokemon.lower()}.png"
         )
-        print("create_pokemon_embed: ", self.pokemon_type)
         if self.pokemon_shiny:
             sprite_url = f"https://pokemonshowdown.com/sprites/dex-shiny/{current_pokemon.lower()}.png"
 
