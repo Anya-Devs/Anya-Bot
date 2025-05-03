@@ -1,199 +1,223 @@
 {
-    "redirect": {
-        "aliases": [],
-        "description": null,
-        "example": "{}redirect",
-        "related_commands": "Provide related commands"
-    },
-    "quest": {
-        "aliases": [
-            "q"
-        ],
-        "description": null,
-        "example": "{}quest",
-        "related_commands": "Provide related commands"
-    },
-    "quest_roles": {
-        "aliases": [],
-        "description": "Command for admins to set or list roles that a target can get randomly.",
-        "example": "{}quest_roles",
-        "related_commands": "Provide related commands"
-    },
-    "inventory": {
-        "aliases": [
-            "inv"
-        ],
-        "description": "Displays the user's tool inventory.",
-        "example": "{}inventory",
-        "related_commands": "Provide related commands"
-    },
-    "balance": {
-        "aliases": [
-            "bal",
-            "points",
-            "stars",
-            "stp"
-        ],
-        "description": null,
-        "example": "{}balance",
-        "related_commands": "Provide related commands"
-    },
-    "shop": {
-        "aliases": [],
-        "description": null,
-        "example": "{}shop",
-        "related_commands": "Provide related commands"
-    },
-    "anime": {
-        "aliases": [],
-        "description": null,
-        "example": "{}anime",
-        "related_commands": "Provide related commands"
-    },
-    "character": {
-        "aliases": [],
-        "description": null,
-        "example": "{}character",
-        "related_commands": "Provide related commands"
-    },
-    "manga": {
-        "aliases": [],
-        "description": null,
-        "example": "{}manga",
-        "related_commands": "Provide related commands"
-    },
-    "anime_recommend": {
-        "aliases": [
-            "ar"
-        ],
-        "description": "Fetches a random anime and sends the recommendation.",
-        "example": "{}anime_recommend",
-        "related_commands": "Provide related commands"
-    },
-    "about": {
-        "aliases": [
-            "info",
-            "details"
-        ],
-        "description": null,
-        "example": "{}about",
-        "related_commands": "Provide related commands"
-    },
-    "server": {
-        "aliases": [],
-        "description": null,
-        "example": "{}server",
-        "related_commands": "Provide related commands"
-    },
-    "pfp": {
-        "aliases": [],
-        "description": null,
-        "example": "{}pfp",
-        "related_commands": "Provide related commands"
-    },
-    "banner": {
-        "aliases": [],
-        "description": null,
-        "example": "{}banner",
-        "related_commands": "Provide related commands"
-    },
-    "invite": {
-        "aliases": [],
-        "description": null,
-        "example": "{}invite",
-        "related_commands": "Provide related commands"
-    },
-    "perms": {
-        "aliases": [],
-        "description": null,
-        "example": "{}perms",
-        "related_commands": "Provide related commands"
-    },
-    "server_emojis": {
-        "aliases": [],
-        "description": null,
-        "example": "{}server_emojis",
-        "related_commands": "Provide related commands"
-    },
-    "server_roles": {
-        "aliases": [],
-        "description": null,
-        "example": "{}server_roles",
-        "related_commands": "Provide related commands"
-    },
-    "predict": {
-        "aliases": [],
-        "description": null,
-        "example": "{}predict",
-        "related_commands": "Provide related commands"
-    },
-    "hunt": {
-        "aliases": [],
-        "description": null,
-        "example": "{}hunt",
-        "related_commands": "Provide related commands"
-    },
-    "pokemon": {
-        "aliases": [
-            "pokdex",
-            "dex",
-            "d",
-            "p"
-        ],
-        "description": "Displays Pokemon dex information.",
-        "example": "{}pokemon",
-        "related_commands": "Provide related commands"
-    },
-    "detect": {
-        "aliases": [],
-        "description": null,
-        "example": "{}detect",
-        "related_commands": "Provide related commands"
-    },
-    "imagine": {
-        "aliases": [
+    "Ai": {
+        "imagine": {
+         "aliases": [
             "i"
-        ],
-        "description": null,
-        "example": "{}imagine",
-        "related_commands": "Provide related commands"
+         ],
+         "description": "Model: animagine-xl-4.0\nGenerates images using prompts and returns an anime-styled image.",
+         "example": "{}imagine 1girl, solo, blue archive, long hair, grey hair, red eyes, large breasts, white shirt, collared shirt, long sleeves, halo, v, skirt, outdoors, ruins, standing, sensitive, masterpiece, high score, great score, absurdres",
+         "related_commands": "{}vision"
     },
-    "vision": {
-        "aliases": [
-            "v"
-        ],
-        "description": null,
-        "example": "{}vision",
-        "related_commands": "Provide related commands"
+        "vision": {
+            "aliases": [
+                "v"
+            ],
+            "description": "Generate a vision-based response using a prompt and an image URL via Gemini 2.0 model.",
+            "example": "{}vision https://i.pinimg.com/736x/32/82/8a/32828a1554ad31ff44c5d4bd948cfdd7.jpg",
+            "related_commands": "{}imagine"
+        }
     },
-    "memory": {
-        "aliases": [],
-        "description": null,
-        "example": "{}memory",
-        "related_commands": "Provide related commands"
+    "Recommendation": {
+        "anime_recommend": {
+            "aliases": [
+                "ar"
+            ],
+            "description": "Fetches a random anime and sends the recommendation.",
+            "example": "{}anime_recommend",
+            "related_commands": "{}anime"
+        }
     },
-    "ping": {
-        "aliases": [],
-        "description": null,
-        "example": "{}ping",
-        "related_commands": "Provide related commands"
+    "Anime": {
+          "anime": {
+            "aliases": [],
+            "description": "Search for anime information specifically about Spy x Family.",
+            "example": "{}anime Spy x Family",
+            "related_commands": "{}character, {}manga"
+          },
+          "character": {
+            "aliases": [],
+            "description": "Search for information about Spy x Family characters.",
+            "example": "{}character Anya Forger",
+            "related_commands": "{}anime"
+          },
+          "manga": {
+            "aliases": [],
+            "description": "Search for manga information specifically about Spy x Family.",
+            "example": "{}manga Spy x Family",
+            "related_commands": "{}anime"
+          }
     },
-    "uptime": {
-        "aliases": [],
-        "description": null,
-        "example": "{}uptime",
-        "related_commands": "Provide related commands"
+    "Help": {},
+    "Information": {
+        "about": {
+            "aliases": [
+                "info",
+                "details"
+            ],
+            "description": "No description provided.",
+            "example": "{}about",
+            "related_commands": "Provide related commands"
+        },
+        "server": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}server",
+            "related_commands": "Provide related commands"
+        },
+        "pfp": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}pfp",
+            "related_commands": "Provide related commands"
+        },
+        "banner": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}banner",
+            "related_commands": "Provide related commands"
+        },
+        "invite": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}invite",
+            "related_commands": "Provide related commands"
+        },
+        "perms": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}perms",
+            "related_commands": "Provide related commands"
+        },
+        "server_emojis": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}server_emojis",
+            "related_commands": "Provide related commands"
+        },
+        "server_roles": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}server_roles",
+            "related_commands": "Provide related commands"
+        }
     },
-    "credit": {
-        "aliases": [],
-        "description": null,
-        "example": "{}credit",
-        "related_commands": "Provide related commands"
+    "Quest_Data": {},
+    "Mini_Games": {
+        "memo": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}memo",
+            "related_commands": "Provide related commands"
+        }
     },
-    "memo": {
-        "aliases": [],
-        "description": null,
-        "example": "{}memo",
-        "related_commands": "Provide related commands"
-    }
+    "Memo_Data": {},
+    "Pokemon_Emojis": {},
+    "Ping_Pokemon": {},
+    "Pokemon": {
+        "predict": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}predict",
+            "related_commands": "Provide related commands"
+        },
+        "hunt": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}hunt",
+            "related_commands": "Provide related commands"
+        },
+        "pokemon": {
+            "aliases": [
+                "pokdex",
+                "dex",
+                "d",
+                "p"
+            ],
+            "description": "Displays Pokemon dex information.",
+            "example": "{}pokemon",
+            "related_commands": "Provide related commands"
+        }
+    },
+    "Quest": {
+        "redirect": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}redirect",
+            "related_commands": "Provide related commands"
+        },
+        "quest": {
+            "aliases": [
+                "q"
+            ],
+            "description": "No description provided.",
+            "example": "{}quest",
+            "related_commands": "Provide related commands"
+        },
+        "quest_roles": {
+            "aliases": [],
+            "description": "Command for admins to set or list roles that a target can get randomly.",
+            "example": "{}quest_roles",
+            "related_commands": "Provide related commands"
+        },
+        "inventory": {
+            "aliases": [
+                "inv"
+            ],
+            "description": "Displays the user's tool inventory.",
+            "example": "{}inventory",
+            "related_commands": "Provide related commands"
+        },
+        "balance": {
+            "aliases": [
+                "bal",
+                "points",
+                "stars",
+                "stp"
+            ],
+            "description": "No description provided.",
+            "example": "{}balance",
+            "related_commands": "Provide related commands"
+        },
+        "shop": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}shop",
+            "related_commands": "Provide related commands"
+        }
+    },
+    "Quest_Slash": {},
+    "Sync": {},
+    "System": {
+        "memory": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}memory",
+            "related_commands": "Provide related commands"
+        },
+        "ping": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}ping",
+            "related_commands": "Provide related commands"
+        },
+        "uptime": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}uptime",
+            "related_commands": "Provide related commands"
+        },
+        "credit": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}credit",
+            "related_commands": "Provide related commands"
+        }
+    },
+    "AvatarChanger": {},
+    "Permission": {},
+    "GlitchSolver": {},
+    "Anti_Thief": {},
+    "EventGate": {},
+    "Quest_Checker": {},
+    "ToolBot": {}
 }

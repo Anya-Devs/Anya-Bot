@@ -27,12 +27,20 @@ class Select_Help(discord.ui.Select):
         self.primary_color = primary_color()
         self.module_to_cogs = self.map_modules_to_cogs()
         self.set_thumbnail_file = "data/commands/help/help_embed_images.json"
+        self.cog_image_path = "data/images/help_images/cog_image.png"
 
         options = []
         for module, cogs in self.module_to_cogs.items():
             first_cog = cogs[0] if cogs else None
             cog_name = first_cog.qualified_name if first_cog else "unknown"
             emoji = Help_Select_Embed_Mapping.emojis.get(cog_name.lower())
+
+            if not emoji:
+                for cog in cogs:
+                    cog_emoji = Help_Select_Embed_Mapping.emojis.get(cog.qualified_name.lower())
+                    if cog_emoji:
+                        emoji = cog_emoji
+                        break
 
             options.append(
                 discord.SelectOption(
@@ -73,10 +81,10 @@ class Select_Help(discord.ui.Select):
                 if len(cmd_args) > 3:
                     cmd_args = cmd_args[:3] + ['...']
                 cmd_args_str = ' '.join(cmd_args)
-                command_line = f"`{cmd.name}`"   
+                command_line = f"`{cmd.name}`".strip()
                 command_lines.append(command_line)
 
-            fields.append((cog.qualified_name, " ".join(command_lines)))
+            fields.append((cog.__class__.__name__, " ".join(command_lines)))
 
         return fields
 
@@ -96,19 +104,20 @@ class Select_Help(discord.ui.Select):
             else:
                 embed.description = "No visible commands found for this module."
 
-            file = None
-            first_cog = self.module_to_cogs[selected_module][0] if self.module_to_cogs[selected_module] else None
+            file_name = selected_module.split('.')[0]
+            first_cog = self.module_to_cogs.get(selected_module, [None])[0]
             cog_name = first_cog.qualified_name if first_cog else "unknown"
 
             help_embed_manager = Help_Thumbnails(self.set_thumbnail_file)
-            thumbnail_url = help_embed_manager.get_image_url(cog_name)
+            thumbnail_url = help_embed_manager.get_image_url(file_name)
             if thumbnail_url:
                 embed.set_thumbnail(url=thumbnail_url)
 
-            image_generator = Options_ImageGenerator(cog_name)
-            image_path = "data/images/help_images/cog_image.png"
+            image_generator = Options_ImageGenerator(file_name)
+            image_path = self.cog_image_path
             saved_image_path = image_generator.save_image(image_path)
 
+            file = None
             if os.path.exists(image_path):
                 with open(image_path, "rb") as f:
                     file = discord.File(f, filename="cog_image.png")
@@ -121,7 +130,7 @@ class Select_Help(discord.ui.Select):
 
         except Exception:
             traceback.print_exc()
-
+          
 
 
 class HelpMenu(discord.ui.View):
@@ -489,6 +498,7 @@ class Help_Thumbnails:
 
 
  
+
 class Sub_Helper:
     def __init__(self, bot, prefix):
         self.bot = bot
@@ -515,11 +525,13 @@ class Sub_Helper:
 
         for cog in self.bot.cogs.values():
             if isinstance(cog, commands.Cog):
+                cog_name = cog.__class__.__name__
+                if cog_name not in help_data:
+                    help_data[cog_name] = {}
                 for cmd in cog.get_commands():
-                    if cmd.hidden or cmd.name in help_data:
-                        continue  
-
-                    help_data[cmd.name] = {
+                    if cmd.hidden or cmd.name in help_data[cog_name]:
+                        continue
+                    help_data[cog_name][cmd.name] = {
                         "aliases": cmd.aliases,
                         "description": cmd.help or "No description provided.",
                         "example": f"{{}}{cmd.name}",
@@ -535,7 +547,12 @@ class Sub_Helper:
         if not command:
             return f"Command `{command_name}` not found."
 
-        command_info = help_data.get(command.name, {})
+        command_info = {}
+        for cog_data in help_data.values():
+            if command.name in cog_data:
+                command_info = cog_data[command.name]
+                break
+
         aliases = command_info.get("aliases", [])
         description = command_info.get("description", "No description provided.")
         example = command_info.get("example", "No example provided.")
@@ -562,3 +579,50 @@ class Sub_Helper:
 > <> = required arguments
 > [] = optional arguments
 ```"""
+
+    def check_and_fix_misplaced_commands(self):
+        help_data = self._load_help_json()
+        updated = False
+
+        command_to_cog = {}
+        for cog_name, cog in self.bot.cogs.items():
+            for cmd in cog.get_commands():
+                command_to_cog[cmd.name] = cog_name
+
+        correct_structure = {cog_name: help_data.get(cog_name, {}) for cog_name in self.bot.cogs}
+
+        for key in list(help_data.keys()):
+            if key in self.bot.cogs:
+                continue
+            cmd_name = key
+            cmd_data = help_data[key]
+            if not isinstance(cmd_data, dict) or "description" not in cmd_data:
+                continue
+            correct_cog = command_to_cog.get(cmd_name)
+            if correct_cog:
+                if cmd_name not in correct_structure[correct_cog] or (
+                    cmd_data.get("description", "").lower() != "no description provided."
+                ):
+                    correct_structure[correct_cog][cmd_name] = {
+                        **correct_structure[correct_cog].get(cmd_name, {}),
+                        **cmd_data
+                    }
+                    updated = True
+                del help_data[key]
+
+        for cog_name, commands in help_data.items():
+            if cog_name not in self.bot.cogs:
+                continue
+            for cmd_name in list(commands.keys()):
+                actual_cog = command_to_cog.get(cmd_name)
+                if actual_cog and actual_cog != cog_name:
+                    cmd_data = commands.pop(cmd_name)
+                    correct_structure[actual_cog][cmd_name] = {
+                        **correct_structure[actual_cog].get(cmd_name, {}),
+                        **cmd_data
+                    }
+                    updated = True
+
+        if updated:
+            self._save_help_json(correct_structure)
+            
