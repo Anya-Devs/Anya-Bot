@@ -60,8 +60,7 @@ class Image:
                         output_path = self.output_dir / f"generated_image_{width}x{height}.png"
                         with open(output_path, 'wb') as f:
                             f.write(image_data)
-
-                        print(f"✅ Image successfully generated and saved as '{output_path}'")
+                        #print(f"✅ Image successfully generated and saved as '{output_path}'")
                         return output_path
                     else:
                         print(f"❌ Error: {response.status}, {await response.text()}")
@@ -78,7 +77,7 @@ class Image:
 
 
 
-class AiText:
+class Ai_Text:
     IMAGINE_ALREADY_IN_QUEUE = "{}, you're already in the process of generating an image. Please wait until it finishes."
     ERROR_GENERATING_PROMPT = "❌ Error generating prompt, please try again."
     NO_IMAGE_URL_FOUND = "No image URL found. Please provide an image URL, attach an image to your message, or reply to a message with an image."

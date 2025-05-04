@@ -48,61 +48,59 @@
         }
     },
     "Help": {},
-    
     "Information": {
-            "about": {
-                "aliases": [
-                    "info",
-                    "details"
-                ],
-                "description": "Retrieve information about *Spy x Family* or your current server.",
-                "example": "{}about @Anya Forger",
-                "related_commands": "{}server, {}pfp"
-            },
-            "server": {
-                "aliases": [],
-                "description": "Fetch details about the current server, including server boosts, owner, and member stats.",
-                "example": "{}server",
-                "related_commands": "{}server_roles, {}server_emojis"
-            },
-            "pfp": {
-                "aliases": [],
-                "description": "View the profile picture of a member or yourself.",
-                "example": "{}pfp @Loid Forger",
-                "related_commands": "{}banner"
-            },
-            "banner": {
-                "aliases": [],
-                "description": "Check the banner of a member or yourself, showcasing their *Spy x Family* fandom!",
-                "example": "{}banner @Yor Forger",
-                "related_commands": "{}pfp"
-            },
-            "invite": {
-                "aliases": [],
-                "description": "Generate a server invite link, perhaps to discuss *Spy x Family* with fellow fans.",
-                "example": "{}invite",
-                "related_commands": "{}server"
-            },
-            "perms": {
-                "aliases": [],
-                "description": "Display the permissions of a specific member or role, essential for managing *Spy x Family*-related server interactions.",
-                "example": "{}perms @Yor Forger",
-                "related_commands": "{}server_roles"
-            },
-            "server_emojis": {
-                "aliases": [],
-                "description": "List all custom emojis in the server, including *Spy x Family* fan art and reactions.",
-                "example": "{}server_emojis",
-                "related_commands": "{}server"
-            },
-            "server_roles": {
-                "aliases": [],
-                "description": "List the roles available in the server. Could be fun for organizing *Spy x Family* factions!",
-                "example": "{}server_roles",
-                "related_commands": "{}server_emojis, {}server"
-            }
+        "about": {
+            "aliases": [
+                "info",
+                "details"
+            ],
+            "description": "Retrieve information about *Spy x Family* or your current server.",
+            "example": "{}about @Anya Forger",
+            "related_commands": "{}server, {}pfp"
+        },
+        "server": {
+            "aliases": [],
+            "description": "Fetch details about the current server, including server boosts, owner, and member stats.",
+            "example": "{}server",
+            "related_commands": "{}server_roles, {}server_emojis"
+        },
+        "pfp": {
+            "aliases": [],
+            "description": "View the profile picture of a member or yourself.",
+            "example": "{}pfp @Loid Forger",
+            "related_commands": "{}banner"
+        },
+        "banner": {
+            "aliases": [],
+            "description": "Check the banner of a member or yourself, showcasing their *Spy x Family* fandom!",
+            "example": "{}banner @Yor Forger",
+            "related_commands": "{}pfp"
+        },
+        "invite": {
+            "aliases": [],
+            "description": "Generate a server invite link, perhaps to discuss *Spy x Family* with fellow fans.",
+            "example": "{}invite",
+            "related_commands": "{}server"
+        },
+        "perms": {
+            "aliases": [],
+            "description": "Display the permissions of a specific member or role, essential for managing *Spy x Family*-related server interactions.",
+            "example": "{}perms @Yor Forger",
+            "related_commands": "{}server_roles"
+        },
+        "server_emojis": {
+            "aliases": [],
+            "description": "List all custom emojis in the server, including *Spy x Family* fan art and reactions.",
+            "example": "{}server_emojis",
+            "related_commands": "{}server"
+        },
+        "server_roles": {
+            "aliases": [],
+            "description": "List the roles available in the server. Could be fun for organizing *Spy x Family* factions!",
+            "example": "{}server_roles",
+            "related_commands": "{}server_emojis, {}server"
+        }
     },
-    
     "Quest_Data": {},
     "Mini_Games": {
         "memo": {
@@ -136,7 +134,7 @@
                 "p"
             ],
             "description": "Displays Pokemon dex information.",
-            "example": "{}pokemon ",
+            "example": "{}pokemon eevee\n{}pokemon shiny eevee\n{}pokemon alolan vulpix,",
             "related_commands": "Provide related commands"
         }
     },
@@ -185,41 +183,49 @@
             "description": "No description provided.",
             "example": "{}shop",
             "related_commands": "Provide related commands"
+        },
+        "Quest_Slash": {},
+        "Sync": {},
+        "System": {
+            "memory": {
+                "aliases": [
+                    "mem"
+                ],
+                "description": "Displays the bot's current memory usage.",
+                "example": "{}memory",
+                "related_commands": "ping, uptime"
+            },
+            "ping": {
+                "aliases": [],
+                "description": "Checks the bot's response time and latency to the server.",
+                "example": "{}ping",
+                "related_commands": "memory, uptime"
+            },
+            "uptime": {
+                "aliases": [
+                    "up"
+                ],
+                "description": "Shows how long the bot has been running since its last restart.",
+                "example": "{}uptime",
+                "related_commands": "ping, memory"
+            },
+            "credit": {
+                "aliases": [
+                    "credits",
+                    "creator",
+                    "contributors"
+                ],
+                "description": "Displays the names of the people who contributed to the creation and development of the bot.",
+                "example": "{}credit",
+                "related_commands": "uptime, ping"
+            },
+            "AvatarChanger": {},
+            "Permission": {},
+            "GlitchSolver": {},
+            "Anti_Thief": {},
+            "EventGate": {},
+            "Quest_Checker": {},
+            "ToolBot": {}
         }
-    },
-    "Quest_Slash": {},
-    "Sync": {},
-    "System": {
-        "memory": {
-            "aliases": [],
-            "description": "No description provided.",
-            "example": "{}memory",
-            "related_commands": "Provide related commands"
-        },
-        "ping": {
-            "aliases": [],
-            "description": "No description provided.",
-            "example": "{}ping",
-            "related_commands": "Provide related commands"
-        },
-        "uptime": {
-            "aliases": [],
-            "description": "No description provided.",
-            "example": "{}uptime",
-            "related_commands": "Provide related commands"
-        },
-        "credit": {
-            "aliases": [],
-            "description": "No description provided.",
-            "example": "{}credit",
-            "related_commands": "Provide related commands"
-        }
-    },
-    "AvatarChanger": {},
-    "Permission": {},
-    "GlitchSolver": {},
-    "Anti_Thief": {},
-    "EventGate": {},
-    "Quest_Checker": {},
-    "ToolBot": {}
+    }
 }
