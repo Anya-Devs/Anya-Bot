@@ -23,7 +23,7 @@ class Fun(commands.Cog):
         await ctx.reply(response_build, mention_author=False)
 
     def create_action_commands(self):
-     actions = ['pat', 'cuddle', 'bite', 'kiss', 'lick', "hug"]
+     actions = ['pat', 'cuddle', 'bite', 'kiss', 'lick', "hug", "cry", "kiss", "wave", "slowclap", "smug"]
      for action in actions:
         @commands.command(name=action)
         async def action_fn(ctx, user: Union[discord.Member, Literal["everyone"]] = None, *, additional_text: str = ""):
