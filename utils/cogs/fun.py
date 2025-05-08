@@ -31,11 +31,16 @@ class Fun_Commands:
         everyone = isinstance(user, str) and user.lower() == "everyone"
         msg = f"{ctx.author.display_name} {action}s the whole server {emote} {additional_text}" if everyone else f"{ctx.author.display_name} {action}s {user.display_name} {emote} {additional_text}"
         embed = discord.Embed(title=msg.strip(), color=primary_color()).set_image(url=gif)
-        if not everyone and user != ctx.author:
-            sid, aid, uid = str(ctx.guild.id), str(ctx.author.id), str(user.id)
-            await self.mongo.update_one({"server_id": sid}, {"$inc": {f"members.outake.{aid}": 1, f"members.intake.{uid}": 1}}, upsert=True)
-            doc = await self.mongo.find_one({"server_id": sid})
-            outake = doc.get("members", {}).get("outake", {}).get(aid, 0)
-            intake = doc.get("members", {}).get("intake", {}).get(uid, 0)
-            embed.set_footer(text=f"Sent: {outake} | Received: {intake}")
+
+        sid, aid = str(ctx.guild.id), str(ctx.author.id)
+        if not everyone:
+            if user != ctx.author:
+                uid = str(user.id)
+                await self.mongo.update_one({"server_id": sid}, {"$inc": {f"members.intake.{uid}": 1}}, upsert=True)
+            await self.mongo.update_one({"server_id": sid}, {"$inc": {f"members.outake.{aid}": 1}}, upsert=True)
+
+        doc = await self.mongo.find_one({"server_id": sid})
+        sent = doc.get("members", {}).get("outake", {}).get(aid, 0)
+        received = doc.get("members", {}).get("intake", {}).get(aid, 0)
+        embed.set_footer(text=f"Sent: {sent} | Received: {received}")
         return embed
