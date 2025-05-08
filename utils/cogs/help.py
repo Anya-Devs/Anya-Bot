@@ -14,7 +14,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 from data.const import *
-
 from imports.discord_imports import *
 from imports.log_imports import logger
 
@@ -626,3 +625,78 @@ class Sub_Helper:
         if updated:
             self._save_help_json(correct_structure)
             
+
+
+
+
+
+class Help_Select_Embed_Mapping:
+    images = AnyaImages.load_images()  
+    embeds = {
+        "system": {
+            "title": "System",
+            "description": "View the status of the bot, including information about its current performance, system resources usage, and configuration settings.",
+            "color": discord.Color.red(),
+            "thumbnail_url": images["help_system_thumbnail"],
+            "image_url": images["help_system_thumbnail"],
+        },
+        "quest": {
+            "title": "Quest",
+            "description": "Progress on interactions, they are awarding and fulfilling Anya's wish for you to make new friends and engage within the community.",
+            "color": None,
+            "thumbnail_url": images["help_quest_thumbnail"],
+        },
+        "ai": {
+            "title": "AI",
+            "description": "Interact with advanced artificial intelligence functionalities, capable of handling various tasks.",
+            "color": discord.Color.green(),
+            "thumbnail_url": images["help_ai_thumbnail"],
+        },
+        "pokemon": {
+            "title": "Pokemon",
+            "description": "Provides a set of Pokémon-focused commands for image recognition, hunt ping, and detailed form lookups.",
+            "color": discord.Color.red(),
+            "thumbnail_url": images["help_pokemon_thumbnail"],
+        },
+        "anime": {
+            "title": "Anime",
+            "description": "Waku waku! Anya throws in a dash of anime or weeb material into the mix for those who are interested.",
+            "color": None,
+            "thumbnail_url": images["help_anime_thumbnail"],
+        },
+        "information": {
+            "title": "Information",
+            "description": "Gather the status of a member in the Discord server and stay informed to avoid looking silly.",
+            "color": None,
+            "thumbnail_url": images["help_information_thumbnail"],
+        },
+        "mini_games": {
+            "title": "Minigame",
+            "description": "Engage in a fun and interactive minigame! Choose the type of minigame you'd like to play and compete for rewards and fun challenges.",
+            "color": None,
+            "thumbnail_url": images["help_minigame_thumbnail"],
+        },
+        "fun": {
+            "title": "Fun",
+            "description": "A variety of silly, playful, or meme-based commands made to make you laugh or respond with chaos.",
+            "color": discord.Color.magenta(),
+            "thumbnail_url": images["help_fun_thumbnail"],
+        },
+        "Cog2": {
+            "title": "Title for Cog2",
+            "description": "Description for Cog2",
+            "color": discord.Color.blue(),
+            "thumbnail_url": "Thumbnail URL for Cog2",
+        },
+    }
+
+    emojis = {
+        "system": "<:system:1261208067085959320>",
+        "quest": "<:anyasus:1258563706518765669>",
+        "ai": "✨",
+        "pokemon": "<:Pokeball:1261208239891156992>",
+        "anime": "<:neko_lurk:1320306198075015201>",
+        "information": "<:help_info:1268971820988764272>",
+        "mini_games": "🎲",  
+        "fun": '🎱'
+    }

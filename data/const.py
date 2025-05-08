@@ -9,69 +9,11 @@ from imports.discord_imports import *
 from openai import AsyncOpenAI
 
 class AnyaImages:
-    shocked_anya = "https://img-03.stickers.cloud/packs/20d46227-dcb0-4583-8d66-ee78d4743129/webp/a65e28be-a5fd-4654-8e7d-736dbd809df2.webp"
-    awake_anya = "https://media.tenor.com/9kLYJilshNMAAAAe/spy-x-family-anya.png"
-    question_anya = (
-        "https://i.pinimg.com/236x/b7/23/1f/b7231fbf87eee22b6d1f35f83e9a80bd.jpg"
-    )
-    start_shop_thumbnail = (
-        "https://i.pinimg.com/564x/fd/1d/49/fd1d49d255ca18236a27a38b8710681b.jpg"
-    )
-    start_shop_image = (
-        "https://i.pinimg.com/564x/ed/1f/83/ed1f834eb245918964ca5507dbbc59bd.jpg"
-    )
-    ping_banner_anya = (
-        "https://i.pinimg.com/564x/db/98/ff/db98ffc40d53378a9999528b69d66d00.jpg"
-    )
-    ping_image = (
-        "https://i.pinimg.com/564x/25/da/ee/25daee24ea5fb98b5590d542d2879708.jpg"
-    )
-    sleepy_anya = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR9y_MT3QHxXZVVzVlA94oFM8uIN0QH1fdw8Q6inySFmQ&s"
-    new_mission_anya = (
-        "https://i.pinimg.com/236x/b5/90/49/b590497e5e776909274ba40b040bba8c.jpg"
-    )
-    look_radiant_anya = (
-        "https://i.pinimg.com/236x/0b/cf/4b/0bcf4b9002db8cbb5f5d42855b5d460c.jpg"
-    )
-    ping_thumbnail = (
-        "https://i.pinimg.com/236x/5d/d7/d1/5dd7d1d91933d59b8f21732efba70368.jpg"
-    )
-    help_thumbnail = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzvquP9P7dIi5DFyTmtenWQwDyAqOu98l_juVOo6ah5Q_8N5KqT3VAdZ8twJ7L2TexN7k&usqp=CAU"
-    help_ai_thumbnail = None  
-    help_system_thumbnail = (
-        "https://i.pinimg.com/564x/f4/38/ef/f438ef92875df915c8d019780a76a346.jpg"
-    )
-    help_quest_thumbnail = (
-        "https://i.pinimg.com/474x/d9/af/95/d9af956f06d0de95689e2094f753aa2f.jpg"
-    )
-    help_pokemon_thumbnail = (
-        "https://pbs.twimg.com/media/FRaJipkWUAADmt-?format=jpg&name=4096x4096"
-    )
-    help_anime_thumbnail = "https://anime.astronerdboy.com/wp-content/uploads/2022/06/x03-reading-manga-goofing-off-not-working.jpg"
-    help_information_thumbnail = (
-        "https://i.pinimg.com/474x/ae/95/91/ae9591cf2700cedc2ca63c2b5eb85990.jpg"
-    )
-    help_minigame_thumbnail = ("https://comicbook.com/wp-content/uploads/sites/4/2025/02/Spy-x-Family-Damian-Anya.jpeg")
-    quest_completed_anya = (
-        "https://i.pinimg.com/236x/26/3b/90/263b90473c3651b4fc3d30b462152c0b.jpg"
-    )
+    @staticmethod
+    def load_images():
+        with open('data/images/url_map.json', 'r') as file:
+            return json.load(file)
 
-    agree_to_terms_anya = (
-        "https://i.pinimg.com/474x/09/47/bc/0947bc96fe6f6af4a9779d994c0a2df0.jpg"
-    )
-    
-    no_quest_anya = (
-        "https://th.bing.com/th/id/OIP.iwQwh6xaDNpS2519HlwV8gHaKg?rs=1&pid=ImgDetMain"
-    )
-    show_quest_anya = (
-        "https://i.pinimg.com/236x/23/2f/62/232f626bc0ec7a845198149fdc38e311.jpg"
-    )
-    comfirmation_image_url = (
-        "https://media.tenor.com/mWAIV_rO9FUAAAAe/happy-anime-girl-happy-anime.png"
-    )
-    system_image = (
-        "https://i.pinimg.com/564x/f4/38/ef/f438ef92875df915c8d019780a76a346.jpg"
-    )
 
 
 
@@ -105,85 +47,7 @@ class EmbedFactory:
         return embed
 
 
-class Help_Embed_Mapping:
-    embed1 = {
-        "title": " ",
-        "description": "```Navigate through the selection options.```",
-        "thumbnail_url": None,
-        "image_url": None,
-    }
-    embed2 = {
-        "title": " ",
-        "description": "**Prefix**: `...<cmd.name>` || <@1234247716243112100>\n**Support Server**: [Here](https://discord.gg/qdD4gu4v).",
-        "thumbnail_url": AnyaImages.help_thumbnail,
-        "image_url": None,
-    }
 
-
-class Help_Select_Embed_Mapping:
-    embeds = {
-        "system": {
-            "title": "System",
-            "description": "View the status of the bot, including information about its current performance, system resources usage, and configuration settings.",
-            "color": discord.Color.red(),  
-            "thumbnail_url": AnyaImages.help_system_thumbnail,
-            "image_url": "https://i.pinimg.com/564x/f4/38/ef/f438ef92875df915c8d019780a76a346.jpg",
-        },
-        "quest": {
-            "title": "Quest",
-            "description": "Progress on interactions, they are awarding and fulfilling Anya's wish for you to make new friends and engage within the community.",
-            "color": None,  
-            "thumbnail_url": AnyaImages.help_quest_thumbnail,
-        },
-        "ai": {
-            "title": "AI",
-            "description": "Interact with advanced artificial intelligence functionalities, capable of handling various tasks.",
-            "color": discord.Color.green(),  
-            "thumbnail_url": AnyaImages.help_ai_thumbnail,
-        },
-        "pokemon": {
-            "title": "Pokemon",
-            "description": "Provides a set of Pokémon-focused commands for image recognition, hunt ping, and detailed form lookups.",
-            "color": discord.Color.red(),  
-            "thumbnail_url": AnyaImages.help_pokemon_thumbnail,
-        },
-        "anime": {
-            "title": "Anime",
-            "description": "Waku waku! Anya throws in a dash of anime or weeb material into the mix for those who are interested.",
-            "color": None,
-            "thumbnail_url": AnyaImages.help_anime_thumbnail,
-        },
-        "information": {
-            "title": "Information",
-            "description": "Gather the status of a member in the Discord server and stay informed to avoid looking silly.",
-            "color": None,
-            "thumbnail_url": AnyaImages.help_information_thumbnail,
-        },
-        "mini_games": {
-            "title": "Minigame",
-            "description": "Engage in a fun and interactive minigame! Choose the type of minigame you'd like to play and compete for rewards and fun challenges.",
-            "color": None,  
-            "thumbnail_url": AnyaImages.help_minigame_thumbnail,
-        },
-        "Cog2": {
-            "title": "Title for Cog2",
-            "description": "Description for Cog2",
-            "color": discord.Color.blue(),  
-            "thumbnail_url": "Thumbnail URL for Cog2",
-        },
-        
-    }
-
-    emojis = {
-        "system": "<:system:1261208067085959320>",
-        "quest": "<:anyasus:1258563706518765669> ",
-        "ai": "✨",
-        "pokemon": "<:Pokeball:1261208239891156992>",
-        "anime": "<:neko_lurk:1320306198075015201>",
-        "information": "<:help_info:1268971820988764272>",
-        "mini_games": "🎲",  
-        
-    }
 
 
 
@@ -663,8 +527,9 @@ class LogConstants:
 
 
 class PingConstants:
+    images = AnyaImages.load_images()  
     thumbnail_url = None  
-    image_url = AnyaImages.ping_image
+    image_url = images['ping_image']
     footer_icon = None
     embed_color = None
 
@@ -1092,8 +957,11 @@ async def get_banner_color(bot, user: discord.User):
 
 
 async def error_custom_embed(
-    bot, ctx, e, title="Custom Error", thumbnail_url=AnyaImages.question_anya
-):
+    bot, ctx, e, title="Custom Error", thumbnail_url=None):
+    if thumbnail_url == None:
+        images =  AnyaImages.load_images()
+        thumbnail_url = images['question_anya']
+
     error_embed = discord.Embed(
         description=f"```bash\n{e}```",
         color=discord.Color.red(),

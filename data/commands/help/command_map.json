@@ -42,5 +42,8 @@
         "ping": " ",
         "uptime": " ",
         "credit": " "
+    },
+    "Fun": {
+        "8ball": " "
     }
 }

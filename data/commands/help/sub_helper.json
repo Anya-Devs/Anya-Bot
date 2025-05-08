@@ -227,5 +227,48 @@
             "Quest_Checker": {},
             "ToolBot": {}
         }
-    }
+    },
+    "Fun": {
+        "8ball": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}8ball",
+            "related_commands": "Provide related commands"
+        }
+    },
+    "Quest_Slash": {},
+    "Sync": {},
+    "System": {
+        "memory": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}memory",
+            "related_commands": "Provide related commands"
+        },
+        "ping": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}ping",
+            "related_commands": "Provide related commands"
+        },
+        "uptime": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}uptime",
+            "related_commands": "Provide related commands"
+        },
+        "credit": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}credit",
+            "related_commands": "Provide related commands"
+        }
+    },
+    "AvatarChanger": {},
+    "Permission": {},
+    "GlitchSolver": {},
+    "Anti_Thief": {},
+    "EventGate": {},
+    "Quest_Checker": {},
+    "ToolBot": {}
 }
