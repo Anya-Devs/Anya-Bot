@@ -116,3 +116,5 @@ from discord.ext.commands import (
 
 # Slash Commands, Additional Types
 from discord.ext.commands import when_mentioned, when_mentioned_or, clean_content
+
+from typing import Union, Literal

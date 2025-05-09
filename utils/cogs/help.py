@@ -65,12 +65,10 @@ class Select_Help(discord.ui.Select):
     def build_fields_for_module(self, module):
         cogs = self.module_to_cogs.get(module, [])
         fields = []
-
         for cog in cogs:
             cog_commands = [cmd for cmd in cog.get_commands() if not cmd.hidden]
             if not cog_commands:
                 continue
-
             command_lines = []
             for cmd in cog_commands:
                 cmd_args = [
@@ -82,9 +80,7 @@ class Select_Help(discord.ui.Select):
                 cmd_args_str = ' '.join(cmd_args)
                 command_line = f"`{cmd.name}`".strip()
                 command_lines.append(command_line)
-
             fields.append((cog.__class__.__name__, " ".join(command_lines)))
-
         return fields
 
     async def callback(self, interaction: discord.Interaction):
@@ -129,7 +125,11 @@ class Select_Help(discord.ui.Select):
 
         except Exception:
             traceback.print_exc()
-          
+
+
+
+
+
 
 
 class HelpMenu(discord.ui.View):

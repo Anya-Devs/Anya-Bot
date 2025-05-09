@@ -1,19 +1,13 @@
-"""                   commands                   """
-# 8ball, bite, blush, builtdifferent, cry, cuddle, dance, gayrate, handhold, happy,
-# hug, iq, kiss, lick, nervous, pat, pinch, poke, pp, simprate, slap,
-# slowclap, smile, smug, slot, strength, waifurate, wave, wink
-
-import types
-from motor.motor_asyncio import AsyncIOMotorClient
-
 from utils.cogs.fun import *
 from imports.discord_imports import *
 from data.commands.fun.emojis import *
+from typing import Union, Literal
 
 class Fun(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.fun_cmd = Fun_Commands()
+        self._dynamic_commands = []
         self.create_action_commands()
 
     @commands.command(name='8ball')
@@ -23,15 +17,22 @@ class Fun(commands.Cog):
         await ctx.reply(response_build, mention_author=False)
 
     def create_action_commands(self):
-     actions = ['pat', 'cuddle', 'bite', 'kiss', 'lick', "hug", "cry", "kiss", "wave", "slowclap", "smug"]
-     for action in actions:
-        @commands.command(name=action)
-        async def action_fn(ctx, user: Union[discord.Member, Literal["everyone"]] = None, *, additional_text: str = ""):
-            if user is None: user = ctx.author
-            embed = await  self.fun_cmd.action_command(ctx, user, additional_text)
-            await ctx.send(embed=embed)
-        action_fn.__name__ = action 
-        self.bot.add_command(action_fn)
+        actions = ['pat', 'cuddle', 'bite', 'kiss', 'lick', "hug", "cry", "wave", "slowclap", "smug"]
+
+        for action in actions:
+            async def action_fn(ctx, user: Union[discord.Member, Literal["everyone"]] = None, *, additional_text: str = ""):
+                if user is None:
+                    user = ctx.author
+                embed = await self.fun_cmd.action_command(ctx, user, additional_text)
+                await ctx.send(embed=embed)
+
+            action_fn.__name__ = action
+            command = commands.Command(action_fn)
+            self._dynamic_commands.append(command)
+            self.bot.add_command(command)
+
+    def get_commands(self):
+        return super().get_commands() + self._dynamic_commands
 
 
 async def setup(bot):

@@ -234,6 +234,66 @@
             "description": "No description provided.",
             "example": "{}8ball",
             "related_commands": "Provide related commands"
+        },
+        "pat": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}pat",
+            "related_commands": "Provide related commands"
+        },
+        "cuddle": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}cuddle",
+            "related_commands": "Provide related commands"
+        },
+        "bite": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}bite",
+            "related_commands": "Provide related commands"
+        },
+        "kiss": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}kiss",
+            "related_commands": "Provide related commands"
+        },
+        "lick": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}lick",
+            "related_commands": "Provide related commands"
+        },
+        "hug": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}hug",
+            "related_commands": "Provide related commands"
+        },
+        "cry": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}cry",
+            "related_commands": "Provide related commands"
+        },
+        "wave": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}wave",
+            "related_commands": "Provide related commands"
+        },
+        "slowclap": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}slowclap",
+            "related_commands": "Provide related commands"
+        },
+        "smug": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}smug",
+            "related_commands": "Provide related commands"
         }
     },
     "Quest_Slash": {},
