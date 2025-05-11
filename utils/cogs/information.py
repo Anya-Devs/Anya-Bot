@@ -14,6 +14,7 @@ from imports.discord_imports import *
 
 
 class Information_Commands:
+    
 
     async def server(self, ctx: commands.Context, mode: Optional[Literal["roles", "emojis"]] = None, cog=None, members_per_page=10) -> Union[discord.Embed, tuple[discord.Embed, discord.ui.View]]: 
         guild = ctx.guild
@@ -48,6 +49,7 @@ class Information_Commands:
         return embed
 
     def create_role_embed(self, role, current_page):
+        self.members_per_page = 25
         members = [member for member in role.members if not member.bot]
         total_members = len(members)
         total_pages = (total_members // self.members_per_page) + (1 if total_members % self.members_per_page else 0)
@@ -116,7 +118,7 @@ class Information_View:
                 print(e)
 
     class Select_Role(discord.ui.View):
-        def __init__(self, roles, cog, members_per_page):
+        def __init__(self, roles, cog, members_per_page=25):
             super().__init__(timeout=120)
             self.cog, self.roles, self.current_page = cog, roles, 0
             self.selected_role, self.members_per_page = self.roles[0], members_per_page
