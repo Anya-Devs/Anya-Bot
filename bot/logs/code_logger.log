@@ -1,0 +1,49 @@
+[91m❌  | 03:14:52 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 03:17:07 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 03:22:17 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 03:23:39 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 03:26:06 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 03:27:45 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 03:35:52 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 04:22:41 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 04:30:36 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 04:36:17 AM | client.py | Ignoring exception in on_message[0m
+[91m❌  | 04:36:24 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 04:38:03 AM | quest_tools.py | Error processing tool in message 1370983271684640858: 'ToolHandler' object has no attribute 'apply_tool_effect'[0m
+[91m❌  | 04:42:04 AM | quest_tools.py | Error processing tool in message 1370984283430457424: 'ToolHandler' object has no attribute 'apply_tool_effect'[0m
+[91m❌  | 04:48:22 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 04:49:24 AM | client.py | Ignoring exception in on_message[0m
+[91m❌  | 04:49:26 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 05:02:53 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 05:27:53 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 05:29:07 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 05:33:58 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 05:34:52 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 05:37:56 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 05:39:39 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 05:41:11 AM | client.py | Ignoring exception in on_ready[0m
+[91m❌  | 05:42:30 AM | client.py | Ignoring exception in on_ready[0m
+[93m⚠️  | 05:58:42 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1278580578115125295.[0m
+[93m⚠️  | 05:58:42 AM | pokemon_thief.py | Timeout reached in channel 1278580578115125295. Allowing all to catch.[0m
+[93m⚠️  | 06:20:46 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1307943599312207892.[0m
+[93m⚠️  | 06:24:03 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1307943599312207892.[0m
+[93m⚠️  | 06:34:57 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1278580578593148971.[0m
+[93m⚠️  | 06:34:57 AM | pokemon_thief.py | Timeout reached in channel 1278580578593148971. Allowing all to catch.[0m
+[93m⚠️  | 06:48:52 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1332337479520485406.[0m
+[93m⚠️  | 07:01:31 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1332337444804104232.[0m
+[93m⚠️  | 07:05:43 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1332337444804104232.[0m
+[93m⚠️  | 07:27:05 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1278580578115125294.[0m
+[91m❌  | 07:30:52 AM | pokemon_thief.py | Error fetching member 877023360431841280: 404 Not Found (error code: 10007): Unknown Member[0m
+[93m⚠️  | 07:46:35 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1278580578115125295.[0m
+[93m⚠️  | 08:21:13 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1278580578593148971.[0m
+[93m⚠️  | 08:26:36 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1278580578115125295.[0m
+[93m⚠️  | 08:46:20 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1332337444804104232.[0m
+[93m⚠️  | 08:48:31 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1278580578115125294.[0m
+[93m⚠️  | 09:07:47 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1307943599312207892.[0m
+[93m⚠️  | 09:18:40 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1307229036359192576.[0m
+[93m⚠️  | 09:28:36 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1307943599312207892.[0m
+[93m⚠️  | 09:28:36 AM | pokemon_thief.py | Timeout reached in channel 1307943599312207892. Allowing all to catch.[0m
+[93m⚠️  | 09:31:55 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1278580578115125294.[0m
+[93m⚠️  | 09:51:32 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1307943599312207892.[0m
+[93m⚠️  | 09:51:32 AM | pokemon_thief.py | Timeout reached in channel 1307943599312207892. Allowing all to catch.[0m
+[93m⚠️  | 10:08:06 AM | pokemon_thief.py | Timeout: No congratulatory message detected in channel 1332337509488791592.[0m

@@ -15,6 +15,7 @@ class AnyaImages:
             return json.load(file)
 
 
+images = AnyaImages.load_images()
 
 
 class EmbedFactory:
@@ -507,13 +508,12 @@ class ShopEmbed:
         embed = discord.Embed(
             title="<:shop:1272249831120965753>    Spy Shop", color=primary_color()
         )
-        
         embed.description = f"```py\nStella Points: {balance}```"
         embed.set_footer(
             text=f"Use the {bot.user.name}'s option menu to acquire your spy tool."
         )
         embed.set_thumbnail(url=ctx.author.avatar)
-        embed.set_image(url=AnyaImages.start_shop_image)
+        embed.set_image(url=images['start_shop_image'])
         return embed
 
 
@@ -527,7 +527,6 @@ class LogConstants:
 
 
 class PingConstants:
-    images = AnyaImages.load_images()  
     thumbnail_url = None  
     image_url = images['ping_image']
     footer_icon = None
@@ -959,7 +958,6 @@ async def get_banner_color(bot, user: discord.User):
 async def error_custom_embed(
     bot, ctx, e, title="Custom Error", thumbnail_url=None):
     if thumbnail_url == None:
-        images =  AnyaImages.load_images()
         thumbnail_url = images['question_anya']
 
     error_embed = discord.Embed(
@@ -1071,3 +1069,8 @@ bot_config = {
         "token_key": "Token"
     }
 }
+
+
+def timestamp_gen(timestamp: int) -> str:
+    dt = datetime.utcfromtimestamp(timestamp).replace(tzinfo=timezone.utc)
+    return f'<t:{int(dt.timestamp())}:R>'

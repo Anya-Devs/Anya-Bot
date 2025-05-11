@@ -692,7 +692,7 @@ class ImageGenerator:
         img = self.create_image()
         img_bytes = BytesIO()
         img.save(img_bytes, format="PNG")
-        display(IPImage(img_bytes.getvalue()))
+        #display(IPImage(img_bytes.getvalue()))
 
 
 class Quest_Data(commands.Cog):

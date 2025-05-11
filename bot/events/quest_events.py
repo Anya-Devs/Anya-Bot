@@ -1,22 +1,15 @@
 
-import asyncio
 import logging
 import re
 import traceback
-
-
 from fuzzywuzzy import fuzz
-
-from bot.cogs.quest import Quest_Data
 from data.const import Quest_Completed_Embed
-
 from imports.discord_imports import *
 
 
-logger = logging.getLogger("Quest_Checker")
+logger = logging.getLogger("Quest_Events")
 
-
-class Quest_Checker(commands.Cog):
+class Quest_Events(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.quest_data = bot.get_cog("Quest_Data")
@@ -288,4 +281,4 @@ class Quest_Checker(commands.Cog):
  
 
 async def setup(bot):
-    await bot.add_cog(Quest_Checker(bot))
+    await bot.add_cog(Quest_Events(bot))

@@ -39,18 +39,17 @@ class Image:
         sampler_name = self.payload_config['sampler_name']
 
         payload = {
-            "prompt": positive_prompt,
-            "negative_prompt": negative_prompt,
-            "steps": self.payload_config['steps'],
-            "cfg_scale": self.payload_config['cfg_scale'],
-            "width": self.payload_config['width'],
-            "height": self.payload_config['height'],
-            "seed": self.payload_config['seed'],
-            "style_preset": self.payload_config['style_preset'],
-            "sampler_name": sampler_name,
-            "override_settings": self.payload_config['override_settings']
+          "prompt": positive_prompt or "",
+          "negative_prompt": negative_prompt or "",
+          "steps": self.payload_config.get("steps", 20),
+          "cfg_scale": self.payload_config.get("cfg_scale", 7.0),
+          "width": self.payload_config.get("width", 512),
+          "height": self.payload_config.get("height", 512),
+          "seed": self.payload_config.get("seed", -1),
+          "style_preset": self.payload_config.get("style_preset", "none"),
+          "sampler_name": sampler_name or "Euler",
+          "override_settings": self.payload_config.get("override_settings", {})
         }
-
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.API_URL, json=payload) as response:

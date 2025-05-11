@@ -2,14 +2,11 @@ import logging
 import colorlog
 import colorama
 
-# Initialize colorama for colored terminal output
 colorama.init()
 
-# Define logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  
 
-# Set up the log handler
 handler = colorlog.StreamHandler()
 handler.setFormatter(
     colorlog.ColoredFormatter(

@@ -1,24 +1,5 @@
-
-import os
-import datetime
-import random
-import string
-import typing
-import traceback
-import asyncio
-import random
+import datetime, typing, traceback, json
 from io import BytesIO
-from datetime import datetime
-from PIL import Image, ImageDraw, ImageFont
-from concurrent.futures import ThreadPoolExecutor
-
-
-
-import json
-import numpy as np
-import motor.motor_asyncio
-from pymongo.errors import PyMongoError
-
 
 
 from data.const import *
@@ -241,7 +222,6 @@ class Quest(commands.Cog):
 
     @commands.command(name="inventory", aliases=["inv"])
     async def inventory(self, ctx):
-        """Displays the user's tool inventory."""
         try:
             guild_id = str(ctx.guild.id)
             user_id = str(ctx.author.id)
@@ -270,9 +250,7 @@ class Quest(commands.Cog):
                 return
 
             
-            embed = discord.Embed(
-                title=f"{ctx.author.display_name}'s Inventory",
-                
+            embed = discord.Embed(                
                 color=primary_color(),
                 timestamp=datetime.now(),
             )
@@ -317,8 +295,7 @@ class Quest(commands.Cog):
                         f"Error generating or fetching un_tool_id or quantity for {tool}: {e}"
                     )
 
-            embed.set_footer(text="Inventory",
-                             icon_url=self.bot.user.avatar.url)
+            embed.set_footer(text="Inventory")
 
             
             await ctx.reply(embed=embed, mention_author=False)
@@ -358,7 +335,6 @@ class Quest(commands.Cog):
                 balance_with_commas = "{:,}".format(balance)
 
                 embed = discord.Embed(
-                    title="Stella",
                     description=f"-# {ctx.author.mention}'s balance",
                     timestamp=datetime.now(),
                 )
@@ -383,7 +359,6 @@ class Quest(commands.Cog):
             shop_data = self.read_shop_file(self.shop_file)
             view = ShopView(self.bot, shop_data)
             await view.start(ctx)
-
         except Exception as e:
             await ctx.send(f"An error occurred while processing the shop: {e}")
 

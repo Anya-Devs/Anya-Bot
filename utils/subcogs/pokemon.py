@@ -1,7 +1,6 @@
 
-import aiohttp
-import os, csv, json, re, asyncio
 from tqdm import tqdm
+import os, csv, json, re, asyncio, aiohttp
 
 from fuzzywuzzy import fuzz
 from imports.log_imports import *
@@ -486,7 +485,6 @@ class Pokemon_Emojis(commands.Cog):
     @commands.command(hidden=True)
     async def get_pokemon_emoji(self, ctx, pokemon_id: int):
         emoji_str = self.get_emoji_for_pokemon(pokemon_id)
-        
         if emoji_str:
             await ctx.send(f"Here is your Pokémon emoji: {emoji_str}")
         else:

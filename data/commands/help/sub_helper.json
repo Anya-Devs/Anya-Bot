@@ -30,19 +30,19 @@
     "Anime": {
         "anime": {
             "aliases": [],
-            "description": "Search for anime information specifically about Spy x Family.",
+            "description": "Search for information about any anime.",
             "example": "{}anime Spy x Family",
             "related_commands": "{}character, {}manga"
         },
         "character": {
             "aliases": [],
-            "description": "Search for information about Spy x Family characters.",
+            "description": "Search for information about any anime character.",
             "example": "{}character Anya Forger",
             "related_commands": "{}anime"
         },
         "manga": {
             "aliases": [],
-            "description": "Search for manga information specifically about Spy x Family.",
+            "description": "Search for information about any anime manga.",
             "example": "{}manga Spy x Family",
             "related_commands": "{}anime"
         }
@@ -54,8 +54,8 @@
                 "info",
                 "details"
             ],
-            "description": "Retrieve information about *Spy x Family* or your current server.",
-            "example": "{}about @Anya Forger",
+            "description": "Retrieve information about (bot/server/user/invite)",
+            "example": "{}about @Anya\n{}about https://discord.gg/vFwPn74mfJ or vFwPn74mfJ, ",
             "related_commands": "{}server, {}pfp"
         },
         "server": {
@@ -72,31 +72,31 @@
         },
         "banner": {
             "aliases": [],
-            "description": "Check the banner of a member or yourself, showcasing their *Spy x Family* fandom!",
+            "description": "Check the banner of a member or yourself.",
             "example": "{}banner @Yor Forger",
             "related_commands": "{}pfp"
         },
         "invite": {
             "aliases": [],
-            "description": "Generate a server invite link, perhaps to discuss *Spy x Family* with fellow fans.",
+            "description": "Generate a server invite link of your current server.",
             "example": "{}invite",
             "related_commands": "{}server"
         },
         "perms": {
             "aliases": [],
-            "description": "Display the permissions of a specific member or role, essential for managing *Spy x Family*-related server interactions.",
-            "example": "{}perms @Yor Forger",
+            "description": "Display the permissions of a specific member or role.",
+            "example": "{}perms @Yor Forger,{}perms @Admin\n{}perms [role id]",
             "related_commands": "{}server_roles"
         },
         "server_emojis": {
             "aliases": [],
-            "description": "List all custom emojis in the server, including *Spy x Family* fan art and reactions.",
+            "description": "List all custom emojis in the server.",
             "example": "{}server_emojis",
             "related_commands": "{}server"
         },
         "server_roles": {
             "aliases": [],
-            "description": "List the roles available in the server. Could be fun for organizing *Spy x Family* factions!",
+            "description": "View who has which role, useful for auditing, cleaning up unused roles, or checking access levels.",
             "example": "{}server_roles",
             "related_commands": "{}server_emojis, {}server"
         }
@@ -293,6 +293,18 @@
             "aliases": [],
             "description": "No description provided.",
             "example": "{}smug",
+            "related_commands": "Provide related commands"
+        },
+        "dance": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}dance",
+            "related_commands": "Provide related commands"
+        },
+        "happy": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}happy",
             "related_commands": "Provide related commands"
         }
     },
