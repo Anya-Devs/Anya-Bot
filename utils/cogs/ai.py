@@ -72,6 +72,18 @@ class Image:
 
 
 
+class Vision:
+  
+  @staticmethod
+    async def _generate_vision_response(cog, url: str, prompt: str = " "):
+        try:
+            res = await cog.openai_client.chat.completions.create(
+                model="gemini-2.0-flash-lite",
+                messages=[{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": url}}]}]
+            )
+            return res.choices[0].message.content
+        except Exception as e:
+            return VISION_ERROR.format(error=e)
 
 
 
