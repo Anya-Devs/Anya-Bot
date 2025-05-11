@@ -4,13 +4,9 @@ import aiohttp
 from datetime import datetime
 
 from data.const import *
-
 from data.const import primary_color, Information_Embed
 from discord.ui import View, Select, Button
 from imports.discord_imports import *
-
-
-
 
 
 class Information_Commands:
