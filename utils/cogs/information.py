@@ -4,16 +4,17 @@ import aiohttp
 from datetime import datetime
 
 from data.const import *
-from data.const import primary_color, Information_Embed
-from discord.ui import View, Select, Button
+from data.const import primary_color
+from discord.ui import View
 from imports.discord_imports import *
+from imports.log_imports import *
 
 
 class Information_Commands:
-    def __int__(self):
+    def __init__(self):
         self.members_per_page = 25
 
-    async def server(self, ctx: commands.Context, mode: Optional[Literal["roles", "emojis"]] = None, cog=None, members_per_page=10) -> Union[discord.Embed, tuple[discord.Embed, discord.ui.View]]: 
+    async def server(self, ctx: commands.Context, mode: Optional[Literal["roles", "emojis"]] = None, cog=None, members_per_page=10) -> Union[discord.Embed, tuple[discord.Embed, discord.ui.View]]:
         guild = ctx.guild
 
         if mode == "emojis":
@@ -29,7 +30,7 @@ class Information_Commands:
             roles = [r for r in roles if len(r.members) >= 5 and r.name][:25]
             if not roles:
                 return discord.Embed(description="No roles available for selection.", color=primary_color())
-            view = Information_View.Select_Role(roles=roles, cog=cog, members_per_page=members_per_page)
+            view = Information_View.Select_Role(roles=roles, cog=Information_Commands(), members_per_page=members_per_page)
             return self.create_role_embed(roles[0], 0), view
 
         owner = guild.owner
@@ -49,7 +50,8 @@ class Information_Commands:
         members = [member for member in role.members if not member.bot]
         total_members = len(members)
         total_pages = (total_members // self.members_per_page) + (1 if total_members % self.members_per_page else 0)
-        start_index, end_index = current_page * self.members_per_page, (current_page + 1) * self.members_per_page
+        start_index = current_page * self.members_per_page
+        end_index = (current_page + 1) * self.members_per_page
         members_for_page = members[start_index:end_index]
         member_mentions = ",".join([member.mention for member in members_for_page]) or "No members with this role."
 
@@ -63,6 +65,16 @@ class Information_Commands:
         embed.set_footer(text=f"Role ID: {role.id} | Page {current_page + 1}/{total_pages}")
         return embed
 
+    async def next_page(self, interaction):
+        try:
+            await interaction.response.defer()
+            if self.current_page < self.get_total_pages(self.selected_role) - 1:
+                self.current_page += 1
+                embed = self.create_role_embed(self.selected_role, self.current_page)  # Ensure `self` refers to `Information_Commands`
+                self.update_navigation_buttons()
+                await interaction.message.edit(embed=embed, view=self)
+        except Exception as e:
+            logging.error(f"Error in next_page: {e}")
 
 
 
@@ -114,32 +126,33 @@ class Information_View:
                 print(e)
 
     class Select_Role(discord.ui.View):
-        def __init__(self, roles, cog, members_per_page):
-            super().__init__(timeout=120)
-            self.cog, self.roles, self.current_page = cog, roles, 0
-            self.selected_role, self.members_per_page = self.roles[0], members_per_page
+     def __init__(self, roles, cog, members_per_page):
+        super().__init__(timeout=120)
+        self.cog, self.roles, self.current_page = cog, roles, 0
+        self.selected_role, self.members_per_page = self.roles[0], members_per_page
 
-            select = discord.ui.Select(
-                placeholder="Select a role to view details...",
-                options=[discord.SelectOption(label=r.name, description=f"{len(r.members)} members", value=str(r.id)) for r in roles]
-            )
-            select.callback = self.select_callback
-            self.add_item(select)
+        select = discord.ui.Select(
+            placeholder="Select a role to view details...",
+            options=[discord.SelectOption(label=r.name, description=f"{len(r.members)} members", value=str(r.id)) for r in roles]
+        )
+        select.callback = self.select_callback
+        self.add_item(select)
 
-            self.prev_button = discord.ui.Button(emoji="◀️", style=discord.ButtonStyle.primary, custom_id="prev", row=1)
-            self.next_button = discord.ui.Button(emoji="▶️", style=discord.ButtonStyle.primary, custom_id="next", row=1)
-            self.prev_button.callback = self.prev_page
-            self.next_button.callback = self.next_page
-            self.add_item(self.prev_button)
-            self.add_item(self.next_button)
-            self.update_navigation_buttons()
+        self.prev_button = discord.ui.Button(emoji="◀️", style=discord.ButtonStyle.primary, custom_id="prev", row=1)
+        self.next_button = discord.ui.Button(emoji="▶️", style=discord.ButtonStyle.primary, custom_id="next", row=1)
+        self.prev_button.callback = self.prev_page
+        self.next_button.callback = self.next_page
+        self.add_item(self.prev_button)
+        self.add_item(self.next_button)
+        self.update_navigation_buttons()
 
-        def update_navigation_buttons(self):
-            total_pages = self.get_total_pages(self.selected_role)
-            self.prev_button.disabled = self.current_page <= 0
-            self.next_button.disabled = self.current_page >= total_pages - 1
+     def update_navigation_buttons(self):
+        total_pages = self.get_total_pages(self.selected_role)
+        self.prev_button.disabled = self.current_page <= 0
+        self.next_button.disabled = self.current_page >= total_pages - 1
 
-        async def select_callback(self, interaction):
+     async def select_callback(self, interaction):
+        try:
             role_id = int(interaction.data["values"][0])
             self.selected_role = discord.utils.get(interaction.guild.roles, id=role_id)
             if self.selected_role:
@@ -147,27 +160,39 @@ class Information_View:
                 embed = self.cog.create_role_embed(self.selected_role, self.current_page)
                 self.update_navigation_buttons()
                 await interaction.response.edit_message(embed=embed, view=self)
+        except Exception as e:
+            logging.error(f"Error in select_callback: {e}")
 
-        async def prev_page(self, interaction):
+     async def prev_page(self, interaction):
+        try:
             await interaction.response.defer()
             if self.current_page > 0:
                 self.current_page -= 1
                 embed = self.cog.create_role_embed(self.selected_role, self.current_page)
                 self.update_navigation_buttons()
                 await interaction.message.edit(embed=embed, view=self)
+        except Exception as e:
+            logging.error(f"Error in prev_page: {e}")
 
-        async def next_page(self, interaction):
+     async def next_page(self, interaction):
+        try:
             await interaction.response.defer()
             if self.current_page < self.get_total_pages(self.selected_role) - 1:
                 self.current_page += 1
                 embed = self.cog.create_role_embed(self.selected_role, self.current_page)
                 self.update_navigation_buttons()
                 await interaction.message.edit(embed=embed, view=self)
+        except Exception as e:
+            logging.error(f"Error in next_page: {e}")
 
-        def get_total_pages(self, role):
+     def get_total_pages(self, role):
+        try:
             members = [m for m in role.members if not m.bot]
             return (len(members) + self.members_per_page - 1) // self.members_per_page
-
+        except Exception as e:
+            logging.error(f"Error in get_total_pages: {e}")
+            return 0
+    
     class PermissionsView(discord.ui.View):
         GENERAL_PERMISSIONS = ["administrator", "manage_guild", "manage_roles", "manage_channels", "kick_members", "ban_members", "manage_messages", "embed_links", "attach_files", "read_message_history"]
         TEXT_PERMISSIONS = ["send_messages", "send_tts_messages", "manage_messages", "manage_threads", "read_messages", "mention_everyone", "use_external_emojis", "add_reactions"]
