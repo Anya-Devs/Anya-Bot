@@ -55,7 +55,7 @@ class Ai(commands.Cog):
                     image_url = embed.thumbnail.url if embed.thumbnail else embed.image.url
                 if not image_url: return await message.edit(content=Ai_Text.IMAGE_URL_NOT_FOUND)
 
-            response = await self._generate_vision_response(image_url, prompt)
+            response = await Vision._generate_vision_response(Ai(bot),image_url, prompt)
             embed = discord.Embed(description=Ai_Text.VISION_DESCRIPTION.format(mention=ctx.author.mention, response=response), color=primary_color())
             embed.set_thumbnail(url=image_url)
             embed.set_footer(icon_url=self.bot.user.avatar, text=f"Thanks for using {self.bot.user.name}")
