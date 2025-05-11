@@ -1,3 +1,8 @@
+
+from data.const import primary_color
+import cv2, numpy as np, requests, io, itertools, discord, re
+from collections import Counter
+
 class ImgPuzzle:
     def __init__(self, bot):
         self.bot, self.orb, self.bf = bot, cv2.ORB_create(nfeatures=1000), cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
