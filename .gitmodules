@@ -1,0 +1,3 @@
+[submodule "repo/utils/events/poketwo_spawns"]
+	path = repo/utils/events/poketwo_spawns
+	url = https://github.com/cringe-neko-girl/Poketwo-AutoNamer.git
