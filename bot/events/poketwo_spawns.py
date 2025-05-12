@@ -14,18 +14,16 @@ class PoketwoSpawnDetector(commands.Cog):
     async def on_message(self, message: discord.Message):
         if message.author.id != self.target_id or not message.embeds:
             return
-
         embed = message.embeds[0]
         if embed.description != self.target_description:
             return
-
         image_url = embed.image.url if embed.image and embed.image.url else None
         if not image_url:
             return
         try:
             pokemon_name, confidence = self.predictor.predict(image_url)
-            #pokemon_name = self.pp.transform_pokemon_name(pokemon_name)
-            reply = f"{pokemon_name}: {confidence}"
+            formatted_name = self.format_pokemon_name(pokemon_name)
+            reply = f"{formatted_name}: {confidence}"
             await message.reply(reply)
         except Exception as e:
             await message.reply(f"❌ Prediction error: {e}")
@@ -41,16 +39,24 @@ class PoketwoSpawnDetector(commands.Cog):
                     image_url = ref_msg.embeds[0].image.url if ref_msg.embeds[0].image else None
             elif ctx.message.embeds:
                 image_url = ctx.message.embeds[0].image.url if ctx.message.embeds[0].image else None
-
         if not image_url:
             return await ctx.send("❌ No image URL found.")
-
         try:
             pokemon_name, confidence = self.predictor.predict(image_url)
-            #pokemon_name = self.pp.transform_pokemon_name(pokemon_name)
-            await ctx.send(f"{pokemon_name}: {confidence}")
+            formatted_name = self.format_pokemon_name(pokemon_name)
+            await ctx.send(f"{formatted_name}: {confidence}")
         except Exception as e:
             await ctx.send(f"❌ Prediction error: {e}")
+
+    def format_pokemon_name(self, pokemon_name: str) -> str:
+        REGIONAL_VARIANTS = {'alola': 'Alolan', 'galar': 'Galarian', 'hisui': 'Hisuian', 'paldea': 'Paldean', 'unova': 'Unovan'}
+        parts = pokemon_name.lower().split('-')
+        if len(parts) > 1 and parts[1] in REGIONAL_VARIANTS:
+            region_name = REGIONAL_VARIANTS[parts[1]]
+            base_name = parts[0].capitalize()
+            return f"{region_name} {base_name}"
+        else:
+            return pokemon_name.capitalize()
 
 def setup(bot):
     PoketwoSpawnDetector(bot)

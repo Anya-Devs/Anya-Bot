@@ -46,6 +46,7 @@ def start():
     install_package('onnxruntime')
     install_package('opencv-python-headless')
     install_package('python-Levenshtein')
+    os.system('git submodule update --init --recursive')
 
     
     update_all_packages()
