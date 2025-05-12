@@ -24,7 +24,7 @@ class PoketwoSpawnDetector(commands.Cog):
             return
         try:
             pokemon_name, confidence = self.predictor.predict(image_url)
-            pokemon_name = self.pp.transform_pokemon_name(pokemon_name)
+            #pokemon_name = self.pp.transform_pokemon_name(pokemon_name)
             reply = f"{pokemon_name}: {confidence}"
             await message.reply(reply)
         except Exception as e:
