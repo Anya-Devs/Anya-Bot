@@ -1,7 +1,7 @@
 import os
 import subprocess
 
- 
+
 def install_package(package):
     subprocess.run(['pip', 'install', '--quiet', '--upgrade', package], check=True)
 
@@ -22,7 +22,6 @@ def update_all_packages():
 def clean_requirements():
     subprocess.run(['pipreqs', '--force', '--ignore', 'venv,.venv,_repo', '.'], check=True)
 
- 
     with open('requirements.txt', 'r') as file:
         lines = file.readlines()
 
@@ -30,25 +29,44 @@ def clean_requirements():
     for line in lines:
         if '==' in line:
             package, version = line.strip().split('==')
-            unique_packages[package] = version 
+            unique_packages[package] = version
 
     with open('requirements.txt', 'w') as file:
         for package, version in unique_packages.items():
             file.write(f"{package}=={version}\n")
 
 
+def sync_submodule():
+    submodule_url = "https://github.com/cringe-neko-girl/Poketwo-AutoNamer.git"
+    submodule_path = "_repo/utils/events/poketwo_spawns"
+
+    def run(*args):
+        subprocess.run(args, check=True)
+
+    if not os.path.exists(os.path.join(submodule_path, '.git')):
+        print(f"Fixing submodule: {submodule_path}")
+        run("git", "rm", "--cached", submodule_path)
+        run("rm", "-rf", submodule_path)
+        run("git", "submodule", "add", submodule_url, submodule_path)
+
+    # Ensure submodule is clean before checkout
+    print("Cleaning submodule changes...")
+    run("git", "submodule", "foreach", "--recursive", "git reset --hard")
+    run("git", "submodule", "foreach", "--recursive", "git clean -fd")
+
+    run("git", "submodule", "sync", "--recursive")
+    run("git", "submodule", "update", "--init", "--remote", "--recursive")
+
+
 def start():
-    
     os.system("pip install --upgrade pip")
-    #os.system("pip install git+https://github.com/facebookresearch/detectron2.git --no-build-isolation")
-    
+
     install_package('pipreqs')
     install_package('onnxruntime')
     install_package('opencv-python-headless')
     install_package('python-Levenshtein')
-    os.system('git submodule update --init --recursive')
 
-    
+    sync_submodule()
     update_all_packages()
     clean_requirements()
 
