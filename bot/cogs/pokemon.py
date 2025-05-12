@@ -104,8 +104,8 @@ class Pokemon(commands.Cog):
         pp = Ping_Pokemon(self.bot)
         is_shiny = pokemon and "shiny" in pokemon.lower()
         cleaned_name = pokemon.lower().replace(" ", "-").replace("shiny-", "").replace("shiny", "") if pokemon else ""
-        pokemon = pp.transform_pokemon_name(cleaned_name)
-        pokemon_name, region = pokemon[0], pokemon[1]
+        #pokemon = pp.transform_pokemon_name(cleaned_name)
+        pokemon_name = cleaned_name
         pokemon_id = pokemon_name if pokemon_name else random.randint(1, 1021)
         has_form = form is not None
         db_path = self.poke_json
@@ -114,7 +114,7 @@ class Pokemon(commands.Cog):
         with open(db_path, "r") as f: cache = json.load(f)
         if str(pokemon_id) in cache:
             return await pc.send_pokemon_info(ctx=ctx, data=cache[str(pokemon_id)], type="shiny" if is_shiny else None, color=p_color())
-        url = f"https://pokeapi.co/api/v2/pokemon-form/{pokemon_id}-{form}" if has_form else f"https://pokeapi.co/api/v2/pokemon/{pokemon_id}"
+        url = f"https://pokeapi.co/api/v2/pokemon-form/{pokemon_id}-{form}"
         response = requests.get(url)
         if response.status_code != 200:
             label = f"Form data" if has_form else "Data"

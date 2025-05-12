@@ -46,15 +46,14 @@ class Pokemon_Commands:
             "special-defense": "Sp. Def",
         }
 
-    async def send_pokemon_info(self, ctx, data, type, color):
+    async def send_pokemon_info(self, ctx, data,type, color):
+        
         name = data["name"].capitalize()
         id = data["id"]
         types = [t["type"]["name"].capitalize() for t in data["types"]]
         pokemon_type_unformatted = types
 
-        species_url = data["species"]["url"]
-        species_data = requests.get(species_url).json()
-        species_name = species_data["name"]
+        species_name = name.replace('-', ' ')
         base_url = "https://pokeapi.co/api/v2/pokemon-species/"
         
         if type == "mega":

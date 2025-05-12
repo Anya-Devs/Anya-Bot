@@ -1,6 +1,6 @@
 from imports.discord_imports import *
 from utils.subcogs.pokemon import Ping_Pokemon
-from repo.utils.events.poketwo_spawns.predict import Prediction
+from _repo.utils.events.poketwo_spawns.predict import Prediction
 
 class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot):
@@ -47,7 +47,7 @@ class PoketwoSpawnDetector(commands.Cog):
 
         try:
             pokemon_name, confidence = self.predictor.predict(image_url)
-            pokemon_name = self.pp.transform_pokemon_name(pokemon_name)
+            #pokemon_name = self.pp.transform_pokemon_name(pokemon_name)
             await ctx.send(f"{pokemon_name}: {confidence}")
         except Exception as e:
             await ctx.send(f"❌ Prediction error: {e}")

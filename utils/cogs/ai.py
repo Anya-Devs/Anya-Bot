@@ -2,10 +2,6 @@ import os, base64, asyncio, requests, concurrent, aiohttp, json
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
-import cv2 as cv
-import numpy as np
-from PIL import Image, ImageSequence
-from tqdm import tqdm
 
 
 
@@ -75,7 +71,7 @@ class Image:
 class Vision:
   
   @staticmethod
-    async def _generate_vision_response(cog, url: str, prompt: str = " "):
+  async def _generate_vision_response(cog, url: str, prompt: str = " "):
         try:
             res = await cog.openai_client.chat.completions.create(
                 model="gemini-2.0-flash-lite",

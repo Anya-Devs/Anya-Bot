@@ -20,8 +20,9 @@ def update_all_packages():
 
 
 def clean_requirements():
-    subprocess.run(['pipreqs', '--force', '--ignore', 'venv,.venv', '.'], check=True)
+    subprocess.run(['pipreqs', '--force', '--ignore', 'venv,.venv,_repo', '.'], check=True)
 
+ 
     with open('requirements.txt', 'r') as file:
         lines = file.readlines()
 
@@ -42,6 +43,7 @@ def start():
     #os.system("pip install git+https://github.com/facebookresearch/detectron2.git --no-build-isolation")
     
     install_package('pipreqs')
+    install_package('onnxruntime')
     install_package('opencv-python-headless')
     install_package('python-Levenshtein')
 

@@ -1,6 +1,9 @@
 __import__('data.setup').setup.start()
 
-import os, gc, asyncio, traceback, importlib, pkgutil, aiohttp
+
+
+
+import os, sys, gc, asyncio, traceback, importlib, pkgutil, aiohttp
 from aiohttp import web
 from art import *
 from rich.tree import Tree
@@ -12,6 +15,7 @@ from utils.token import get_bot_token, prefix, use_test_bot as ut
 from imports.log_imports import *
 from imports.discord_imports import *
 
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 load_dotenv(dotenv_path=os.path.join(".github", ".env"))
 
 class BotSetup(commands.AutoShardedBot):
