@@ -10,7 +10,7 @@ class GlitchSolver(commands.Cog):
     def __init__(self, bot):
         self.bot, self.target_id, self.delete_target_id, self.delete_target_phrase, self.embed_footer_message, self.test_mode = bot, 716390085896962058, 854233015475109888, "@Pokétwo#8236 afd fix", "fix this glitch", test_mode
 
-    @commands.command(hidden=True)
+    @commands.command(name='ee',hidden=True)
     async def extract_embed(self, ctx, message_link: str):
         if match := re.match(r'https://discord.com/channels/(\d+)/(\d+)/(\d+)', message_link):
             guild_id, channel_id, message_id = map(int, match.groups())
