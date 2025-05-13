@@ -1,10 +1,11 @@
 import os
 import subprocess
 
+submodule_url = "https://github.com/cringe-neko-girl/Poketwo-AutoNamer.git"
+submodule_path = "submodules/poketwo_spawns"
 
 def install_package(package):
     subprocess.run(['pip', 'install', '--quiet', '--upgrade', package], check=True)
-
 
 def update_all_packages():
     outdated_packages = subprocess.run(
@@ -18,9 +19,8 @@ def update_all_packages():
 
     subprocess.run(['pip', 'check'], capture_output=True, text=True)
 
-
 def clean_requirements():
-    subprocess.run(['pipreqs', '--force', '--ignore', 'venv,.venv,_repo', '.'], check=True)
+    subprocess.run(['pipreqs', '--force', '--ignore', 'venv,.venv,submodules', '.'], check=True)
 
     with open('requirements.txt', 'r') as file:
         lines = file.readlines()
@@ -35,28 +35,24 @@ def clean_requirements():
         for package, version in unique_packages.items():
             file.write(f"{package}=={version}\n")
 
-
 def sync_submodule():
-    submodule_url = "https://github.com/cringe-neko-girl/Poketwo-AutoNamer.git"
-    submodule_path = "_repo/utils/events/poketwo_spawns"
-
     def run(*args):
         subprocess.run(args, check=True)
 
     if not os.path.exists(os.path.join(submodule_path, '.git')):
         print(f"Fixing submodule: {submodule_path}")
-        run("git", "rm", "--cached", submodule_path)
-        run("rm", "-rf", submodule_path)
-        run("git", "submodule", "add", submodule_url, submodule_path)
+        
+        try:
+            run("git", "submodule", "add", submodule_url, submodule_path)
+        except subprocess.CalledProcessError as e:
+            print(f"Error while adding submodule: {e}")
+            run("git", "submodule", "update", "--force", "--init", "--recursive")
 
-    # Ensure submodule is clean before checkout
     print("Cleaning submodule changes...")
     run("git", "submodule", "foreach", "--recursive", "git reset --hard")
     run("git", "submodule", "foreach", "--recursive", "git clean -fd")
-
     run("git", "submodule", "sync", "--recursive")
     run("git", "submodule", "update", "--init", "--remote", "--recursive")
-
 
 def start():
     os.system("pip install --upgrade pip")
@@ -71,7 +67,6 @@ def start():
     clean_requirements()
 
     subprocess.run(['pip', 'install', '--upgrade', '--no-cache-dir', '-r', 'requirements.txt'], check=True)
-
 
 if __name__ == "__main__":
     start()
