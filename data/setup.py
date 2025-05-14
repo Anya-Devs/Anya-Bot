@@ -2,7 +2,7 @@ import os
 import subprocess
 
 submodule_url = "https://github.com/cringe-neko-girl/Poketwo-AutoNamer.git"
-submodule_path = "submodules/poketwo_spawns"
+submodule_path = "submodules/poketwo_autonamer"
 
 def install_package(package):
     subprocess.run(['pip', 'install', '--quiet', '--upgrade', package], check=True)
@@ -53,6 +53,7 @@ def sync_submodule():
     run("git", "submodule", "foreach", "--recursive", "git clean -fd")
     run("git", "submodule", "sync", "--recursive")
     run("git", "submodule", "update", "--init", "--remote", "--recursive")
+
 
 def start():
     os.system("pip install --upgrade pip")
