@@ -22,7 +22,7 @@ class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all(); intents.members = True
         super().__init__(command_prefix=commands.when_mentioned_or(prefix), intents=intents,
-                         help_command=None, shard_count=10, shard_reconnect_interval=20, heartbeat_timeout=120)
+                         help_command=None, shard_count=50, shard_reconnect_interval=20, heartbeat_timeout=120)
         self.cog_dirs = ['bot.cogs', 'bot.events']
 
     async def on_ready(self):
