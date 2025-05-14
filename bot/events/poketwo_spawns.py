@@ -1,7 +1,7 @@
 from imports.discord_imports import *
 from utils.subcogs.pokemon import Ping_Pokemon
 from submodules.poketwo_autonamer.predict import Prediction
-from utils.token import use_test_bot as ut
+from bot.token import use_test_bot as ut
 
 class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot):

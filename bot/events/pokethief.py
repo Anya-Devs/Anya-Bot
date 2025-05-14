@@ -9,7 +9,7 @@ import logging
 import json
 
 from data.const import primary_color
-from utils.token import get_bot_token
+from bot.token import get_bot_token
 
 from imports.log_imports import *
 from imports.discord_imports import *

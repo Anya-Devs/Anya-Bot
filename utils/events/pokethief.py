@@ -1,6 +1,6 @@
 import asyncio, datetime, re, os, requests, json, logging
 from data.const import primary_color
-from utils.token import get_bot_token
+from bot.token import get_bot_token
 
 logger = logging.getLogger(__name__)
 
