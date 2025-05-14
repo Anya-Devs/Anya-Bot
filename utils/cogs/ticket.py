@@ -233,7 +233,7 @@ class Ticket_View:
                 
                 async def yes_callback(confirm_interaction: discord.Interaction):
                     try:
-                        await Ticket_Dataset.delete_ticket(ticket_id)
+                        await Ticket_Dataset().delete_ticket(ticket_id)
                         await confirm_interaction.response.edit_message(content=f"Ticket configuration '{ticket_name}' deleted!", view=None)
                     except Exception as e:
                         await confirm_interaction.response.edit_message(content=f"Error deleting ticket: {str(e)}", view=None)
@@ -375,9 +375,9 @@ class Ticket_View:
                 thumbnail_url = self.form_data["thumbnail_url"]
                 image_url = self.form_data["image_url"]
                 open_button_label = self.form_data["open_button_label"] or "Open Ticket"
-                open_button_emoji = self.form_data["open_button_emoji"]
+                open_button_emoji = self.form_data["open_button_emoji"] or "🎫"
                 close_button_label = self.form_data["close_button_label"] or "Close Thread"
-                close_button_emoji = self.form_data["close_button_emoji"]
+                close_button_emoji = self.form_data["close_button_emoji"] or "🔒"
                 thread_msg = self.form_data["thread_msg"] or "Welcome to your ticket! A staff member will assist you shortly."
                 ticket_name = self.form_data["ticket_name"] or f"Ticket-{interaction.guild.id}-{self.channel.id}"
 
@@ -426,7 +426,7 @@ class Ticket_View:
                 if self.edit_mode and self.message:
                     # Update existing message
                     await self.message.edit(embed=embed, view=view)
-                    await Ticket_Dataset.update_message(self.ctx, self.message, embed, ticket_name)
+                    await Ticket_Dataset().update_message(self.ctx, self.message, embed, ticket_name)
                     await interaction.followup.send(f"Ticket system '{ticket_name}' updated successfully!", ephemeral=True)
                 else:
                     # Create new message
@@ -436,7 +436,8 @@ class Ticket_View:
                     message_link = f"https://discord.com/channels/{self.ctx.guild.id}/{self.channel.id}/{msg.id}"
                     
                     try:
-                        await Ticket_Dataset.save_message(
+                        
+                        await Ticket_Dataset().save_message(
                             self.ctx, 
                             msg, 
                             embed, 
