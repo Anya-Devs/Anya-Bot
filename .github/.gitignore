@@ -166,4 +166,4 @@ cython_debug/
 .github/.env
 
 # Comment this out if needded
-utils/token.py
+bot/token.py
