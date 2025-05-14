@@ -88,9 +88,15 @@ def sync_submodule():
     run("git", "submodule", "update", "--init", "--remote", "--recursive")
 
 
-def start():
-    os.system("pip install --upgrade pip")
+def fix_requests_urllib3():
+    subprocess.run(['pip', 'uninstall', 'urllib3', 'requests', '-y'], check=True)
+    subprocess.run(['pip', 'install', '--upgrade', 'pip'], check=True)
+    subprocess.run(['pip', 'install', '--no-cache-dir', 'urllib3', 'requests'], check=True)
 
+def start():
+    subprocess.run(['pip', 'install', '--upgrade', 'pip'], check=True)
+    fix_requests_urllib3()
+    install_package('urllib3')
     install_package('pipreqs')
     install_package('onnxruntime')
     install_package('opencv-python-headless')
@@ -98,7 +104,12 @@ def start():
 
     sync_submodule()
     update_all_packages()
-    clean_requirements()
+
+    try:
+        clean_requirements()
+    except subprocess.CalledProcessError as e:
+        print("❌ pipreqs failed. Likely due to missing dependencies.")
+        print(e)
 
     if os.path.exists("requirements.txt"):
         subprocess.run(['pip', 'install', '--upgrade', '--no-cache-dir', '-r', 'requirements.txt'], check=True)

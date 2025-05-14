@@ -27,9 +27,8 @@ class PoketwoSpawnDetector(commands.Cog):
             formatted_name = self.format_pokemon_name(pokemon_name)
             await message.reply(f"{formatted_name}: {confidence}")
       except Exception as e:
-            print(f"[ERROR] Prediction failed in message {message.id} | {type(e).__name__}: {e}")
-            await message.reply(f"❌ Prediction failed: {type(e).__name__}: {e}")
-
+            pass
+      
     @commands.command(name="ps", hidden=True)
     async def predict_spawn(self, ctx, image_url: str = None):
         if not image_url:
