@@ -95,9 +95,7 @@ class Pokemon(commands.Cog):
             acts = ["list", "add <name>", "remove <name>"]
             await ctx.reply(f"Invalid action. Use: `{ctx.prefix}hunt {' | '.join(acts)}`", mention_author=False)
 
-    @commands.command(
-        help="Displays Pokemon dex information.", aliases=["pokdex", "dex", "d", "p"]
-    )
+
     @commands.command(help="Displays Pokemon dex information.", aliases=["pokdex", "dex", "d", "p"])
     async def pokemon(self, ctx, *, pokemon=None, form=None):
      async with ctx.typing():
