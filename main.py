@@ -34,7 +34,7 @@ class BotSetup(commands.AutoShardedBot):
             command_prefix=commands.when_mentioned_or(prefix),
             intents=intents,
             help_command=None,
-            shard_count=100,
+            shard_count=63,
             shard_reconnect_interval=20,
             heartbeat_timeout=120
         )
