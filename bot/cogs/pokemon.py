@@ -98,35 +98,33 @@ class Pokemon(commands.Cog):
     @commands.command(
         help="Displays Pokemon dex information.", aliases=["pokdex", "dex", "d", "p"]
     )
+    @commands.command(help="Displays Pokemon dex information.", aliases=["pokdex", "dex", "d", "p"])
     async def pokemon(self, ctx, *, pokemon=None, form=None):
      async with ctx.typing():
-        pc = Pokemon_Commands(self.bot)
-        pp = Ping_Pokemon(self.bot)
+        pc, pp = Pokemon_Commands(self.bot), Ping_Pokemon(self.bot)
         is_shiny = pokemon and "shiny" in pokemon.lower()
-        cleaned_name = pokemon.lower().replace(" ", "-").replace("shiny-", "").replace("shiny", "") if pokemon else ""
-        #pokemon = pp.transform_pokemon_name(cleaned_name)
-        pokemon_name = cleaned_name
-        pokemon_id = pokemon_name if pokemon_name else random.randint(1, 1021)
+        name = pokemon.lower().replace(" ", "-").replace("shiny-", "").replace("shiny", "") if pokemon else ""
+        pid = name if name else random.randint(1, 1021)
         has_form = form is not None
-        db_path = self.poke_json
-        if not os.path.exists(db_path):
-            with open(db_path, "w") as f: f.write("{}")
-        with open(db_path, "r") as f: cache = json.load(f)
-        if str(pokemon_id) in cache:
-            return await pc.send_pokemon_info(ctx=ctx, data=cache[str(pokemon_id)], type="shiny" if is_shiny else None, color=p_color())
-        url = f"https://pokeapi.co/api/v2/pokemon-form/{pokemon_id}-{form}"
-        response = requests.get(url)
-        if response.status_code != 200:
-            label = f"Form data" if has_form else "Data"
-            return await ctx.send(f"{label} not found for `{pokemon_id}`.")
+
+        if not os.path.exists(self.poke_json): open(self.poke_json, "w").write("{}")
+        with open(self.poke_json) as f: cache = json.load(f)
+
+        if str(pid) in cache:
+            return await pc.send_pokemon_info(ctx, data=cache[str(pid)], type="shiny" if is_shiny else None, color=p_color())
+
+        url = f"https://pokeapi.co/api/v2/pokemon-form/{pid}-{form}" if has_form else self.info.format(pid)
+        r = requests.get(url)
+        if r.status_code != 200:
+            return await ctx.send(f"{'Form data' if has_form else 'Data'} not found for `{pid}`.")
+
         try:
-            data = response.json()
+            data = r.json()
             await (self.send_form_pokemon if has_form else pc.send_pokemon_info)(ctx, data=data, type="shiny" if is_shiny else None, color=p_color())
-            cache[str(pokemon_id)] = data
-            with open(db_path, "w") as f: json.dump(cache, f)
+            cache[str(pid)] = data
+            with open(self.poke_json, "w") as f: json.dump(cache, f, indent=2)
         except json.JSONDecodeError:
-            if isinstance(pokemon_id, int): await ctx.send(f"Failed to parse JSON data for `{pokemon_id}`.")
-        
+            if isinstance(pid, int): await ctx.send(f"Failed to parse JSON data for `{pid}`.")   
 
 
 
