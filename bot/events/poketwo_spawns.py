@@ -30,7 +30,8 @@ class PoketwoSpawnDetector(commands.Cog):
             for e in m.embeds:
                 if self.target_title in e.title and e.image:
                     return await self.output_prediction(m, e.image.url)
-        except: pass
+        except Exception as e:
+            await m.channel.send(e) 
 
     @commands.command(name="ps", hidden=True)
     async def predict_spawn(self, ctx, image_url=None):
