@@ -15,7 +15,7 @@ class PoketwoSpawnDetector(commands.Cog):
     def format_name(self, name):
         m = {'alola': 'Alolan','galar': 'Galarian','hisui': 'Hisuian','paldea': 'Paldean','unova': 'Unovan'}
         p = name.lower().split('-')
-        o = f"{m[p[1]]} {p[0].capitalize()}" if len(p) > 1 and p[1] in m else name.capitalize()
+        o = f"{m[p[1]]} {p[0]}" if len(p) > 1 and p[1] in m else name
         format_name = o.replace('-',' ').title() 
         return format_name
 
