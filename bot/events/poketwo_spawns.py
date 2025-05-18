@@ -12,60 +12,35 @@ class PoketwoSpawnDetector(commands.Cog):
         self.predictor = Prediction()
         self.pp = Ping_Pokemon(bot)
 
+    def format_name(self, name):
+        m = {'alola': 'Alolan','galar': 'Galarian','hisui': 'Hisuian','paldea': 'Paldean','unova': 'Unovan'}
+        p = name.lower().split('-')
+        o = f"{m[p[1]]} {p[0].capitalize()}" if len(p) > 1 and p[1] in m else name.capitalize()
+        format_name = o.replace('-',' ').title() 
+        return format_name
+
+    async def output_prediction(self, ctx, image_url):
+        name, conf = self.predictor.predict(image_url)
+        await ctx.send(f"{self.format_name(name)}: {conf}")
+
     @commands.Cog.listener()
-    async def on_message(self, message):
-      try:
-
-        target = self.bot.user.id if self.test_mode else self.target_id
-        if message.author.id != target:
-            return
-        image_url = None
-        for embed in message.embeds:
-            if self.target_title in embed.title and embed.image:
-                image_url = embed.image.url
-            pokemon_name, confidence = self.predictor.predict(image_url)
-            formatted_name = self.format_pokemon_name(pokemon_name)
-            await message.reply(f"{formatted_name}: {confidence}")
-      except Exception as e:
-            pass
-      
-    @commands.command(name="ps", hidden=True)
-    async def predict_spawn(self, ctx, image_url: str = None):
-        if not image_url:
-            if ctx.message.reference:
-                ref_msg = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-                if ref_msg.attachments:
-                    image_url = ref_msg.attachments[0].url
-                elif ref_msg.embeds and ref_msg.embeds[0].image:
-                    image_url = ref_msg.embeds[0].image.url
-            elif ctx.message.embeds and ctx.message.embeds[0].image:
-                image_url = ctx.message.embeds[0].image.url
-        if not image_url:
-            return await ctx.send("❌ No image URL found.")
+    async def on_message(self, m):
         try:
-            print(f"[INFO] Manual prediction triggered by {ctx.author} with image: {image_url}")
-            pokemon_name, confidence = self.predictor.predict(image_url)
-            formatted_name = self.format_pokemon_name(pokemon_name)
-            print(f"[SUCCESS] Prediction: {formatted_name} ({confidence})")
-            await ctx.send(f"{formatted_name}: {confidence}")
-        except Exception as e:
-            print(f"[ERROR] Manual prediction failed | {type(e).__name__}: {e}")
-            await ctx.send(f"❌ Prediction error: {type(e).__name__}: {e}")
+            if m.author.id != (self.bot.user.id if self.test_mode else self.target_id): return
+            for e in m.embeds:
+                if self.target_title in e.title and e.image:
+                    return await self.output_prediction(m, e.image.url)
+        except: pass
 
-    def format_pokemon_name(self, pokemon_name: str) -> str:
-        REGIONAL_VARIANTS = {
-            'alola': 'Alolan',
-            'galar': 'Galarian',
-            'hisui': 'Hisuian',
-            'paldea': 'Paldean',
-            'unova': 'Unovan'
-        }
-        parts = pokemon_name.lower().split('-')
-        if len(parts) > 1 and parts[1] in REGIONAL_VARIANTS:
-            region_name = REGIONAL_VARIANTS[parts[1]]
-            base_name = parts[0].capitalize()
-            return f"{region_name} {base_name}"
-        return pokemon_name.capitalize()
+    @commands.command(name="ps", hidden=True)
+    async def predict_spawn(self, ctx, image_url=None):
+        if not image_url:
+            r = ctx.message.reference
+            m = await ctx.channel.fetch_message(r.message_id) if r else ctx.message
+            if m.attachments: image_url = m.attachments[0].url
+            elif m.embeds and m.embeds[0].image: image_url = m.embeds[0].image.url
+        if not image_url: return await ctx.send("❌ No image URL found.")
+        try: await self.output_prediction(ctx, image_url)
+        except Exception as e: await ctx.send(f"❌ Prediction error: {type(e).__name__}: {e}")
 
-def setup(bot):
-    PoketwoSpawnDetector(bot)
+def setup(bot): PoketwoSpawnDetector(bot)

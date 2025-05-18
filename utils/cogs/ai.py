@@ -7,64 +7,67 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 
-class Image: 
-  class ImageGenerator:
-    def __init__(self):
-        self.output_dir = Path("data/commands/ai/images")
-        self.prompt_path = "data/commands/ai/prompt.json"
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.prompts = self.load_prompts()
-        self.payload_config = self.load_payload_config()
-        self.API_URL = os.getenv("Stable_Diffusion_API_URL")
+class Image:
+    class ImageGenerator:
+        def __init__(self):
+            self.output_dir = Path("data/commands/ai/images")
+            self.prompt_path = "data/commands/ai/prompt.json"
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+            self.prompts = self.load_prompts()
+            self.payload_config = self.load_payload_config()
+            self.API_URL = os.getenv("Stable_Diffusion_API_URL")
 
-    def load_prompts(self):
-        prompt_file = Path(self.prompt_path)
-        if prompt_file.exists():
-            with open(prompt_file, 'r') as f:
-                return json.load(f)
+        def load_prompts(self):
+            p = Path(self.prompt_path)
+            if p.exists():
+                with open(p, 'r') as f:
+                    return json.load(f)
 
-    def load_payload_config(self):
-        payload_file = Path("data/commands/ai/payload.json")
-        if payload_file.exists():
-            with open(payload_file, 'r') as f:
-                return json.load(f)
+        def load_payload_config(self):
+            p = Path("data/commands/ai/payload.json")
+            if p.exists():
+                with open(p, 'r') as f:
+                    return json.load(f)
 
-    async def generate_image_sync(self, prompt: str, width: int = 1216, height: int = 768) -> Path:
-        positive_prompt = f"{prompt}, {self.prompts['positive_prompt']}"
-        negative_prompt = self.prompts['negative_prompt']
-        sampler_name = self.payload_config['sampler_name']
+        async def generate_image_sync(self, prompt: str, width: int = 1216, height: int = 768):
+            pos = f"{prompt}, {self.prompts['positive_prompt']}"
+            neg = self.prompts['negative_prompt']
+            sampler = self.payload_config['sampler_name']
 
-        payload = {
-          "prompt": positive_prompt or "",
-          "negative_prompt": negative_prompt or "",
-          "steps": self.payload_config.get("steps", 20),
-          "cfg_scale": self.payload_config.get("cfg_scale", 7.0),
-          "width": self.payload_config.get("width", 512),
-          "height": self.payload_config.get("height", 512),
-          "seed": self.payload_config.get("seed", -1),
-          "style_preset": self.payload_config.get("style_preset", "none"),
-          "sampler_name": sampler_name or "Euler",
-          "override_settings": self.payload_config.get("override_settings", {})
-        }
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.API_URL, json=payload) as response:
-                    if response.status == 200:
-                        r = await response.json()
-                        image_data = base64.b64decode(r['images'][0])
-                        output_path = self.output_dir / f"generated_image_{width}x{height}.png"
-                        with open(output_path, 'wb') as f:
-                            f.write(image_data)
-                        #print(f"✅ Image successfully generated and saved as '{output_path}'")
-                        return output_path
-                    else:
-                        print(f"❌ Error: {response.status}, {await response.text()}")
-                        return None
-        except aiohttp.ClientError as e:
-            print(f"❌ Request failed: {str(e)}")
-            return None
+            payload = {
+                "prompt": pos or "",
+                "negative_prompt": neg or "",
+                "steps": self.payload_config.get("steps", 20),
+                "cfg_scale": self.payload_config.get("cfg_scale", 7.0),
+                "width": self.payload_config.get("width", 512),
+                "height": self.payload_config.get("height", 512),
+                "seed": self.payload_config.get("seed", -1),
+                "style_preset": self.payload_config.get("style_preset", "none"),
+                "sampler_name": sampler or "Euler",
+                "override_settings": self.payload_config.get("override_settings", {})
+            }
 
+            try:
+                async with aiohttp.ClientSession() as s:
+                    async with s.post(self.API_URL, json=payload) as r:
+                        if r.status == 200:
+                            data = await r.json()
+                            img = base64.b64decode(data['images'][0])
+                            out_path = self.output_dir / f"generated_image_{width}x{height}.png"
+                            with open(out_path, 'wb') as f:
+                                f.write(img)
 
+                            config_dump = (
+                                json.dumps(self.prompts, indent=2) + "\n\n" +
+                                json.dumps(self.payload_config, indent=2)
+                            )
+                            return out_path, config_dump
+                        else:
+                            print(f"❌ Error: {r.status}, {await r.text()}")
+                            return None, None
+            except aiohttp.ClientError as e:
+                print(f"❌ Request failed: {str(e)}")
+                return None, None
 
 
 

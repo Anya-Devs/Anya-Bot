@@ -17,12 +17,12 @@ class Quest(commands.Cog):
         self.shop_data = self.load_shop_data()
 
     def load_shop_data(self):
-        try:
-            with open(self.shop_file, "r") as file:
-                return json.load(file)
-        except Exception as e:
-            logger.error(f"Error loading shop data: {e}")
-            return {}
+     try:
+        with open(self.shop_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+     except Exception as e:
+        logger.error(f"Error loading shop data: {e}")
+        return {}
 
     def get_tool_emoji(self, tool_name):
         """Fetches the emoji for a given tool name."""
