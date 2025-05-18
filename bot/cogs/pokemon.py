@@ -96,8 +96,8 @@ class Pokemon(commands.Cog):
             await ctx.reply(f"Invalid action. Use: `{ctx.prefix}hunt {' | '.join(acts)}`", mention_author=False)
 
 
-    @commands.command(help="Displays Pokemon dex information.", aliases=["pokdex", "dex", "d", "p"])
-    async def pokemon(self, ctx, *, pokemon=None, form=None):
+    @commands.command(help="Displays Pokemon dex information.", aliases=["pokdex", "dex", "d"])
+    async def pokdex(self, ctx, *, pokemon=None, form=None):
      async with ctx.typing():
         pc, pp = Pokemon_Commands(self.bot), Ping_Pokemon(self.bot)
         is_shiny = pokemon and "shiny" in pokemon.lower()
