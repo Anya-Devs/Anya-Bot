@@ -37,7 +37,7 @@ class PoketwoSpawnDetector(commands.Cog):
                     return await self.output_prediction(m.channel, e.image.url, reference=m)
         except Exception as e:
             print(f"❌ Error in on_message: {type(e).__name__}: {e}")
-                if self.target_title in e.title and e.image:
+            if self.target_title in e.title and e.image:
                     return await self.output_prediction(m, e.image.url)
         except Exception as e:
             await m.channel.send(e) 
