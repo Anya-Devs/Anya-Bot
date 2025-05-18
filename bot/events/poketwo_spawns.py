@@ -16,7 +16,12 @@ class PoketwoSpawnDetector(commands.Cog):
         m = {'alola': 'Alolan', 'galar': 'Galarian', 'hisui': 'Hisuian', 'paldea': 'Paldean', 'unova': 'Unovan'}
         p = name.lower().split('-')
         o = f"{m[p[1]]} {p[0]}" if len(p) > 1 and p[1] in m else name
+<<<<<<< HEAD
         return o.replace('-', ' ').title()
+=======
+        format_name = o.replace('-',' ').title() 
+        return format_name
+>>>>>>> 1a755929b2d5dc0f2af5f34e6ff64d4e55f1b4e4
 
     async def output_prediction(self, dest, image_url, reference=None):
         name, conf = self.predictor.predict(image_url)
@@ -32,10 +37,17 @@ class PoketwoSpawnDetector(commands.Cog):
             if m.author.id != (self.bot.user.id if self.test_mode else self.target_id):
                 return
             for e in m.embeds:
+<<<<<<< HEAD
                 if self.target_title in (e.title or "") and e.image:
                     return await self.output_prediction(m.channel, e.image.url, reference=m)
         except Exception as e:
             print(f"❌ Error in on_message: {type(e).__name__}: {e}")
+=======
+                if self.target_title in e.title and e.image:
+                    return await self.output_prediction(m, e.image.url)
+        except Exception as e:
+            await m.channel.send(e) 
+>>>>>>> 1a755929b2d5dc0f2af5f34e6ff64d4e55f1b4e4
 
     @commands.command(name="ps", hidden=True)
     async def predict_spawn(self, ctx, image_url=None):
