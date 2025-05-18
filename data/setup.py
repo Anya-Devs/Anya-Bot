@@ -1,30 +1,35 @@
 import os
+import sys
 import subprocess
 
 submodule_url = "https://github.com/cringe-neko-girl/Poketwo-AutoNamer.git"
 submodule_path = "submodules/poketwo_autonamer"
 
 
+def run_python(*args, **kwargs):
+    """Run commands with the current Python interpreter."""
+    return subprocess.run([sys.executable, *args], check=True, **kwargs)
+
+
 def install_package(package):
-    subprocess.run(['pip', 'install', '--quiet', '--upgrade', package], check=True)
+    run_python("-m", "pip", "install", "--quiet", "--upgrade", package)
 
 
 def update_all_packages():
     result = subprocess.run(
-        ['pip', 'list', '--outdated', '--format=freeze'],
+        [sys.executable, '-m', 'pip', 'list', '--outdated', '--format=freeze'],
         capture_output=True, text=True
     )
     outdated_packages = result.stdout.strip().splitlines()
-
     for line in outdated_packages:
         pkg = line.split('==')[0]
         install_package(pkg)
 
-    subprocess.run(['pip', 'check'], capture_output=True, text=True)
+    subprocess.run([sys.executable, '-m', 'pip', 'check'], capture_output=True, text=True)
 
 
 def clean_requirements():
-    subprocess.run(['pipreqs', '--force', '--ignore', 'venv,.venv,submodules', '.'], check=True)
+    run_python("-m", "pipreqs", "--force", "--ignore", "venv,.venv,submodules", ".")
 
     if not os.path.exists('requirements.txt'):
         return
@@ -44,7 +49,6 @@ def clean_requirements():
 
 
 def ensure_git_login():
-    """Check if authenticated with GitHub, otherwise log in using .netrc."""
     try:
         subprocess.run(
             ['git', 'ls-remote', submodule_url],
@@ -56,7 +60,7 @@ def ensure_git_login():
         from dotenv import load_dotenv
         load_dotenv(dotenv_path=os.path.join(".github", ".env"))
         token = os.environ.get('GIT_ACCESS_TOKEN')
-        username= os.environ.get('GIT_USERNAME')
+        username = os.environ.get('GIT_USERNAME')
         if not token:
             raise EnvironmentError("❌ GIT_ACCESS_TOKEN not set in environment!")
 
@@ -89,18 +93,24 @@ def sync_submodule():
 
 
 def fix_requests_urllib3():
-    subprocess.run(['pip', 'uninstall', 'urllib3', 'requests', '-y'], check=True)
-    subprocess.run(['pip', 'install', '--upgrade', 'pip'], check=True)
-    subprocess.run(['pip', 'install', '--no-cache-dir', 'urllib3', 'requests'], check=True)
+    run_python("-m", "pip", "uninstall", "urllib3", "requests", "-y")
+    run_python("-m", "pip", "install", "--upgrade", "pip")
+    run_python("-m", "pip", "install", "--no-cache-dir", "urllib3", "requests")
+
 
 def start():
-    subprocess.run(['pip', 'install', '--upgrade', 'pip'], check=True)
+    run_python("-m", "pip", "install", "--upgrade", "pip")
     fix_requests_urllib3()
-    install_package('urllib3')
-    install_package('pipreqs')
-    install_package('onnxruntime')
-    install_package('opencv-python-headless')
-    install_package('python-Levenshtein')
+
+    # Core dependencies
+    for pkg in [
+        'urllib3',
+        'pipreqs',
+        'onnxruntime',
+        'opencv-python-headless',
+        'python-Levenshtein'
+    ]:
+        install_package(pkg)
 
     sync_submodule()
     update_all_packages()
@@ -112,7 +122,7 @@ def start():
         print(e)
 
     if os.path.exists("requirements.txt"):
-        subprocess.run(['pip', 'install', '--upgrade', '--no-cache-dir', '-r', 'requirements.txt'], check=True)
+        run_python("-m", "pip", "install", "--upgrade", "--no-cache-dir", "-r", "requirements.txt")
 
 
 if __name__ == "__main__":
