@@ -95,6 +95,36 @@ class Ping_Pokemon(commands.Cog):
                 )
             except Exception:
                 pass
+     if message.author.id not in self.user_author_id:
+        return
+
+     pattern = re.compile(r"([a-zA-Z\s-]+):\s([\d\.]+)%")
+     match = pattern.search(message.content.split("\n")[0].strip())
+     if not match:
+        return
+
+     pokemon_name = match.group(1).strip()
+     translated_name, region = self.transform_pokemon_name(pokemon_name)
+     translated_name = translated_name.lower()
+
+     rare_pokemon, regional_pokemon = self.load_pokemon_data()
+     matched_rare = next((p for p in rare_pokemon if fuzz.ratio(translated_name, p) > 90), None)
+     matched_regional = next((p for p in regional_pokemon if fuzz.ratio(translated_name, p) > 90), None)
+
+     if matched_rare or matched_regional:
+        ping_type = self.message_rare_pokemon if matched_rare else self.message_regional_pokemon
+        ref = message.reference
+        if ref:
+            try:
+                ref_msg = await message.channel.fetch_message(ref.message_id)
+                await message.delete()
+                await message.channel.send(
+                    f"{ping_type}\n\n{message.content}",
+                    reference=ref_msg.to_reference(),
+                    mention_author=False
+                )
+            except Exception:
+                pass
 
 class Pokemon_Emojis(commands.Cog):
     def __init__(self, bot):
