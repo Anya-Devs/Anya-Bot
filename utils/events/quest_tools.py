@@ -5,7 +5,7 @@ from bot.cogs.quest import Quest_Data
 from imports.discord_imports import *
 from imports.log_imports import *
 from datetime import datetime, timedelta
-from data.const import *
+from data.local.const import *
 
 redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
 

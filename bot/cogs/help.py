@@ -7,7 +7,7 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 
 
-from data.const import *
+from data.local.const import *
 from utils.cogs.help import *
 
 from imports.log_imports import logger

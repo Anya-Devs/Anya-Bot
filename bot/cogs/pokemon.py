@@ -6,7 +6,7 @@ from imports.log_imports import *
 from imports.discord_imports import *
 from utils.cogs.pokemon import *
 from utils.subcogs.pokemon import Ping_Pokemon, Pokemon_Emojis
-from data.const import error_custom_embed as err_embed, primary_color as p_color
+from data.local.const import error_custom_embed as err_embed, primary_color as p_color
 
 class Pokemon(commands.Cog):
     def __init__(self, bot, folder="data/commands/pokemon/pokemon_images"):

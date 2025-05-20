@@ -6,10 +6,10 @@ import motor.motor_asyncio
 from pymongo.errors import PyMongoError
 from datetime import datetime, timezone, timedelta
 
-from data.const import *
+from data.local.const import *
 from utils.cogs.quest import *
 from imports.log_imports import *
-from data.const import *
+from data.local.const import *
 
 
 

@@ -6,8 +6,8 @@ import traceback
 from datetime import datetime
 from difflib import get_close_matches
 
-import data.const as const
-from data.const import error_custom_embed
+import data.local.const as const
+from data.local.const import error_custom_embed
 from imports.log_imports import logger
 from imports.discord_imports import *
 

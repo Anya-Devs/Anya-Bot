@@ -1,6 +1,6 @@
 import os
 from motor.motor_asyncio import AsyncIOMotorClient
-from data.const import bot_config
+from data.local.const import bot_config
 
 
 use_test_bot = False

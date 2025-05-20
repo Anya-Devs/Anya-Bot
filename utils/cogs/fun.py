@@ -3,7 +3,7 @@
 # hug, iq, kiss, lick, nervous, pat, pinch, poke, pp, simprate, slap,
 # slowclap, smile, smug, slot, strength, waifurate, wave, wink
 
-from data.const import *
+from data.local.const import *
 import aiofiles, random, aiohttp
 from imports.discord_imports import *
 from motor.motor_asyncio import AsyncIOMotorClient

@@ -2,7 +2,7 @@ import datetime, typing, traceback, json
 from io import BytesIO
 
 
-from data.const import *
+from data.local.const import *
 from imports.discord_imports import *
 from imports.log_imports import *
 from utils.cogs.quest import *

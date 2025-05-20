@@ -8,7 +8,7 @@ import traceback
 import logging
 import json
 
-from data.const import primary_color
+from data.local.const import primary_color
 from bot.token import get_bot_token
 
 from imports.log_imports import *

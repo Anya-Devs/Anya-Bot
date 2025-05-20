@@ -1,4 +1,4 @@
-import aiohttp;from imports.discord_imports import *;from data.const import primary_color;from data.local.emojis import *
+import aiohttp;from imports.discord_imports import *;from data.local.const import primary_color;from data.local.emojis import *
 
 class Recommendation(commands.Cog):
     def __init__(self, bot): self.bot = bot; self.API_URL = "https://api.jikan.moe/v4/random/anime"

@@ -1,7 +1,7 @@
 
 import logging, re, traceback
 from fuzzywuzzy import fuzz
-from data.const import Quest_Completed_Embed
+from data.local.const import Quest_Completed_Embed
 from imports.discord_imports import *
 
 logger = logging.getLogger("Quest_Events")

@@ -13,7 +13,7 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 
 
-from data.const import *
+from data.local.const import *
 from imports.discord_imports import *
 from imports.log_imports import logger
 

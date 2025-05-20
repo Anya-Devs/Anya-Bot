@@ -9,10 +9,10 @@ import subprocess
 from datetime import datetime
 from colorama import Fore, Style
 
-import data.const as const
+import data.local.const as const
 from imports.log_imports import *
 from imports.discord_imports import *
-from data.const import primary_color, timestamp_gen
+from data.local.const import primary_color, timestamp_gen
 
 
 class System(commands.Cog):

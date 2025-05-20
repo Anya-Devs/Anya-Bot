@@ -6,7 +6,7 @@ from utils.cogs.information import *
 from utils.cogs.information import Information_Commands
 
 from imports.discord_imports import * 
-from data.const import primary_color, Information_Embed
+from data.local.const import primary_color, Information_Embed
 
 
 class Information(commands.Cog):

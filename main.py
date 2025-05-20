@@ -7,7 +7,7 @@ from rich.tree import Tree
 from rich.align import Align
 from rich.console import Console
 from dotenv import load_dotenv
-from data.const import AvatarToTextArt
+from data.local.const import AvatarToTextArt
 from bot.token import get_bot_token, prefix, use_test_bot as ut
 from imports.log_imports import logger
 from imports.discord_imports import *

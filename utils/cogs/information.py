@@ -3,8 +3,8 @@ import json
 import aiohttp
 from datetime import datetime
 
-from data.const import *
-from data.const import primary_color
+from data.local.const import *
+from data.local.const import primary_color
 from discord.ui import View
 from imports.discord_imports import *
 from imports.log_imports import *

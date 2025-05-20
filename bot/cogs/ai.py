@@ -5,7 +5,7 @@ from openai import AsyncOpenAI
 from utils.cogs.ai import *
 from imports.discord_imports import *
 from imports.log_imports import logger
-from data.const import primary_color
+from data.local.const import primary_color
 
 class Ai(commands.Cog):
     def __init__(self, bot):
