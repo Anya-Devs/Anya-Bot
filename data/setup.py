@@ -64,8 +64,4 @@ def start():
 	except subprocess.CalledProcessError as e: print("❌ pipreqs failed. Likely due to missing dependencies."); print(e)
 	if os.path.exists("requirements.txt"): run_python("-m", "pip", "install", "--upgrade", "--no-cache-dir", "-r", "requirements.txt")
 
-<<<<<<< HEAD
 if __name__ == "__main__": start()
-=======
-if __name__ == "__main__": start()
->>>>>>> 0bf629fcf25abf7d888f5f93e381f9482b527e92
