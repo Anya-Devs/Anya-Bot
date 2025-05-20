@@ -10,7 +10,7 @@ class Ping_Pokemon(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.csv_file = 'data/commands/pokemon/pokemon_special_names.csv'
-        self.user_author_id = 854233015475109888                                                   
+        self.user_author_id = [854233015475109888, 1234247716243112100]                                               
                                                            
         self.message_rare_pokemon = "<@&1278580577104040023>"
         self.message_regional_pokemon = "<@&1278580577104040022>"
@@ -65,50 +65,36 @@ class Ping_Pokemon(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-                                                           
-        if message.author.id != self.user_author_id:
-            return
+     if message.author.id not in self.user_author_id:
+        return
 
-                                                                          
-        pattern = re.compile(r"([a-zA-Z\s-]+):\s([\d\.]+)%")
-        match = pattern.search(message.content.split("\n")[0].strip())
-        
-        message_content = message.content
-        if match:
-            pokemon_name = match.group(1).strip()                                 
-            percentage = match.group(2)
+     pattern = re.compile(r"([a-zA-Z\s-]+):\s([\d\.]+)%")
+     match = pattern.search(message.content.split("\n")[0].strip())
+     if not match:
+        return
 
-            #print(f"Matched Pokémon name: {pokemon_name}, Percentage: {percentage}")
+     pokemon_name = match.group(1).strip()
+     translated_name, region = self.transform_pokemon_name(pokemon_name)
+     translated_name = translated_name.lower()
 
-                                                         
-            translated_pokemon_name, region = self.transform_pokemon_name(pokemon_name)
-        
-            translated_pokemon_name = translated_pokemon_name.lower()
-                                                   
-            rare_pokemon, regional_pokemon = self.load_pokemon_data()
+     rare_pokemon, regional_pokemon = self.load_pokemon_data()
+     matched_rare = next((p for p in rare_pokemon if fuzz.ratio(translated_name, p) > 90), None)
+     matched_regional = next((p for p in regional_pokemon if fuzz.ratio(translated_name, p) > 90), None)
 
-                                                                        
-            matched_rare = None
-            matched_regional = None
-            for rare in rare_pokemon:
-                if fuzz.ratio(translated_pokemon_name, rare) > 90:                         
-                    matched_rare = rare
-                    break
-
-            for regional in regional_pokemon:
-                if fuzz.ratio(translated_pokemon_name, regional) > 90:                         
-                    matched_regional = regional
-                    break
-
-            if matched_rare:
-                await message.channel.send(self.message_rare_pokemon)
-            elif matched_regional:
-                await message.channel.send(self.message_regional_pokemon)
-            """
-            else:
-                await message.channel.send(self.message_unknown_pokemon)
-            """
-
+     if matched_rare or matched_regional:
+        ping_type = self.message_rare_pokemon if matched_rare else self.message_regional_pokemon
+        ref = message.reference
+        if ref:
+            try:
+                ref_msg = await message.channel.fetch_message(ref.message_id)
+                await message.delete()
+                await message.channel.send(
+                    f"{ping_type}\n\n{message.content}",
+                    reference=ref_msg.to_reference(),
+                    mention_author=False
+                )
+            except Exception:
+                pass
 
 class Pokemon_Emojis(commands.Cog):
     def __init__(self, bot):
@@ -466,9 +452,6 @@ class Pokemon_Emojis(commands.Cog):
         return None
 
     def call_emoji(self, emoji_mapping, pokemon_id):
-        """
-        Return a discord.PartialEmoji for a given Pokémon ID across all servers.
-        """
         pokemon_id = pokemon_id['id']
         
         for server_id, server_data in emoji_mapping.items():

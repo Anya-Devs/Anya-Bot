@@ -15,7 +15,6 @@ class PokemonNamesDownloader:
         self.regional_terms = ["alola", "galar", "hisui", "paldea"]  
 
     async def fetch_pokemon_species(self):
-        """Fetch all Pokémon species from the API."""
         species_list = []
         url = self.pokemon_species_url
         while url:
@@ -31,7 +30,6 @@ class PokemonNamesDownloader:
         return species_list
 
     async def categorize_pokemon(self, species_list):
-        """Categorize Pokémon into regional and rare."""
         rare_pokemon = []
         regional_pokemon = []
 
@@ -54,7 +52,6 @@ class PokemonNamesDownloader:
         return rare_pokemon, regional_pokemon
 
     async def save_to_csv(self, rare_pokemon, regional_pokemon):
-        """Save the rare and regional Pokémon names to a CSV file."""
         os.makedirs(os.path.dirname(self.csv_file), exist_ok=True)
         with open(self.csv_file, 'w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)

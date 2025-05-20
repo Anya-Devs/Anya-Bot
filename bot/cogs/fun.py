@@ -1,4 +1,4 @@
-from utils.cogs.fun import *; from imports.discord_imports import *; from data.commands.fun.emojis import *; from typing import Union, Literal
+from utils.cogs.fun import *; from imports.discord_imports import *; from data.local.emojis import *; from typing import Union, Literal
 
 class Fun(commands.Cog):
     def __init__(self, bot):

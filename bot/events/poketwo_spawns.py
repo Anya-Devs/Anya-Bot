@@ -13,20 +13,13 @@ class PoketwoSpawnDetector(commands.Cog):
         self.pp = Ping_Pokemon(bot)
 
     def format_name(self, name):
-        m = {'alola': 'Alolan', 'galar': 'Galarian', 'hisui': 'Hisuian', 'paldea': 'Paldean', 'unova': 'Unovan'}
-        p = name.lower().split('-')
-        o = f"{m[p[1]]} {p[0]}" if len(p) > 1 and p[1] in m else name
-        format_name = o.replace('-',' ').title() 
-        return format_name
->>>>>>> 1a755929b2d5dc0f2af5f34e6ff64d4e55f1b4e4
+        forms = {'alola': 'Alolan', 'galar': 'Galarian', 'hisui': 'Hisuian', 'paldea': 'Paldean', 'unova': 'Unovan'}
+        parts = name.lower().split('-')
+        return (f"{forms[parts[1]]} {parts[0]}" if len(parts) > 1 and parts[1] in forms else name).replace('-', ' ').title()
 
-    async def output_prediction(self, dest, image_url, reference=None):
+    async def output_prediction(self, message, image_url):
         name, conf = self.predictor.predict(image_url)
-        msg = f"{self.format_name(name)}: {conf}"
-        if isinstance(reference, discord.Message):
-            await dest.send(msg, reference=reference)
-        else:
-            await dest.reply(msg, mention_author=False)
+        await message.channel.send(f"{self.format_name(name)}: {conf}", reference=message)
 
     @commands.Cog.listener()
     async def on_message(self, m):
@@ -34,31 +27,26 @@ class PoketwoSpawnDetector(commands.Cog):
             if m.author.id != (self.bot.user.id if self.test_mode else self.target_id):
                 return
             for e in m.embeds:
-<<<<<<< HEAD
                 if self.target_title in (e.title or "") and e.image:
-                    return await self.output_prediction(m.channel, e.image.url, reference=m)
-        except Exception as e:
-            print(f"❌ Error in on_message: {type(e).__name__}: {e}")
-=======
-                if self.target_title in e.title and e.image:
                     return await self.output_prediction(m, e.image.url)
         except Exception as e:
-            await m.channel.send(e) 
->>>>>>> 1a755929b2d5dc0f2af5f34e6ff64d4e55f1b4e4
+            print(f"❌ Error in on_message: {type(e).__name__}: {e}")
 
     @commands.command(name="ps", hidden=True)
     async def predict_spawn(self, ctx, image_url=None):
-        if not image_url:
-            r = ctx.message.reference
-            m = await ctx.channel.fetch_message(r.message_id) if r else ctx.message
-            if m.attachments:
-                image_url = m.attachments[0].url
-            elif m.embeds and m.embeds[0].image:
-                image_url = m.embeds[0].image.url
-        if not image_url:
-            return await ctx.send("❌ No image URL found.")
         try:
-            await self.output_prediction(ctx, image_url, reference=ctx.message)
+            m = ctx.message
+            if not image_url:
+                ref = ctx.message.reference
+                if ref:
+                    m = await ctx.channel.fetch_message(ref.message_id)
+                if m.attachments:
+                    image_url = m.attachments[0].url
+                elif m.embeds and m.embeds[0].image:
+                    image_url = m.embeds[0].image.url
+            if not image_url:
+                return await ctx.send("❌ No image URL found.")
+            await self.output_prediction(m, image_url)
         except Exception as e:
             await ctx.send(f"❌ Prediction error: {type(e).__name__}: {e}")
 

@@ -30,7 +30,7 @@ class BotSetup(commands.AutoShardedBot):
             msg = f"\n\n\n{art.get_colored_ascii_art()}\n\033[38;2;88;101;242m{'Welcome to Discord!'.center(term)}\033[0m\n\033[92m" + "\n".join(line.center(term) for line in text2art(self.user.name.title()[:11], 'sub-zero').splitlines())
             msg += f"🌐  Connected: {len(g)} server{'s'*(len(g)!=1)}  |  Users served: ~{sum(m.member_count or 0 for m in g)}".center(term)
             print(msg)
-            try: await setup_persistent_views(self); print("✅ Persistent ticket views restored.")
+            try: await setup_persistent_views(self); #print("✅ Persistent ticket views restored.")
             except Exception as e: logger.error(f"Persistent views error: {e}\n{traceback.format_exc()}"); print(f"❌ Failed to restore persistent ticket views: {e}")
         except Exception as e: logger.error(f"Error in on_ready: {e}\n{traceback.format_exc()}")
 

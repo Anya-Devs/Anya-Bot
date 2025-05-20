@@ -665,7 +665,7 @@ class Invalidation:
 
 
 async def setup_persistent_views(bot):
-    print("Setting up persistent views for tickets...")
+    # print("Setting up persistent views for tickets...")
     try:
         mongo_url = os.getenv("MONGO_URI") or "mongodb://localhost:27017/"
         if not os.getenv("MONGO_URI"):
@@ -674,20 +674,18 @@ async def setup_persistent_views(bot):
         db = cluster["Commands"]
         collection = db["ticket"]
         await cluster.admin.command('ping')
-        print("✅ Connected to MongoDB successfully")
+        # print("✅ Connected to MongoDB successfully")
         tickets = await collection.find().to_list(length=None)
-        print(f"Loading {len(tickets)} ticket configurations...")
+        # print(f"Loading {len(tickets)} ticket configurations...")
 
         success_count = error_count = thread_button_count = 0
-        
-        # Process tickets with names first
+
         named_tickets = [t for t in tickets if t.get("ticket_name")]
         unnamed_tickets = [t for t in tickets if not t.get("ticket_name")]
-        
-        if named_tickets:
-            print(f"Found {len(named_tickets)} named tickets and {len(unnamed_tickets)} unnamed tickets")
-        
-        # Process all tickets (named first, then unnamed)
+
+        # if named_tickets:
+        #     print(f"Found {len(named_tickets)} named tickets and {len(unnamed_tickets)} unnamed tickets")
+
         for ticket in named_tickets + unnamed_tickets:
             try:
                 guild_id = ticket.get("guild_id")
@@ -698,18 +696,16 @@ async def setup_persistent_views(bot):
                 thread_message = ticket.get("thread_message", "Welcome to your ticket!")
                 close_button_data = ticket.get("close_button_data", {})
                 message_link = ticket.get("message_link", "")
-                
-                # Get ticket name or create a default one that includes identifiers
+
                 ticket_name = ticket.get("ticket_name")
                 if not ticket_name:
                     ticket_name = f"Ticket-{guild_id}-{channel_id}"
-                    # Update the ticket in the database with the generated name
                     try:
                         await collection.update_one(
                             {"_id": ticket.get("_id")},
                             {"$set": {"ticket_name": ticket_name}}
                         )
-                        print(f"✅ Updated unnamed ticket with generated name: {ticket_name}")
+                        # print(f"✅ Updated unnamed ticket with generated name: {ticket_name}")
                     except Exception as e:
                         print(f"❌ Failed to update unnamed ticket with name: {str(e)}")
 
@@ -729,7 +725,7 @@ async def setup_persistent_views(bot):
                                 bot.add_view(view, message_id=link_message_id)
                                 message_found = True
                                 success_count += 1
-                                print(f"✅ Registered view for ticket '{ticket_name}' via message link")
+                                # print(f"✅ Registered view for ticket '{ticket_name}' via message link")
                     except Exception as e:
                         print(f"❌ Error processing message link for ticket '{ticket_name}': {str(e)}")
 
@@ -742,7 +738,7 @@ async def setup_persistent_views(bot):
                                 bot.add_view(view, message_id=message_id)
                                 message_found = True
                                 success_count += 1
-                                print(f"✅ Registered view for ticket '{ticket_name}' via channel/message ID")
+                                # print(f"✅ Registered view for ticket '{ticket_name}' via channel/message ID")
                     except Exception as e:
                         print(f"❌ Error registering view directly for ticket '{ticket_name}': {str(e)}")
 
@@ -754,13 +750,11 @@ async def setup_persistent_views(bot):
                     try:
                         guild = bot.get_guild(guild_id)
                         if guild:
-                            # Process active threads
                             thread_count = 0
                             for channel in guild.channels:
                                 if isinstance(channel, discord.TextChannel):
                                     try:
                                         for thread in channel.threads:
-                                            # Create a thread name that includes the ticket name
                                             thread_ticket_name = f"{ticket_name}-Thread-{thread.id}"
                                             close_view = Ticket_View.CloseButton(thread.id, close_button_data)
                                             bot.add_view(close_view, message_id=None)
@@ -768,8 +762,7 @@ async def setup_persistent_views(bot):
                                             thread_count += 1
                                     except Exception as e:
                                         print(f"❌ Error processing threads in channel {channel.id}: {str(e)}")
-                            
-                            # Process archived threads
+
                             for channel in guild.channels:
                                 if isinstance(channel, discord.TextChannel):
                                     try:
@@ -788,16 +781,16 @@ async def setup_persistent_views(bot):
                                             thread_count += 1
                                     except Exception as e:
                                         print(f"❌ Error processing archived private threads in channel {channel.id}: {str(e)}")
-                            
-                            if thread_count > 0:
-                                print(f"✅ Registered {thread_count} thread buttons for ticket '{ticket_name}'")
+
+                            # if thread_count > 0:
+                            #     print(f"✅ Registered {thread_count} thread buttons for ticket '{ticket_name}'")
                     except Exception as e:
                         print(f"❌ Error registering thread close buttons for ticket '{ticket_name}': {str(e)}")
             except Exception as e:
                 error_count += 1
                 print(f"❌ Error processing ticket {ticket.get('_id', 'unknown')}: {str(e)}")
 
-        print(f"✅ Tickets loaded: {success_count} successful, {error_count} failed, {thread_button_count} thread buttons registered")
+        # print(f"✅ Tickets loaded: {success_count} successful, {error_count} failed, {thread_button_count} thread buttons registered")
     except Exception as e:
         print(f'❌ Setup persistent views error: {str(e)}')
         print("🔄 Falling back to empty persistent views setup")
@@ -809,7 +802,6 @@ async def setup_persistent_views(bot):
             print("✅ Generic fallback view registered")
         except Exception as e:
             print(f"❌ Failed to register fallback view: {str(e)}")
-    print("✅ Persistent ticket views setup complete")
-
+    # print("✅ Persistent ticket views setup complete")
 
 
