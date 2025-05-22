@@ -19,42 +19,22 @@ from imports.discord_imports import *
 class Help(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.cog_commands = {}
-        self.command_mapping_file = "data/commands/help/command_map.json"
 
-    def _ensure_file_exists(self):
-        os.makedirs(os.path.dirname(self.command_mapping_file), exist_ok=True)
-        if not os.path.exists(self.command_mapping_file):
-            with open(self.command_mapping_file, "w") as f:
-                json.dump({}, f, indent=4)
-
-    def _load_command_mapping(self):
-        self._ensure_file_exists()
-        with open(self.command_mapping_file, "r") as f:
-            return json.load(f)
-
-    def _save_command_mapping(self, mapping):
-        with open(self.command_mapping_file, "w") as f:
-            json.dump(mapping, f, indent=4)
-
-    def _update_command_mapping(self):
-        mapping = self._load_command_mapping()
-        for cog_name in self.cog_commands.keys():
-            if cog_name not in mapping:
-                mapping[cog_name] = {}
-            cog = self.bot.get_cog(cog_name)
-            if cog:
-                for cmd in cog.get_commands():
-                    if not cmd.hidden:
-                        if cmd.name not in mapping[cog_name]:
-                            mapping[cog_name][cmd.name] = " "
-        self._save_command_mapping(mapping)
+    def _get_cog_command_mapping(self):
+        mapping = {}
+        for cog_name, cog in self.bot.cogs.items():
+            if isinstance(cog, commands.Cog):
+                visible_commands = {
+                    cmd.name: " " for cmd in cog.get_commands() if not cmd.hidden
+                }
+                if visible_commands:
+                    mapping[cog_name] = visible_commands
+        return mapping
 
     @commands.command(hidden=True)
     async def help(self, ctx, command_name: str = None):
         try:
             bot_avatar_url = str(self.bot.user.avatar.with_size(128))
-
             async with aiohttp.ClientSession() as session:
                 async with session.get(bot_avatar_url) as resp:
                     if resp.status != 200:
@@ -74,7 +54,7 @@ class Help(commands.Cog):
             logger.error(f"Error getting primary color: {e}")
             await ctx.reply(embed=await error_custom_embed(self.bot, ctx, e, title="Primary Color"))
             return
-  
+
         if command_name:
             try:
                 sub_helper = Sub_Helper(self.bot, ctx.prefix)
@@ -86,17 +66,14 @@ class Help(commands.Cog):
             return
 
         try:
-            cog_commands = {}
-            for cog_name, cog_object in self.bot.cogs.items():
-                if isinstance(cog_object, commands.Cog):
-                    commands_in_cog = [
-                        cmd for cmd in cog_object.get_commands() if not cmd.hidden
-                    ]
-                    if commands_in_cog:
-                        cog_commands[cog_name] = commands_in_cog
-
-            self.cog_commands = cog_commands
-            self._update_command_mapping()
+            # Generate mapping dynamically in memory
+            self.cog_commands = {
+                cog_name: [
+                    cmd for cmd in cog.get_commands() if not cmd.hidden
+                ]
+                for cog_name, cog in self.bot.cogs.items()
+                if isinstance(cog, commands.Cog)
+            }
 
             sub_helper = Sub_Helper(self.bot, ctx.prefix)
             sub_helper.create_command_help_json()
@@ -113,11 +90,10 @@ class Help(commands.Cog):
                         f"- For more help, visit the [support server](https://discord.gg/9QTMkjsteF)."
                     ),
                 )
-
                 select_view = Select_Help(self.bot, ctx)
                 options = HelpMenu(self.bot, select_view)
-
                 help_embed.set_image(url="attachment://image.png")
+
                 await ctx.send(
                     embed=help_embed,
                     file=discord.File(file, "image.png"),
@@ -132,8 +108,6 @@ class Help(commands.Cog):
         except Exception as e:
             logger.error(f"Error sending HelpMenu: {e}")
             await ctx.reply(embed=await error_custom_embed(self.bot, ctx, e, title="Help Menu"))
-            return
-
 
 def setup(bot):
     bot.add_cog(Help(bot))

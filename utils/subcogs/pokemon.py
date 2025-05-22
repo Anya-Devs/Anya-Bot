@@ -2,130 +2,95 @@
 from tqdm import tqdm
 import os, csv, json, re, asyncio, aiohttp
 
+
 from fuzzywuzzy import fuzz
+from utils.cogs.pokemon import *
+
 from imports.log_imports import *
 from imports.discord_imports import *
+from motor.motor_asyncio import AsyncIOMotorClient
+from data.local.const import *
+
 
 class Ping_Pokemon(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.csv_file = 'data/commands/pokemon/pokemon_special_names.csv'
-        self.user_author_id = [854233015475109888, 1234247716243112100]                                               
-                                                           
-        self.message_rare_pokemon = "<@&1278580577104040023>"
-        self.message_regional_pokemon = "<@&1278580577104040022>"
-                                                                                                                                  
+        self.pe = Pokemon_Emojis(self.bot)
+        self.shiny_collection = "shiny_hunt"
+        self.collection_collection = "collection"
+        self.mongo = Pokemon_Subcogs.MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
 
-    def load_pokemon_data(self):
-        rare_pokemon = []
-        regional_pokemon = []
+
+    
+  
+    async def handle_collection(self, ctx, col, action, pokemon=None, max_one=False):
+        user_id = ctx.author.id
+        embed = Embed()
         
-        try:
-            with open(self.csv_file, 'r', newline='', encoding='utf-8') as file:
-                reader = csv.reader(file)
-                next(reader)                   
-                for row in reader:
-                    rare_name = row[0].strip()
-                    regional_name = row[1].strip()
-
-                    if rare_name:
-                        rare_pokemon.append(rare_name.lower())                                        
-                    if regional_name:
-                        regional_pokemon.append(regional_name.lower())                                            
+        if action == "list":
+            current = await self.mongo.list(col, user_id)
+            if not current:
+                embed.description = "Your list is empty."
+                return await ctx.reply(embed=embed, mention_author=False)
             
-            return rare_pokemon, regional_pokemon
-        except FileNotFoundError:
-            logger.error(f"CSV file not found: {self.csv_file}")
-            return [], []
+            pokemon_list = []
+            for n in current:
+                pkmn_id = Pokemon_Subcogs.pokemon_name_to_id(n)
+                emoji = self.pe.get_emoji_for_pokemon(pkmn_id) if pkmn_id else ''
+                pokemon_list.append(f"{emoji} {n.title()}")
+            
+            embed.description = "\n".join(pokemon_list)
+            return await ctx.reply(embed=embed, mention_author=False)
+        
+        if not pokemon:
+            embed.description = "Specify Pokémon to add/remove."
+            return await ctx.reply(embed=embed, mention_author=False)
+        
+        names = [n.strip() for n in pokemon.split(',') if n.strip()]
+        results = []
+        current = await self.mongo.list(col, user_id)
+        
+        for raw_name in names:
+            transformed, _ = Pokemon.transform_pokemon_name(raw_name)
+            if not transformed:
+                results.append(f"❌ Invalid Pokémon name: {raw_name}")
+                continue
+                
+            pkmn_id = Pokemon_Subcogs.pokemon_name_to_id(transformed)
+            emoji = self.pe.get_emoji_for_pokemon(pkmn_id) if pkmn_id else ''
+            
+            if action == "add":
+                if max_one:
+                    if current:
+                        results.append(f"{emoji} Only 1 allowed. Remove current: {current[0].title()}")
+                    else:
+                        added = await self.mongo.add(col, transformed, user_id)
+                        results.append(f"{emoji} Added {transformed.title()}" if added else f"{emoji} {transformed.title()} already exists.")
+                    break
+                else:
+                    if len(current) >= 10 and transformed not in current:
+                        results.append(f"❌ Max of 10 Pokémon reached. `{transformed.title()}` not added.")
+                        continue
+                    added = await self.mongo.add(col, transformed, user_id)
+                    results.append(f"{emoji} Added {transformed.title()}" if added else f"{emoji} {transformed.title()} already exists.")
+            
+            elif action == "remove":
+                removed = await self.mongo.remove(col, transformed, user_id)
+                results.append(f"{emoji} Removed {transformed.title()}" if removed else f"{emoji} {transformed.title()} not found.")
+        
+        embed.description = "\n".join(results)
+        await ctx.reply(embed=embed, mention_author=False)
 
-    def transform_pokemon_name(self, name):
-                                               
-        translation_map = {
-            "alolan": "-alola",
-            "galarian": "-galar",
-            "hisui": "-hisui",
-            "paldean": "-paldea",
-            "mega": "-mega"
-        }
+    @commands.command()
+    async def sh(self, ctx, action: Literal["add", "remove", "list"], *, pokemon: str = None):
+        await self.handle_collection(ctx, self.shiny_collection, action, pokemon, max_one=True)
 
-                                                                                                              
-        name_cleaned = re.sub(r'[^a-zA-Z\s]', '', name)                                                
+    @commands.command()
+    async def cl(self, ctx, action: Literal["add", "remove", "list"], *, pokemon: str = None):
+        await self.handle_collection(ctx, self.collection_collection, action, pokemon)
 
-                                                                                 
-        name_lower = name_cleaned.lower()
-        for region, suffix in translation_map.items():
-            if region in name_lower:
-                                                                                           
-                parts = name_cleaned.split()
-                base_name = parts[1].capitalize() if len(parts) > 1 else parts[0].capitalize()                                   
-                return f"{base_name.lower()}{suffix}", region                                                   
-
-                                                                                     
-        return name_cleaned, None
-
-    @commands.Cog.listener()
-    async def on_message(self, message):
-     if message.author.id not in self.user_author_id:
-        return
-
-     pattern = re.compile(r"([a-zA-Z\s-]+):\s([\d\.]+)%")
-     match = pattern.search(message.content.split("\n")[0].strip())
-     if not match:
-        return
-
-     pokemon_name = match.group(1).strip()
-     translated_name, region = self.transform_pokemon_name(pokemon_name)
-     translated_name = translated_name.lower()
-
-     rare_pokemon, regional_pokemon = self.load_pokemon_data()
-     matched_rare = next((p for p in rare_pokemon if fuzz.ratio(translated_name, p) > 90), None)
-     matched_regional = next((p for p in regional_pokemon if fuzz.ratio(translated_name, p) > 90), None)
-
-     if matched_rare or matched_regional:
-        ping_type = self.message_rare_pokemon if matched_rare else self.message_regional_pokemon
-        ref = message.reference
-        if ref:
-            try:
-                ref_msg = await message.channel.fetch_message(ref.message_id)
-                await message.delete()
-                await message.channel.send(
-                    f"{ping_type}\n\n{message.content}",
-                    reference=ref_msg.to_reference(),
-                    mention_author=False
-                )
-            except Exception:
-                pass
-     if message.author.id not in self.user_author_id:
-        return
-
-     pattern = re.compile(r"([a-zA-Z\s-]+):\s([\d\.]+)%")
-     match = pattern.search(message.content.split("\n")[0].strip())
-     if not match:
-        return
-
-     pokemon_name = match.group(1).strip()
-     translated_name, region = self.transform_pokemon_name(pokemon_name)
-     translated_name = translated_name.lower()
-
-     rare_pokemon, regional_pokemon = self.load_pokemon_data()
-     matched_rare = next((p for p in rare_pokemon if fuzz.ratio(translated_name, p) > 90), None)
-     matched_regional = next((p for p in regional_pokemon if fuzz.ratio(translated_name, p) > 90), None)
-
-     if matched_rare or matched_regional:
-        ping_type = self.message_rare_pokemon if matched_rare else self.message_regional_pokemon
-        ref = message.reference
-        if ref:
-            try:
-                ref_msg = await message.channel.fetch_message(ref.message_id)
-                await message.delete()
-                await message.channel.send(
-                    f"{ping_type}\n\n{message.content}",
-                    reference=ref_msg.to_reference(),
-                    mention_author=False
-                )
-            except Exception:
-                pass
-
+  
+                   
 class Pokemon_Emojis(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -502,3 +467,92 @@ class Pokemon_Emojis(commands.Cog):
             await ctx.send(f"Here is your Pokémon emoji: {emoji_str}")
         else:
             await ctx.send(f"No emoji found for Pokémon ID {pokemon_id} across all servers.")
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+class Pokemon_Subcogs:
+    
+ @staticmethod
+ def pokemon_name_to_id(pokemon_name, file_path="data/commands/pokemon/pokemon_description.csv"):
+    try:
+        with open(file_path, mode="r", encoding="utf-8") as csv_file:
+            reader = csv.DictReader(csv_file)
+            for row in reader:
+                if row["slug"].lower() == pokemon_name.lower():
+                    return row["id"]
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+    
+ class MongoHelper:
+    def __init__(self, db):
+        self.db = db
+
+    async def add(self, col_name, pokemon, user_id):
+        coll = self.db[col_name]
+        doc = await coll.find_one({"user_id": user_id})
+        if not doc:
+            await coll.insert_one({"user_id": user_id, "pokemon": [pokemon]})
+            return True
+        if pokemon in doc["pokemon"]:
+            return False
+        await coll.update_one({"user_id": user_id}, {"$push": {"pokemon": pokemon}})
+        return True
+
+    async def remove(self, col_name, pokemon, user_id):
+        coll = self.db[col_name]
+        doc = await coll.find_one({"user_id": user_id})
+        if not doc or pokemon not in doc["pokemon"]:
+            return False
+        await coll.update_one({"user_id": user_id}, {"$pull": {"pokemon": pokemon}})
+        return True
+
+    async def list(self, col_name, user_id):
+        doc = await self.db[col_name].find_one({"user_id": user_id})
+        return doc["pokemon"] if doc else []
+
+ class PokemonNameHelper:
+    def __init__(self, csv_file):
+        self.csv_file = csv_file
+        self.rare, self.regional = [], []
+
+    def load_data(self):
+        try:
+            with open(self.csv_file, newline='', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                next(reader)
+                for row in reader:
+                    if row[0]: self.rare.append(row[0].lower().strip())
+                    if row[1]: self.regional.append(row[1].lower().strip())
+        except FileNotFoundError:
+            self.rare, self.regional = [], []
+
+    def transform_name(self, name):
+        map_ = {"alolan":"-alola","galarian":"-galar","hisui":"-hisui","paldean":"-paldea","mega":"-mega"}
+        name_clean = re.sub(r'[^a-zA-Z\s]', '', name)
+        lower = name_clean.lower()
+        for k,v in map_.items():
+            if k in lower:
+                parts = name_clean.split()
+                base = parts[1].capitalize() if len(parts)>1 else parts[0].capitalize()
+                return f"{base.lower()}{v}", k
+        return name_clean, None
+
+    def check_match(self, name):
+        rare_match = next((p for p in self.rare if fuzz.ratio(name, p) > 90), None)
+        regional_match = next((p for p in self.regional if fuzz.ratio(name, p) > 90), None)
+        return rare_match, regional_match

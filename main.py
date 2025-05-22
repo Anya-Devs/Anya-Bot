@@ -1,4 +1,4 @@
-from data.setup import start; start()
+#from data.setup import start; start()
 
 import os, sys, gc, asyncio, traceback, importlib, pkgutil, aiohttp
 from aiohttp import web

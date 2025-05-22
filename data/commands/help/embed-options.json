@@ -1,0 +1,47 @@
+{
+  "system": {
+    "title": "System",
+    "description": "Testing View the status of the bot, including information about its current performance, system resources usage, and configuration settings.",
+    "emoji": "<:system:1261208067085959320>"
+  },
+  "quest": {
+    "title": "Quest",
+    "description": "Progress on interactions, they are awarding and fulfilling Anya's wish for you to make new friends and engage within the community.",
+    "emoji": "<:anyasus:1258563706518765669>"
+  },
+  "ai": {
+    "title": "AI",
+    "description": "Interact with advanced artificial intelligence functionalities, capable of handling various tasks.",
+    "emoji": "✨"
+  },
+  "pokemon": {
+    "title": "Pokemon",
+    "description": "Provides a set of Pokémon-focused commands for image recognition, hunt ping, and detailed form lookups.",
+    "emoji": "<:Pokeball:1261208239891156992>"
+  },
+  "anime": {
+    "title": "Anime",
+    "description": "Waku waku! Anya throws in a dash of anime or weeb material into the mix for those who are interested.",
+    "emoji": "<:neko_lurk:1320306198075015201>"
+  },
+  "information": {
+    "title": "Information",
+    "description": "Gather the status of a member in the Discord server and stay informed to avoid looking silly.",
+    "emoji": "<:help_info:1268971820988764272>"
+  },
+  "mini_games": {
+    "title": "Minigame",
+    "description": "Engage in a fun and interactive minigame! Choose the type of minigame you'd like to play and compete for rewards and fun challenges.",
+    "emoji": "🎲"
+  },
+  "fun": {
+    "title": "Fun",
+    "description": "A variety of silly, playful, or meme-based commands made to make you laugh or respond with chaos.",
+    "emoji": "🎱"
+  },
+  "Cog2": {
+    "title": "Title for Cog2",
+    "description": "Description for Cog2",
+    "emoji": null
+  }
+}

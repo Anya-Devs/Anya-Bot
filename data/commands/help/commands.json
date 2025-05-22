@@ -1,0 +1,379 @@
+{
+    "Ai": {
+        "imagine": {
+            "aliases": [
+                "i"
+            ],
+            "description": "Model: animagine-xl-4.0\nGenerates images using prompts and returns an anime-styled image.",
+            "example": "{}imagine 1girl, solo, blue archive, long hair, grey hair, red eyes, large breasts, white shirt, collared shirt, long sleeves, halo, v, skirt, outdoors, ruins, standing, sensitive, masterpiece, high score, great score, absurdres",
+            "related_commands": "{}vision"
+        },
+        "vision": {
+            "aliases": [
+                "v"
+            ],
+            "description": "Generate a vision-based response using a prompt and an image URL via Gemini 2.0 model.",
+            "example": "{}vision https://i.pinimg.com/736x/32/82/8a/32828a1554ad31ff44c5d4bd948cfdd7.jpg",
+            "related_commands": "{}imagine"
+        }
+    },
+    "Recommendation": {
+        "anime_recommend": {
+            "aliases": [
+                "ar"
+            ],
+            "description": "Fetches a random anime and sends the recommendation.",
+            "example": "{}anime_recommend",
+            "related_commands": "{}anime"
+        }
+    },
+    "Anime": {
+        "anime": {
+            "aliases": [],
+            "description": "Search for information about any anime.",
+            "example": "{}anime Spy x Family",
+            "related_commands": "{}character, {}manga"
+        },
+        "character": {
+            "aliases": [],
+            "description": "Search for information about any anime character.",
+            "example": "{}character Anya Forger",
+            "related_commands": "{}anime"
+        },
+        "manga": {
+            "aliases": [],
+            "description": "Search for information about any anime manga.",
+            "example": "{}manga Spy x Family",
+            "related_commands": "{}anime"
+        }
+    },
+    "Help": {},
+    "Information": {
+        "about": {
+            "aliases": [
+                "info",
+                "details"
+            ],
+            "description": "Retrieve information about (bot/server/user/invite)",
+            "example": "{}about @Anya\n{}about https://discord.gg/vFwPn74mfJ or vFwPn74mfJ, ",
+            "related_commands": "{}server, {}pfp"
+        },
+        "server": {
+            "aliases": [],
+            "description": "Fetch details about the current server, including server boosts, owner, and member stats.",
+            "example": "{}server",
+            "related_commands": "{}server_roles, {}server_emojis"
+        },
+        "pfp": {
+            "aliases": [],
+            "description": "View the profile picture of a member or yourself.",
+            "example": "{}pfp @Loid Forger",
+            "related_commands": "{}banner"
+        },
+        "banner": {
+            "aliases": [],
+            "description": "Check the banner of a member or yourself.",
+            "example": "{}banner @Yor Forger",
+            "related_commands": "{}pfp"
+        },
+        "invite": {
+            "aliases": [],
+            "description": "Generate a server invite link of your current server.",
+            "example": "{}invite",
+            "related_commands": "{}server"
+        },
+        "perms": {
+            "aliases": [],
+            "description": "Display the permissions of a specific member or role.",
+            "example": "{}perms @Yor Forger,{}perms @Admin\n{}perms [role id]",
+            "related_commands": "{}server_roles"
+        },
+        "server_emojis": {
+            "aliases": [],
+            "description": "List all custom emojis in the server.",
+            "example": "{}server_emojis",
+            "related_commands": "{}server"
+        },
+        "server_roles": {
+            "aliases": [],
+            "description": "View who has which role, useful for auditing, cleaning up unused roles, or checking access levels.",
+            "example": "{}server_roles",
+            "related_commands": "{}server_emojis, {}server"
+        }
+    },
+    "Quest_Data": {},
+    "Mini_Games": {
+        "memo": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}memo",
+            "related_commands": "Provide related commands"
+        }
+    },
+    "Memo_Data": {},
+    "Pokemon_Emojis": {},
+    "Ping_Pokemon": {
+        "sh": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}sh",
+            "related_commands": "Provide related commands"
+        },
+        "cl": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}cl",
+            "related_commands": "Provide related commands"
+        }
+    },
+    "Pokemon": {
+        "predict": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}predict",
+            "related_commands": "Provide related commands"
+        },
+        "hunt": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}hunt",
+            "related_commands": "Provide related commands"
+        },
+        "pokemon": {
+            "aliases": [
+                "pokdex",
+                "dex",
+                "d",
+                "p"
+            ],
+            "description": "Displays Pokemon dex information.",
+            "example": "{}pokemon eevee\n{}pokemon shiny eevee\n{}pokemon alolan vulpix,",
+            "related_commands": "Provide related commands"
+        },
+        "pokdex": {
+            "aliases": [
+                "dex",
+                "d"
+            ],
+            "description": "Displays Pokemon dex information.",
+            "example": "{}pokdex",
+            "related_commands": "Provide related commands"
+        }
+    },
+    "Quest": {
+        "redirect": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}redirect",
+            "related_commands": "Provide related commands"
+        },
+        "quest": {
+            "aliases": [
+                "q"
+            ],
+            "description": "No description provided.",
+            "example": "{}quest",
+            "related_commands": "Provide related commands"
+        },
+        "quest_roles": {
+            "aliases": [],
+            "description": "Command for admins to set or list roles that a target can get randomly.",
+            "example": "{}quest_roles",
+            "related_commands": "Provide related commands"
+        },
+        "inventory": {
+            "aliases": [
+                "inv"
+            ],
+            "description": "Displays the user's tool inventory.",
+            "example": "{}inventory",
+            "related_commands": "Provide related commands"
+        },
+        "balance": {
+            "aliases": [
+                "bal",
+                "points",
+                "stars",
+                "stp"
+            ],
+            "description": "No description provided.",
+            "example": "{}balance",
+            "related_commands": "Provide related commands"
+        },
+        "shop": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}shop",
+            "related_commands": "Provide related commands"
+        },
+        "Quest_Slash": {},
+        "Sync": {},
+        "System": {
+            "memory": {
+                "aliases": [
+                    "mem"
+                ],
+                "description": "Displays the bot's current memory usage.",
+                "example": "{}memory",
+                "related_commands": "ping, uptime"
+            },
+            "ping": {
+                "aliases": [],
+                "description": "Checks the bot's response time and latency to the server.",
+                "example": "{}ping",
+                "related_commands": "memory, uptime"
+            },
+            "uptime": {
+                "aliases": [
+                    "up"
+                ],
+                "description": "Shows how long the bot has been running since its last restart.",
+                "example": "{}uptime",
+                "related_commands": "ping, memory"
+            },
+            "credit": {
+                "aliases": [
+                    "credits",
+                    "creator",
+                    "contributors"
+                ],
+                "description": "Displays the names of the people who contributed to the creation and development of the bot.",
+                "example": "{}credit",
+                "related_commands": "uptime, ping"
+            },
+            "AvatarChanger": {},
+            "Permission": {},
+            "GlitchSolver": {},
+            "Anti_Thief": {},
+            "EventGate": {},
+            "Quest_Checker": {},
+            "ToolBot": {}
+        }
+    },
+    "Fun": {
+        "8ball": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}8ball",
+            "related_commands": "Provide related commands"
+        },
+        "pat": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}pat",
+            "related_commands": "Provide related commands"
+        },
+        "cuddle": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}cuddle",
+            "related_commands": "Provide related commands"
+        },
+        "bite": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}bite",
+            "related_commands": "Provide related commands"
+        },
+        "kiss": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}kiss",
+            "related_commands": "Provide related commands"
+        },
+        "lick": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}lick",
+            "related_commands": "Provide related commands"
+        },
+        "hug": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}hug",
+            "related_commands": "Provide related commands"
+        },
+        "cry": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}cry",
+            "related_commands": "Provide related commands"
+        },
+        "wave": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}wave",
+            "related_commands": "Provide related commands"
+        },
+        "slowclap": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}slowclap",
+            "related_commands": "Provide related commands"
+        },
+        "smug": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}smug",
+            "related_commands": "Provide related commands"
+        },
+        "dance": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}dance",
+            "related_commands": "Provide related commands"
+        },
+        "happy": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}happy",
+            "related_commands": "Provide related commands"
+        }
+    },
+    "Quest_Slash": {},
+    "Sync": {},
+    "System": {
+        "memory": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}memory",
+            "related_commands": "Provide related commands"
+        },
+        "ping": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}ping",
+            "related_commands": "Provide related commands"
+        },
+        "uptime": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}uptime",
+            "related_commands": "Provide related commands"
+        },
+        "credit": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}credit",
+            "related_commands": "Provide related commands"
+        }
+    },
+    "AvatarChanger": {},
+    "Permission": {},
+    "GlitchSolver": {},
+    "Anti_Thief": {},
+    "EventGate": {},
+    "Quest_Checker": {},
+    "ToolBot": {},
+    "Ticket": {
+        "ticket": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}ticket",
+            "related_commands": "Provide related commands"
+        }
+    },
+    "PoketwoSpawnDetector": {},
+    "Quest_Events": {},
+    "Quest_Tools": {}
+}

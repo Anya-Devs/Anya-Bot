@@ -1,0 +1,16 @@
+{
+  "font_path_header": "data/commands/help/menu/initial/style/assets/font/valentine.ttf",
+  "font_path_base": "data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf",
+  "character_path": "data/commands/help/menu/initial/style/assets/character.png",
+  "background_path": "data/commands/help/menu/initial/style/assets/background.png",
+  "character_scale": 0.4,
+  "header_font_color": "white",
+  "base_font_color": "black",
+  "base_font_size": 18,
+  "min_font_size": 5,
+  "character_pos": [5, 5],
+  "text_x_offset": 10,
+  "text_y_offset": 27,
+  "text_spacing": 20,
+  "color_replacements_map": {}
+}

@@ -2,19 +2,13 @@ import os, base64, asyncio, requests, concurrent, aiohttp, json
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
-
-
-
-
-
 class Image:
     class ImageGenerator:
         def __init__(self):
             self.output_dir = Path("data/commands/ai/images")
             self.prompt_path = "data/commands/ai/prompt.json"
+            self.payload_path = "data/commands/ai/payload.json"
             self.output_dir.mkdir(parents=True, exist_ok=True)
-            self.prompts = self.load_prompts()
-            self.payload_config = self.load_payload_config()
             self.API_URL = os.getenv("Stable_Diffusion_API_URL")
 
         def load_prompts(self):
@@ -22,29 +16,34 @@ class Image:
             if p.exists():
                 with open(p, 'r') as f:
                     return json.load(f)
+            return {}
 
         def load_payload_config(self):
-            p = Path("data/commands/ai/payload.json")
+            p = Path(self.payload_path)
             if p.exists():
                 with open(p, 'r') as f:
                     return json.load(f)
+            return {}
 
         async def generate_image_sync(self, prompt: str, width: int = 1216, height: int = 768):
-            pos = f"{prompt}, {self.prompts['positive_prompt']}"
-            neg = self.prompts['negative_prompt']
-            sampler = self.payload_config['sampler_name']
+            prompts = self.load_prompts()
+            payload_config = self.load_payload_config()
+
+            pos = f"{prompt}, {prompts.get('positive_prompt', '')}"
+            neg = prompts.get('negative_prompt', '')
+            sampler = payload_config.get('sampler_name', 'Euler')
 
             payload = {
                 "prompt": pos or "",
                 "negative_prompt": neg or "",
-                "steps": self.payload_config.get("steps", 20),
-                "cfg_scale": self.payload_config.get("cfg_scale", 7.0),
-                "width": self.payload_config.get("width", 512),
-                "height": self.payload_config.get("height", 512),
-                "seed": self.payload_config.get("seed", -1),
-                "style_preset": self.payload_config.get("style_preset", "none"),
-                "sampler_name": sampler or "Euler",
-                "override_settings": self.payload_config.get("override_settings", {})
+                "steps": payload_config.get("steps", 20),
+                "cfg_scale": payload_config.get("cfg_scale", 7.0),
+                "width": payload_config.get("width", 512),
+                "height": payload_config.get("height", 512),
+                "seed": payload_config.get("seed", -1),
+                "style_preset": payload_config.get("style_preset", "none"),
+                "sampler_name": sampler,
+                "override_settings": payload_config.get("override_settings", {})
             }
 
             try:
@@ -58,8 +57,8 @@ class Image:
                                 f.write(img)
 
                             config_dump = (
-                                json.dumps(self.prompts, indent=2) + "\n\n" +
-                                json.dumps(self.payload_config, indent=2)
+                                json.dumps(prompts, indent=2) + "\n\n" +
+                                json.dumps(payload_config, indent=2)
                             )
                             return out_path, config_dump
                         else:
@@ -68,7 +67,6 @@ class Image:
             except aiohttp.ClientError as e:
                 print(f"❌ Request failed: {str(e)}")
                 return None, None
-
 
 
 class Vision:
@@ -82,7 +80,7 @@ class Vision:
             )
             return res.choices[0].message.content
         except Exception as e:
-            return VISION_ERROR.format(error=e)
+            return Ai_Text.ERROR_OCCURED.format(error=e)
 
 
 

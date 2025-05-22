@@ -1000,3 +1000,19 @@ bot_config = {
 def timestamp_gen(timestamp: int) -> str:
     dt = datetime.utcfromtimestamp(timestamp).replace(tzinfo=timezone.utc)
     return f'<t:{int(dt.timestamp())}:R>'
+
+class Pokemon:
+    
+  @staticmethod
+  def transform_pokemon_name(n):
+        m={"alolan":"-alola","galarian":"-galar","hisui":"-hisui","hisuian":"-hisui","paldean":"-paldea","mega":"-mega"}
+        c=re.sub(r'[^a-zA-Z\s\-]','',n).strip()
+        if not c: return "",None
+        l=c.lower()
+        for region,suffix in m.items():
+            if region in l:
+                parts=c.split()
+                if len(parts)>1:
+                    base=[x for x in parts if x.lower()!=region]
+                    if base: return base[0].lower()+suffix,region
+        return c.lower(),None

@@ -19,31 +19,26 @@ log_dir = "data"
 if not os.path.exists(log_dir):
     os.makedirs(log_dir)
 
+config_path = "data/commands/pokethief/shiny_ping_config.json"
+
 def timestamp_gen(timestamp: int) -> str:
     dt = datetime.datetime.utcfromtimestamp(timestamp).replace(tzinfo=datetime.timezone.utc)
     return f'<t:{int(dt.timestamp())}:R>'
 
-
 def load_ping_phrase():
-    config_path = "data/commands/poketwo_anti_thief/shiny_ping_config.json"
     if os.path.exists(config_path):
         with open(config_path, 'r') as file:
             config = json.load(file)
         return config.get("shiny_ping_phrase", "**:sparkles: Shiny Hunt Pings:**")
-    else:
-        return "**:sparkles: Shiny Hunt Pings:**"
-
+    return "**:sparkles: Shiny Hunt Pings:**"
 
 def save_ping_phrase(new_phrase):
-    config_path = "data/commands/poketwo_anti_thief/shiny_ping_config.json"
     if not os.path.exists(os.path.dirname(config_path)):
         os.makedirs(os.path.dirname(config_path))
-
     config = {"shiny_ping_phrase": new_phrase}
     with open(config_path, 'w') as file:
         json.dump(config, file, indent=4)
-
-
+        
 class Anti_Thief(commands.Cog):
     def __init__(self, bot):
         self.bot = bot

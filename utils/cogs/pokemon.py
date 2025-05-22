@@ -1,10 +1,10 @@
-import os,  csv, json, asyncio, traceback
+import os, re,csv, json, asyncio, traceback, aiofiles
 import aiohttp, requests, motor.motor_asyncio
 import pandas as pd
-
+from fuzzywuzzy import fuzz
 from imports.log_imports import *
+from utils.subcogs.pokemon import *
 from imports.discord_imports import *
-from utils.subcogs.pokemon import Pokemon_Emojis
 
 
 
@@ -1274,3 +1274,16 @@ class PokemonData:
 
         
         return [hunter["user_id"] for hunter in hunters]
+
+
+
+
+
+
+
+
+
+
+
+
+

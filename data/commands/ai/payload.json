@@ -1,13 +1,12 @@
 {
-    "width": "1216",
-    "height": "768",
-    "sampler_name": "DPM++ 2M Karras",
-    "steps": 45,
-    "cfg_scale": 7,
-    "seed": -1,
-    "style_preset": "cinematic",
-    "override_settings": {
-        "sd_model_checkpoint": "animagine-xl-4.0"
-    }
+  "width": 1216,
+  "height": 768,
+  "sampler_name": "Euler a",
+  "steps": 30,
+  "cfg_scale": 5,
+  "seed": -1,
+  "style_preset": "Anim4gine",
+  "override_settings": {
+    "sd_model_checkpoint": "animagine-xl-4.0"
+  }
 }
- 

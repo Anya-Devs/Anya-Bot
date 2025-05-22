@@ -6,13 +6,16 @@ from bot.token import get_bot_token
 logger = logging.getLogger(__name__)
 
 class PokemonThiefUtils:
+    
+
     @staticmethod
     def timestamp_gen(timestamp: int) -> str:
         return f'<t:{int(datetime.datetime.utcfromtimestamp(timestamp).replace(tzinfo=datetime.timezone.utc).timestamp())}:R>'
     
     @staticmethod
     def load_ping_phrase():
-        config_path = "data/commands/poketwo_anti_thief/shiny_ping_config.json"
+        config_path = "data/commands/pokethief/shiny_ping_config.json"
+
         if os.path.exists(config_path):
             with open(config_path, 'r') as file:
                 return json.load(file).get("shiny_ping_phrase", "**:sparkles: Shiny Hunt Pings:**")
@@ -20,8 +23,10 @@ class PokemonThiefUtils:
     
     @staticmethod
     def save_ping_phrase(new_phrase):
-        os.makedirs(os.path.dirname("data/commands/poketwo_anti_thief/shiny_ping_config.json"), exist_ok=True)
-        with open("data/commands/poketwo_anti_thief/shiny_ping_config.json", 'w') as file:
+        config_path = "data/commands/pokethief/shiny_ping_config.json"
+
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        with open(config_path, 'w') as file:
             json.dump({"shiny_ping_phrase": new_phrase}, file, indent=4)
 
 class ShinyHunterManager:

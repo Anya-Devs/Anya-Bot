@@ -77,6 +77,7 @@ class Responses(SyncAPIResource):
         *,
         input: Union[str, ResponseInputParam],
         model: ResponsesModel,
+        background: Optional[bool] | NotGiven = NOT_GIVEN,
         include: Optional[List[ResponseIncludable]] | NotGiven = NOT_GIVEN,
         instructions: Optional[str] | NotGiven = NOT_GIVEN,
         max_output_tokens: Optional[int] | NotGiven = NOT_GIVEN,
@@ -131,6 +132,9 @@ class Responses(SyncAPIResource):
               and price points. Refer to the
               [model guide](https://platform.openai.com/docs/models) to browse and compare
               available models.
+
+          background: Whether to run the model response in the background.
+              [Learn more](https://platform.openai.com/docs/guides/background).
 
           include: Specify additional output data to include in the model response. Currently
               supported values are:
@@ -267,6 +271,7 @@ class Responses(SyncAPIResource):
         input: Union[str, ResponseInputParam],
         model: ResponsesModel,
         stream: Literal[True],
+        background: Optional[bool] | NotGiven = NOT_GIVEN,
         include: Optional[List[ResponseIncludable]] | NotGiven = NOT_GIVEN,
         instructions: Optional[str] | NotGiven = NOT_GIVEN,
         max_output_tokens: Optional[int] | NotGiven = NOT_GIVEN,
@@ -327,6 +332,9 @@ class Responses(SyncAPIResource):
               See the
               [Streaming section below](https://platform.openai.com/docs/api-reference/responses-streaming)
               for more information.
+
+          background: Whether to run the model response in the background.
+              [Learn more](https://platform.openai.com/docs/guides/background).
 
           include: Specify additional output data to include in the model response. Currently
               supported values are:
@@ -456,6 +464,7 @@ class Responses(SyncAPIResource):
         input: Union[str, ResponseInputParam],
         model: ResponsesModel,
         stream: bool,
+        background: Optional[bool] | NotGiven = NOT_GIVEN,
         include: Optional[List[ResponseIncludable]] | NotGiven = NOT_GIVEN,
         instructions: Optional[str] | NotGiven = NOT_GIVEN,
         max_output_tokens: Optional[int] | NotGiven = NOT_GIVEN,
@@ -516,6 +525,9 @@ class Responses(SyncAPIResource):
               See the
               [Streaming section below](https://platform.openai.com/docs/api-reference/responses-streaming)
               for more information.
+
+          background: Whether to run the model response in the background.
+              [Learn more](https://platform.openai.com/docs/guides/background).
 
           include: Specify additional output data to include in the model response. Currently
               supported values are:
@@ -644,6 +656,7 @@ class Responses(SyncAPIResource):
         *,
         input: Union[str, ResponseInputParam],
         model: ResponsesModel,
+        background: Optional[bool] | NotGiven = NOT_GIVEN,
         include: Optional[List[ResponseIncludable]] | NotGiven = NOT_GIVEN,
         instructions: Optional[str] | NotGiven = NOT_GIVEN,
         max_output_tokens: Optional[int] | NotGiven = NOT_GIVEN,
@@ -674,6 +687,7 @@ class Responses(SyncAPIResource):
                 {
                     "input": input,
                     "model": model,
+                    "background": background,
                     "include": include,
                     "instructions": instructions,
                     "max_output_tokens": max_output_tokens,
@@ -934,6 +948,43 @@ class Responses(SyncAPIResource):
             cast_to=NoneType,
         )
 
+    def cancel(
+        self,
+        response_id: str,
+        *,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = NOT_GIVEN,
+    ) -> None:
+        """Cancels a model response with the given ID.
+
+        Only responses created with the
+        `background` parameter set to `true` can be cancelled.
+        [Learn more](https://platform.openai.com/docs/guides/background).
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not response_id:
+            raise ValueError(f"Expected a non-empty value for `response_id` but received {response_id!r}")
+        extra_headers = {"Accept": "*/*", **(extra_headers or {})}
+        return self._post(
+            f"/responses/{response_id}/cancel",
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=NoneType,
+        )
+
 
 class AsyncResponses(AsyncAPIResource):
     @cached_property
@@ -965,6 +1016,7 @@ class AsyncResponses(AsyncAPIResource):
         *,
         input: Union[str, ResponseInputParam],
         model: ResponsesModel,
+        background: Optional[bool] | NotGiven = NOT_GIVEN,
         include: Optional[List[ResponseIncludable]] | NotGiven = NOT_GIVEN,
         instructions: Optional[str] | NotGiven = NOT_GIVEN,
         max_output_tokens: Optional[int] | NotGiven = NOT_GIVEN,
@@ -1019,6 +1071,9 @@ class AsyncResponses(AsyncAPIResource):
               and price points. Refer to the
               [model guide](https://platform.openai.com/docs/models) to browse and compare
               available models.
+
+          background: Whether to run the model response in the background.
+              [Learn more](https://platform.openai.com/docs/guides/background).
 
           include: Specify additional output data to include in the model response. Currently
               supported values are:
@@ -1155,6 +1210,7 @@ class AsyncResponses(AsyncAPIResource):
         input: Union[str, ResponseInputParam],
         model: ResponsesModel,
         stream: Literal[True],
+        background: Optional[bool] | NotGiven = NOT_GIVEN,
         include: Optional[List[ResponseIncludable]] | NotGiven = NOT_GIVEN,
         instructions: Optional[str] | NotGiven = NOT_GIVEN,
         max_output_tokens: Optional[int] | NotGiven = NOT_GIVEN,
@@ -1215,6 +1271,9 @@ class AsyncResponses(AsyncAPIResource):
               See the
               [Streaming section below](https://platform.openai.com/docs/api-reference/responses-streaming)
               for more information.
+
+          background: Whether to run the model response in the background.
+              [Learn more](https://platform.openai.com/docs/guides/background).
 
           include: Specify additional output data to include in the model response. Currently
               supported values are:
@@ -1344,6 +1403,7 @@ class AsyncResponses(AsyncAPIResource):
         input: Union[str, ResponseInputParam],
         model: ResponsesModel,
         stream: bool,
+        background: Optional[bool] | NotGiven = NOT_GIVEN,
         include: Optional[List[ResponseIncludable]] | NotGiven = NOT_GIVEN,
         instructions: Optional[str] | NotGiven = NOT_GIVEN,
         max_output_tokens: Optional[int] | NotGiven = NOT_GIVEN,
@@ -1404,6 +1464,9 @@ class AsyncResponses(AsyncAPIResource):
               See the
               [Streaming section below](https://platform.openai.com/docs/api-reference/responses-streaming)
               for more information.
+
+          background: Whether to run the model response in the background.
+              [Learn more](https://platform.openai.com/docs/guides/background).
 
           include: Specify additional output data to include in the model response. Currently
               supported values are:
@@ -1532,6 +1595,7 @@ class AsyncResponses(AsyncAPIResource):
         *,
         input: Union[str, ResponseInputParam],
         model: ResponsesModel,
+        background: Optional[bool] | NotGiven = NOT_GIVEN,
         include: Optional[List[ResponseIncludable]] | NotGiven = NOT_GIVEN,
         instructions: Optional[str] | NotGiven = NOT_GIVEN,
         max_output_tokens: Optional[int] | NotGiven = NOT_GIVEN,
@@ -1562,6 +1626,7 @@ class AsyncResponses(AsyncAPIResource):
                 {
                     "input": input,
                     "model": model,
+                    "background": background,
                     "include": include,
                     "instructions": instructions,
                     "max_output_tokens": max_output_tokens,
@@ -1823,6 +1888,43 @@ class AsyncResponses(AsyncAPIResource):
             cast_to=NoneType,
         )
 
+    async def cancel(
+        self,
+        response_id: str,
+        *,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = NOT_GIVEN,
+    ) -> None:
+        """Cancels a model response with the given ID.
+
+        Only responses created with the
+        `background` parameter set to `true` can be cancelled.
+        [Learn more](https://platform.openai.com/docs/guides/background).
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not response_id:
+            raise ValueError(f"Expected a non-empty value for `response_id` but received {response_id!r}")
+        extra_headers = {"Accept": "*/*", **(extra_headers or {})}
+        return await self._post(
+            f"/responses/{response_id}/cancel",
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=NoneType,
+        )
+
 
 class ResponsesWithRawResponse:
     def __init__(self, responses: Responses) -> None:
@@ -1836,6 +1938,9 @@ class ResponsesWithRawResponse:
         )
         self.delete = _legacy_response.to_raw_response_wrapper(
             responses.delete,
+        )
+        self.cancel = _legacy_response.to_raw_response_wrapper(
+            responses.cancel,
         )
 
     @cached_property
@@ -1856,6 +1961,9 @@ class AsyncResponsesWithRawResponse:
         self.delete = _legacy_response.async_to_raw_response_wrapper(
             responses.delete,
         )
+        self.cancel = _legacy_response.async_to_raw_response_wrapper(
+            responses.cancel,
+        )
 
     @cached_property
     def input_items(self) -> AsyncInputItemsWithRawResponse:
@@ -1875,6 +1983,9 @@ class ResponsesWithStreamingResponse:
         self.delete = to_streamed_response_wrapper(
             responses.delete,
         )
+        self.cancel = to_streamed_response_wrapper(
+            responses.cancel,
+        )
 
     @cached_property
     def input_items(self) -> InputItemsWithStreamingResponse:
@@ -1893,6 +2004,9 @@ class AsyncResponsesWithStreamingResponse:
         )
         self.delete = async_to_streamed_response_wrapper(
             responses.delete,
+        )
+        self.cancel = async_to_streamed_response_wrapper(
+            responses.cancel,
         )
 
     @cached_property

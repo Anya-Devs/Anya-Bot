@@ -21,111 +21,63 @@ from imports.log_imports import logger
 
 class Select_Help(discord.ui.Select):
     def __init__(self, bot, ctx):
-        self.bot = bot
-        self.ctx = ctx
+        self.bot, self.ctx = bot, ctx
         self.primary_color = primary_color()
+        self.placeholder_text = "[Select a module]"
+        self.image_path = "data/images/help_images/cog_image.png"
+        self.thumbnail_file = "data/commands/help/thumbnails.json"
         self.module_to_cogs = self.map_modules_to_cogs()
-        self.set_thumbnail_file = "data/commands/help/help_embed_images.json"
-        self.cog_image_path = "data/images/help_images/cog_image.png"
-
-        options = []
-        for module, cogs in self.module_to_cogs.items():
-            first_cog = cogs[0] if cogs else None
-            cog_name = first_cog.qualified_name if first_cog else "unknown"
-            emoji = Help_Select_Embed_Mapping.emojis.get(cog_name.lower())
-
-            if not emoji:
-                for cog in cogs:
-                    cog_emoji = Help_Select_Embed_Mapping.emojis.get(cog.qualified_name.lower())
-                    if cog_emoji:
-                        emoji = cog_emoji
-                        break
-
-            options.append(
-                discord.SelectOption(
-                    label=module.replace("_", " ").replace(".py", "").capitalize(),
-                    value=module,
-                    emoji=emoji
-                )
-            )
-
-        if not options:
-            options = [discord.SelectOption(label="No Modules Available", value="none")]
-
-        super().__init__(placeholder="[Select a module]", max_values=1, min_values=1, options=options)
+        options = self.build_options() or [discord.SelectOption(label="No Modules Available", value="none")]
+        super().__init__(placeholder=self.placeholder_text, max_values=1, min_values=1, options=options)
 
     def map_modules_to_cogs(self):
-        module_map = {}
+        m = {}
         for cog in self.bot.cogs.values():
             if any(not cmd.hidden for cmd in cog.get_commands()):
-                module = inspect.getmodule(cog.__class__).__name__.split('.')[-1]
-                module_map.setdefault(module, []).append(cog)
-        return module_map
+                mod = inspect.getmodule(cog.__class__).__name__.split('.')[-1]
+                m.setdefault(mod, []).append(cog)
+        return m
+
+    def build_options(self):
+        opts = []
+        for module, cogs in self.module_to_cogs.items():
+            cog_name = cogs[0].qualified_name.lower() if cogs else "unknown"
+            emoji = Help_Select_Embed_Mapping.emojis.get(cog_name)
+            if not emoji:
+                for cog in cogs:
+                    e = Help_Select_Embed_Mapping.emojis.get(cog.qualified_name.lower())
+                    if e:
+                        emoji = e
+                        break
+            opts.append(discord.SelectOption(label=module.replace("_", " ").replace(".py", "").capitalize(), value=module, emoji=emoji))
+        return opts
 
     def build_fields_for_module(self, module):
-        cogs = self.module_to_cogs.get(module, [])
-        fields = []
-        for cog in cogs:
-            cog_commands = [cmd for cmd in cog.get_commands() if not cmd.hidden]
-            if not cog_commands:
-                continue
-            command_lines = []
-            for cmd in cog_commands:
-                cmd_args = [
-                    f"[{param.name}]" if param.default is not param.empty else f"<{param.name}>"
-                    for param in cmd.clean_params.values()
-                ]
-                if len(cmd_args) > 3:
-                    cmd_args = cmd_args[:3] + ['...']
-                cmd_args_str = ' '.join(cmd_args)
-                command_line = f"`{cmd.name}`".strip()
-                command_lines.append(command_line)
-            fields.append((cog.__class__.__name__, " ".join(command_lines)))
-        return fields
+        return [(c.__class__.__name__, " ".join(f"`{cmd.name}`" for cmd in c.get_commands() if not cmd.hidden))
+                for c in self.module_to_cogs.get(module, []) if any(not cmd.hidden for cmd in c.get_commands())]
 
     async def callback(self, interaction: discord.Interaction):
         try:
-            selected_module = self.values[0]
-            if selected_module == "none":
+            module = self.values[0]
+            if module == "none":
                 await interaction.response.send_message("No modules available.", ephemeral=True)
                 return
-
             embed = discord.Embed(description="", color=self.primary_color)
-
-            fields = self.build_fields_for_module(selected_module)
+            fields = self.build_fields_for_module(module)
             if fields:
-                for name, value in fields:
-                    embed.add_field(name=name, value=value, inline=True)
+                for n, v in fields: embed.add_field(name=n, value=v, inline=True)
             else:
                 embed.description = "No visible commands found for this module."
-
-            file_name = selected_module.split('.')[0]
-            first_cog = self.module_to_cogs.get(selected_module, [None])[0]
-            cog_name = first_cog.qualified_name if first_cog else "unknown"
-
-            help_embed_manager = Help_Thumbnails(self.set_thumbnail_file)
-            thumbnail_url = help_embed_manager.get_image_url(file_name)
-            if thumbnail_url:
-                embed.set_thumbnail(url=thumbnail_url)
-
-            image_generator = Options_ImageGenerator(file_name)
-            image_path = self.cog_image_path
-            saved_image_path = image_generator.save_image(image_path)
-
-            file = None
-            if os.path.exists(image_path):
-                with open(image_path, "rb") as f:
-                    file = discord.File(f, filename="cog_image.png")
-                embed.set_image(url="attachment://cog_image.png")
-
-            if file:
-                await interaction.response.edit_message(embed=embed, attachments=[file])
-            else:
-                await interaction.response.edit_message(embed=embed)
-
-        except Exception:
-            traceback.print_exc()
-
+            filename = module.split('.')[0]
+            cog = self.module_to_cogs.get(module, [None])[0]
+            thumbs = Help_Thumbnails(self.thumbnail_file)
+            url = thumbs.get_image_url(filename)
+            if url: embed.set_thumbnail(url=url)
+            Options_ImageGenerator(filename).save_image(self.image_path)
+            file = discord.File(open(self.image_path, "rb"), filename="cog_image.png") if os.path.exists(self.image_path) else None
+            if file: embed.set_image(url="attachment://cog_image.png")
+            await interaction.response.edit_message(embed=embed, attachments=[file] if file else None)
+        except: traceback.print_exc()
 
 
 
@@ -140,44 +92,39 @@ class HelpMenu(discord.ui.View):
         cog_commands = {}  
         self.add_item(select_view)
         
-
-
-
-
-
 class Options_ImageGenerator:
     def __init__(self, cog_name, image_width=800, image_height=800):
-        self.font_path_header = "data/commands/help/menu/initial/style/assets/font/valentine.ttf"
-        self.font_path_base = "data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
-        self.character_path = "data/commands/help/menu/initial/style/assets/character.png"
-        self.background_path = "data/commands/help/menu/initial/style/assets/background.png"
+        config_path = "data/commands/help/option_image.json"
+        with open(config_path, "r") as f:
+            config = json.load(f)
 
-        self.character_scale = 0.4
+        self.font_path_header = config["font_path_header"]
+        self.font_path_base = config["font_path_base"]
+        self.character_path = config["character_path"]
+        self.background_path = config["background_path"]
+        self.character_scale = config["character_scale"]
+        self.header_font_color = config["header_font_color"]
+        self.base_font_color = config["base_font_color"]
+        self.base_font_size = config["base_font_size"]
+        self.min_font_size = config["min_font_size"]
+        self.character_pos = tuple(config["character_pos"])
+        self.text_x_offset = config["text_x_offset"]
+        self.text_y_offset = config["text_y_offset"]
+        self.text_spacing = config["text_spacing"]
+        self.color_replacements_map = config["color_replacements_map"]
+
         self.image_width = image_width
         self.image_height = image_height
         self.header_font_size = int(image_width * 0.04)
-        self.base_font_size = int(image_width * 0.0199)
-
-        self.header_font_color = "white"
-        self.base_font_color = "black"
 
         self.cog_name = cog_name
-        self.header_text = f"{cog_name.replace('_', ' ')}"
-
-        self.text_wrap_max = image_width * (0.63)
+        self.header_text = f"{cog_name.replace('_', ' ').title()}"
+        self.text_wrap_max = image_width * 0.63
         self.description_text = self._wrap_text(
             f"{Help_Select_Embed_Mapping.embeds[cog_name.lower()]['description'] or '...'}",
             max_width=self.text_wrap_max,
         )
 
-        self.character_pos = (5, 5)
-        self.text_x_offset = 10
-        self.text_y_offset = 27
-        self.text_spacing = 20
-
-        self.color_replacements_map = {}
-        self.min_font_size = 5  
-        
         self._load_resources()
         self._apply_color_replacements()
 
@@ -233,67 +180,39 @@ class Options_ImageGenerator:
         lines = []
         words = text.split()
         current_line = []
-
-        draw = ImageDraw.Draw(
-            Image.new("RGBA", (1, 1))
-        )
-        font = ImageFont.truetype(
-            self.font_path_base, self.base_font_size
-        )
-
+        draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        font = ImageFont.truetype(self.font_path_base, self.base_font_size)
         for word in words:
             current_line.append(word)
-            line_width = draw.textbbox(
-                (0, 0), " ".join(current_line), font=font)[2]
+            line_width = draw.textbbox((0, 0), " ".join(current_line), font=font)[2]
             if line_width > max_width:
                 current_line.pop()
                 lines.append(" ".join(current_line))
                 current_line = [word]
-
         if current_line:
             lines.append(" ".join(current_line))
         return "\n".join(lines)
 
     def adjust_font_size_for_text(self, text, max_width):
-        """Adjust the font size dynamically to prevent overflow."""
-        draw = ImageDraw.Draw(
-            Image.new("RGBA", (1, 1))
-        )
+        draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
         font_size = self.base_font_size
         font = ImageFont.truetype(self.font_path_base, font_size)
-
         while True:
-            
             wrapped_text = self._wrap_text(text, max_width)
-            
             lines = wrapped_text.split("\n")
             longest_line = max(lines, key=lambda line: draw.textbbox((0, 0), line, font=font)[2])
             if draw.textbbox((0, 0), longest_line, font=font)[2] <= max_width or font_size <= self.min_font_size:
                 break
             font_size -= 1
             font = ImageFont.truetype(self.font_path_base, font_size)
-
         return font_size
 
     def _draw_text(self, draw, text_x, text_y):
-        
         dynamic_font_size = self.adjust_font_size_for_text(self.description_text, self.text_wrap_max)
         dynamic_font = ImageFont.truetype(self.font_path_base, dynamic_font_size)
-
-        draw.text(
-            (text_x, text_y),
-            self.header_text,
-            font=self.header_font,
-            fill=self.header_font_color,
-        )
+        draw.text((text_x, text_y), self.header_text, font=self.header_font, fill=self.header_font_color)
         text_y += self.header_font.size + self.text_spacing
-
-        draw.text(
-            (text_x, text_y),
-            self.description_text,
-            font=dynamic_font,
-            fill=self.base_font_color,
-        )
+        draw.text((text_x, text_y), self.description_text, font=dynamic_font, fill=self.base_font_color)
 
     def calculate_image_height(self):
         text_lines = self.description_text.split("\n")
@@ -303,14 +222,11 @@ class Options_ImageGenerator:
     def create_image(self):
         bg = self.background.copy()
         draw = ImageDraw.Draw(bg)
-
         character_x, character_y = self.character_pos
         bg.paste(self.character, (character_x, character_y), self.character)
-
         text_x = self.character.width + self.text_x_offset
         text_y = self.text_y_offset
         self._draw_text(draw, text_x, text_y)
-
         return bg
 
     def save_image(self, file_path):
@@ -323,6 +239,13 @@ class Options_ImageGenerator:
         img_bytes = BytesIO()
         img.save(img_bytes, format="PNG")
         return img_bytes.getvalue()
+
+
+
+
+
+
+
 
 
     
@@ -502,7 +425,7 @@ class Sub_Helper:
     def __init__(self, bot, prefix):
         self.bot = bot
         self.prefix = prefix
-        self.help_json_path = "data/commands/help/sub_helper.json"
+        self.help_json_path = "data/commands/help/commands.json"
 
     def _ensure_file_exists(self):
         os.makedirs(os.path.dirname(self.help_json_path), exist_ok=True)
@@ -631,72 +554,34 @@ class Sub_Helper:
 
 
 class Help_Select_Embed_Mapping:
-    images = AnyaImages.load_images()  
-    embeds = {
-        "system": {
-            "title": "System",
-            "description": "View the status of the bot, including information about its current performance, system resources usage, and configuration settings.",
-            "color": discord.Color.red(),
-            "thumbnail_url": images["help_system_thumbnail"],
-            "image_url": images["help_system_thumbnail"],
-        },
-        "quest": {
-            "title": "Quest",
-            "description": "Progress on interactions, they are awarding and fulfilling Anya's wish for you to make new friends and engage within the community.",
-            "color": None,
-            "thumbnail_url": images["help_quest_thumbnail"],
-        },
-        "ai": {
-            "title": "AI",
-            "description": "Interact with advanced artificial intelligence functionalities, capable of handling various tasks.",
-            "color": discord.Color.green(),
-            "thumbnail_url": images["help_ai_thumbnail"],
-        },
-        "pokemon": {
-            "title": "Pokemon",
-            "description": "Provides a set of Pokémon-focused commands for image recognition, hunt ping, and detailed form lookups.",
-            "color": discord.Color.red(),
-            "thumbnail_url": images["help_pokemon_thumbnail"],
-        },
-        "anime": {
-            "title": "Anime",
-            "description": "Waku waku! Anya throws in a dash of anime or weeb material into the mix for those who are interested.",
-            "color": None,
-            "thumbnail_url": images["help_anime_thumbnail"],
-        },
-        "information": {
-            "title": "Information",
-            "description": "Gather the status of a member in the Discord server and stay informed to avoid looking silly.",
-            "color": None,
-            "thumbnail_url": images["help_information_thumbnail"],
-        },
-        "mini_games": {
-            "title": "Minigame",
-            "description": "Engage in a fun and interactive minigame! Choose the type of minigame you'd like to play and compete for rewards and fun challenges.",
-            "color": None,
-            "thumbnail_url": images["help_minigame_thumbnail"],
-        },
-        "fun": {
-            "title": "Fun",
-            "description": "A variety of silly, playful, or meme-based commands made to make you laugh or respond with chaos.",
-            "color": discord.Color.magenta(),
-            "thumbnail_url": images["help_fun_thumbnail"],
-        },
-        "Cog2": {
-            "title": "Title for Cog2",
-            "description": "Description for Cog2",
-            "color": discord.Color.blue(),
-            "thumbnail_url": "Thumbnail URL for Cog2",
-        },
-    }
+    images = AnyaImages.load_images()
+    embed_data_path = "data/commands/help/embed-options.json"
+    with open(embed_data_path, 'r', encoding='utf-8') as file:
+        embed_options = json.load(file)
 
-    emojis = {
-        "system": "<:system:1261208067085959320>",
-        "quest": "<:anyasus:1258563706518765669>",
-        "ai": "✨",
-        "pokemon": "<:Pokeball:1261208239891156992>",
-        "anime": "<:neko_lurk:1320306198075015201>",
-        "information": "<:help_info:1268971820988764272>",
-        "mini_games": "🎲",  
-        "fun": '🎱'
-    }
+    embeds = {}
+    emojis = {}
+
+    for key, data in embed_options.items():
+        embeds[key] = {
+            "title": data["title"],
+            "description": data["description"],
+            "color": getattr(
+                discord.Color,
+                "red" if key in {"system", "pokemon"} else
+                "green" if key == "ai" else
+                "magenta" if key == "fun" else
+                "blue" if key == "Cog2" else
+                "default"
+            )(),
+            "thumbnail_url": images.get(f"help_{key}_thumbnail", ""),
+            "image_url": images.get(f"help_{key}_thumbnail", "") if key == "system" else None
+        }
+        emoji = data.get("emoji")
+        if emoji:
+            emojis[key] = emoji  
+
+    @classmethod
+    def get_emoji(cls, cog_name: str):
+        return cls.emojis.get(cog_name.lower())         
+            
