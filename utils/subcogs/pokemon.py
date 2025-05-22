@@ -18,47 +18,46 @@ class Ping_Pokemon(commands.Cog):
         self.pe = Pokemon_Emojis(self.bot)
         self.shiny_collection = "shiny_hunt"
         self.collection_collection = "collection"
-        self.mongo = Pokemon_Subcogs.MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
+        self.mongo = Pokemon_Subcogs.MongoHelper(
+            AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"]
+        )
 
-
-    
-  
     async def handle_collection(self, ctx, col, action, pokemon=None, max_one=False):
         user_id = ctx.author.id
         embed = Embed()
-        
+
         if action == "list":
             current = await self.mongo.list(col, user_id)
             if not current:
                 embed.description = "Your list is empty."
                 return await ctx.reply(embed=embed, mention_author=False)
-            
+
             pokemon_list = []
             for n in current:
                 pkmn_id = Pokemon_Subcogs.pokemon_name_to_id(n)
                 emoji = self.pe.get_emoji_for_pokemon(pkmn_id) if pkmn_id else ''
                 pokemon_list.append(f"{emoji} {n.title()}")
-            
+
             embed.description = "\n".join(pokemon_list)
             return await ctx.reply(embed=embed, mention_author=False)
-        
+
         if not pokemon:
             embed.description = "Specify Pokémon to add/remove."
             return await ctx.reply(embed=embed, mention_author=False)
-        
+
         names = [n.strip() for n in pokemon.split(',') if n.strip()]
         results = []
         current = await self.mongo.list(col, user_id)
-        
+
         for raw_name in names:
             transformed, _ = Pokemon.transform_pokemon_name(raw_name)
             if not transformed:
                 results.append(f"❌ Invalid Pokémon name: {raw_name}")
                 continue
-                
+
             pkmn_id = Pokemon_Subcogs.pokemon_name_to_id(transformed)
             emoji = self.pe.get_emoji_for_pokemon(pkmn_id) if pkmn_id else ''
-            
+
             if action == "add":
                 if max_one:
                     if current:
@@ -73,11 +72,11 @@ class Ping_Pokemon(commands.Cog):
                         continue
                     added = await self.mongo.add(col, transformed, user_id)
                     results.append(f"{emoji} Added {transformed.title()}" if added else f"{emoji} {transformed.title()} already exists.")
-            
+
             elif action == "remove":
                 removed = await self.mongo.remove(col, transformed, user_id)
                 results.append(f"{emoji} Removed {transformed.title()}" if removed else f"{emoji} {transformed.title()} not found.")
-        
+
         embed.description = "\n".join(results)
         await ctx.reply(embed=embed, mention_author=False)
 
