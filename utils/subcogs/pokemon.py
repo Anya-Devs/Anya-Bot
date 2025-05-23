@@ -82,11 +82,11 @@ class Ping_Pokemon(commands.Cog):
      await ctx.reply(embed=embed, mention_author=False)
      
     @commands.command()
-    async def sh(self, ctx, action: Literal["add", "remove", "list"], *, pokemon: str = None):
+    async def sh(self, ctx, action: Literal["add", "remove", "list"] = "list", *, pokemon: str = None):
         await self.handle_collection(ctx, self.shiny_collection, action, pokemon, max_one=True)
 
     @commands.command()
-    async def cl(self, ctx, action: Literal["add", "remove", "list"], *, pokemon: str = None):
+    async def cl(self, ctx, action: Literal["add", "remove", "list"] = "list", *, pokemon: str = None):
         await self.handle_collection(ctx, self.collection_collection, action, pokemon)
 
   
