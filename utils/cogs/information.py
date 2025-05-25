@@ -38,8 +38,7 @@ class Information_Commands:
         overview = f"Owner: {owner.mention}\nBoosts: {boosts}/14\nBoost Tier: {'Tier ' + str(guild.premium_tier) if boosts else 'Not boosted'}"
         other = f"Roles: {len(guild.roles)}\nChannels: {len(guild.channels)} - Text: {len(guild.text_channels)} - Voice: {len(guild.voice_channels)}\nMembers: {guild.member_count} (Users: {len([m for m in guild.members if not m.bot])}, Bots: {len([m for m in guild.members if m.bot])})"
 
-        embed = discord.Embed(color=primary_color(), timestamp=datetime.now())
-        embed.set_author(name=guild.name, icon_url=owner.avatar.url)
+        embed = discord.Embed(title=guild.name, color=primary_color(), timestamp=datetime.now())
         embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
         embed.set_footer(text=f"ID: {guild.id}")
         embed.add_field(name="Overview", value=overview, inline=True)
@@ -75,6 +74,23 @@ class Information_Commands:
                 await interaction.message.edit(embed=embed, view=self)
         except Exception as e:
             logging.error(f"Error in next_page: {e}")
+    
+    
+    async def get_information_embed(args, bot):
+        if isinstance(args, discord.Member):
+            return await Information_Embed.get_member_embed(bot, args)
+        elif isinstance(args, int):
+            guild = bot.get_guild(args)
+            if guild:
+                return await Information_Embed.get_guild_embed(guild)
+            else:
+                raise ValueError("Invalid server ID provided.")
+        elif isinstance(args, str):
+            async with aiohttp.ClientSession() as session:
+                invite = await bot.fetch_invite(args)
+                return await Information_Embed.get_invite_embed(invite, bot)
+        else:
+            return await Information_Embed.get_bot_embed(bot.user, bot)
 
 
 
@@ -248,3 +264,235 @@ async def get_user_banner_url(bot, user):
         return f"{image_base_url}{banners_endpoint}{image_size}"
     return None
 
+
+
+
+
+
+
+class Information_Embed:
+    @staticmethod
+    async def get_user_banner_url(bot, user):
+        user_data = await bot.fetch_user(user.id)
+        return user_data.banner.url if user_data.banner else None
+
+    @staticmethod
+    async def get_bot_embed(bot_user: discord.User, bot):
+        def timestamp_gen(ts: int) -> str:
+            return f"<t:{int(datetime.utcfromtimestamp(ts).timestamp())}:R>"
+
+        try:
+            cpu = f"{psutil.cpu_percent(1):.0f}% of {psutil.cpu_count()} cores"
+            ram_data = psutil.virtual_memory()
+            ram = f"{ram_data.percent:.0f}% of {ram_data.total / 1e9:.0f}GB ({ram_data.total * ram_data.percent / 100 / 1e9:.0f}GB)"
+            total_users = sum(g.member_count for g in bot.guilds)
+            created = timestamp_gen(int(bot_user.created_at.timestamp()))
+            owner = bot.get_user(1124389055598170182)
+            embed = discord.Embed(
+                title="Bot Information",
+                description=(
+                    "Assigns member's quests to encourage server activity. Has other commands for everyone.\n\n"
+                    f"🌐 Global:\n- Servers: {len(bot.guilds)}\n- Members: {total_users}\n\n"
+                    f"❤️ Internal:\n- **CPU**: {cpu}\n- **RAM**: {ram}\n\n"
+                    f":clock: Creation:\n- **Developer**: {owner}\n- **When?**: {created}\n\n"
+                    "-# [Support server](https://discord.gg/5p5b7A7WRH)\n"
+                    "-# [Invite bot](https://discord.com/oauth2/authorize?client_id=1234247716243112100&permissions=27482422508608&scope=bot)\n"
+                ),
+                timestamp=datetime.now(), color=primary_color()
+            )
+            embed.set_thumbnail(url=owner.avatar)
+            embed.set_image(url=await Information_Embed.get_user_banner_url(bot, bot.user))
+            embed.set_footer(text="About Myself")
+            return embed, None
+        except Exception as e:
+            print(e)
+
+    @staticmethod
+    async def get_member_embed(bot, member):
+        def timestamp_gen(ts): return f"<t:{int(ts)}:R>"
+
+        try:
+            created = timestamp_gen(member.created_at.replace(tzinfo=timezone.utc).timestamp())
+            joined = timestamp_gen(member.joined_at.replace(tzinfo=timezone.utc).timestamp())
+            type_icon = "🤖" if member.bot else "👤"
+
+            perms = member.guild_permissions
+            category = (
+                "Admin" if perms.administrator or perms.manage_guild else
+                "Moderator" if perms.kick_members or perms.ban_members or perms.manage_messages else
+                "Member"
+            )
+
+            top_roles = sorted(
+                [r for r in member.roles if r.name != "@everyone" and (
+                    r.permissions.administrator or r.permissions.kick_members or
+                    r.permissions.ban_members or r.permissions.manage_messages)],
+                key=lambda r: (
+                    r.permissions.administrator,
+                    r.permissions.kick_members or r.permissions.ban_members,
+                    r.permissions.manage_messages
+                ), reverse=True)
+
+            top_roles_text = "".join(
+                f"- {r.mention} (admin)\n" if r.permissions.administrator else
+                f"- {r.mention} (moderator)\n" if r.permissions.kick_members or r.permissions.ban_members else
+                f"- {r.mention} (baby moderator)\n" if r.permissions.manage_messages else
+                f"- {r.mention}\n"
+                for r in top_roles) or "No top roles"
+
+            embed = discord.Embed(
+                title=member.display_name,
+                description=(
+                    f"**User**: {member}\n**Nick**: {member.nick or 'No nickname'}\n\n"
+                    f"**Created**: {created}\t\t\t**Joined**: {joined}\n\n"
+                    f"-# **Top Roles with perms:**\n{top_roles_text}"
+                ),
+                color=member.color, timestamp=datetime.now())
+            embed.set_thumbnail(url=member.avatar.url)
+            embed.set_footer(text=f"ID: {member.id} | {type_icon} {category}")
+
+            banner_url = await Information_Embed.get_user_banner_url(bot, member)
+            if banner_url: embed.set_image(url=banner_url)
+            button = discord.ui.Button(label="Show Roles", style=discord.ButtonStyle.primary)
+            
+            async def button_callback(interaction: discord.Interaction):
+             try:
+                if interaction.user != member:
+                    return await interaction.response.send_message("You can't use this button.", ephemeral=True)
+
+                # Scan all private channels for viewable roles
+                chan_perms = set()
+                for chan in member.guild.channels:
+                    if isinstance(chan, discord.TextChannel) and not chan.permissions_for(member.guild.default_role).view_channel:
+                        for role in member.guild.roles:
+                            if role != member.guild.default_role and chan.permissions_for(role).view_channel:
+                                chan_perms.add(role)
+
+                channel_roles = [r for r in member.roles if r in chan_perms]
+                misc_roles = [r for r in member.roles if r.name != "@everyone" and r not in top_roles and r not in channel_roles]
+
+                embed_chan = discord.Embed(
+                    title=f"{member.display_name}'s Channel Permission Roles",
+                    description="".join(f"- {r.mention}\n" for r in channel_roles) or "No channel permission roles",
+                    color=member.color, timestamp=datetime.now())
+
+                misc_embeds = []
+                for i in range(0, len(misc_roles), 25):
+                    misc_embeds.append(discord.Embed(
+                        title=f"{member.display_name}'s Misc Roles",
+                        description="".join(f"- {r.mention}\n" for r in misc_roles[i:i+25]) or "No miscellaneous roles",
+                        color=member.color, timestamp=datetime.now())).set_footer(text=f"Page {i//25+1}")
+
+                await interaction.response.send_message(embeds=[embed_chan] + misc_embeds, ephemeral=True)
+             except Exception as e:
+                 print(e)
+            button.callback = button_callback
+            view = discord.ui.View()
+            view.add_item(button)
+            return embed, view
+        except Exception as e:
+            logging.error("Error in get_member_embed", exc_info=True)
+            return None, None
+
+    @staticmethod
+    async def get_guild_embed(guild, invite=None, bot=None):
+     try:
+        timestamp_gen = lambda ts: f"<t:{int(ts)}:R>"
+        owner = guild.owner
+        boosts = guild.premium_subscription_count
+        boost_tier = f"Tier {guild.premium_tier}" if boosts else "Not boosted"
+        overview = (
+            f"Owner: {owner.mention}\n"
+            f"Created: {timestamp_gen(guild.created_at.timestamp())}\n"
+        )
+        booster = ( f"Boosts: {boosts}/14\n"
+                    f"Boost Tier: {boost_tier}" ) 
+        
+        members = guild.members
+        users = sum(not m.bot for m in members)
+        bots = sum(m.bot for m in members)
+        other = (
+            f"Roles: {len(guild.roles)}\n"
+            f"Channels: {len(guild.channels)} (Text: {len(guild.text_channels)}, Voice: {len(guild.voice_channels)})\n"
+            f"Members: {guild.member_count} (Users: {users}, Bots: {bots})"
+        )
+        embed = discord.Embed(title=guild.name, color=primary_color(), timestamp=datetime.now())
+        if guild.icon:
+            embed.set_thumbnail(url=guild.icon.url)
+        if guild.banner:
+            embed.set_image(url=guild.banner.url)
+        embed.add_field(name="Overview", value=overview, inline=True)
+        embed.add_field(name="Other", value=other, inline=True)
+        embed.add_field(name="", value=booster, inline=False)
+
+        
+        embed.set_footer(text=f"ID: {guild.id}")
+        view = None
+        if invite and bot:
+            try:
+                invite_obj = await bot.fetch_invite(invite, with_counts=True)
+                inviter = invite_obj.inviter
+                if inviter:
+                    desc = (
+                        f"Name: {inviter}\n"
+                        f"ID: {inviter.id}\n"
+                        f"In Server: {'Yes' if guild.get_member(inviter.id) else 'No'}"
+                    )
+                    user_embed = discord.Embed(
+                        title="Invite Owner Info",
+                        description=desc,
+                        color=discord.Color.blurple(),
+                        timestamp=datetime.now()
+                    )
+                    user_embed.set_thumbnail(url=inviter.avatar.url if inviter.avatar else None)
+                    class InviteView(discord.ui.View):
+                        @discord.ui.button(label="Show Inviter Info", style=discord.ButtonStyle.primary)
+                        async def button_callback(self, interaction, button):
+                            await interaction.response.send_message(embed=user_embed, ephemeral=True)
+                    view = InviteView()
+            except Exception:
+                pass
+        return embed, view
+     except Exception:
+        logging.error("get_guild_embed error", exc_info=True)
+        return None, None
+
+
+
+
+
+
+    @staticmethod
+    async def get_invite_embed(invite_str: str | discord.Invite, bot: commands.Bot):
+     try:
+        if isinstance(invite_str, discord.Invite):
+            invite = invite_str
+        else:
+            invite_code = invite_str.split("/")[-1].strip()
+            invite = await bot.fetch_invite(invite_code, with_counts=True, with_expiration=True)
+
+        guild = invite.guild
+        if not guild:
+            raise ValueError("Invite does not contain guild info.")
+
+        embed, _ = await Information_Embed.get_guild_embed(guild)
+        if embed is None:
+            embed = discord.Embed(
+                title="Invite Information",
+                description="Could not fetch guild info from invite.",
+                color=discord.Color.red(),
+                timestamp=datetime.now(),
+            )
+
+        return embed, None
+
+     except discord.NotFound:
+        return discord.Embed(
+            title="Invalid Invite",
+            description="This invite link/code appears to be invalid or expired.",
+            color=discord.Color.red()
+        ), None
+     except Exception as e:
+        logging.error("get_invite_embed error:", e)
+        return None, None
+    

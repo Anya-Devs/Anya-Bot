@@ -3,10 +3,10 @@ from datetime import datetime
 from typing import Union, Optional, Literal
 
 from utils.cogs.information import *
-from utils.cogs.information import Information_Commands
+from utils.cogs.information import Information_Commands, Information_Embed
 
 from imports.discord_imports import * 
-from data.local.const import primary_color, Information_Embed
+from data.local.const import primary_color
 
 
 class Information(commands.Cog):
@@ -18,10 +18,16 @@ class Information(commands.Cog):
 
     @commands.command(name="about", aliases=["info", "details"])
     async def about(self, ctx, args: Union[discord.Member, int, str] = None):
-        args = args or ctx.bot.user
-        embed = await Information_View.get_information_embed(args, self.bot)
-        await ctx.reply(embed=embed, mention_author=False)
+     args = args or ctx.bot.user
 
+     result = await Information_Commands.get_information_embed(args, self.bot)
+     if isinstance(result, tuple) and len(result) == 2:
+        embed, view = result
+        await ctx.reply(embed=embed, view=view, mention_author=False)
+     else:
+        embed = result
+        await ctx.reply(embed=embed, mention_author=False) 
+        
     @commands.command(name="server")
     async def server_info(self, ctx, mode: Optional[Literal["roles", "emojis"]] = None):
         try:

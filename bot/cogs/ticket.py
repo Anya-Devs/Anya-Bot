@@ -4,8 +4,7 @@ from utils.cogs.ticket import *
 class Ticket(commands.Cog):
     def __init__(self, bot):  # fixed __init__ typo
         self.bot = bot
-
-
+        
     @commands.command(name="ticket")
     async def ticket_command(self, ctx,
                              action: Literal["create", "activate", "delete", "edit"],

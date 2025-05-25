@@ -1225,57 +1225,6 @@ class Strength_weakness(discord.ui.View):
 
 #######################################################################################################
 
-class PokemonData:
-    def __init__(self):
-        self.DB_NAME = "Pokemon_SH"  
-        mongo_url = os.getenv("MONGO_URI")
-        if not mongo_url:
-            raise ValueError("No MONGO_URI found in environment variables")
-        self.mongoConnect = motor.motor_asyncio.AsyncIOMotorClient(mongo_url)
-        self.db = self.mongoConnect[self.DB_NAME]
-        self.users_collection = self.db["users_pokemon"]
-        self.pokemon_df = pd.read_csv("data/commands/pokemon/pokemon_description.csv")
-
-    async def check_pokemon_exists(self, pokemon_name):
-        
-        return not self.pokemon_df[
-            self.pokemon_df["slug"].str.lower() == pokemon_name.lower()
-        ].empty
-
-    async def get_user_pokemon(self, user_id):
-        
-        user_data = await self.users_collection.find_one({"user_id": user_id})
-        if user_data:
-            return user_data["pokemon_list"]
-        return []
-
-    async def add_pokemon_to_user(self, user_id, pokemon_name):
-        
-        user_pokemon = await self.get_user_pokemon(user_id)
-        user_pokemon.append(pokemon_name)
-        await self.users_collection.update_one(
-            {"user_id": user_id}, {"$set": {"pokemon_list": user_pokemon}}, upsert=True
-        )
-
-    async def remove_pokemon_from_user(self, user_id, pokemon_name):
-        
-        user_pokemon = await self.get_user_pokemon(user_id)
-        user_pokemon = [p for p in user_pokemon if p.lower() !=
-                        pokemon_name.lower()]
-        await self.users_collection.update_one(
-            {"user_id": user_id}, {"$set": {"pokemon_list": user_pokemon}}
-        )
-
-    async def get_hunters_for_pokemon(self, pokemon_name):
-        
-        hunters = await self.users_collection.find(
-            {"pokemon_list": {"$in": [pokemon_name]}}
-        ).to_list(None)
-
-        
-        return [hunter["user_id"] for hunter in hunters]
-
-
 
 
 

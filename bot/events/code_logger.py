@@ -76,8 +76,8 @@ class Permission(commands.Cog):
                 raise error
         except Exception as e:
             await self.notify_error(ctx, e)
-            self.logger.exception(f"Exception in on_command_error: {e}")
-            traceback.print_exc()
+            tb = "".join(traceback.format_exception(type(e), e, e.__traceback__))
+            self.logger.error(f"Exception in on_command_error:\n{tb}")
 
     async def notify_missing_permissions(self, ctx, error):
         missing = ', '.join(error.missing_perms)
