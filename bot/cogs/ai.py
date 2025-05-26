@@ -21,7 +21,7 @@ class Ai(commands.Cog):
     @commands.command(name="imagine", aliases=["i"], description="Generate an image")
     async def imagine(self, ctx: commands.Context, *, prompt: str):
      if ctx.author.id in self.queue:
-        return await ctx.send(Ai_Text.IMAGINE_ALREADY_IN_QUEUE.format(mention=ctx.author.mention))
+        return await ctx.send(Ai_Text.IMAGINE_ALREADY_IN_QUEUE.format(ctx.author.mention))
      self.queue.append(ctx.author.id)
      try:
         async with ctx.typing():

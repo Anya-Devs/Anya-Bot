@@ -309,58 +309,59 @@ class Information_Embed:
 
     @staticmethod
     async def get_member_embed(bot, member):
-        def timestamp_gen(ts): return f"<t:{int(ts)}:R>"
+     def timestamp_gen(ts): return f"<t:{int(ts)}:R>"
 
-        try:
-            created = timestamp_gen(member.created_at.replace(tzinfo=timezone.utc).timestamp())
-            joined = timestamp_gen(member.joined_at.replace(tzinfo=timezone.utc).timestamp())
-            type_icon = "🤖" if member.bot else "👤"
+     try:
+        created = timestamp_gen(member.created_at.replace(tzinfo=timezone.utc).timestamp())
+        joined = timestamp_gen(member.joined_at.replace(tzinfo=timezone.utc).timestamp())
+        type_icon = "🤖" if member.bot else "👤"
 
-            perms = member.guild_permissions
-            category = (
-                "Admin" if perms.administrator or perms.manage_guild else
-                "Moderator" if perms.kick_members or perms.ban_members or perms.manage_messages else
-                "Member"
-            )
+        perms = member.guild_permissions
+        category = (
+            "Admin" if perms.administrator or perms.manage_guild else
+            "Moderator" if perms.kick_members or perms.ban_members or perms.manage_messages else
+            "Member"
+        )
 
-            top_roles = sorted(
-                [r for r in member.roles if r.name != "@everyone" and (
-                    r.permissions.administrator or r.permissions.kick_members or
-                    r.permissions.ban_members or r.permissions.manage_messages)],
-                key=lambda r: (
-                    r.permissions.administrator,
-                    r.permissions.kick_members or r.permissions.ban_members,
-                    r.permissions.manage_messages
-                ), reverse=True)
+        top_roles = sorted(
+            [r for r in member.roles if r.name != "@everyone" and (
+                r.permissions.administrator or r.permissions.kick_members or
+                r.permissions.ban_members or r.permissions.manage_messages)],
+            key=lambda r: (
+                r.permissions.administrator,
+                r.permissions.kick_members or r.permissions.ban_members,
+                r.permissions.manage_messages
+            ), reverse=True)
 
-            top_roles_text = "".join(
-                f"- {r.mention} (admin)\n" if r.permissions.administrator else
-                f"- {r.mention} (moderator)\n" if r.permissions.kick_members or r.permissions.ban_members else
-                f"- {r.mention} (baby moderator)\n" if r.permissions.manage_messages else
-                f"- {r.mention}\n"
-                for r in top_roles) or "No top roles"
+        top_roles_text = "".join(
+            f"- {r.mention} (admin)\n" if r.permissions.administrator else
+            f"- {r.mention} (moderator)\n" if r.permissions.kick_members or r.permissions.ban_members else
+            f"- {r.mention} (baby moderator)\n" if r.permissions.manage_messages else
+            f"- {r.mention}\n"
+            for r in top_roles) or "No top roles"
 
-            embed = discord.Embed(
-                title=member.display_name,
-                description=(
-                    f"**User**: {member}\n**Nick**: {member.nick or 'No nickname'}\n\n"
-                    f"**Created**: {created}\t\t\t**Joined**: {joined}\n\n"
-                    f"-# **Top Roles with perms:**\n{top_roles_text}"
-                ),
-                color=member.color, timestamp=datetime.now())
-            embed.set_thumbnail(url=member.avatar.url)
-            embed.set_footer(text=f"ID: {member.id} | {type_icon} {category}")
+        embed = discord.Embed(
+            title=member.display_name,
+            description=(
+                f"**User**: {member}\n**Nick**: {member.nick or 'No nickname'}\n\n"
+                f"**Created**: {created}    **Joined**: {joined}\n\n"
+                f"-# **Top Roles with perms:**\n{top_roles_text}"
+            ),
+            color=member.color,
+            timestamp=datetime.now()
+        )
+        embed.set_thumbnail(url=member.avatar.url)
+        embed.set_footer(text=f"ID: {member.id} | {type_icon} {category}")
 
-            banner_url = await Information_Embed.get_user_banner_url(bot, member)
-            if banner_url: embed.set_image(url=banner_url)
-            button = discord.ui.Button(label="Show Roles", style=discord.ButtonStyle.primary)
-            
-            async def button_callback(interaction: discord.Interaction):
-             try:
-                if interaction.user != member:
-                    return await interaction.response.send_message("You can't use this button.", ephemeral=True)
+        banner_url = await Information_Embed.get_user_banner_url(bot, member)
+        if banner_url:
+            embed.set_image(url=banner_url)
 
-                # Scan all private channels for viewable roles
+        # Button + Callback
+        button = discord.ui.Button(label="Show Roles", style=discord.ButtonStyle.primary)
+
+        async def button_callback(interaction: discord.Interaction):
+            try:
                 chan_perms = set()
                 for chan in member.guild.channels:
                     if isinstance(chan, discord.TextChannel) and not chan.permissions_for(member.guild.default_role).view_channel:
@@ -374,26 +375,38 @@ class Information_Embed:
                 embed_chan = discord.Embed(
                     title=f"{member.display_name}'s Channel Permission Roles",
                     description="".join(f"- {r.mention}\n" for r in channel_roles) or "No channel permission roles",
-                    color=member.color, timestamp=datetime.now())
+                    color=member.color,
+                    timestamp=datetime.now()
+                )
 
                 misc_embeds = []
                 for i in range(0, len(misc_roles), 25):
-                    misc_embeds.append(discord.Embed(
+                    page = discord.Embed(
                         title=f"{member.display_name}'s Misc Roles",
-                        description="".join(f"- {r.mention}\n" for r in misc_roles[i:i+25]) or "No miscellaneous roles",
-                        color=member.color, timestamp=datetime.now())).set_footer(text=f"Page {i//25+1}")
+                        description="".join(f"- {r.mention}\n" for r in misc_roles[i:i + 25]) or "No miscellaneous roles",
+                        color=member.color,
+                        timestamp=datetime.now()
+                    )
+                    page.set_footer(text=f"Page {i // 25 + 1}")
+                    misc_embeds.append(page)
 
-                await interaction.response.send_message(embeds=[embed_chan] + misc_embeds, ephemeral=True)
-             except Exception as e:
-                 print(e)
-            button.callback = button_callback
-            view = discord.ui.View()
-            view.add_item(button)
-            return embed, view
-        except Exception as e:
-            logging.error("Error in get_member_embed", exc_info=True)
-            return None, None
+                await interaction.response.send_message(
+                    embeds=[embed_chan] + misc_embeds, ephemeral=True
+                )
 
+            except Exception as e:
+                logging.exception("Error in button callback:")
+
+        button.callback = button_callback
+        view = discord.ui.View()
+        view.add_item(button)
+
+        return embed, view
+
+     except Exception as e:
+        logging.exception("Error in get_member_embed:")
+        return None, None
+    
     @staticmethod
     async def get_guild_embed(guild, invite=None, bot=None):
      try:
