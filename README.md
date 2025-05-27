@@ -38,6 +38,9 @@ Use the `<prefix>balance` command to check your status in the server. It shows h
 > Go to `.github` and create `.env`
 
 ```env
+GIT_USERNAME=your-github-username  # GitHub username 
+GIT_ACCESS_TOKEN=your-github-personal-access-token # Generate at: https://github.com/settings/tokens
+
 MONGO_URI= https://cloud.mongodb.com  # Go to MongoDB to create a database called 'Bot' and a collection named 'information'
 HUGGINGFACE_API_KEY= https://huggingface.co/settings/tokens  # Go to Hugging Face to generate your API key
 OPENAI_KEY= https://openai.com/index/openai-api/  # Go to OpenAI to get your API key
