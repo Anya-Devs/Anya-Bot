@@ -43,7 +43,7 @@ class Ping_Pokemon(commands.Cog):
             if action == "add":
                 if max_one:
                     await self.mongo.replace(col, name, uid)
-                    results.append(f"{emoji} Set to {name.title().replace("None", "")}"); break
+                    results.append(f"{emoji} Set to {name.title().replace('None', '')}"); break
                 if len(cur) >= 10 and name not in cur:
                     results.append(f"❌ Max 10 Pokémon. `{name.title()}` not added."); continue
                 ok = await self.mongo.add(col, name, uid)
