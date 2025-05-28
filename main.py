@@ -1,4 +1,4 @@
-from data.setup import start; start()
+#from data.setup import start; start()
 
 import os, sys, gc, asyncio, traceback, importlib, pkgutil, aiohttp
 from aiohttp import web
@@ -19,7 +19,7 @@ load_dotenv(dotenv_path=os.path.join(".github", ".env"))
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all(); intents.members = True
-        self.shard_count = 63 if not ut else None
+        self.shard_count = None #63 if not ut else None
         super().__init__(command_prefix=commands.when_mentioned_or(prefix), intents=intents, help_command=None, shard_count=self.shard_count, shard_reconnect_interval=20, heartbeat_timeout=120)
         self.cog_dirs = ['bot.cogs', 'bot.events']
 

@@ -7,7 +7,6 @@ from bot.token import use_test_bot as ut
 from data.local.const import *
 from motor.motor_asyncio import AsyncIOMotorClient
 from utils.subcogs.pokemon import *
-
 class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
