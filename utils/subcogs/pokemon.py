@@ -10,7 +10,6 @@ from imports.discord_imports import *
 from data.local.const import *
 from bot.token import use_test_bot as ut
 from utils.subcogs.pokemon import *
-from submodules.poketwo_autonamer.predict import Prediction
 
 
 class Ping_Pokemon(commands.Cog):
