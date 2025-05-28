@@ -124,6 +124,12 @@
             "description": "No description provided.",
             "example": "{}cl",
             "related_commands": "Provide related commands"
+        },
+        "collection": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}collection",
+            "related_commands": "Provide related commands"
         }
     },
     "Pokemon": {

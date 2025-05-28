@@ -1,7 +1,7 @@
 from imports.discord_imports import *
 from fuzzywuzzy import fuzz
 import os, asyncio, csv, re
-from utils.subcogs.pokemon import Ping_Pokemon, Pokemon_Subcogs
+from utils.subcogs.pokemon import *
 from submodules.poketwo_autonamer.predict import Prediction
 from bot.token import use_test_bot as ut
 from data.local.const import *

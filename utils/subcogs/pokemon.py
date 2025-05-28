@@ -19,7 +19,7 @@ class Ping_Pokemon(commands.Cog):
         self.pe = Pokemon_Emojis(bot)
         self.shiny_collection = "shiny_hunt"
         self.collection_collection = "collection"
-        self.pokemon_description = "data\\commands\\pokemon\\pokemon_description.csv"
+        self.pokemon_description = "data\commands\pokemon\pokemon_description.csv"
         self.mongo = MongoHelper(
             AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"]
         )
@@ -83,14 +83,14 @@ class Ping_Pokemon(commands.Cog):
         e.description = "\n".join(results)
         await ctx.reply(embed=e, mention_author=False)
 
-    @commands.command()
+    @commands.command(name="sh")
     async def sh(self, ctx, action: str = "add", *, pokemon: str = None):
         valid = {"add", "remove", "list", "clear"}
         if action not in valid:
             pokemon, action = f"{action} {pokemon}".strip(), "add"
         await self.handle_collection(ctx, self.shiny_collection, action, pokemon, max_one=True)
 
-    @commands.command()
+    @commands.command(name="cl", alias=['collection'])
     async def cl(self, ctx, action: Literal["add", "remove", "list", "clear"] = "list", *, pokemon: str = None):
         await self.handle_collection(ctx, self.collection_collection, action, pokemon)
 
@@ -104,23 +104,9 @@ class Pokemon_Emojis(commands.Cog):
         self.owner_id = [1124389055598170182, 1320515815270907957]
         self.failed_downloads = set()
         self.emoji_mapping = self.load_emoji_mapping()
-        self.setup_logging()
         os.makedirs(os.path.dirname(self.emoji_json_path), exist_ok=True)
         os.makedirs(self.POKEMON_IMAGES_FOLDER, exist_ok=True)
 
-    def setup_logging(self):
-        log_dir = "logs"
-        os.makedirs(log_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, f"pokemon_emoji_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        file_handler = logging.FileHandler(log_file, encoding='utf-8')
-        file_handler.setFormatter(formatter)
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.INFO)
-        self.logger.addHandler(file_handler)
-        self.logger.addHandler(console_handler)
 
     def get_server_emoji_limit(self, guild):
         if guild.premium_tier >= 2:
