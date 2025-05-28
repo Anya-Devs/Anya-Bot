@@ -12,88 +12,124 @@ from bot.token import use_test_bot as ut
 from utils.subcogs.pokemon import *
 
 
+MAX_POKEMON, CHUNK_SIZE = 50, 15
 class Ping_Pokemon(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.pe = Pokemon_Emojis(bot)
         self.shiny_collection = "shiny_hunt"
         self.collection_collection = "collection"
         self.pokemon_description = os.path.join("data", "commands", "pokemon", "pokemon_description.csv")
-        
-        self.mongo = MongoHelper(
-            AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"]
-        )
+        self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
         self.valid_slugs = self.load_valid_slugs()
+        self.pe = Pokemon_Emojis(bot)
 
     def load_valid_slugs(self):
         with open(self.pokemon_description, newline='', encoding='utf-8') as f:
             return {row["slug"] for row in csv.DictReader(f)}
 
-    async def handle_collection(self, ctx, col, action, pokemon=None, max_one=False):
-        uid, e = ctx.author.id, Embed()
+    async def paginate_and_send(self, ctx, entries: list[str], title: str = "Your Pokémon Collection List"):
+        pages = [entries[i:i + CHUNK_SIZE] for i in range(0, len(entries), CHUNK_SIZE)]
+        embeds = [Embed(title=title, description="\n".join(chunk), color=primary_color()) for chunk in pages]
 
-        # Sanitize existing list
+        class NavView(View):
+            def __init__(self, index=0):
+                super().__init__(timeout=60)
+                self.index = index
+
+                self.prev_button = Button(label="◀", style=ButtonStyle.secondary, disabled=index == 0, custom_id=f"prev_{index}")
+                self.next_button = Button(label="▶", style=ButtonStyle.secondary, disabled=index >= len(embeds) - 1, custom_id=f"next_{index}")
+
+                self.prev_button.callback = self.go_prev
+                self.next_button.callback = self.go_next
+
+                self.add_item(self.prev_button)
+                self.add_item(self.next_button)
+
+            async def interaction_check(self, interaction: Interaction) -> bool:
+                return interaction.user == ctx.author
+
+            async def go_prev(self, interaction: Interaction):
+                if self.index > 0:
+                    self.index -= 1
+                    await interaction.response.edit_message(embed=embeds[self.index], view=NavView(self.index))
+
+            async def go_next(self, interaction: Interaction):
+                if self.index < len(embeds) - 1:
+                    self.index += 1
+                    await interaction.response.edit_message(embed=embeds[self.index], view=NavView(self.index))
+
+        await ctx.reply(embed=embeds[0], view=NavView(), mention_author=False)
+
+    async def handle_collection(self, ctx, col, action, pokemon=None, max_one=False):
+        uid = ctx.author.id
         cur = await self.mongo.list(col, uid)
-        invalids = [name for name in cur if name not in self.valid_slugs]
-        for invalid in invalids:
-            await self.mongo.remove(col, invalid, uid)
+        invalids = [n for n in cur if n not in self.valid_slugs]
+        for n in invalids:
+            await self.mongo.remove(col, n, uid)
+        cur = await self.mongo.list(col, uid)
+
+        if len(cur) > MAX_POKEMON:
+            for n in cur[MAX_POKEMON:]:
+                await self.mongo.remove(col, n, uid)
+            cur = cur[:MAX_POKEMON]
 
         if action == "list":
-            updated = await self.mongo.list(col, uid)
-            e.description = "Your list is empty." if not updated else "\n".join(
+            if not cur:
+                return await ctx.reply(embed=Embed(description="Your list is empty."), mention_author=False)
+            entries = [
                 f"{self.pe.get_emoji_for_pokemon(Pokemon_Subcogs.pokemon_name_to_id(n)) or ''} {n.title()}"
-                for n in updated)
-            return await ctx.reply(embed=e, mention_author=False)
+                for n in cur
+            ]
+            return await self.paginate_and_send(ctx, entries)
 
         if action == "clear":
             await self.mongo.clear(col, uid)
-            e.description = "🗑️ Cleared your Pokémon list."
-            return await ctx.reply(embed=e, mention_author=False)
+            return await ctx.reply(embed=Embed(description="🗑️ Cleared your Pokémon list."), mention_author=False)
 
         if not pokemon:
-            e.description = "❌ Specify Pokémon name(s)."
-            return await ctx.reply(embed=e, mention_author=False)
+            return await ctx.reply(embed=Embed(description="❌ Specify Pokémon name(s)."), mention_author=False)
 
         names = [n.strip() for n in pokemon.split(',') if n.strip()]
         results = []
-        cur = await self.mongo.list(col, uid)  # Re-fetch after cleanup
+        cur = await self.mongo.list(col, uid)
 
         for raw in names:
             name, _ = Pokemon.transform_pokemon_name(raw)
             if not name or name not in self.valid_slugs:
                 results.append(f"❌ Invalid Pokémon name: {raw}")
                 continue
-
             pid = Pokemon_Subcogs.pokemon_name_to_id(name)
-            emoji = self.pe.get_emoji_for_pokemon(pid) if pid else ''
-
+            emoji = self.pe.get_emoji_for_pokemon(pid) or ''
             if action == "add":
                 if max_one:
                     await self.mongo.replace(col, name, uid)
-                    results.append(f"{emoji} Set to {name.title()}"); break
-                if len(cur) >= 10 and name not in cur:
-                    results.append(f"❌ Max 10 Pokémon. `{name.title()}` not added."); continue
+                    results.append(f"{emoji} Set to {name.title()}")
+                    break
+                if len(cur) >= MAX_POKEMON and name not in cur:
+                    results.append(f"❌ Max {MAX_POKEMON} Pokémon. `{name.title()}` not added.")
+                    continue
                 ok = await self.mongo.add(col, name, uid)
                 results.append(f"{emoji} Added {name.title()}" if ok else f"{emoji} {name.title()} already exists.")
-
+                if ok:
+                    cur.append(name)
             elif action == "remove":
                 ok = await self.mongo.remove(col, name, uid)
                 results.append(f"{emoji} Removed {name.title()}" if ok else f"{emoji} {name.title()} not found.")
 
-        e.description = "\n".join(results)
-        await ctx.reply(embed=e, mention_author=False)
+        await ctx.reply(embed=Embed(description="\n".join(results)), mention_author=False)
 
     @commands.command(name="sh")
     async def sh(self, ctx, action: str = "add", *, pokemon: str = None):
-        valid = {"add", "remove", "list", "clear"}
-        if action not in valid:
+        if action not in {"add", "remove", "list", "clear"}:
             pokemon, action = f"{action} {pokemon}".strip(), "add"
+        if not action and pokemon:
+            pokemon, action = None, "list"
         await self.handle_collection(ctx, self.shiny_collection, action, pokemon, max_one=True)
 
-    @commands.command(name="cl", alias=['collection'])
+    @commands.command(name="cl", aliases=["collection"])
     async def cl(self, ctx, action: Literal["add", "remove", "list", "clear"] = "list", *, pokemon: str = None):
         await self.handle_collection(ctx, self.collection_collection, action, pokemon)
-
+             
 class Pokemon_Emojis(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
