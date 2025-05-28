@@ -17,7 +17,7 @@ class PoketwoSpawnDetector(commands.Cog):
         self.target_title = "pokémon has appeared!"
         self.predictor = Prediction()
         self.pp = Ping_Pokemon(bot)
-        self.mongo = Pokemon_Subcogs.MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
+        self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
         self.message_rare_pokemon = "<@&1278580577104040023>"
         self.message_regional_pokemon = "<@&1278580577104040022>"
         self.csv_file = 'data/commands/pokemon/pokemon_special_names.csv'
