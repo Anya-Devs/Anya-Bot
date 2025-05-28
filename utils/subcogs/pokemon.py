@@ -18,7 +18,8 @@ class Ping_Pokemon(commands.Cog):
         self.pe = Pokemon_Emojis(bot)
         self.shiny_collection = "shiny_hunt"
         self.collection_collection = "collection"
-        self.pokemon_description = "data\commands\pokemon\pokemon_description.csv" 
+        self.pokemon_description = os.path.join("data", "commands", "pokemon", "pokemon_description.csv")
+        
         self.mongo = MongoHelper(
             AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"]
         )
