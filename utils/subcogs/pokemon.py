@@ -35,13 +35,10 @@ class Ping_Pokemon(commands.Cog):
             def __init__(self, index=0):
                 super().__init__(timeout=60)
                 self.index = index
-
-                self.prev_button = Button(label="◀", style=ButtonStyle.secondary, disabled=index == 0, custom_id=f"prev_{index}")
-                self.next_button = Button(label="▶", style=ButtonStyle.secondary, disabled=index >= len(embeds) - 1, custom_id=f"next_{index}")
-
+                self.prev_button = Button(label="◀", style=ButtonStyle.secondary, disabled=index == 0)
+                self.next_button = Button(label="▶", style=ButtonStyle.secondary, disabled=index >= len(embeds) - 1)
                 self.prev_button.callback = self.go_prev
                 self.next_button.callback = self.go_next
-
                 self.add_item(self.prev_button)
                 self.add_item(self.next_button)
 
@@ -63,11 +60,14 @@ class Ping_Pokemon(commands.Cog):
     async def handle_collection(self, ctx, col, action, pokemon=None, max_one=False):
         uid = ctx.author.id
         cur = await self.mongo.list(col, uid)
+
+        # remove invalids
         invalids = [n for n in cur if n not in self.valid_slugs]
         for n in invalids:
             await self.mongo.remove(col, n, uid)
         cur = await self.mongo.list(col, uid)
 
+        # enforce limit
         if len(cur) > MAX_POKEMON:
             for n in cur[MAX_POKEMON:]:
                 await self.mongo.remove(col, n, uid)
@@ -76,10 +76,7 @@ class Ping_Pokemon(commands.Cog):
         if action == "list":
             if not cur:
                 return await ctx.reply(embed=Embed(description="Your list is empty."), mention_author=False)
-            entries = [
-                f"{self.pe.get_emoji_for_pokemon(Pokemon_Subcogs.pokemon_name_to_id(n)) or ''} {n.title()}"
-                for n in cur
-            ]
+            entries = [f"{self.pe.get_emoji_for_pokemon(Pokemon_Subcogs.pokemon_name_to_id(n)) or ''} {n.title()}" for n in cur]
             return await self.paginate_and_send(ctx, entries)
 
         if action == "clear":
@@ -116,7 +113,10 @@ class Ping_Pokemon(commands.Cog):
                 ok = await self.mongo.remove(col, name, uid)
                 results.append(f"{emoji} Removed {name.title()}" if ok else f"{emoji} {name.title()} not found.")
 
-        await ctx.reply(embed=Embed(description="\n".join(results)), mention_author=False)
+        if len(results) <= CHUNK_SIZE:
+            await ctx.reply(embed=Embed(description="\n".join(results)), mention_author=False)
+        else:
+            await self.paginate_and_send(ctx, results, title="Collection Update")
 
     @commands.command(name="sh")
     async def sh(self, ctx, action: str = "add", *, pokemon: str = None):
@@ -128,8 +128,12 @@ class Ping_Pokemon(commands.Cog):
 
     @commands.command(name="cl", aliases=["collection"])
     async def cl(self, ctx, action: Literal["add", "remove", "list", "clear"] = "list", *, pokemon: str = None):
-        await self.handle_collection(ctx, self.collection_collection, action, pokemon)
-             
+        await self.handle_collection(ctx, self.collection_collection, action, pokemon) 
+        
+        
+        
+        
+                 
 class Pokemon_Emojis(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
