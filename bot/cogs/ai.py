@@ -1,4 +1,4 @@
-import os
+import os, logging
 from datetime import datetime
 from PIL import Image
 from openai import AsyncOpenAI
