@@ -1,6 +1,9 @@
-import os, base64, asyncio, requests, concurrent, aiohttp, json
+import os, base64, asyncio, requests, concurrent, aiohttp, json, logging
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class Image:
     class ImageGenerator:
@@ -62,7 +65,7 @@ class Image:
                             )
                             return out_path, config_dump
                         else:
-                            print(f"❌ Error: {r.status}, {await r.text()}")
+                            logger.error(f"❌ Error: {r.status}, {await r.text()}")
                             return None, None
             except aiohttp.ClientError as e:
                 print(f"❌ Request failed: {str(e)}")
