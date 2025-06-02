@@ -7,6 +7,9 @@ from imports.discord_imports import *
 from imports.log_imports import logger
 from data.local.const import primary_color
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 class Ai(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -61,7 +64,8 @@ class Ai(commands.Cog):
 
             await ctx.reply(embed=embed, file=discord.File(str(final_path), filename="1.png"), view=view)
      except Exception as e:
-        await ctx.send(Ai_Text.ERROR_GENERATING_PROMPT.format(error=e))
+        logger.error(e) 
+        await ctx.send(Ai_Text.ERROR_GENERATING_PROMPT.format(e))
      finally:
         self.queue.remove(ctx.author.id)
 
