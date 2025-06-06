@@ -7,9 +7,9 @@ discord.py==2.5.2
 fuzzywuzzy==0.18.0
 motor==3.7.1
 numpy==2.2.6
-openai==1.82.0
+openai==1.84.0
 opencv_python_headless==4.11.0.86
-pandas==2.2.3
+pandas==2.3.0
 Pillow==11.2.1
 psutil==7.0.0
 pymongo==4.13.0
