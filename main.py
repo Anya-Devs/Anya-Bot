@@ -1,4 +1,4 @@
-from data.setup import start; start()
+#from data.setup import start; start()
 
 import os, sys, gc, asyncio, traceback, importlib, pkgutil, aiohttp
 from aiohttp import web
@@ -72,12 +72,20 @@ class BotSetup(commands.AutoShardedBot):
                 logger.error(f"Error loading cog {mod_name}: {e}\n{traceback.format_exc()}")
         console.print(Align(tree, align='center', width=console.width))
 
-async def handle_index(_): return web.Response(text="✅ Bot is running", content_type="text/html")
-
+async def handle_index(request):
+    index_path = os.path.join(os.getcwd(), 'html', 'index.html')
+    if os.path.exists(index_path):
+        with open(index_path, 'r', encoding='utf-8') as f:
+            return web.Response(text=f.read(), content_type='text/html')
+    return web.Response(text="⚠️ index.html not found.", content_type='text/plain', status=404)
 async def start_web_server():
-    app = web.Application(); app.router.add_get("/", handle_index)
-    runner = web.AppRunner(app); await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 0 if ut else 8080); await site.start()
+    app = web.Application()
+    app.router.add_get("/", handle_index)
+    app.router.add_static('/html/', path=os.path.join(os.getcwd(), 'html'), name='html')
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 0 if ut else 8080)
+    await site.start()
     return runner, site
 
 async def periodic_ping(host, port):
@@ -86,11 +94,13 @@ async def periodic_ping(host, port):
             async with aiohttp.ClientSession() as s:
                 async with s.get(f"http://{host}:{port}") as r:
                     if r.status == 200: logger.debug("Ping successful!")
-        except Exception as e: logger.debug(f"Ping failed: {e}")
+        except Exception as e:
+            logger.debug(f"Ping failed: {e}")
         await asyncio.sleep(60)
 
 async def start_all_services():
-    gc.collect(); runner = site = None
+    gc.collect()
+    runner = site = None
     try:
         bot = BotSetup()
         runner, site = await start_web_server()
@@ -98,9 +108,11 @@ async def start_all_services():
         print(f"Web server started on port {port}")
         await asyncio.gather(bot.start_bot(), periodic_ping("localhost", port))
     except Exception as e:
-        traceback.print_exc(); logger.error(f"Fatal error: {e}\n{traceback.format_exc()}")
+        traceback.print_exc()
+        logger.error(f"Fatal error: {e}\n{traceback.format_exc()}")
     finally:
         if runner: await runner.cleanup()
         await asyncio.sleep(1)
 
-if __name__ == "__main__": asyncio.run(start_all_services())
+if __name__ == "__main__":
+    asyncio.run(start_all_services())

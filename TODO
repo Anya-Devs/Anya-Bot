@@ -1,7 +1,11 @@
 1. Update Pokétwo spawn training:
-  Train model to recognize new event Pokémon
+   Train model to recognize new event Pokémon
 
 2. Fix 'imagine' command:
-  Outdated usage—current Stable Diffusion API URL no longer works:
-  "https://hirakukatsu--example-a1111-webui-run.modal.run/sdapi/v1/txt2img"
+   Outdated usage—current Stable Diffusion API URL no longer works:
+   "https://hirakukatsu--example-a1111-webui-run.modal.run/sdapi/v1/txt2img"
 
+3. Build a website for our Discord bot to:
+   - Send messages
+   - View available commands
+   - Manage bot features via a user-friendly interface
