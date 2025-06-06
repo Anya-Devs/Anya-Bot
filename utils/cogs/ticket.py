@@ -1,6 +1,7 @@
 import os 
 import json
 import traceback
+from bson import ObjectId
 from imports.discord_imports import *
 from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -196,61 +197,107 @@ class Ticket_View:
             self.add_item(self.select)
     
     class TicketDeleteView(discord.ui.View):
-        def __init__(self, tickets):
-            super().__init__()
-            self.tickets = tickets
-            
-            # Create a dropdown for ticket selection with names
-            self.select = discord.ui.Select(
-                placeholder="Select a ticket configuration to delete",
-                min_values=1,
-                max_values=1,
-                options=[
-                    discord.SelectOption(
-                        label=f"{ticket.get('ticket_name', 'Unnamed Ticket')}",
-                        description=f"Channel: #{ticket.get('channel_id')}",
-                        value=str(ticket.get('_id'))
-                    ) for ticket in tickets[:25]  # Discord limits to 25 options
-                ]
-            )
-            
-            async def select_callback(interaction: discord.Interaction):
-                ticket_id = self.select.values[0]
-                selected_ticket = None
-                
-                for ticket in self.tickets:
-                    if str(ticket.get('_id')) == ticket_id:
-                        selected_ticket = ticket
-                        break
-                
-                ticket_name = selected_ticket.get('ticket_name', 'Unnamed Ticket') if selected_ticket else 'Unknown Ticket'
-                
-                # Create confirmation view
-                confirm_view = discord.ui.View()
-                
-                yes_button = discord.ui.Button(label="Yes", style=discord.ButtonStyle.red)
-                no_button = discord.ui.Button(label="No", style=discord.ButtonStyle.grey)
-                
-                async def yes_callback(confirm_interaction: discord.Interaction):
+     def __init__(self, tickets, author_id):
+        super().__init__(timeout=None)
+        self.tickets = tickets
+        self.author_id = author_id
+        self.select = discord.ui.Select(
+            placeholder="Select a ticket configuration to delete",
+            min_values=1,
+            max_values=1,
+            options=[discord.SelectOption(
+                label=f"{t.get('ticket_name', 'Unnamed Ticket')}",
+                description=f"Channel: #{t.get('channel_id')}",
+                value=str(t.get('_id'))
+            ) for t in tickets[:25]]
+        )
+        self.add_item(self.select)
+
+        self.delete_btn = discord.ui.Button(label="Delete", style=discord.ButtonStyle.red)
+        self.delete_btn.callback = self.delete_callback
+        self.add_item(self.delete_btn)
+
+        async def select_callback(interaction: discord.Interaction):
+            if interaction.user.id != self.author_id:
+                return await interaction.response.send_message("You can't interact with this menu.", ephemeral=True)
+            ticket_id = self.select.values[0]
+            selected = next((t for t in self.tickets if str(t.get('_id')) == ticket_id), None)
+            name = selected.get('ticket_name', 'Unnamed Ticket') if selected else 'Unknown Ticket'
+            confirm = discord.ui.View(timeout=None)
+            confirm.author_id = self.author_id
+            yes = discord.ui.Button(label="Yes", style=discord.ButtonStyle.red)
+            no = discord.ui.Button(label="No", style=discord.ButtonStyle.grey)
+
+            async def yes_callback(i: discord.Interaction):
+                if i.user.id != self.author_id:
+                    return await i.response.send_message("You can't interact with this button.", ephemeral=True)
+                try:
+                    ticket_dataset = Ticket_Dataset()
                     try:
-                        await Ticket_Dataset().delete_ticket(ticket_id)
-                        await confirm_interaction.response.edit_message(content=f"Ticket configuration '{ticket_name}' deleted!", view=None)
-                    except Exception as e:
-                        await confirm_interaction.response.edit_message(content=f"Error deleting ticket: {str(e)}", view=None)
-                
-                async def no_callback(confirm_interaction: discord.Interaction):
-                    await confirm_interaction.response.edit_message(content="Operation cancelled.", view=None)
-                
-                yes_button.callback = yes_callback
-                no_button.callback = no_callback
-                
-                confirm_view.add_item(yes_button)
-                confirm_view.add_item(no_button)
-                
-                await interaction.response.send_message(f"Are you sure you want to delete the ticket configuration '{ticket_name}'?", view=confirm_view, ephemeral=True)
-            
-            self.select.callback = select_callback
-            self.add_item(self.select)
+                        object_id = ObjectId(ticket_id)
+                        delete_result = await ticket_dataset.delete_ticket(object_id)
+                    except Exception:
+                        delete_result = await ticket_dataset.delete_ticket(ticket_id)
+                    if selected:
+                        channel_id = selected.get('channel_id')
+                        message_id = selected.get('message_id')
+                        if channel_id and message_id:
+                            try:
+                                channel = interaction.guild.get_channel(channel_id)
+                                if channel:
+                                    message = await channel.fetch_message(message_id)
+                                    await message.delete()
+                            except (discord.NotFound, discord.Forbidden, Exception):
+                                pass
+                    if delete_result and delete_result.deleted_count > 0:
+                        await i.response.edit_message(content=f"✅ Ticket configuration '{name}' successfully deleted from database and Discord!", embed=None, view=None)
+                    else:
+                        await i.response.edit_message(content=f"⚠️ Ticket configuration '{name}' may have already been deleted or could not be found in database.", embed=None, view=None)
+                except Exception as e:
+                    await i.response.edit_message(content=f"❌ Error deleting ticket configuration '{name}': {str(e)}", embed=None, view=None)
+
+            async def no_callback(i: discord.Interaction):
+                if i.user.id != self.author_id:
+                    return await i.response.send_message("You can't interact with this button.", ephemeral=True)
+                await i.response.edit_message(content="❌ Operation cancelled.", embed=None, view=None)
+
+            yes.callback = yes_callback
+            no.callback = no_callback
+            confirm.add_item(yes)
+            confirm.add_item(no)
+            embed = None
+            if selected:
+                embed_data = selected.get("embed", {})
+                if embed_data:
+                    try:
+                        embed = discord.Embed.from_dict(embed_data)
+                        embed.title = f"🗑️ PREVIEW: {embed_data.get('title', 'No Title')}"
+                        embed.description = f"**[PREVIEW OF TICKET TO BE DELETED]**\n\n{embed.description}" if embed.description else "**[PREVIEW OF TICKET TO BE DELETED]**"
+                    except Exception:
+                        embed = discord.Embed(
+                            title="🗑️ Ticket Preview",
+                            description=f"**Ticket Name:** {name}\n**Channel:** <#{selected.get('channel_id')}>\n**Button Label:** {selected.get('button_data', {}).get('label', 'Open Ticket')}",
+                            color=discord.Color.red()
+                        )
+            await interaction.response.send_message(
+                content=f"⚠️ **Are you sure you want to delete the ticket configuration '{name}'?**\n\nThis will remove it from the database and delete the Discord message.\n\n**Here's what will be deleted:**",
+                embed=embed,
+                view=confirm,
+                ephemeral=True
+            )
+
+        self.select.callback = select_callback
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message("You can't interact with this.", ephemeral=True)
+            return False
+        return True
+
+    async def delete_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author_id:
+            return await interaction.response.send_message("You can't interact with this button.", ephemeral=True)
+        await interaction.message.delete()
 
     class TicketSetupView:
         @staticmethod
@@ -259,38 +306,36 @@ class Ticket_View:
             await paginated_form.start(ctx)
             
         @staticmethod
-        async def start_edit(ctx, msg):
-            try:
-                # Get existing configuration from database
-                ticket = await server_collection.find_one({"message_id": msg.id})
-                if not ticket:
-                    await ctx.send("This message is not configured as a ticket system.")
-                    return
-                    
-                # Initialize the edit form
-                paginated_form = Ticket_View.PaginatedEmbedSetup(ctx, msg.channel, edit_mode=True, message=msg)
-                
-                # Pre-fill form data from existing configuration
-                embed_data = ticket.get("embed", {})
-                paginated_form.form_data = {
-                    "title": embed_data.get("title", ""),
-                    "description": embed_data.get("description", ""),
-                    "color": f"#{hex(embed_data.get('color', 0x2ecc71))[2:]}",
-                    "footer": embed_data.get("footer", {}).get("text", ""),
-                    "thumbnail_url": embed_data.get("thumbnail", {}).get("url", ""),
-                    "image_url": embed_data.get("image", {}).get("url", ""),
-                    "open_button_label": ticket.get("button_data", {}).get("label", "Open Ticket"),
-                    "open_button_emoji": ticket.get("button_data", {}).get("emoji", ""),
-                    "close_button_label": ticket.get("close_button_data", {}).get("label", "Close Thread"),
-                    "close_button_emoji": ticket.get("close_button_data", {}).get("emoji", ""),
-                    "thread_msg": ticket.get("thread_message", "Welcome to your ticket! A staff member will assist you shortly."),
-                    "ticket_name": ticket.get("ticket_name", "")  # Add existing ticket name
-                }
-                
-                await paginated_form.start(ctx)
-            except Exception as e:
-                await ctx.send(f"Error starting edit: {str(e)}")
-                traceback.print_exception(type(e), e, e.__traceback__)
+        async def start_edit(ctx, msg, ticket_data):
+         try:
+            ticket = await ticket_data.collection.find_one({"message_id": msg.id})
+            if not ticket:
+             return await ctx.send("This message is not configured as a ticket system.")
+
+            paginated_form = Ticket_View.PaginatedEmbedSetup(ctx, msg.channel, edit_mode=True, message=msg)
+
+            embed_data = ticket.get("embed", {})
+            paginated_form.form_data = {
+             "title": embed_data.get("title", ""),
+             "description": embed_data.get("description", ""),
+             "color": f"#{hex(embed_data.get('color', 0x2ecc71))[2:]}",
+             "footer": embed_data.get("footer", {}).get("text", ""),
+             "thumbnail_url": embed_data.get("thumbnail", {}).get("url", ""),
+             "image_url": embed_data.get("image", {}).get("url", ""),
+             "open_button_label": ticket.get("button_data", {}).get("label", "Open Ticket"),
+             "open_button_emoji": ticket.get("button_data", {}).get("emoji", ""),
+             "close_button_label": ticket.get("close_button_data", {}).get("label", "Close Thread"),
+             "close_button_emoji": ticket.get("close_button_data", {}).get("emoji", ""),
+             "thread_msg": ticket.get("thread_message", "Welcome to your ticket! A staff member will assist you shortly."),
+             "ticket_name": ticket.get("ticket_name", "")
+            }
+
+            await paginated_form.start(ctx)
+
+         except Exception as e:
+           await ctx.send(f"Error starting edit: {str(e)}")
+           traceback.print_exception(type(e), e, e.__traceback__)
+
 
     class PaginatedEmbedSetup:
         def __init__(self, ctx, channel, edit_mode=False, message=None):
