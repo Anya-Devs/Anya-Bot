@@ -5,5 +5,3 @@
   Outdated usage—current Stable Diffusion API URL no longer works:
   "https://hirakukatsu--example-a1111-webui-run.modal.run/sdapi/v1/txt2img"
 
-3. Add Gen 9 Pokémon to shiny/collection validation:
-   Update load_valid_slugs to append Gen 9 Pokémon to CSV or validation list if missing.
