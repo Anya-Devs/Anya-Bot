@@ -9,3 +9,4 @@
    - Send messages
    - View available commands
    - Manage bot features via a user-friendly interface
+   - Fetch server data including channels, members, and related info
