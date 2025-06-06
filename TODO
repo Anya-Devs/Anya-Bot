@@ -1,0 +1,13 @@
+1. Fix 'ticket activate' and 'delete' commands:
+  TypeError: Ticket_Dataset.load_all_tickets() missing 'self' argument
+  Traceback points to discord.ext.commands/core.py line 244
+
+2. Fix 'ticket edit <message_link>' command:
+  Always responds with "Please provide a valid message link." even when valid URL is provided
+
+3. Update Pokétwo spawn training:
+  Train model to recognize new event Pokémon
+
+4. Fix 'imagine' command:
+  Outdated usage—current Stable Diffusion API URL no longer works:
+  "https://hirakukatsu--example-a1111-webui-run.modal.run/sdapi/v1/txt2img"
