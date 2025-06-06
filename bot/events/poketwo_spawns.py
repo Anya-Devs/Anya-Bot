@@ -45,13 +45,11 @@ class PoketwoSpawnDetector(commands.Cog):
     async def output_prediction(self, message, image_url):
         name, conf = self.predictor.predict(image_url)
         formatted_name = self.format_name(name)
-
         try:
             conf_value = float(conf)
             pred_text = f"{formatted_name}: {conf_value:.2f}%"
         except:
             pred_text = f"{formatted_name}: {conf}"
-
         lines = []
         match = re.search(r"([a-zA-Z\s-]+):\s*([\d\.]+)%", pred_text)
         if match:
@@ -59,18 +57,16 @@ class PoketwoSpawnDetector(commands.Cog):
             pname, _ = Pokemon.transform_pokemon_name(pname)
             rare, reg = self.load_pokemon_data()
             is_regional_prefix = any(formatted_name.startswith(v) for v in self.regional_forms.values())
-            if any(fuzz.ratio(pname, p) > 90 for p in rare):
+            if any(p in pname for p in rare):
                 lines.append(self.message_rare_pokemon)
-            if any(fuzz.ratio(pname, p) > 90 for p in reg) or is_regional_prefix:
+            if any(p in pname for p in reg) or is_regional_prefix:
                 lines.append(self.message_regional_pokemon)
-
         transformed_name, _ = Pokemon.transform_pokemon_name(formatted_name)
         shiny, collect = await self.get_ping_users(message.guild, transformed_name)
         if shiny:
             lines.append(f"Shiny Pings: {' '.join(shiny)}")
         if collect:
             lines.append(f"Collection Pings: {' '.join(collect)}")
-
         lines += ["", pred_text]
         await message.channel.send("\n".join(lines), reference=message)
 
@@ -80,23 +76,19 @@ class PoketwoSpawnDetector(commands.Cog):
             c_users = await self.mongo.db[self.collection_collection].find({}).to_list(None)
             s_users = await self.mongo.db[self.shiny_collection].find({}).to_list(None)
         except: return [], []
-
         shiny_ping, collection_ping = [], []
-
         for d in s_users:
             for p in d.get("pokemon", []):
                 if fuzzy_match(pokemon_name.lower(), p.lower()):
                     if guild.get_member(d['user_id']):
                         shiny_ping.append(f"<@{d['user_id']}>")
                     break
-
         for d in c_users:
             for p in d.get("pokemon", []):
                 if fuzzy_match(pokemon_name.lower(), p.lower()):
                     if guild.get_member(d['user_id']):
                         collection_ping.append(f"<@{d['user_id']}>")
                     break
-
         return shiny_ping, collection_ping
 
     @commands.Cog.listener()

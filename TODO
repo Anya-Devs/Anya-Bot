@@ -10,3 +10,6 @@
    - View available commands
    - Manage bot features via a user-friendly interface
    - Fetch server data including channels, members, and related info
+
+4. Add rare Pokémon ping:
+   Scan spawn name and compare against rare Pokémon list in CSV file; alert when match is found.
