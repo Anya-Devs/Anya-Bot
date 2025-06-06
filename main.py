@@ -3,7 +3,7 @@ from data.setup import start; start()
 import os, sys, gc, asyncio, traceback, importlib, pkgutil, aiohttp
 from aiohttp import web
 from art import text2art
-from rich.tree import Tree
+from rich.tree import Tree 
 from rich.align import Align
 from rich.console import Console
 from dotenv import load_dotenv
