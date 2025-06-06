@@ -136,7 +136,7 @@ class Ping_Pokemon(commands.Cog):
         else:
             await self.paginate_and_send(ctx, results, title="Collection Update")
 
-    @commands.command(name="sh")
+    @commands.command(name="shiny_hunt", aliases=['sh'])
     async def sh(self, ctx, action: str = None, *, pokemon: str = None):
      if not action and not pokemon:
         cur = await self.mongo.list(self.shiny_collection, ctx.author.id)
@@ -153,8 +153,8 @@ class Ping_Pokemon(commands.Cog):
         pokemon = None
      await self.handle_collection(ctx, self.shiny_collection, action, pokemon, max_one=True)
 
-    @commands.command(name="cl", aliases=["collection"])
-    async def cl(self, ctx, action: str = "list", *, pokemon: str = None):
+    @commands.command(name="collection", aliases=["cl"])
+    async def collection(self, ctx, action: str = "list", *, pokemon: str = None):
         await self.handle_collection(ctx, self.collection_collection, action, pokemon)
 class Pokemon_Emojis(commands.Cog):
     def __init__(self, bot):
