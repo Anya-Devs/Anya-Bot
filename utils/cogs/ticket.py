@@ -213,7 +213,7 @@ class Ticket_View:
         )
         self.add_item(self.select)
 
-        self.delete_btn = discord.ui.Button(label="Delete", style=discord.ButtonStyle.red)
+        self.delete_btn = discord.ui.Button(emoji='🗑️', style=discord.ButtonStyle.red)
         self.delete_btn.callback = self.delete_callback
         self.add_item(self.delete_btn)
 
