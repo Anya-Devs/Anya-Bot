@@ -27,14 +27,14 @@ class Ticket(commands.Cog):
             if not tickets:
                 return await ctx.send("No existing ticket configurations found.")
             await ctx.send("Select a ticket configuration to activate:",
-                           view=Ticket_View.TicketActivateView(tickets))
+                           view=Ticket_View.TicketActivateView(tickets, ctx.message.author.id))
 
         elif action == "delete":
             tickets = await self.ticket_data.load_all_tickets()
             if not tickets:
                 return await ctx.send("No tickets available to delete.")
             await ctx.send("Select a ticket configuration to delete:",
-                           view=Ticket_View.TicketDeleteView(tickets, ctx.author.id))
+                           view=Ticket_View.TicketDeleteView(tickets, ctx.message.author.id))
 
         elif action == "edit":
             if not param or "discord.com/channels/" not in param:

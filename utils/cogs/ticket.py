@@ -123,11 +123,11 @@ class Ticket_View:
             self.add_item(close_button)
 
     class TicketActivateView(discord.ui.View):
-        def __init__(self, tickets):
+        def __init__(self, tickets, author_id):
             super().__init__()
             self.tickets = tickets
+            self.author_id = author_id
             
-            # Create a dropdown for ticket selection with names
             self.select = discord.ui.Select(
                 placeholder="Select a ticket configuration",
                 min_values=1,
@@ -137,11 +137,14 @@ class Ticket_View:
                         label=f"{ticket.get('ticket_name', 'Unnamed Ticket')}",
                         description=f"Channel: #{ticket.get('channel_id')}",
                         value=str(ticket.get('_id'))
-                    ) for ticket in tickets[:25]  # Discord limits to 25 options
+                    ) for ticket in tickets[:25] 
                 ]
             )
             
             async def select_callback(interaction: discord.Interaction):
+                if interaction.user.id != self.author_id:
+                 return await interaction.response.send_message("You can't interact with this menu.", ephemeral=True)
+        
                 ticket_id = self.select.values[0]
                 for ticket in self.tickets:
                     if str(ticket.get('_id')) == ticket_id:
