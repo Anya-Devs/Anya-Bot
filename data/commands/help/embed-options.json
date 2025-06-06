@@ -1,7 +1,7 @@
 {
   "system": {
     "title": "System",
-    "description": "Testing View the status of the bot, including information about its current performance, system resources usage, and configuration settings.",
+    "description": "View bot status, performance, resource usage, and settings.",
     "emoji": "<:system:1261208067085959320>"
   },
   "quest": {

@@ -104,9 +104,11 @@ class Permission(commands.Cog):
         await ctx.send(f"My permissions: {', '.join(current)}")
 
     async def notify_error(self, ctx, error):
-        await self.error_custom_embed(self.bot, ctx, error)
-        self.logger.error(f"Unexpected error in command {ctx.command}: {error}")
-
+     if isinstance(error, commands.MissingRequiredArgument) and error.param.name == "action":
+        return
+     await self.error_custom_embed(self.bot, ctx, error)
+     self.logger.error(f"Unexpected error in command {ctx.command}: {error}")
+     
     def generate_invite_link(self, missing_perms):
         permissions = discord.Permissions()
         for perm in missing_perms:

@@ -362,6 +362,12 @@
             "description": "No description provided.",
             "example": "{}credit",
             "related_commands": "Provide related commands"
+        },
+        "ticket": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}ticket",
+            "related_commands": "Provide related commands"
         }
     },
     "AvatarChanger": {},
