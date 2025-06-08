@@ -144,6 +144,7 @@ class Quest(commands.Cog):
 
         except Exception as e:
             error_message = "An error occurred while fetching quests."
+            print(error_message)
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
             await ctx.send(f"{error_message}")

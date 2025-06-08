@@ -11,7 +11,13 @@ class Fun(commands.Cog):
     @commands.command(name='8ball')
     async def eight_ball(self, ctx, *, question):
         ans = await self.fun_cmd.eight_ball()
-        await ctx.reply(f'**:8ball: | {ctx.author.display_name} asked:** *"{question}"*\n{blank_emoji} | **Answer:** {ans}', mention_author=False)
+        embed = discord.Embed(
+            title="🎱 8Ball",
+            description=f"**{question}**\n{blank_emoji} {ans}",
+            color=primary_color()
+        )
+        embed.set_footer(text=f"Requested by {ctx.author}", icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
+        await ctx.reply(embed=embed, mention_author=False)
 
     def _create_actions(self):
         actions = ['pat', 'cuddle', 'bite', 'kiss', 'lick', 'hug', 'cry', 'wave', 'slowclap', 'smug', 'dance', 'happy']

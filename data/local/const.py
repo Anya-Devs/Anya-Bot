@@ -288,7 +288,6 @@ class Quest_Prompt:
         tracking_emoji = discord.utils.get(bot.emojis, id=1244195699331960863)
         respect_emoji = discord.utils.get(bot.emojis, id=1244196427828301825)
 
-        print("getting embed")
         embed = discord.Embed(
             description=(
                 f"**By accepting server quests, you agree to the following terms and conditions:**\n\n"
@@ -303,9 +302,10 @@ class Quest_Prompt:
             timestamp=datetime.now(),
         )
         
+        look_radiant_anya = images['look_radiant_anya']
         embed.set_footer(
             text=QUEST_PROMPT_EMBED["footer_text"],
-            icon_url=AnyaImages.look_radiant_anya,
+            icon_url=look_radiant_anya,
         )
         return embed
 

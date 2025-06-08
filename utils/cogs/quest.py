@@ -221,6 +221,7 @@ class Quest_Select(Select):
             await interaction.response.edit_message(embed=embed, view=view)
         except Exception as e:
             error_message = "An error occurred while fetching quests."
+            print(error_message)
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
             await self.ctx.send(f"{error_message}")
@@ -262,6 +263,7 @@ class Quest_Select_Filter(Select):
             await interaction.response.edit_message(embed=embed, view=view)
         except Exception as e:
             error_message = "An error occurred while fetching quests."
+            print(error_message)
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
             await self.ctx.send(f"{error_message}")
@@ -363,7 +365,7 @@ class Quest_Button1(discord.ui.View):
                 
                 await button.response.edit_message(
                     content="No redirected channels found for this guild. Please set redirect channels before creating a new quest.\n"
-                    "> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `...redirect <channels>`"
+                    f"> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `{self.ctx.prefix}redirect <channels>`"
                 )
                 return  
 
@@ -432,7 +434,7 @@ class Quest_Button(discord.ui.View):
             
             await button.response.send_message(
                 "No redirected channels found for this guild. Please set redirect channels before creating a new quest.\n"
-                "> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `...redirect <channels>`",
+                f"> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `{self.ctx.prefix}redirect <channels>`",
                 ephemeral=True,
             )
             return  
