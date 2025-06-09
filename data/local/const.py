@@ -749,7 +749,7 @@ bot_config = {
         "token_key": "Test_Token"
     },
     False: { 
-        "prefix": "...",
+        "prefix": ".",
         "token_key": "Token"
     }
 }
