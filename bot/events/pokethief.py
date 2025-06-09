@@ -9,7 +9,7 @@ import logging
 import json
 
 from data.local.const import primary_color
-from bot.token import get_bot_token
+from bot.token import get_bot_token, use_test_bot as ut
 
 from imports.log_imports import *
 from imports.discord_imports import *
@@ -100,6 +100,8 @@ class Anti_Thief(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+      if ut: 
+          return
       if 'incense' not in message.channel.name.lower():
         if message.author.id in self.bot_id and message.guild:
             self.shiny_hunters = await self.process_pings(message.guild, message.content)

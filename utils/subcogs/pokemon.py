@@ -1,4 +1,4 @@
-import os, re, csv, json, asyncio, multiprocessing as mp, csv
+import os, re, csv, json, asyncio, multiprocessing as mp, csv, difflib
 from functools import partial
 from tqdm import tqdm, asyncio as async_tqdm
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
@@ -42,7 +42,7 @@ class Ping_Pokemon(commands.Cog):
                 writer.writeheader()
                 writer.writerows(pokemons)
         with open(self.pokemon_names_csv, newline="", encoding="utf-8") as f:
-            return {row["name"] for row in csv.DictReader(f)}
+            return {row["name"].lower() for row in csv.DictReader(f)}  # lowercase all for matching
 
     @property
     async def valid_slugs(self):
@@ -53,6 +53,7 @@ class Ping_Pokemon(commands.Cog):
     async def paginate_and_send(self, ctx, entries: list[str], title: str = "Your Pokémon Collection List"):
         pages = [entries[i:i + CHUNK_SIZE] for i in range(0, len(entries), CHUNK_SIZE)]
         embeds = [Embed(title=title, description="\n".join(chunk), color=primary_color()) for chunk in pages]
+
         class NavView(View):
             def __init__(self, index=0):
                 super().__init__(timeout=60)
@@ -63,38 +64,51 @@ class Ping_Pokemon(commands.Cog):
                 self.next_button.callback = self.go_next
                 self.add_item(self.prev_button)
                 self.add_item(self.next_button)
+
             async def interaction_check(self, interaction: Interaction) -> bool:
                 return interaction.user == ctx.author
+
             async def go_prev(self, interaction: Interaction):
                 if self.index > 0:
                     self.index -= 1
                     await interaction.response.edit_message(embed=embeds[self.index], view=NavView(self.index))
+
             async def go_next(self, interaction: Interaction):
                 if self.index < len(embeds) - 1:
                     self.index += 1
                     await interaction.response.edit_message(embed=embeds[self.index], view=NavView(self.index))
+
         await ctx.reply(embed=embeds[0], view=NavView(), mention_author=False)
 
     async def handle_collection(self, ctx, col, action, pokemon=None, max_one=False):
+    
         valid_slugs = await self.valid_slugs
+        valid_lookup = {v.lower() for v in valid_slugs}
         uid = ctx.author.id
         cur = await self.mongo.list(col, uid)
-        invalids = [n for n in cur if n not in valid_slugs]
+        invalids = [n for n in cur if n.lower() not in valid_lookup]
+        shiny_hunt = max_one
+        
+
         for n in invalids:
             await self.mongo.remove(col, n, uid)
+
         cur = await self.mongo.list(col, uid)
         if len(cur) > MAX_POKEMON:
             for n in cur[MAX_POKEMON:]:
                 await self.mongo.remove(col, n, uid)
             cur = cur[:MAX_POKEMON]
+
         if action == "list":
             if not cur:
                 return await ctx.reply(embed=Embed(description="Your list is empty."), mention_author=False)
             entries = [f"{self.pe.get_emoji_for_pokemon(Pokemon_Subcogs.pokemon_name_to_id(n)) or ''} {n.title()}" for n in cur]
             return await self.paginate_and_send(ctx, entries)
+
         if action == "clear":
             await self.mongo.clear(col, uid)
             return await ctx.reply(embed=Embed(description="🗑️ Cleared your Pokémon list."), mention_author=False)
+
         if not pokemon:
             return await ctx.reply(embed=Embed(description="❌ Specify Pokémon name(s)."), mention_author=False)
 
@@ -109,30 +123,37 @@ class Ping_Pokemon(commands.Cog):
         cur = await self.mongo.list(col, uid)
 
         for raw, name in names:
-            if name not in valid_slugs:
+            match = difflib.get_close_matches(name.lower(), valid_lookup, n=1, cutoff=0.8)
+            if not match:
                 results.append(f"❌ Invalid Pokémon name: {raw}")
                 continue
-            pid = Pokemon_Subcogs.pokemon_name_to_id(name)
+
+            matched_slug = match[0]
+            pid = Pokemon_Subcogs.pokemon_name_to_id(matched_slug)
             emoji = self.pe.get_emoji_for_pokemon(pid) or ""
+
             if action == "add":
                 if max_one:
-                    await self.mongo.replace(col, name, uid)
-                    name = self.ph.reverse_transform_name(name)[0].replace('-',' ')
-                    results.append(f"{emoji} Set to {name.title()}")
+                    await self.mongo.replace(col, matched_slug, uid)
+                    name = self.ph.reverse_transform_name(matched_slug)[0].replace('-', ' ')
+                    results.append(f"`[✓]` Set your shiny hunt to {emoji} {name.title()}!")
                     break
-                if len(cur) >= MAX_POKEMON and name not in cur:
-                    results.append(f"❌ Max {MAX_POKEMON} Pokémon. `{name.title()}` not added.")
+                if len(cur) >= MAX_POKEMON and matched_slug not in cur:
+                    results.append(f"❌ Max {MAX_POKEMON} Pokémon. `{matched_slug.title()}` not added.")
                     continue
-                ok = await self.mongo.add(col, name, uid)
-                results.append(f"{emoji} Added {name.title()}" if ok else f"{emoji} {name.title()} already exists.")
+                ok = await self.mongo.add(col, matched_slug, uid)
+                results.append(f"`[✓]` Added {emoji} {matched_slug.title()}" if ok else f"`[⍻]` {emoji} {matched_slug.title()} already exists.")
                 if ok:
-                    cur.append(name)
+                    cur.append(matched_slug)
+
             elif action == "remove":
-                ok = await self.mongo.remove(col, name, uid)
-                results.append(f"{emoji} Removed {name.title()}" if ok else f"{emoji} {name.title()} not found.")
+                ok = await self.mongo.remove(col, matched_slug, uid)
+                results.append(f"`[−]` {emoji} Removed {matched_slug.title()}" if ok else f"`[𐄂]` {emoji} {matched_slug.title()} not found.")
 
         if len(results) <= CHUNK_SIZE:
-            await ctx.reply(embed=Embed(description="\n".join(results)), mention_author=False)
+            embed = Embed(description="\n".join(results))
+            embed.set_footer(text="" if shiny_hunt else "Updated Your Pokemon Collection")
+            await ctx.reply(embed=embed, mention_author=False)
         else:
             await self.paginate_and_send(ctx, results, title="Collection Update")
 
@@ -145,17 +166,23 @@ class Ping_Pokemon(commands.Cog):
         name = cur[0]
         pid = Pokemon_Subcogs.pokemon_name_to_id(name)
         emoji = self.pe.get_emoji_for_pokemon(pid) or ""
-        name = self.ph.reverse_transform_name(name)[0].replace('-',' ')
+        name = self.ph.reverse_transform_name(name)[0].replace('-', ' ')
         return await ctx.reply(embed=Embed(description=f"You are currently shiny hunting: **{emoji} {name.title()}**"), mention_author=False)
+
      if action not in {"add", "remove", "list", "clear"}:
-        pokemon, action = f"{action} {pokemon}".strip(), "add"
+        full_name = f"{action} {pokemon}".strip() if pokemon else action
+        transformed_name, _ = self.ph.transform_name(full_name)
+        pokemon, action = transformed_name, "add"
      elif not pokemon:
         pokemon = None
+
      await self.handle_collection(ctx, self.shiny_collection, action, pokemon, max_one=True)
+
 
     @commands.command(name="collection", aliases=["cl"])
     async def collection(self, ctx, action: str = "list", *, pokemon: str = None):
         await self.handle_collection(ctx, self.collection_collection, action, pokemon)
+
 class Pokemon_Emojis(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -665,7 +692,7 @@ class PokemonNameHelper:
             self.rare, self.regional = [], []
 
     def transform_name(self, name):
-        map_ = {"alolan":"-alola","galarian":"-galar","hisui":"-hisui","paldean":"-paldea","mega":"-mega"}
+        map_ = {"alolan":"-alola","galarian":"-galar","hisuian":"-hisui","paldean":"-paldea","mega":"-mega"}
         name_clean = re.sub(r'[^a-zA-Z\s]', '', name)
         lower = name_clean.lower()
         for k,v in map_.items():
@@ -676,13 +703,13 @@ class PokemonNameHelper:
         return name_clean, None
     
     def reverse_transform_name(self, name):
-     rev_map = {"-alola": "Alolan", "-galar": "Galarian", "-hisui": "Hisui", "-paldea": "Paldean", "-mega": "Mega"}
+     rev_map = {"-alola": "Alolan", "-galar": "Galarian", "-hisui": "Hisuian", "-paldea": "Paldean", "-mega": "Mega"}
      n = name.lower()
      for suf, pre in rev_map.items():
         if n.endswith(suf):
             base = name[:-len(suf)]
             return f"{pre} {base}", pre
-     return name, None
+     return name, ''
     
     def check_match(self, name):
         rare_match = next((p for p in self.rare if fuzz.ratio(name, p) > 90), None)

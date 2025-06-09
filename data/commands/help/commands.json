@@ -130,6 +130,14 @@
             "description": "No description provided.",
             "example": "{}collection",
             "related_commands": "Provide related commands"
+        },
+        "shiny_hunt": {
+            "aliases": [
+                "sh"
+            ],
+            "description": "No description provided.",
+            "example": "{}shiny_hunt",
+            "related_commands": "Provide related commands"
         }
     },
     "Pokemon": {
@@ -387,5 +395,6 @@
     },
     "PoketwoSpawnDetector": {},
     "Quest_Events": {},
-    "Quest_Tools": {}
+    "Quest_Tools": {},
+    "Anime_Recommendation": {}
 }

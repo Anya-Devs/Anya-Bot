@@ -745,7 +745,7 @@ class AvatarToTextArt:
     
 bot_config = {
     True: { 
-        "prefix": ".",
+        "prefix": "-",
         "token_key": "Test_Token"
     },
     False: { 
