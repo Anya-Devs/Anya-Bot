@@ -1,7 +1,7 @@
 """                   commands                   """
-# 8ball, bite, blush, builtdifferent, cry, cuddle, dance, gayrate, handhold, happy,
-# hug, iq, kiss, lick, nervous, pat, pinch, poke, pp, simprate, slap,
-# slowclap, smile, smug, slot, strength, waifurate, wave, wink
+
+
+
 
 from data.local.const import *
 import aiofiles, random, aiohttp

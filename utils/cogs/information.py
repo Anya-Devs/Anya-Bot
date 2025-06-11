@@ -69,7 +69,7 @@ class Information_Commands:
             await interaction.response.defer()
             if self.current_page < self.get_total_pages(self.selected_role) - 1:
                 self.current_page += 1
-                embed = self.create_role_embed(self.selected_role, self.current_page)  # Ensure `self` refers to `Information_Commands`
+                embed = self.create_role_embed(self.selected_role, self.current_page)  
                 self.update_navigation_buttons()
                 await interaction.message.edit(embed=embed, view=self)
         except Exception as e:
@@ -357,7 +357,7 @@ class Information_Embed:
         if banner_url:
             embed.set_image(url=banner_url)
 
-        # Button + Callback
+        
         button = discord.ui.Button(label="Show Roles", style=discord.ButtonStyle.primary)
 
         async def button_callback(interaction: discord.Interaction):

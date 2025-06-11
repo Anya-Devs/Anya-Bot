@@ -7,7 +7,7 @@ discord.py==2.5.2
 fuzzywuzzy==0.18.0
 motor==3.7.1
 numpy==2.3.0
-openai==1.84.0
+openai==1.86.0
 opencv_python_headless==4.11.0.86
 pandas==2.3.0
 Pillow==11.2.1
@@ -15,6 +15,6 @@ psutil==7.0.0
 pymongo==4.13.0
 python-dotenv==1.1.0
 redis==5.2.1
-Requests==2.32.3
+Requests==2.32.4
 rich==14.0.0
 tqdm==4.67.1

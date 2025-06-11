@@ -1,6 +1,4 @@
-import os 
-import json
-import traceback
+import os, json,traceback, random
 from bson import ObjectId
 from imports.discord_imports import *
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -70,16 +68,8 @@ class Ticket_Dataset:
         return await self.collection.find_one({"_id": ticket_id})
 
 
-
+        
 class Ticket_View:
-    @staticmethod
-    def is_admin_or_owner(user, guild):
-        return (
-            user.id == guild.owner_id or 
-            user.guild_permissions.administrator or
-            user.guild_permissions.manage_guild
-        )
-    
     class TicketButton(discord.ui.Button):
         def __init__(self, button_data, thread_message, embed_data, guild_id, channel_id, close_button_data):
             super().__init__(
@@ -95,50 +85,35 @@ class Ticket_View:
             self.close_button_data = close_button_data
 
         async def callback(self, interaction: discord.Interaction):
-            # Create private thread that only ticket creator and admins can see
             thread = await interaction.channel.create_thread(
-                name=f"Ticket-{interaction.user.name}", 
+                name=f"Ticket-{interaction.user.name}",
                 type=discord.ChannelType.private_thread
             )
-            
-            # Add admins and server owner to the thread
-            guild = interaction.guild
-            members_to_add = []
-            
-            # Add server owner
-            if guild.owner:
-                members_to_add.append(guild.owner)
-            
-            # Add administrators
-            for member in guild.members:
-                if (member.guild_permissions.administrator or 
-                    member.guild_permissions.manage_guild) and member != interaction.user:
-                    members_to_add.append(member)
-            
-            # Add members to thread (Discord limits to 10 members at once)
-            for member in members_to_add[:10]:
-                try:
-                    await thread.add_user(member)
-                except (discord.Forbidden, discord.HTTPException):
-                    pass  # Skip if we can't add the member
-            
-            # Send initial messages
-            await thread.send(
-                f"<@{interaction.user.id}>", 
-                embed=discord.Embed.from_dict(self.embed_data)
-            )
-            await thread.send(
-                self.thread_message, 
-                view=Ticket_View.CloseButton(thread.id, self.close_button_data)
-            )
-            
-            # Notify admins about new ticket
-            admin_mentions = " ".join([f"<@{member.id}>" for member in members_to_add[:5]])  # Limit mentions
-            if admin_mentions:
-                await thread.send(f"🔔 **New Ticket Created**\n{admin_mentions}\nTicket created by {interaction.user.mention}")
-            
-            await interaction.response.send_message("Ticket thread created! Only you and server administrators can see it.", ephemeral=True)
 
+            owner = interaction.guild.owner
+            admin_members = [
+                m for m in interaction.guild.members
+                if m.guild_permissions.administrator and not m.bot and m != owner
+            ]
+            online_admins = [m for m in admin_members if m.status != discord.Status.offline]
+
+            selected_admins = random.sample(
+                online_admins if online_admins else admin_members,
+                min(2, len(online_admins if online_admins else admin_members))
+            )
+            selected_admins.insert(0, owner)
+
+            if selected_admins:
+                mentions = ' '.join(m.mention for m in selected_admins)
+                await thread.send(f"<@{interaction.user.id}>", embed=discord.Embed.from_dict(self.embed_data))
+                await thread.send(f"> The following team member(s) will be assisting you: {mentions}")
+            else:
+                await thread.send(f"<@{interaction.user.id}>", embed=discord.Embed.from_dict(self.embed_data))
+                await thread.send("> We couldn't find any online team members. Please ping someone available for help.")
+
+            await thread.send(self.thread_message, view=Ticket_View.CloseButton(thread.id, self.close_button_data))
+            await interaction.response.send_message(f"Ticket created: {thread.mention}", ephemeral=True)
+                      
     class CloseButton(discord.ui.View):
         def __init__(self, thread_id, button_data=None):
             super().__init__(timeout=None)
@@ -153,21 +128,13 @@ class Ticket_View:
             )
             
             async def close_callback(interaction: discord.Interaction):
-                # Check if user is admin, owner, or thread creator
+                if not interaction.user.guild_permissions.administrator:
+                    await interaction.response.send_message("Only administrators can close tickets.", ephemeral=True)
+                    return
+                    
                 thread = interaction.guild.get_thread(thread_id)
-                if not thread:
-                    return await interaction.response.send_message("Thread not found.", ephemeral=True)
-                
-                is_authorized = (
-                    Ticket_View.is_admin_or_owner(interaction.user, interaction.guild) or
-                    thread.owner_id == interaction.user.id
-                )
-                
-                if not is_authorized:
-                    return await interaction.response.send_message("❌ Only administrators or the ticket creator can close this ticket.", ephemeral=True)
-                
                 await thread.edit(locked=True, archived=True)
-                await interaction.response.send_message("✅ Ticket closed successfully.", ephemeral=True)
+                await interaction.response.send_message("Thread closed.", ephemeral=True)
             
             close_button.callback = close_callback
             self.add_item(close_button)
@@ -192,9 +159,8 @@ class Ticket_View:
             )
             
             async def select_callback(interaction: discord.Interaction):
-                # Check admin permissions
-                if not Ticket_View.is_admin_or_owner(interaction.user, interaction.guild):
-                    return await interaction.response.send_message("❌ Only administrators can activate ticket systems.", ephemeral=True)
+                if not interaction.user.guild_permissions.administrator:
+                    return await interaction.response.send_message("Only administrators can activate tickets.", ephemeral=True)
                 
                 if interaction.user.id != self.author_id:
                     return await interaction.response.send_message("You can't interact with this menu.", ephemeral=True)
@@ -229,10 +195,8 @@ class Ticket_View:
                             embed = discord.Embed.from_dict(embed_data)
                             msg = await channel.send(embed=embed, view=view)
                             
-                            # Create message link for the new message
                             message_link = f"https://discord.com/channels/{interaction.guild.id}/{channel_id}/{msg.id}"
                             
-                            # Update database with the new message ID and link
                             await server_collection.insert_one({
                                 "guild_id": interaction.guild.id,
                                 "message_id": msg.id,
@@ -245,7 +209,7 @@ class Ticket_View:
                                 "message_link": message_link
                             })
                             
-                            await interaction.response.send_message(f"✅ Ticket system '{ticket_name}' activated in <#{channel_id}>!\n🔒 **Admin-Only Mode**: Only administrators and the ticket creator can see each ticket.", ephemeral=True)
+                            await interaction.response.send_message(f"Ticket system '{ticket_name}' activated in <#{channel_id}>!", ephemeral=True)
                         except Exception as e:
                             await interaction.response.send_message(f"Error activating ticket: {str(e)}", ephemeral=True)
                         break
@@ -275,9 +239,8 @@ class Ticket_View:
             self.add_item(self.delete_btn)
 
             async def select_callback(interaction: discord.Interaction):
-                # Check admin permissions
-                if not Ticket_View.is_admin_or_owner(interaction.user, interaction.guild):
-                    return await interaction.response.send_message("❌ Only administrators can delete ticket systems.", ephemeral=True)
+                if not interaction.user.guild_permissions.administrator:
+                    return await interaction.response.send_message("Only administrators can delete tickets.", ephemeral=True)
                 
                 if interaction.user.id != self.author_id:
                     return await interaction.response.send_message("You can't interact with this menu.", ephemeral=True)
@@ -291,8 +254,8 @@ class Ticket_View:
                 no = discord.ui.Button(label="No", style=discord.ButtonStyle.grey)
 
                 async def yes_callback(i: discord.Interaction):
-                    if not Ticket_View.is_admin_or_owner(i.user, i.guild):
-                        return await i.response.send_message("❌ Only administrators can delete ticket systems.", ephemeral=True)
+                    if not i.user.guild_permissions.administrator:
+                        return await i.response.send_message("Only administrators can delete tickets.", ephemeral=True)
                     
                     if i.user.id != self.author_id:
                         return await i.response.send_message("You can't interact with this button.", ephemeral=True)
@@ -354,8 +317,8 @@ class Ticket_View:
             self.select.callback = select_callback
 
         async def interaction_check(self, interaction: discord.Interaction) -> bool:
-            if not Ticket_View.is_admin_or_owner(interaction.user, interaction.guild):
-                await interaction.response.send_message("❌ Only administrators can manage ticket systems.", ephemeral=True)
+            if not interaction.user.guild_permissions.administrator:
+                await interaction.response.send_message("Only administrators can interact with this.", ephemeral=True)
                 return False
             if interaction.user.id != self.author_id:
                 await interaction.response.send_message("You can't interact with this.", ephemeral=True)
@@ -363,8 +326,9 @@ class Ticket_View:
             return True
 
         async def delete_callback(self, interaction: discord.Interaction):
-            if not Ticket_View.is_admin_or_owner(interaction.user, interaction.guild):
-                return await interaction.response.send_message("❌ Only administrators can manage ticket systems.", ephemeral=True)
+            if not interaction.user.guild_permissions.administrator:
+                return await interaction.response.send_message("Only administrators can delete tickets.", ephemeral=True)
+            
             if interaction.user.id != self.author_id:
                 return await interaction.response.send_message("You can't interact with this button.", ephemeral=True)
             await interaction.message.delete()
@@ -372,19 +336,17 @@ class Ticket_View:
     class TicketSetupView:
         @staticmethod
         async def start_setup(ctx, channel):
-            # Check admin permissions
-            if not Ticket_View.is_admin_or_owner(ctx.author, ctx.guild):
-                return await ctx.send("❌ Only administrators can setup ticket systems.")
+            if not ctx.author.guild_permissions.administrator:
+                return await ctx.send("Only administrators can setup ticket systems.")
             
             paginated_form = Ticket_View.PaginatedEmbedSetup(ctx, channel)
             await paginated_form.start(ctx)
             
         @staticmethod
         async def start_edit(ctx, msg, ticket_data):
-            # Check admin permissions
-            if not Ticket_View.is_admin_or_owner(ctx.author, ctx.guild):
-                return await ctx.send("❌ Only administrators can edit ticket systems.")
-                
+            if not ctx.author.guild_permissions.administrator:
+                return await ctx.send("Only administrators can edit ticket systems.")
+            
             try:
                 ticket = await ticket_data.collection.find_one({"message_id": msg.id})
                 if not ticket:
@@ -444,9 +406,9 @@ class Ticket_View:
             else:
                 view = self.ModalView(self.current_modal)
                 if self.edit_mode:
-                    await interaction_or_ctx.send("🔒 **Admin-Only Ticket System**\nClick the button below to edit your ticket system:", view=view)
+                    await interaction_or_ctx.send("Click the button below to edit your ticket system:", view=view)
                 else:
-                    await interaction_or_ctx.send("🔒 **Admin-Only Ticket System**\nClick the button below to setup your ticket system:", view=view)
+                    await interaction_or_ctx.send("Click the button below to setup your ticket system:", view=view)
                 
         class ModalView(discord.ui.View):
             def __init__(self, modal):
@@ -459,10 +421,8 @@ class Ticket_View:
                 )
                 
                 async def setup_callback(interaction: discord.Interaction):
-                    # Check admin permissions in modal callback too
-                    if not Ticket_View.is_admin_or_owner(interaction.user, interaction.guild):
-                        return await interaction.response.send_message("❌ Only administrators can setup ticket systems.", ephemeral=True)
-                    
+                    if not interaction.user.guild_permissions.administrator:
+                        return await interaction.response.send_message("Only administrators can setup ticket systems.", ephemeral=True)
                     await interaction.response.send_modal(self.modal)
                 
                 setup_button.callback = setup_callback
@@ -479,8 +439,8 @@ class Ticket_View:
                     button = discord.ui.Button(label=f"Continue to step {self.page}/{self.total_pages}", style=discord.ButtonStyle.primary)
                     
                     async def button_callback(button_interaction):
-                        if not Ticket_View.is_admin_or_owner(button_interaction.user, button_interaction.guild):
-                            return await button_interaction.response.send_message("❌ Only administrators can setup ticket systems.", ephemeral=True)
+                        if not button_interaction.user.guild_permissions.administrator:
+                            return await button_interaction.response.send_message("Only administrators can setup ticket systems.", ephemeral=True)
                         await button_interaction.response.send_modal(self.current_modal)
                     
                     button.callback = button_callback
@@ -497,17 +457,17 @@ class Ticket_View:
                     pass
                     
                 title = self.form_data["title"]
-                description = self.form_data["description"] or "🔒 **Admin-Only Tickets**\nClick the button below to open a private ticket that only you and administrators can see."
+                description = self.form_data["description"] or "Click the button below to open a ticket"
                 color_str = self.form_data["color"] or "#2ecc71"
-                footer = self.form_data["footer"] or "🔒 Private tickets visible only to admins"
+                footer = self.form_data["footer"]
                 thumbnail_url = self.form_data["thumbnail_url"]
                 image_url = self.form_data["image_url"]
-                open_button_label = self.form_data["open_button_label"] or "🔒 Open Private Ticket"
+                open_button_label = self.form_data["open_button_label"] or "Open Ticket"
                 open_button_emoji = self.form_data["open_button_emoji"] or "🎫"
-                close_button_label = self.form_data["close_button_label"] or "🔒 Close Ticket"
+                close_button_label = self.form_data["close_button_label"] or "Close Thread"
                 close_button_emoji = self.form_data["close_button_emoji"] or "🔒"
-                thread_msg = self.form_data["thread_msg"] or "🔒 **Private Ticket Created**\n\nWelcome to your private ticket! Only you and server administrators can see this conversation. A staff member will assist you shortly."
-                ticket_name = self.form_data["ticket_name"] or f"Private-Ticket-{interaction.guild.id}-{self.channel.id}"
+                thread_msg = self.form_data["thread_msg"] or "Welcome to your ticket! A staff member will assist you shortly."
+                ticket_name = self.form_data["ticket_name"] or f"Ticket-{interaction.guild.id}-{self.channel.id}"
 
                 try:
                     if color_str.startswith("#"):
@@ -552,13 +512,13 @@ class Ticket_View:
                 view.add_item(ticket_button)
 
                 if self.edit_mode and self.message:
-                    # Update existing message
                     await self.message.edit(embed=embed, view=view)
                     await Ticket_Dataset().update_message(self.ctx, self.message, embed, ticket_name)
-                    await interaction.followup.send(f"✅ Admin-only ticket system '{ticket_name}' updated successfully!", ephemeral=True)
+                    await interaction.followup.send(f"Ticket system '{ticket_name}' updated successfully!", ephemeral=True)
                 else:
-                    # Create new message
                     msg = await self.channel.send(embed=embed, view=view)
+                    
+                    message_link = f"https://discord.com/channels/{self.ctx.guild.id}/{self.channel.id}/{msg.id}"
                     
                     try:
                         await Ticket_Dataset().save_message(
@@ -573,7 +533,7 @@ class Ticket_View:
                     except Exception as e:
                         traceback.print_exception(type(e), e, e.__traceback__)
 
-                    await interaction.followup.send(f"✅ Admin-only ticket system '{ticket_name}' created successfully!\n🔒 **Privacy**: Only ticket creators and administrators can see each ticket.", ephemeral=True)
+                    await interaction.followup.send(f"Ticket system '{ticket_name}' created successfully!", ephemeral=True)
             except Exception as e:
                 await interaction.followup.send("An error occurred while processing the ticket system.", ephemeral=True)
                 traceback.print_exception(type(e), e, e.__traceback__)
@@ -583,7 +543,6 @@ class Ticket_View:
                 super().__init__(title=f"Embed Setup (1/{parent.total_pages})")
                 self.parent = parent
                 
-                # Add ticket name field at the top
                 self.add_item(discord.ui.TextInput(
                     label="Ticket Name",
                     placeholder="Enter a name for this ticket system",
@@ -730,7 +689,6 @@ class Ticket_View:
             async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
                 await interaction.response.send_message('Oops! Something went wrong.', ephemeral=True)
                 traceback.print_exception(type(error), error, error.__traceback__)
-
 
 
 class Invalidation:
