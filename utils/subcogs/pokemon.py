@@ -169,6 +169,10 @@ class Ping_Pokemon(commands.Cog):
         name = self.ph.reverse_transform_name(name)[0].replace('-', ' ')
         return await ctx.reply(embed=Embed(description=f"You are currently shiny hunting: **{emoji} {name.title()}**"), mention_author=False)
 
+     if action == "remove" and not pokemon:
+        await self.mongo.clear(self.shiny_collection, ctx.author.id)
+        return await ctx.reply(embed=Embed(description="🗑️ Your shiny hunt has been removed."), mention_author=False)
+
      if action not in {"add", "remove", "list", "clear"}:
         full_name = f"{action} {pokemon}".strip() if pokemon else action
         transformed_name, _ = self.ph.transform_name(full_name)
@@ -177,7 +181,6 @@ class Ping_Pokemon(commands.Cog):
         pokemon = None
 
      await self.handle_collection(ctx, self.shiny_collection, action, pokemon, max_one=True)
-
 
     @commands.command(name="collection", aliases=["cl"])
     async def collection(self, ctx, action: str = "list", *, pokemon: str = None):
