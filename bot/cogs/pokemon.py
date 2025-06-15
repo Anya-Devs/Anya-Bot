@@ -22,7 +22,7 @@ class Pokemon(commands.Cog):
         self.wait = 11
 
     @commands.command(help="Displays Pokémon dex info.", aliases=["dex", "d"])
-    async def pokdex(self, ctx, *, pokemon=None, form=None):
+    async def pokedex(self, ctx, *, pokemon=None, form=None):
      async with ctx.typing():
         ph = PokemonNameHelper()
         pc, pp = Pokemon_Commands(self.bot), Ping_Pokemon(self.bot)
