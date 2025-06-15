@@ -65,7 +65,7 @@ class Select_Help(discord.ui.Select):
             embed = discord.Embed(description="", color=self.primary_color)
             fields = self.build_fields_for_module(module)
             if fields:
-                for n, v in fields: embed.add_field(name=n, value=v, inline=True)
+                for n, v in fields: embed.add_field(name=n.replace('_',' '), value=v, inline=True)
             else:
                 embed.description = "No visible commands found for this module."
             filename = module.split('.')[0]
