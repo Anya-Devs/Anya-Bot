@@ -110,7 +110,7 @@ class Ping_Pokemon(commands.Cog):
             return await ctx.reply(embed=Embed(description="🗑️ Cleared your Pokémon list."), mention_author=False)
 
         if not pokemon:
-            return await ctx.reply(embed=Embed(description="❌ Specify Pokémon name(s)."), mention_author=False)
+            return await ctx.reply(embed=Embed(description="`[✕]` Specify Pokémon name(s)."), mention_author=False)
 
         names = []
         for entry in pokemon.split(","):
@@ -125,7 +125,7 @@ class Ping_Pokemon(commands.Cog):
         for raw, name in names:
             match = difflib.get_close_matches(name.lower(), valid_lookup, n=1, cutoff=0.8)
             if not match:
-                results.append(f"❌ Invalid Pokémon name: {raw}")
+                results.append(f"`[✕]` Invalid Pokémon name: {raw}")
                 continue
 
             matched_slug = match[0]
@@ -139,7 +139,7 @@ class Ping_Pokemon(commands.Cog):
                     results.append(f"`[✓]` Set your shiny hunt to {emoji} {name.title()}!")
                     break
                 if len(cur) >= MAX_POKEMON and matched_slug not in cur:
-                    results.append(f"❌ Max {MAX_POKEMON} Pokémon. `{matched_slug.title()}` not added.")
+                    results.append(f"`[✕]` Max {MAX_POKEMON} Pokémon. `{matched_slug.title()}` not added.")
                     continue
                 ok = await self.mongo.add(col, matched_slug, uid)
                 results.append(f"`[✓]` Added {emoji} {matched_slug.title()}" if ok else f"`[⍻]` {emoji} {matched_slug.title()} already exists.")
