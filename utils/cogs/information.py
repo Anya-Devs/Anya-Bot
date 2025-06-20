@@ -508,4 +508,116 @@ class Information_Embed:
      except Exception as e:
         logging.error("get_invite_embed error:", e)
         return None, None
-    
+
+class RoleLookupView(ui.View):
+    def __init__(self, bot):
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.selected = []
+        self.user_select = ui.UserSelect(placeholder="Select users...", min_values=1, max_values=25)
+        self.user_select.callback = self.user_select_callback
+        self.add_item(self.user_select)
+
+    async def user_select_callback(self, interaction: Interaction):
+        self.selected = self.user_select.values
+        await interaction.response.send_message(f"✅ Selected {len(self.selected)} user(s). Click Validate.", ephemeral=True)
+
+    def get_role_category(self, role):
+        p = role.permissions
+        if p.administrator: return "admin"
+        if p.kick_members or p.ban_members: return "moderator"
+        if p.manage_messages: return "baby moderator"
+        return None
+
+    def categorize_roles(self, member):
+        chan_perms = set()
+        for chan in member.guild.channels:
+            if isinstance(chan, discord.TextChannel) and not chan.permissions_for(member.guild.default_role).view_channel:
+                for role in member.guild.roles:
+                    if role != member.guild.default_role and chan.permissions_for(role).view_channel:
+                        chan_perms.add(role)
+        perm_roles, channel_roles, misc_roles = [], [], []
+        for r in member.roles[1:]:
+            c = self.get_role_category(r)
+            if c: perm_roles.append((r, c))
+            elif r in chan_perms: channel_roles.append(r)
+            else: misc_roles.append(r)
+        perm_roles.sort(key=lambda x: ("admin", "moderator", "baby moderator").index(x[1]) if x[1] in ("admin", "moderator", "baby moderator") else 99)
+        return perm_roles, channel_roles, misc_roles
+
+    async def create_user_embeds(self, member):
+        perm, chan, misc = self.categorize_roles(member)
+        embeds, labels = [], []
+        overview = discord.Embed(
+            title="Role Lookup Guide",
+            description=(
+                "This shows categorized roles for selected users.\n"
+                "**How to use:**\n"
+                "- Use the dropdown to navigate.\n"
+                "- Only relevant role categories will appear.\n"
+                "- Categories: Permission Roles, Channel Access, Misc Roles."
+            ),
+            color=member.color,
+            timestamp=datetime.now()
+        ).set_thumbnail(url=member.display_avatar.url)
+        embeds.append(overview)
+
+        if perm:
+            txt = "".join(f"- {r.mention} ({c})\n" for r, c in perm)
+            embeds.append(discord.Embed(title="Permission Roles", description=txt, color=member.color, timestamp=datetime.now()).set_thumbnail(url=member.display_avatar.url))
+        if chan:
+            embeds.append(discord.Embed(title="Channel Access", description="".join(f"- {r.mention}\n" for r in chan), color=member.color, timestamp=datetime.now()).set_thumbnail(url=member.display_avatar.url))
+        if misc:
+            misc_pages = [misc[i:i+10] for i in range(0, len(misc), 10)]
+            for i, page in enumerate(misc_pages):
+                title = "Misc" if len(misc_pages) == 1 else f"Misc P.{i+1}"
+                e = discord.Embed(title=title, description="".join(f"- {r.mention}\n" for r in page), color=member.color, timestamp=datetime.now()).set_thumbnail(url=member.display_avatar.url)
+                e.set_footer(text=f"Page {i+1} of {len(misc_pages)}")
+                embeds.append(e)
+                labels.append(title)
+        return embeds, labels
+
+    class RolePaginationView(ui.View):
+        def __init__(self, embeds, labels):
+            super().__init__(timeout=300)
+            self.embeds = embeds
+            options = [discord.SelectOption(label="Overview", value="0")]
+            for i, embed in enumerate(embeds[1:], start=1):
+                options.append(discord.SelectOption(label=embed.title, value=str(i)))
+            self.page_select = ui.Select(placeholder="Jump to role section...", options=options)
+            self.page_select.callback = self.select_page
+            self.add_item(self.page_select)
+
+        async def select_page(self, interaction):
+            await interaction.response.edit_message(embed=self.embeds[int(self.page_select.values[0])], view=self)
+
+    @ui.button(label="Validate", style=discord.ButtonStyle.success, row=1)
+    async def validate(self, button, interaction):
+        if not self.selected:
+            return await button.response.send_message("❌ No users selected.", ephemeral=True)
+        try:
+            member = self.selected[0]
+            embeds, labels = await self.create_user_embeds(member)
+            await button.response.send_message(embed=embeds[0], view=self.RolePaginationView(embeds, labels), ephemeral=True)
+        except Exception:
+            import traceback
+            tb = traceback.format_exc()
+            print(tb)
+            await interaction.followup.send(f"⚠️ Error:\n```\n{tb[:1900]}\n```", ephemeral=True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

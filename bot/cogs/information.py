@@ -103,8 +103,43 @@ class Information(commands.Cog):
         else:
             await ctx.reply("Please provide a valid user or role.", mention_author=False)
 
-   
-      
+    @commands.command(name="roles")
+    async def roles(self, ctx, mode: Optional[Literal["lookup", "members"]] = None, *, value: Optional[Union[discord.Member, str]] = None):
+     if mode == "lookup" and isinstance(value, str):
+        mf = 10; parts = value.rsplit(" ", 1)
+        rn = parts[0] if len(parts) == 2 and parts[1].isdigit() else value
+        mf = int(parts[1]) if len(parts) == 2 and parts[1].isdigit() else 10
+        role = discord.utils.find(lambda r: r.name.lower() == rn.lower(), ctx.guild.roles)
+        if not role: return await ctx.reply(f"❌ Role '{rn}' not found.", mention_author=False)
+        roles = sorted((r for r in ctx.guild.roles if r.position < role.position), key=lambda r: r.position, reverse=True)[:mf]
+        if not roles: return await ctx.reply(f"⚠️ No roles under `{role.name}`.", mention_author=False)
+        await ctx.reply(embed=discord.Embed(title=f"Roles under: `{role.name}`", description="\n".join(f"`<@&{r.id}>` — `{r.name}`" for r in roles), color=primary_color(), timestamp=datetime.now()), mention_author=False)
+        return
+     if mode == "members":
+        await ctx.reply("Click the button below to enter usernames:", view=RoleLookupView(ctx.bot), mention_author=False)
+        return
+     m = value if isinstance(value, discord.Member) else ctx.author
+     await ctx.reply(embed=discord.Embed(title=f"Roles for {m.display_name}", description=", ".join(f"<@&{r.id}>" for r in m.roles[1:]) or "None", color=primary_color(), timestamp=datetime.now()).set_footer(text=f"Found {len(m.roles)-1} roles"), mention_author=False)
 
+
+
+    @roles.error
+    async def roles_error(self, ctx, error):
+      p = ctx.prefix
+      embed = discord.Embed(
+        title="❌ Command Error",
+        description=(
+            f"Usage:\n"
+            f"`{p}roles` - shows your roles\n"
+            f"`{p}roles <@member>` - shows roles for member\n"
+            f"`{p}roles lookup <role> [max]` - shows roles below specified role\n"
+            f"`{p}roles members` - enter usernames with button\n\n"
+            f"Error: {error}"
+        ),
+        color=0xFF0000,
+        timestamp=datetime.now()
+      )
+      await ctx.reply(embed=embed, mention_author=False)
+ 
 def setup(bot):
     bot.add_cog(Information(bot))
