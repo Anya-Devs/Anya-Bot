@@ -4,8 +4,8 @@ from data.local.const import primary_color
 from data.local.emojis import *
 
 
-right_button_emoji = "<:point_left:1351851216153350145>"
-left_button_emoji = "<:point_right:1351851206103928948>"
+left_button_emoji = "<:point_left:1351851216153350145>"
+right_button_emoji  = "<:point_right:1351851206103928948>"
 
 
 class Anime_Btn(discord.ui.Button):

@@ -1,10 +1,13 @@
-import os, re,csv, json, asyncio, traceback, aiofiles
-import aiohttp, requests, motor.motor_asyncio
+import os, re, csv, json, asyncio, traceback
+import aiofiles, aiohttp, requests, motor.motor_asyncio
 import pandas as pd
 from fuzzywuzzy import fuzz
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
 from imports.log_imports import *
 from utils.subcogs.pokemon import *
 from imports.discord_imports import *
+
 
 
 
@@ -103,13 +106,20 @@ class Pokemon_Commands:
 
         height, weight = float(int(data["height"])) / 10, float(int(data["weight"])) / 10
         max_stat = 255
-        bar_length = 13
 
-        base_stats = [
-            f"{str(self.stat_name_mapping.get(stat['stat']['name'], stat['stat']['name']).title()).replace('Hp', 'Health'):<10} {str(stat['base_stat']):>5} {'▒' * int(stat['base_stat'] / max_stat * bar_length)}{'░' * (bar_length - int(stat['base_stat'] / max_stat * bar_length))}"
-            for stat in data["stats"]
-        ]
-        base_stats = "\n".join(base_stats)
+        def format_base_stats(stats, name_map, max_stat=255, bar_length=9, filled='▰', empty='▱'):
+         def format_bar(value):
+          filled_len = int(value / max_stat * bar_length)
+          return filled * filled_len + empty * (bar_length - filled_len)
+    
+         return [
+             f"{name_map.get(stat['stat']['name'], stat['stat']['name']).title().replace('Hp', 'Health'):<10} "
+             f"{stat['base_stat']:>5} {format_bar(stat['base_stat'])}"
+             for stat in stats
+             ]
+        
+        base_stats = "\n".join(format_base_stats(data["stats"], self.stat_name_mapping))
+
 
         alternate_names = self.get_pokemon_alternate_names(data_species, species_name)
         
@@ -286,33 +296,50 @@ class Pokemon_Commands:
         return weaknesses, strengths
 
     def format_strengths_weaknesses(self, weaknesses, strengths):
-        result = "● Strengths\n{0}\n\n● Weaknesses\n{1}"
-        strengths = list(strengths)
-        weaknesses = list(weaknesses)
-        
-        if len(strengths) == 1:
-            strengths_formatted = f"╚ {strengths[0]}"
-        else:
-            strengths = list(strengths)
-            strengths_formatted = "\n".join([f"╠ {strength}" for strength in strengths[:-1]]) + \
-                      (f"\n╚ {strengths[-1]}" if strengths else "╚ None")
-                                 
-        if len(weaknesses) == 1:
-            weaknesses_formatted = f"╚ {weaknesses[0]}"
-        else:
-            weaknesses_formatted = "\n".join([f"╠ {weakness}" for weakness in weaknesses[:-1]]) + \
-                                  (f"\n╚ {weaknesses[-1]}" if weaknesses else "╚ None")
-                                  
-        return result.format(strengths_formatted, weaknesses_formatted)
 
+     header_bullet = "□"
+     branch_middle = "├─"
+     branch_end = "└─"
+     none_text = "None"
+     def format_section(title, items):
+        items = list(items)
+        if not items:
+            return f"{header_bullet} {title}\n{branch_end} {none_text}"
+        if len(items) == 1:
+            return f"{header_bullet} {title}\n{branch_end} {items[0]}"
+        lines = [f"{branch_middle} {item}" for item in items[:-1]]
+        lines.append(f"{branch_end} {items[-1]}")
+        return f"{header_bullet} {title}\n" + "\n".join(lines)
+
+     strengths_text = format_section("Strengths", strengths)
+     weaknesses_text = format_section("Weaknesses", weaknesses)
+
+     return f"{strengths_text}\n\n{weaknesses_text}"
+    
     def format_pokemon_type(self, pokemon_type_unformatted):
-        result = "● Type\n{0}\n\n"
-        if len(pokemon_type_unformatted) == 1:
-            types_formatted = f"╚ {pokemon_type_unformatted[0]}"
-        else:
-            types_formatted = "\n".join([f"╠ {types}" for types in pokemon_type_unformatted[:-1]]) + \
-                             (f"\n╚ {pokemon_type_unformatted[-1]}" if pokemon_type_unformatted else "╚ None")
-        return result.format(types_formatted)
+     # Editable formatting config
+     header_bullet = "□"
+     branch_middle = "├─╠"
+     branch_end = "└─"
+     none_text = "None"
+
+     types = list(pokemon_type_unformatted)
+     if not types:
+        types_formatted = f"{branch_end} {none_text}"
+     elif len(types) == 1:
+        types_formatted = f"{branch_end} {types[0]}"
+     else:
+        lines = [f"{branch_middle} {t}" for t in types[:-1]]
+        lines.append(f"{branch_end} {types[-1]}")
+        types_formatted = "\n".join(lines)
+
+     return f"{header_bullet} Type\n{types_formatted}\n\n"
+
+
+
+
+
+
 
     def get_pokemon_gender_ratio_display(self, data_species):
         try:
@@ -662,6 +689,7 @@ class Pokebuttons(discord.ui.View):
         self.description = description
         self.gender_info = gender_info
         self.bot = bot
+        
 
         pokemon_forms = self.get_pokemon_forms()
         if pokemon_forms and len(pokemon_forms) > 1:
@@ -943,7 +971,7 @@ class Pokebuttons(discord.ui.View):
             embed.set_footer(text=self.pokemon_dex_name)
         else:
             embed.set_footer(icon_url=self.image_thumb, text=self.pokemon_dex_name)
-        embed.set_thumbnail(url=self.image_url)
+        #embed.set_thumbnail(url=self.image_url)
         thumbnail = self.image_url
         footer = self.image_thumb
         footer_text = self.pokemon_dex_name
@@ -1067,6 +1095,7 @@ class RegionFlagMapping:
             "ky": "🇰🇬",
         }
 
+
 class Strength_weakness(discord.ui.View):
     def __init__(
         self,
@@ -1084,145 +1113,223 @@ class Strength_weakness(discord.ui.View):
         self.footer = footer
         self.footer_text = footer_text
         self.pokemon_data = pokemon_data
+        self.pokemon_moveset_csv = "data/commands/pokemon/pokemon_moveset.csv"
+        self.moves_api_base = "https://pokeapi.co/api/v2/move"
+        self.pokemon_api_url = "https://pokeapi.co/api/v2/pokemon"
+        self.semaphore = asyncio.Semaphore(10)
 
-    @discord.ui.button(
-        label="S/W", style=discord.ButtonStyle.gray, custom_id="Pokemon_S_and_W_Button"
-    )
+    @discord.ui.button(label="Type Details", style=discord.ButtonStyle.gray, custom_id="Pokemon_S_and_W_Button")
     async def strengths_and_weaknesses(self, button: discord.ui.Button, interaction: discord.Interaction):
         try:
-            embed = discord.Embed(color=self.color)
-            embed.add_field(name=" ", value=self.strength_weakness_text, inline=False)
-
+            embed = discord.Embed(color=self.color, description=self.strength_weakness_text)
             if self.footer is None:
                 embed.set_footer(text=self.footer_text)
             else:
                 embed.set_footer(icon_url=self.footer, text=self.footer_text)
-
-            embed.set_thumbnail(url=self.thumbnail_url)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-
+            await button.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             traceback.print_exc()
-            await interaction.response.send_message(
+            await button.response.send_message(
                 f"An error occurred displaying strengths/weaknesses:\n```{e}```",
                 ephemeral=True
             )
 
-    @discord.ui.button(
-        label="Moveset",
-        style=discord.ButtonStyle.gray,
-        custom_id="Pokemon_Moveset_Button",
-    )
-    async def moves_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+    @discord.ui.button(label="Moveset", style=discord.ButtonStyle.gray, custom_id="Pokemon_Moveset_Button")
+    async def moves_button(self, button, interaction):
         try:
             await button.response.defer(ephemeral=True)
-            await self.show_moves(button)
+            
+            if os.path.exists(self.pokemon_moveset_csv) and os.path.getsize(self.pokemon_moveset_csv) > 0:
+                moves_data = await self.get_pokemon_moves_from_csv(self.pokemon_data['name'])
+                if moves_data:
+                    embed = self.build_moves_embed(moves_data)
+                    await button.followup.send(embed=embed, ephemeral=True)
+                    return
+            
+            await button.followup.send("Downloading Pokémon movesets, this may take a few minutes...", ephemeral=True)
+            await self.download_all_pokemon_movesets()
+
+            moves_data = await self.get_pokemon_moves_api(self.pokemon_data['name'])
+            if not moves_data:
+                await button.followup.send(f"No moveset data found for {self.pokemon_data['name'].title()}.", ephemeral=True)
+                return
+
+            embed = self.build_moves_embed(moves_data)
+            await button.followup.send(embed=embed, ephemeral=True)
+
         except Exception as e:
             traceback.print_exc()
-            await button.followup.send(
-                f"An unexpected error occurred loading the moveset:\n```{e}```",
-                ephemeral=True
-            )
+            await button.followup.send(f"Error loading moveset:\n```{e}```", ephemeral=True)
 
-    async def show_moves(self, interaction: discord.Interaction):
-     try:
-        moves_data = await self.get_pokemon_moves()
+    async def get_pokemon_moves_from_csv(self, pokemon_name):
+        moves_data = {}
+        try:
+            with open(self.pokemon_moveset_csv, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row["pokemon"].lower() == pokemon_name.lower():
+                        level = int(row.get("level", 1)) if row.get("level", "").isdigit() else 1
+                        moves_data[level] = {
+                            "name": row["name"],
+                            "power": row["power"],
+                            "accuracy": row["accuracy"],
+                            "effect": row["effect"]
+                        }
+        except Exception as e:
+            print(f"Error reading CSV for {pokemon_name}: {e}")
+        return moves_data
 
+    async def fetch_all_pokemon_names(self):
+        names = []
+        url = self.pokemon_api_url
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+            while url:
+                try:
+                    async with session.get(url) as resp:
+                        if resp.status != 200:
+                            break
+                        data = await resp.json()
+                        names.extend([p["name"] for p in data["results"]])
+                        url = data.get("next")
+                except Exception as e:
+                    print(f"Error fetching Pokemon names: {e}")
+                    break
+        return names
+
+    async def fetch_pokemon_moves_async(self, session, pokemon_name):
+        async with self.semaphore:
+            try:
+                url = f"https://pokeapi.co/api/v2/pokemon/{pokemon_name}"
+                async with session.get(url, timeout=15) as resp:
+                    if resp.status != 200:
+                        return []
+                    data = await resp.json()
+                    rows, move_tasks = [], []
+                    for move in data.get("moves", []):
+                        move_name = move["move"]["name"]
+                        move_url = move["move"]["url"]
+                        levels = [v["level_learned_at"] for v in move["version_group_details"] if v["level_learned_at"] > 0]
+                        level = min(levels) if levels else 1
+                        task = self.fetch_move_data_async(session, pokemon_name, move_name, move_url, level)
+                        move_tasks.append(task)
+
+                    batch_size = 5
+                    for i in range(0, len(move_tasks), batch_size):
+                        batch = move_tasks[i:i + batch_size]
+                        batch_results = await asyncio.gather(*batch, return_exceptions=True)
+                        for result in batch_results:
+                            if isinstance(result, dict):
+                                rows.append(result)
+                        await asyncio.sleep(0.1)
+                    return rows
+            except Exception as e:
+                print(f"Error fetching moves for {pokemon_name}: {e}")
+                return []
+
+    async def fetch_move_data_async(self, session, pokemon_name, move_name, move_url, level=1):
+        try:
+            async with session.get(move_url, timeout=10) as resp:
+                if resp.status != 200:
+                    return None
+                move_data = await resp.json()
+                effect = next(
+                    (e["short_effect"] for e in move_data.get("effect_entries", []) if e["language"]["name"] == "en"),
+                    "N/A"
+                )
+                return {
+                    "pokemon": pokemon_name,
+                    "name": move_name,
+                    "power": move_data.get("power", "N/A"),
+                    "accuracy": move_data.get("accuracy", "N/A"),
+                    "effect": effect,
+                    "level": level
+                }
+        except Exception:
+            return None
+
+    async def download_all_pokemon_movesets(self):
+        path = os.path.dirname(self.pokemon_moveset_csv)
+        os.makedirs(path, exist_ok=True)
+        print("Fetching Pokemon names...")
+        pokemon_names = await self.fetch_all_pokemon_names()
+        print(f"Found {len(pokemon_names)} Pokemon")
+
+        all_rows = []
+        connector = aiohttp.TCPConnector(limit=20, limit_per_host=10)
+        timeout = aiohttp.ClientTimeout(total=300)
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+            batch_size = 50
+            for i in range(0, len(pokemon_names), batch_size):
+                batch = pokemon_names[i:i + batch_size]
+                print(f"Processing batch {i//batch_size + 1}/{(len(pokemon_names) + batch_size - 1)//batch_size}")
+                tasks = [self.fetch_pokemon_moves_async(session, name) for name in batch]
+                batch_results = []
+                for task in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc=f"Batch {i//batch_size + 1}"):
+                    result = await task
+                    batch_results.extend(result)
+                all_rows.extend(batch_results)
+                await asyncio.sleep(1)
+
+        print(f"Writing {len(all_rows)} moves to CSV...")
+        with open(self.pokemon_moveset_csv, "w", newline="", encoding="utf-8") as f:
+            if all_rows:
+                writer = csv.DictWriter(f, fieldnames=["pokemon", "name", "power", "accuracy", "effect", "level"])
+                writer.writeheader()
+                writer.writerows(all_rows)
+        print("Download complete!")
+
+    async def get_pokemon_moves_api(self, name):
+        moves_data = {}
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+                url = f"https://pokeapi.co/api/v2/pokemon/{name.lower()}"
+                async with session.get(url) as resp:
+                    if resp.status != 200:
+                        return moves_data
+                    data = await resp.json()
+                    move_tasks = []
+                    for move in data.get("moves", []):
+                        levels = [v["level_learned_at"] for v in move["version_group_details"] if v["level_learned_at"] > 0]
+                        if not levels:
+                            continue
+                        level = min(levels)
+                        task = self.fetch_move_data_async(session, name, move["move"]["name"], move["move"]["url"], level)
+                        move_tasks.append((level, task))
+
+                    semaphore = asyncio.Semaphore(10)
+
+                    async def fetch_with_semaphore(level, task):
+                        async with semaphore:
+                            result = await task
+                            return level, result
+
+                    results = await asyncio.gather(
+                        *[fetch_with_semaphore(level, task) for level, task in move_tasks],
+                        return_exceptions=True
+                    )
+
+                    for level, move_data in results:
+                        if move_data:
+                            moves_data[level] = move_data
+        except Exception as e:
+            print(f"Error fetching moves for {name}: {e}")
+            traceback.print_exc()
+        return moves_data
+
+    def build_moves_embed(self, moves_data):
         embed = discord.Embed(
             title=f"{self.pokemon_data['name'].title().replace('-', ' ')} — Moveset",
             color=self.color
         )
-
-        for level, move in sorted(moves_data.items()):
-            name = move["name"].title().replace("-", " ")
-            power = move["power"] or "—"
-            accuracy = move["accuracy"] or "—"
-            effect = move["effect"]
-
+        for level in sorted(moves_data.keys())[:25]:
+            move = moves_data[level]
+            effect = move['effect'][:97] + "..." if len(move['effect']) > 100 else move['effect']
             embed.add_field(
-                name=f"{name}  | Lv. {level}",
-                value=(
-                    f"- Effect: {effect}\n"
-                    f"- Power: {power}\n"
-                    f"- Accuracy: {accuracy}"
-                ),
-                inline=False,
+                name=f"{move['name'].title().replace('-', ' ')} | Lv. {level}",
+                value = f"- Effect: {effect if effect else '—'}\n- Power: {move['power'] if move['power'] else '—'}\n- Accuracy: {move['accuracy'] if move['accuracy'] else '—'}",
+                inline=False
             )
-
+        if len(moves_data) > 25:
+            embed.set_footer(text=f"Showing first 25 of {len(moves_data)} moves")
         embed.set_thumbnail(url=self.thumbnail_url)
-        await interaction.followup.send(embed=embed, ephemeral=True)
-
-     except requests.exceptions.RequestException as e:
-        await interaction.followup.send(
-            f"Network error fetching moves data:\n```{e}```", ephemeral=True
-        )
-        traceback.print_exc()
-
-     except IndexError:
-        await interaction.followup.send(
-            "Error: Move data appears to be incomplete.", ephemeral=True
-        )
-        traceback.print_exc()
-
-     except Exception as e:
-        await interaction.followup.send(
-            f"An error occurred while showing the moveset:\n```{e}```",
-            ephemeral=True
-        )
-        traceback.print_exc()
-    
-    async def get_pokemon_moves(self):
-        moves_data = {}
-        moves = self.pokemon_data.get("moves", [])
-        for move in moves:
-            move_name = move["move"]["name"]
-            level = [
-                version_group_details["level_learned_at"]
-                for version_group_details in move["version_group_details"]
-            ]
-            if level:
-                move_url = move["move"]["url"]
-                move_data = await self.fetch_move_details(move_url)
-                move_power = move_data.get("power", "N/A")
-                move_accuracy = move_data.get("accuracy", "N/A")
-                move_effect_entries = move_data.get("effect_entries", [])
-                move_effect = (
-                    move_effect_entries[0]["short_effect"]
-                    if move_effect_entries
-                    else "N/A"
-                )
-                moves_data.setdefault(
-                    level[0],
-                    {
-                        "name": move_name,
-                        "power": move_power,
-                        "accuracy": move_accuracy,
-                        "effect": move_effect,
-                    },
-                )
-        return moves_data
-
-    @staticmethod
-    async def fetch_move_details(move_url):
-        try:
-            response = requests.get(move_url)
-            if response.status_code == 200:
-                return response.json()
-            else:
-                raise ValueError(f"Move API returned status code {response.status_code}")
-        except Exception as e:
-            traceback.print_exc()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        return embed

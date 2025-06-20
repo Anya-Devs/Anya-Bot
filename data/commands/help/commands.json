@@ -172,6 +172,15 @@
             "description": "Displays Pokemon dex information.",
             "example": "{}pokdex",
             "related_commands": "Provide related commands"
+        },
+        "pokedex": {
+            "aliases": [
+                "dex",
+                "d"
+            ],
+            "description": "Displays Pok\u00e9mon dex info.",
+            "example": "{}pokedex",
+            "related_commands": "Provide related commands"
         }
     },
     "Quest": {

@@ -54,22 +54,21 @@ class Anime(commands.Cog):
             await ctx.send(f"An unexpected error occurred: {e}")
 
     @commands.command(name="anime")
-    async def anime_search(self, ctx, recommend: Literal['recommend'] = None, query: Optional[str] = None):
-        if recommend:
-            d = await self.ar.fetch_random_anime()
-            m = await ctx.reply(embed=discord.Embed(description=f'{neko_lurk} Fetching anime...', color=primary_color()), mention_author=False)
-            return await self.ar.update_anime_embed(m, d)
-
-        query = query or await self.prompt_query(ctx, "anime")
-        if not query: return
-        await self.fetch_and_send(ctx, f"{self.api_url}anime?q={query}", query, AnimeView)
+    async def anime_search(self, ctx, *, query: Optional[str] = None):
+     if query and query.lower() == 'recommend':
+        d = await self.ar.fetch_random_anime()
+        m = await ctx.reply(embed=discord.Embed(description=f'{neko_lurk} Fetching anime...', color=primary_color()), mention_author=False)
+        return await self.ar.update_anime_embed(m, d)
+     query = query or await self.prompt_query(ctx, "anime")
+     if not query: return
+     await self.fetch_and_send(ctx, f"{self.api_url}anime?q={query}", query, AnimeView)
 
     @commands.command(name="character")
     async def character_search(self, ctx, *, query=None):
         query = query or await self.prompt_query(ctx, "character")
         if not query: return
         await self.fetch_and_send(ctx, f"{self.api_url}characters?q={query}", query, CharacterView)
-
+ 
     @commands.command(name="manga")
     async def manga_search(self, ctx, *, query=None):
         query = query or await self.prompt_query(ctx, "manga")
