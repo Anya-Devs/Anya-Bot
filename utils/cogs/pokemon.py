@@ -319,7 +319,7 @@ class Pokemon_Commands:
     def format_pokemon_type(self, pokemon_type_unformatted):
      # Editable formatting config
      header_bullet = "□"
-     branch_middle = "├─╠"
+     branch_middle = "├─"
      branch_end = "└─"
      none_text = "None"
 
