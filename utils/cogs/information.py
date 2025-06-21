@@ -511,7 +511,7 @@ class Information_Embed:
 
 class RoleLookupView(ui.View):
     def __init__(self, bot):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None)
         self.bot = bot
         self.selected = []
         self.user_select = ui.UserSelect(placeholder="Select users...", min_values=1, max_values=25)
@@ -547,15 +547,14 @@ class RoleLookupView(ui.View):
 
     async def create_user_embeds(self, member):
         perm, chan, misc = self.categorize_roles(member)
-        embeds, labels = [], []
+        embeds = []
         overview = discord.Embed(
-            title="Role Lookup Guide",
+            title=f"Roles for {member.display_name}",
             description=(
-                "This shows categorized roles for selected users.\n"
+                f"Breakdown of {member.mention}'s roles by category.\n\n"
                 "**How to use:**\n"
-                "- Use the dropdown to navigate.\n"
-                "- Only relevant role categories will appear.\n"
-                "- Categories: Permission Roles, Channel Access, Misc Roles."
+                "- Use the dropdown to jump between categories.\n"
+                "- Categories shown depend on roles the member has."
             ),
             color=member.color,
             timestamp=datetime.now()
@@ -574,41 +573,52 @@ class RoleLookupView(ui.View):
                 e = discord.Embed(title=title, description="".join(f"- {r.mention}\n" for r in page), color=member.color, timestamp=datetime.now()).set_thumbnail(url=member.display_avatar.url)
                 e.set_footer(text=f"Page {i+1} of {len(misc_pages)}")
                 embeds.append(e)
-                labels.append(title)
-        return embeds, labels
+        return embeds
 
     class RolePaginationView(ui.View):
-        def __init__(self, embeds, labels):
-            super().__init__(timeout=300)
+        def __init__(self, embeds):
+            super().__init__(timeout=None)
             self.embeds = embeds
             options = [discord.SelectOption(label="Overview", value="0")]
             for i, embed in enumerate(embeds[1:], start=1):
                 options.append(discord.SelectOption(label=embed.title, value=str(i)))
-            self.page_select = ui.Select(placeholder="Jump to role section...", options=options)
+            self.page_select = ui.Select(placeholder="Jump to section...", options=options)
             self.page_select.callback = self.select_page
             self.add_item(self.page_select)
+            self.idx = 0
 
         async def select_page(self, interaction):
-            await interaction.response.edit_message(embed=self.embeds[int(self.page_select.values[0])], view=self)
+            self.idx = int(self.page_select.values[0])
+            await interaction.response.edit_message(embed=self.embeds[self.idx], view=self)
 
     @ui.button(label="Validate", style=discord.ButtonStyle.success, row=1)
     async def validate(self, button, interaction):
         if not self.selected:
             return await button.response.send_message("❌ No users selected.", ephemeral=True)
         try:
-            member = self.selected[0]
-            embeds, labels = await self.create_user_embeds(member)
-            await button.response.send_message(embed=embeds[0], view=self.RolePaginationView(embeds, labels), ephemeral=True)
+            # Send overview message explaining usage
+            overview_embed = discord.Embed(
+                title="Role Lookup Overview",
+                description=(
+                    "Select users from the dropdown and click Validate.\n"
+                    "You will receive individual paginated messages per user with role breakdowns."
+                ),
+                color=discord.Color.blue(),
+                timestamp=datetime.now()
+            ).set_footer(text="Role Lookup Command")
+            await button.response.send_message(embed=overview_embed, ephemeral=True)
+
+            # Send each user's paginated role embeds with their own select menu
+            for member in self.selected:
+                embeds = await self.create_user_embeds(member)
+                view = self.RolePaginationView(embeds)
+                await button.followup.send(embed=embeds[0], view=view, ephemeral=True)
+
         except Exception:
             import traceback
             tb = traceback.format_exc()
             print(tb)
-            await interaction.followup.send(f"⚠️ Error:\n```\n{tb[:1900]}\n```", ephemeral=True)
-
-
-
-
-
+            await button.followup.send(f"⚠️ Error:\n```\n{tb[:1900]}\n```", ephemeral=True)
 
 
 
