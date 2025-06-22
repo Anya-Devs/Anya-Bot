@@ -1327,7 +1327,7 @@ class Strength_weakness(discord.ui.View):
             embed.add_field(
                 name=f"{move['name'].title().replace('-', ' ')} | Lv. {level}",
                 value = f"- Effect: {effect if effect else '—'}\n- Power: {move['power'] if move['power'] else '—'}\n- Accuracy: {move['accuracy'] if move['accuracy'] else '—'}",
-                inline=False
+                inline=True
             )
         if len(moves_data) > 25:
             embed.set_footer(text=f"Showing first 25 of {len(moves_data)} moves")
