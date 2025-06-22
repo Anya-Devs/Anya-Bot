@@ -980,7 +980,7 @@ class Pokebuttons(discord.ui.View):
 
         await button.response.send_message(
             embed=embed,
-            view=Strength_weakness(
+            view=StatsView(
                 color, strength_weakness, thumbnail, footer, footer_text, pokemon_data
             ),
             ephemeral=True,
@@ -1095,17 +1095,10 @@ class RegionFlagMapping:
             "ky": "🇰🇬",
         }
 
+import traceback
 
-class Strength_weakness(discord.ui.View):
-    def __init__(
-        self,
-        color=None,
-        strength_weakness_text=None,
-        thumbnail_url=None,
-        footer=None,
-        footer_text=None,
-        pokemon_data=None,
-    ):
+class StatsView(discord.ui.View):
+    def __init__(self, color=None, strength_weakness_text=None, thumbnail_url=None, footer=None, footer_text=None, pokemon_data=None):
         super().__init__()
         self.color = color
         self.strength_weakness_text = strength_weakness_text
@@ -1113,75 +1106,236 @@ class Strength_weakness(discord.ui.View):
         self.footer = footer
         self.footer_text = footer_text
         self.pokemon_data = pokemon_data
-        self.pokemon_moveset_csv = "data/commands/pokemon/pokemon_moveset.csv"
-        self.moves_api_base = "https://pokeapi.co/api/v2/move"
-        self.pokemon_api_url = "https://pokeapi.co/api/v2/pokemon"
+        self.csv_path = "data/commands/pokemon/pokemon_moveset.csv"
+        self.moves_api = "https://pokeapi.co/api/v2/move"
+        self.pokemon_api = "https://pokeapi.co/api/v2/pokemon"
         self.semaphore = asyncio.Semaphore(10)
+        self.current_page = 0
+        self.moves_per_page = 9
+        self.moves_data = {}
 
-    @discord.ui.button(label="Type Details", style=discord.ButtonStyle.gray, custom_id="Pokemon_S_and_W_Button")
-    async def strengths_and_weaknesses(self, button: discord.ui.Button, interaction: discord.Interaction):
+    @discord.ui.button(label="Type Details", style=discord.ButtonStyle.gray)
+    async def type_details(self, button: discord.ui.Button, interaction: discord.Interaction):
         try:
             embed = discord.Embed(color=self.color, description=self.strength_weakness_text)
-            if self.footer is None:
-                embed.set_footer(text=self.footer_text)
-            else:
+            if self.footer:
                 embed.set_footer(icon_url=self.footer, text=self.footer_text)
+            else:
+                embed.set_footer(text=self.footer_text)
             await button.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
-            traceback.print_exc()
-            await button.response.send_message(
-                f"An error occurred displaying strengths/weaknesses:\n```{e}```",
-                ephemeral=True
-            )
+            tb = traceback.format_exc()
+            await button.response.send_message(f"Error: {e}\n```py\n{tb}```", ephemeral=True)
 
-    @discord.ui.button(label="Moveset", style=discord.ButtonStyle.gray, custom_id="Pokemon_Moveset_Button")
-    async def moves_button(self, button, interaction):
+    @discord.ui.button(label="Moveset", style=discord.ButtonStyle.gray)
+    async def moveset(self, button: discord.ui.Button, interaction: discord.Interaction):
         try:
-            await button.response.defer(ephemeral=True)
-            
-            if os.path.exists(self.pokemon_moveset_csv) and os.path.getsize(self.pokemon_moveset_csv) > 0:
-                moves_data = await self.get_pokemon_moves_from_csv(self.pokemon_data['name'])
-                if moves_data:
-                    embed = self.build_moves_embed(moves_data)
-                    await button.followup.send(embed=embed, ephemeral=True)
+            if self.csv_exists():
+                moves = await self.get_moves_from_csv()
+                if moves:
+                    self.moves_data = moves
+                    embed = self.create_moves_embed()
+                    view = self.create_nav_view()
+                    await button.response.send_message(embed=embed, view=view, ephemeral=True)
                     return
-            
-            await button.followup.send("Downloading Pokémon movesets, this may take a few minutes...", ephemeral=True)
-            await self.download_all_pokemon_movesets()
 
-            moves_data = await self.get_pokemon_moves_api(self.pokemon_data['name'])
-            if not moves_data:
-                await button.followup.send(f"No moveset data found for {self.pokemon_data['name'].title()}.", ephemeral=True)
+            await button.response.send_message("Downloading movesets...", ephemeral=True)
+            await self.download_movesets()
+
+            moves = await self.get_moves_from_api()
+            if not moves:
+                await button.followup.send(f"No moves found for {self.pokemon_data['name']}", ephemeral=True)
                 return
 
-            embed = self.build_moves_embed(moves_data)
-            await button.followup.send(embed=embed, ephemeral=True)
+            self.moves_data = moves
+            embed = self.create_moves_embed()
+            view = self.create_nav_view()
+            await button.followup.send(embed=embed, view=view, ephemeral=True)
 
         except Exception as e:
-            traceback.print_exc()
-            await button.followup.send(f"Error loading moveset:\n```{e}```", ephemeral=True)
+            tb = traceback.format_exc()
+            try:
+                print(tb)
+                await button.followup.send(f"Error: {e}\n```py\n{tb}```", ephemeral=True)
+            except:
+                print(tb)
+                await button.response.send_message(f"Error: {e}\n```py\n{tb}```", ephemeral=True)
 
-    async def get_pokemon_moves_from_csv(self, pokemon_name):
-        moves_data = {}
+    def csv_exists(self):
+        return os.path.exists(self.csv_path) and os.path.getsize(self.csv_path) > 0
+
+    async def get_moves_from_csv(self):
+        moves = {}
         try:
-            with open(self.pokemon_moveset_csv, "r", encoding="utf-8") as f:
+            with open(self.csv_path, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    if row["pokemon"].lower() == pokemon_name.lower():
+                    if row["pokemon"].lower() == self.pokemon_data['name'].lower():
                         level = int(row.get("level", 1)) if row.get("level", "").isdigit() else 1
-                        moves_data[level] = {
+                        moves[level] = {
                             "name": row["name"],
                             "power": row["power"],
                             "accuracy": row["accuracy"],
                             "effect": row["effect"]
                         }
         except Exception as e:
-            print(f"Error reading CSV for {pokemon_name}: {e}")
-        return moves_data
+            print(f"CSV error: {e}")
+            traceback.print_exc()
+        return moves
 
-    async def fetch_all_pokemon_names(self):
+    async def get_moves_from_api(self):
+        moves = {}
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+                url = f"{self.pokemon_api}/{self.pokemon_data['name'].lower()}"
+                async with session.get(url) as resp:
+                    if resp.status != 200:
+                        return moves
+                    data = await resp.json()
+
+                    tasks = []
+                    for move in data.get("moves", []):
+                        levels = [v["level_learned_at"] for v in move["version_group_details"] if v["level_learned_at"] > 0]
+                        if levels:
+                            level = min(levels)
+                            task = self.fetch_move_data(session, move["move"]["name"], move["move"]["url"], level)
+                            tasks.append((level, task))
+
+                    results = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
+
+                    for (level, _), result in zip(tasks, results):
+                        if result and not isinstance(result, Exception):
+                            moves[level] = result
+        except Exception as e:
+            print(f"API error: {e}")
+            traceback.print_exc()
+        return moves
+
+    async def fetch_move_data(self, session, name, url, level):
+        try:
+            async with self.semaphore:
+                async with session.get(url, timeout=10) as resp:
+                    if resp.status != 200:
+                        return None
+                    data = await resp.json()
+                    effect = next((e["short_effect"] for e in data.get("effect_entries", []) if e["language"]["name"] == "en"), "")
+                    return {
+                        "name": name,
+                        "power": data.get("power", ""),
+                        "accuracy": data.get("accuracy", ""),
+                        "effect": effect
+                    }
+        except Exception:
+            traceback.print_exc()
+            return None
+
+    def create_moves_embed(self):
+        if not self.moves_data:
+            return discord.Embed(title="No moves found", color=self.color)
+
+        sorted_levels = sorted(self.moves_data.keys())
+        start = self.current_page * self.moves_per_page
+        end = start + self.moves_per_page
+        page_levels = sorted_levels[start:end]
+
+        embed = discord.Embed(
+            title=f"{self.pokemon_data['name'].title().replace('-', ' ')} Moveset",
+            color=self.color
+        )
+
+        for level in page_levels:
+            move = self.moves_data[level]
+            effect = move['effect'][:97] + "..." if len(move['effect']) > 100 else move['effect']
+            embed.add_field(
+                name=f"{move['name'].title().replace('-', ' ')} (Lv. {level})",
+                value=f"Power: {move['power'] or '—'} | Accuracy: {move['accuracy'] or '—'}\n{effect or 'No description'}",
+                inline=False
+            )
+
+        total_pages = (len(self.moves_data) + self.moves_per_page - 1) // self.moves_per_page
+        embed.set_footer(text=f"Page {self.current_page + 1}/{total_pages} | {len(self.moves_data)} moves")
+        if self.thumbnail_url:
+            embed.set_thumbnail(url=self.thumbnail_url)
+
+        return embed
+
+    def create_nav_view(self):
+        view = discord.ui.View(timeout=300)
+        total_pages = (len(self.moves_data) + self.moves_per_page - 1) // self.moves_per_page
+
+        first = discord.ui.Button(label="<<", style=discord.ButtonStyle.secondary, disabled=self.current_page == 0)
+        prev = discord.ui.Button(label="<", style=discord.ButtonStyle.secondary, disabled=self.current_page == 0)
+        page = discord.ui.Button(label=f"{self.current_page + 1}/{total_pages}", style=discord.ButtonStyle.primary, disabled=True)
+        next_btn = discord.ui.Button(label=">", style=discord.ButtonStyle.secondary, disabled=self.current_page >= total_pages - 1)
+        last = discord.ui.Button(label=">>", style=discord.ButtonStyle.secondary, disabled=self.current_page >= total_pages - 1)
+
+        first.callback = self.first_page
+        prev.callback = self.prev_page
+        next_btn.callback = self.next_page
+        last.callback = self.last_page
+
+        view.add_item(first)
+        view.add_item(prev)
+        view.add_item(page)
+        view.add_item(next_btn)
+        view.add_item(last)
+
+        return view
+
+    async def first_page(self, interaction: discord.Interaction):
+        self.current_page = 0
+        await self.update_page(interaction)
+
+    async def prev_page(self, interaction: discord.Interaction):
+        if self.current_page > 0:
+            self.current_page -= 1
+        await self.update_page(interaction)
+
+    async def next_page(self, interaction: discord.Interaction):
+        total_pages = (len(self.moves_data) + self.moves_per_page - 1) // self.moves_per_page
+        if self.current_page < total_pages - 1:
+            self.current_page += 1
+        await self.update_page(interaction)
+
+    async def last_page(self, interaction: discord.Interaction):
+        total_pages = (len(self.moves_data) + self.moves_per_page - 1) // self.moves_per_page
+        self.current_page = total_pages - 1
+        await self.update_page(interaction)
+
+    async def update_page(self, interaction: discord.Interaction):
+        try:
+            embed = self.create_moves_embed()
+            view = self.create_nav_view()
+            await interaction.response.edit_message(embed=embed, view=view)
+        except Exception as e:
+            tb = traceback.format_exc()
+            await interaction.response.send_message(f"Error: {e}\n```py\n{tb}```", ephemeral=True)
+
+    async def download_movesets(self):
+        os.makedirs(os.path.dirname(self.csv_path), exist_ok=True)
+        pokemon_names = await self.fetch_pokemon_names()
+
+        all_moves = []
+        connector = aiohttp.TCPConnector(limit=20)
+        async with aiohttp.ClientSession(connector=connector, timeout=aiohttp.ClientTimeout(total=300)) as session:
+            for i in range(0, len(pokemon_names), 50):
+                batch = pokemon_names[i:i + 50]
+                tasks = [self.fetch_pokemon_moves(session, name) for name in batch]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for result in results:
+                    if isinstance(result, list):
+                        all_moves.extend(result)
+                await asyncio.sleep(1)
+
+        with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
+            if all_moves:
+                writer = csv.DictWriter(f, fieldnames=["pokemon", "name", "power", "accuracy", "effect", "level"])
+                writer.writeheader()
+                writer.writerows(all_moves)
+
+    async def fetch_pokemon_names(self):
         names = []
-        url = self.pokemon_api_url
+        url = self.pokemon_api
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
             while url:
                 try:
@@ -1191,145 +1345,37 @@ class Strength_weakness(discord.ui.View):
                         data = await resp.json()
                         names.extend([p["name"] for p in data["results"]])
                         url = data.get("next")
-                except Exception as e:
-                    print(f"Error fetching Pokemon names: {e}")
+                except Exception:
+                    traceback.print_exc()
                     break
         return names
 
-    async def fetch_pokemon_moves_async(self, session, pokemon_name):
-        async with self.semaphore:
-            try:
-                url = f"https://pokeapi.co/api/v2/pokemon/{pokemon_name}"
+    async def fetch_pokemon_moves(self, session, pokemon_name):
+        try:
+            async with self.semaphore:
+                url = f"{self.pokemon_api}/{pokemon_name}"
                 async with session.get(url, timeout=15) as resp:
                     if resp.status != 200:
                         return []
                     data = await resp.json()
-                    rows, move_tasks = [], []
+
+                    moves = []
                     for move in data.get("moves", []):
-                        move_name = move["move"]["name"]
-                        move_url = move["move"]["url"]
                         levels = [v["level_learned_at"] for v in move["version_group_details"] if v["level_learned_at"] > 0]
-                        level = min(levels) if levels else 1
-                        task = self.fetch_move_data_async(session, pokemon_name, move_name, move_url, level)
-                        move_tasks.append(task)
-
-                    batch_size = 5
-                    for i in range(0, len(move_tasks), batch_size):
-                        batch = move_tasks[i:i + batch_size]
-                        batch_results = await asyncio.gather(*batch, return_exceptions=True)
-                        for result in batch_results:
-                            if isinstance(result, dict):
-                                rows.append(result)
-                        await asyncio.sleep(0.1)
-                    return rows
-            except Exception as e:
-                print(f"Error fetching moves for {pokemon_name}: {e}")
-                return []
-
-    async def fetch_move_data_async(self, session, pokemon_name, move_name, move_url, level=1):
-        try:
-            async with session.get(move_url, timeout=10) as resp:
-                if resp.status != 200:
-                    return None
-                move_data = await resp.json()
-                effect = next(
-                    (e["short_effect"] for e in move_data.get("effect_entries", []) if e["language"]["name"] == "en"),
-                    "N/A"
-                )
-                return {
-                    "pokemon": pokemon_name,
-                    "name": move_name,
-                    "power": move_data.get("power", "N/A"),
-                    "accuracy": move_data.get("accuracy", "N/A"),
-                    "effect": effect,
-                    "level": level
-                }
+                        if levels:
+                            level = min(levels)
+                            move_data = await self.fetch_move_data(session, move["move"]["name"], move["move"]["url"], level)
+                            if move_data:
+                                moves.append({
+                                    "pokemon": pokemon_name,
+                                    "name": move_data["name"],
+                                    "power": move_data["power"],
+                                    "accuracy": move_data["accuracy"],
+                                    "effect": move_data["effect"],
+                                    "level": level
+                                })
+                    return moves
         except Exception:
-            return None
-
-    async def download_all_pokemon_movesets(self):
-        path = os.path.dirname(self.pokemon_moveset_csv)
-        os.makedirs(path, exist_ok=True)
-        print("Fetching Pokemon names...")
-        pokemon_names = await self.fetch_all_pokemon_names()
-        print(f"Found {len(pokemon_names)} Pokemon")
-
-        all_rows = []
-        connector = aiohttp.TCPConnector(limit=20, limit_per_host=10)
-        timeout = aiohttp.ClientTimeout(total=300)
-        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-            batch_size = 50
-            for i in range(0, len(pokemon_names), batch_size):
-                batch = pokemon_names[i:i + batch_size]
-                print(f"Processing batch {i//batch_size + 1}/{(len(pokemon_names) + batch_size - 1)//batch_size}")
-                tasks = [self.fetch_pokemon_moves_async(session, name) for name in batch]
-                batch_results = []
-                for task in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc=f"Batch {i//batch_size + 1}"):
-                    result = await task
-                    batch_results.extend(result)
-                all_rows.extend(batch_results)
-                await asyncio.sleep(1)
-
-        print(f"Writing {len(all_rows)} moves to CSV...")
-        with open(self.pokemon_moveset_csv, "w", newline="", encoding="utf-8") as f:
-            if all_rows:
-                writer = csv.DictWriter(f, fieldnames=["pokemon", "name", "power", "accuracy", "effect", "level"])
-                writer.writeheader()
-                writer.writerows(all_rows)
-        print("Download complete!")
-
-    async def get_pokemon_moves_api(self, name):
-        moves_data = {}
-        try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
-                url = f"https://pokeapi.co/api/v2/pokemon/{name.lower()}"
-                async with session.get(url) as resp:
-                    if resp.status != 200:
-                        return moves_data
-                    data = await resp.json()
-                    move_tasks = []
-                    for move in data.get("moves", []):
-                        levels = [v["level_learned_at"] for v in move["version_group_details"] if v["level_learned_at"] > 0]
-                        if not levels:
-                            continue
-                        level = min(levels)
-                        task = self.fetch_move_data_async(session, name, move["move"]["name"], move["move"]["url"], level)
-                        move_tasks.append((level, task))
-
-                    semaphore = asyncio.Semaphore(10)
-
-                    async def fetch_with_semaphore(level, task):
-                        async with semaphore:
-                            result = await task
-                            return level, result
-
-                    results = await asyncio.gather(
-                        *[fetch_with_semaphore(level, task) for level, task in move_tasks],
-                        return_exceptions=True
-                    )
-
-                    for level, move_data in results:
-                        if move_data:
-                            moves_data[level] = move_data
-        except Exception as e:
-            print(f"Error fetching moves for {name}: {e}")
             traceback.print_exc()
-        return moves_data
+            return []
 
-    def build_moves_embed(self, moves_data):
-        embed = discord.Embed(
-            title=f"{self.pokemon_data['name'].title().replace('-', ' ')} — Moveset",
-            color=self.color
-        )
-        for level in sorted(moves_data.keys())[:25]:
-            move = moves_data[level]
-            effect = move['effect'][:97] + "..." if len(move['effect']) > 100 else move['effect']
-            embed.add_field(
-                name=f"{move['name'].title().replace('-', ' ')} | Lv. {level}",
-                value = f"- Effect: {effect if effect else '—'}\n- Power: {move['power'] if move['power'] else '—'}\n- Accuracy: {move['accuracy'] if move['accuracy'] else '—'}",
-                inline=True
-            )
-        if len(moves_data) > 25:
-            embed.set_footer(text=f"Showing first 25 of {len(moves_data)} moves")
-        embed.set_thumbnail(url=self.thumbnail_url)
-        return embed

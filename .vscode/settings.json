@@ -1,4 +1,5 @@
 {
   "DockerRun.DisableDockerrc": true,
-  "python.REPL.enableREPLSmartSend": false
+  "python.REPL.enableREPLSmartSend": false,
+  "idf.pythonInstallPath": "/home/codespace/.python/current/bin/python"
 }
