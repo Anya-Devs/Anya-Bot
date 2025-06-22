@@ -12,8 +12,12 @@ from bot.token import use_test_bot as ut
 from utils.subcogs.pokemon import *
 
 
-MAX_POKEMON, CHUNK_SIZE = 50, 15
+MAX_POKEMON, CHUNK_SIZE, RESULTS_PER_PAGE, MIN_SIMILARITY_RATIO  = 50, 15, 10, 0.65
+
 class Ping_Pokemon(commands.Cog):
+    ICONS = {"success": "[✓]", "error": "[✕]", "exists": "[⍻]", "removed": "[−]", "not_found": "[𐄂]"}
+    MIN_SUGGEST_LEN, MAX_SUGGESTIONS, RESULTS_PER_PAGE, MAX_OTHER_ENTRIES = 3, 5, 5, 10
+
     def __init__(self, bot):
         self.bot = bot
         self.shiny_collection = "shiny_hunt"
@@ -23,26 +27,47 @@ class Ping_Pokemon(commands.Cog):
         self._valid_slugs = None
         self.pe = Pokemon_Emojis(bot)
         self.ph = PokemonNameHelper()
+        self.region_map = {"alolan": "-alola", "galarian": "-galar", "hisuian": "-hisui", "paldean": "-paldea", "mega": "-mega"}
+        self.reverse_region_map = {
+            "alola": "Alolan",
+            "galar": "Galarian",
+            "hisui": "Hisuian",
+            "paldea": "Paldean",
+            "mega": "Mega"
+        }
+
+    def normalize_regional_name(self, name: str) -> str:
+        parts = name.lower().split("-")
+        for i, p in enumerate(parts):
+            if p in self.region_map:
+                parts.pop(i)
+                return "-".join(parts) + self.region_map[p]
+        return name
+
+    def display_name_with_region(self, slug: str) -> str:
+        parts = slug.lower().split("-")
+        # Check if last part matches a known region suffix
+        if parts[-1] in self.reverse_region_map:
+            region_prefix = self.reverse_region_map[parts[-1]]
+            base_name = " ".join(parts[:-1]).title()
+            return f"{region_prefix} {base_name}"
+        return " ".join(parts).title()
 
     async def load_valid_slugs(self):
         if not os.path.isfile(self.pokemon_names_csv):
-            url = "https://pokeapi.co/api/v2/pokemon?offset=0"
-            pokemons = []
+            url, pokemons = "https://pokeapi.co/api/v2/pokemon?offset=0", []
             async with aiohttp.ClientSession() as session:
-                next_url = url
-                while next_url:
-                    async with session.get(next_url) as resp:
+                while url:
+                    async with session.get(url) as resp:
                         data = await resp.json()
-                        for p in data["results"]:
-                            pid = int(p["url"].rstrip("/").split("/")[-1])
-                            pokemons.append({"id": pid, "name": p["name"]})
-                        next_url = data["next"]
+                        pokemons += [{"id": int(p["url"].rstrip("/").split("/")[-1]), "name": p["name"]} for p in data["results"]]
+                        url = data["next"]
             with open(self.pokemon_names_csv, "w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=["id", "name"])
                 writer.writeheader()
                 writer.writerows(pokemons)
         with open(self.pokemon_names_csv, newline="", encoding="utf-8") as f:
-            return {row["name"].lower() for row in csv.DictReader(f)}  # lowercase all for matching
+            return {row["name"].lower() for row in csv.DictReader(f)}
 
     @property
     async def valid_slugs(self):
@@ -56,7 +81,7 @@ class Ping_Pokemon(commands.Cog):
 
         class NavView(View):
             def __init__(self, index=0):
-                super().__init__(timeout=60)
+                super().__init__(timeout=None)
                 self.index = index
                 self.prev_button = Button(label="◀", style=ButtonStyle.secondary, disabled=index == 0)
                 self.next_button = Button(label="▶", style=ButtonStyle.secondary, disabled=index >= len(embeds) - 1)
@@ -65,31 +90,26 @@ class Ping_Pokemon(commands.Cog):
                 self.add_item(self.prev_button)
                 self.add_item(self.next_button)
 
-            async def interaction_check(self, interaction: Interaction) -> bool:
-                return interaction.user == ctx.author
+            async def interaction_check(self, i: Interaction):
+                return i.user == ctx.author
 
-            async def go_prev(self, interaction: Interaction):
-                if self.index > 0:
-                    self.index -= 1
-                    await interaction.response.edit_message(embed=embeds[self.index], view=NavView(self.index))
+            async def go_prev(self, i: Interaction):
+                self.index -= 1
+                await i.response.edit_message(embed=embeds[self.index], view=NavView(self.index))
 
-            async def go_next(self, interaction: Interaction):
-                if self.index < len(embeds) - 1:
-                    self.index += 1
-                    await interaction.response.edit_message(embed=embeds[self.index], view=NavView(self.index))
+            async def go_next(self, i: Interaction):
+                self.index += 1
+                await i.response.edit_message(embed=embeds[self.index], view=NavView(self.index))
 
         await ctx.reply(embed=embeds[0], view=NavView(), mention_author=False)
 
     async def handle_collection(self, ctx, col, action, pokemon=None, max_one=False):
-    
-        valid_slugs = await self.valid_slugs
-        valid_lookup = {v.lower() for v in valid_slugs}
+        valid_slugs, valid_slugs_list = await self.valid_slugs, list(await self.valid_slugs)
         uid = ctx.author.id
         cur = await self.mongo.list(col, uid)
-        invalids = [n for n in cur if n.lower() not in valid_lookup]
-        shiny_hunt = max_one
-        
 
+        # Clean invalid entries
+        invalids = [n for n in cur if n.lower() not in valid_slugs]
         for n in invalids:
             await self.mongo.remove(col, n, uid)
 
@@ -102,7 +122,10 @@ class Ping_Pokemon(commands.Cog):
         if action == "list":
             if not cur:
                 return await ctx.reply(embed=Embed(description="Your list is empty."), mention_author=False)
-            entries = [f"{self.pe.get_emoji_for_pokemon(Pokemon_Subcogs.pokemon_name_to_id(n)) or ''} {n.title()}" for n in cur]
+            entries = [
+                f"{self.pe.get_emoji_for_pokemon(Pokemon_Subcogs.pokemon_name_to_id(n)) or ''} {self.display_name_with_region(n)}"
+                for n in cur
+            ]
             return await self.paginate_and_send(ctx, entries)
 
         if action == "clear":
@@ -110,81 +133,164 @@ class Ping_Pokemon(commands.Cog):
             return await ctx.reply(embed=Embed(description="🗑️ Cleared your Pokémon list."), mention_author=False)
 
         if not pokemon:
-            return await ctx.reply(embed=Embed(description="`[✕]` Specify Pokémon name(s)."), mention_author=False)
+            return await ctx.reply(embed=Embed(description=f"`{self.ICONS['error']}` Specify Pokémon name(s)."), mention_author=False)
 
-        names = []
+        names, success, failed, exists = [], [], [], []
         for entry in pokemon.split(","):
             raw = entry.strip()
-            name, _ = Pokemon.transform_pokemon_name(raw)
+            norm_name = self.normalize_regional_name(raw.lower().replace(" ", "-"))
+            name, _ = Pokemon.transform_pokemon_name(norm_name)
             if name:
                 names.append((raw, name))
 
-        results = []
         cur = await self.mongo.list(col, uid)
-
         for raw, name in names:
-            match = difflib.get_close_matches(name.lower(), valid_lookup, n=1, cutoff=0.8)
-            if not match:
-                results.append(f"`[✕]` Invalid Pokémon name: {raw}")
-                continue
+            name_lower = name.lower()
+            if name_lower in valid_slugs:
+                matched_slug = name_lower
+            else:
+                suggestions = [slug for slug in valid_slugs_list if name_lower in slug]
+                if not suggestions:
+                    suggestions = [
+                        s for s in difflib.get_close_matches(name_lower, valid_slugs_list, n=self.MAX_SUGGESTIONS)
+                        if difflib.SequenceMatcher(None, name_lower, s).ratio() >= MIN_SIMILARITY_RATIO
+                    ]
+                if not suggestions:
+                    failed.append(f"`{self.ICONS['error']}` Invalid Pokémon name: **{raw}**.")
+                    continue
+                if len(suggestions) == 1:
+                    matched_slug = suggestions[0]
+                else:
+                    sugg_list = "\n".join(f"- {s.replace('-', ' ').title()}" for s in suggestions)
+                    failed.append(f"`{self.ICONS['error']}` Invalid Pokémon name: **{raw}**.\n\nDid you mean:\n{sugg_list}")
+                    continue
 
-            matched_slug = match[0]
             pid = Pokemon_Subcogs.pokemon_name_to_id(matched_slug)
             emoji = self.pe.get_emoji_for_pokemon(pid) or ""
-
             if action == "add":
                 if max_one:
                     await self.mongo.replace(col, matched_slug, uid)
-                    name = self.ph.reverse_transform_name(matched_slug)[0].replace('-', ' ')
-                    results.append(f"`[✓]` Set your shiny hunt to {emoji} {name.title()}!")
+                    name_disp = self.display_name_with_region(matched_slug)
+                    success.append(f"`{self.ICONS['success']}` Set your shiny hunt to {emoji} {name_disp}!")
                     break
                 if len(cur) >= MAX_POKEMON and matched_slug not in cur:
-                    results.append(f"`[✕]` Max {MAX_POKEMON} Pokémon. `{matched_slug.title()}` not added.")
+                    exists.append(f"`{self.ICONS['error']}` Max {MAX_POKEMON} Pokémon. `{matched_slug.title()}` not added.")
                     continue
                 ok = await self.mongo.add(col, matched_slug, uid)
-                results.append(f"`[✓]` Added {emoji} {matched_slug.title()}" if ok else f"`[⍻]` {emoji} {matched_slug.title()} already exists.")
+                (success if ok else exists).append(f"`{self.ICONS['success'] if ok else self.ICONS['exists']}` {emoji} {self.display_name_with_region(matched_slug)}")
                 if ok:
                     cur.append(matched_slug)
-
             elif action == "remove":
                 ok = await self.mongo.remove(col, matched_slug, uid)
-                results.append(f"`[−]` {emoji} Removed {matched_slug.title()}" if ok else f"`[𐄂]` {emoji} {matched_slug.title()} not found.")
+                (success if ok else exists).append(f"`{self.ICONS['removed'] if ok else self.ICONS['not_found']}` {emoji} {self.display_name_with_region(matched_slug)}")
 
-        if len(results) <= CHUNK_SIZE:
-            embed = Embed(description="\n".join(results))
-            embed.set_footer(text="" if shiny_hunt else "Updated Your Pokemon Collection")
-            await ctx.reply(embed=embed, mention_author=False)
-        else:
-            await self.paginate_and_send(ctx, results, title="Collection Update")
+        content = "\n".join(success) or "No valid Pokémon processed."
+        embed = Embed(description=content[:4000], color=primary_color())
+        embed.set_footer(text="" if max_one else "Updated Your Pokemon Collection")
+        msg = await ctx.reply(embed=embed, mention_author=False)
+
+        if failed or exists:
+            class ResultView(View):
+                def __init__(self):
+                    super().__init__(timeout=300)
+                    self.current_view = "success"
+                    self.current_page = 0
+                    self.update_components()
+
+                def get_pages(self, result_type):
+                    data = {"success": success, "invalid": failed, "other": exists}[result_type]
+                    return [data[i:i + RESULTS_PER_PAGE] for i in range(0, len(data), RESULTS_PER_PAGE)] or [[]]
+
+                def update_components(self):
+                    self.clear_items()
+                    if success:
+                        btn_success = Button(label=f"✅ Success ({len(success)})",
+                                             style=ButtonStyle.success if self.current_view == "success" else ButtonStyle.secondary)
+                        btn_success.callback = lambda i, v=self: v.switch_view(i, "success")
+                        self.add_item(btn_success)
+                    if failed:
+                        btn_invalid = Button(label=f"❌ Invalid ({len(failed)})",
+                                             style=ButtonStyle.danger if self.current_view == "invalid" else ButtonStyle.secondary)
+                        btn_invalid.callback = lambda i, v=self: v.switch_view(i, "invalid")
+                        self.add_item(btn_invalid)
+                    if exists:
+                        btn_other = Button(label=f"⛔ Other ({len(exists)})",
+                                           style=ButtonStyle.secondary if self.current_view != "other" else ButtonStyle.primary)
+                        btn_other.callback = lambda i, v=self: v.switch_view(i, "other")
+                        self.add_item(btn_other)
+                    pages = self.get_pages(self.current_view)
+                    if len(pages) > 1:
+                        prev_btn = Button(label="◀", style=ButtonStyle.secondary, disabled=self.current_page == 0, row=1)
+                        next_btn = Button(label="▶", style=ButtonStyle.secondary, disabled=self.current_page >= len(pages) - 1, row=1)
+                        page_btn = Button(label=f"Page {self.current_page + 1}/{len(pages)}", style=ButtonStyle.secondary, disabled=True, row=1)
+                        prev_btn.callback = lambda i, v=self: v.change_page(i, -1)
+                        next_btn.callback = lambda i, v=self: v.change_page(i, 1)
+                        self.add_item(prev_btn)
+                        self.add_item(page_btn)
+                        self.add_item(next_btn)
+
+                async def switch_view(self, interaction: Interaction, view_type):
+                    self.current_view = view_type
+                    self.current_page = 0
+                    await self.update_message(interaction)
+
+                async def change_page(self, interaction: Interaction, direction):
+                    pages = self.get_pages(self.current_view)
+                    self.current_page = max(0, min(len(pages) - 1, self.current_page + direction))
+                    await self.update_message(interaction)
+
+                async def update_message(self, interaction: Interaction):
+                    pages = self.get_pages(self.current_view)
+                    current_data = pages[self.current_page] if pages else []
+                    content = "\n".join(current_data) if current_data else "No entries to display."
+                    view_names = {"success": "✅ Successful Results", "invalid": "❌ Invalid Results", "other": "⛔ Other Results"}
+                    header = f"**{view_names[self.current_view]}**\n\n"
+                    embed = Embed(description=header + content[:3900], color=primary_color())
+                    if len(pages) > 1:
+                        embed.set_footer(text=f"Page {self.current_page + 1} of {len(pages)} • {len(current_data)} entries shown")
+                    else:
+                        embed.set_footer(text=f"{len(current_data)} entries")
+                    self.update_components()
+                    await interaction.response.edit_message(embed=embed, view=self)
+
+                async def interaction_check(self, interaction: Interaction):
+                    return interaction.user == ctx.author
+
+            initial_view = "success" if success else ("invalid" if failed else "other")
+            view = ResultView()
+            view.current_view = initial_view
+            await view.update_message(type('MockInteraction', (), {'response': type('MockResponse', (), {'edit_message': msg.edit})()})())
 
     @commands.command(name="shiny_hunt", aliases=['sh'])
     async def sh(self, ctx, action: str = None, *, pokemon: str = None):
-     if not action and not pokemon:
-        cur = await self.mongo.list(self.shiny_collection, ctx.author.id)
-        if not cur:
-            return await ctx.reply(embed=Embed(description="You don't have a shiny hunt set."), mention_author=False)
-        name = cur[0]
-        pid = Pokemon_Subcogs.pokemon_name_to_id(name)
-        emoji = self.pe.get_emoji_for_pokemon(pid) or ""
-        name = self.ph.reverse_transform_name(name)[0].replace('-', ' ')
-        return await ctx.reply(embed=Embed(description=f"You are currently shiny hunting: **{emoji} {name.title()}**"), mention_author=False)
+        if not action and not pokemon:
+            cur = await self.mongo.list(self.shiny_collection, ctx.author.id)
+            if not cur:
+                return await ctx.reply(embed=Embed(description="You don't have a shiny hunt set."), mention_author=False)
+            name = cur[0]
+            pid = Pokemon_Subcogs.pokemon_name_to_id(name)
+            emoji = self.pe.get_emoji_for_pokemon(pid) or ""
+            name_disp = self.display_name_with_region(name)
+            return await ctx.reply(embed=Embed(description=f"You are currently shiny hunting: **{emoji} {name_disp}**"), mention_author=False)
 
-     if action == "remove" and not pokemon:
-        await self.mongo.clear(self.shiny_collection, ctx.author.id)
-        return await ctx.reply(embed=Embed(description="🗑️ Your shiny hunt has been removed."), mention_author=False)
+        if action == "remove" and not pokemon:
+            await self.mongo.clear(self.shiny_collection, ctx.author.id)
+            return await ctx.reply(embed=Embed(description="🗑️ Your shiny hunt has been removed."), mention_author=False)
 
-     if action not in {"add", "remove", "list", "clear"}:
-        full_name = f"{action} {pokemon}".strip() if pokemon else action
-        transformed_name, _ = self.ph.transform_name(full_name)
-        pokemon, action = transformed_name, "add"
-     elif not pokemon:
-        pokemon = None
+        if action not in {"add", "remove", "list", "clear"}:
+            full_name = f"{action} {pokemon}".strip() if pokemon else action
+            transformed_name, _ = self.ph.transform_name(full_name)
+            pokemon, action = transformed_name, "add"
+        elif not pokemon:
+            pokemon = None
 
-     await self.handle_collection(ctx, self.shiny_collection, action, pokemon, max_one=True)
+        await self.handle_collection(ctx, self.shiny_collection, action, pokemon, max_one=True)
 
     @commands.command(name="collection", aliases=["cl"])
     async def collection(self, ctx, action: str = "list", *, pokemon: str = None):
         await self.handle_collection(ctx, self.collection_collection, action, pokemon)
+
+
 
 class Pokemon_Emojis(commands.Cog):
     def __init__(self, bot):
