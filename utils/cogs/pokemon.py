@@ -383,13 +383,27 @@ class Pokemon_Commands:
 
 
 
-class PokeSelect(discord.ui.Select):
-    def __init__(self, pokemon_forms, default_image_url, alt_names, pokemon_shiny, gender, bot, selected_index=None):
-        self.bot = bot
 
+class CustomIdSensor:
+    def __init__(self):
+        self.used_ids = set()
+
+    def register(self, base: str) -> str:
+        if base not in self.used_ids:
+            self.used_ids.add(base)
+            return base
+        i = 1
+        while f"{base}_{i}" in self.used_ids:
+            i += 1
+        new_id = f"{base}_{i}"
+        self.used_ids.add(new_id)
+        return new_id
+
+class PokeSelect(discord.ui.Select):
+    def __init__(self, pokemon_forms, default_image_url, alt_names, pokemon_shiny, gender, bot, selected_index=None, custom_id="Select_Pokemon_Form"):
+        self.bot = bot
         self.emoji_json_path = "data/commands/pokemon/pokemon_emojis.json"
         self.pokemon_csv_path = "data/commands/pokemon/pokemon_description.csv"
-        
         self.pokemon_api_url = "https://pokeapi.co/api/v2/pokemon/"
         self.pokemon_form_api_url = "https://pokeapi.co/api/v2/pokemon-form/"
 
@@ -430,7 +444,7 @@ class PokeSelect(discord.ui.Select):
         super().__init__(
             options=options,
             placeholder=options[0].label if options else "Select a Pokémon form",
-            custom_id="Select_Pokemon_Form",
+            custom_id=custom_id,
             max_values=1,
             min_values=0
         )
@@ -547,107 +561,134 @@ class PokeSelect(discord.ui.Select):
             await interaction.response.defer()
 
             if selected_form_url in self.form_urls:
-                new_index = self.form_urls.index(selected_form_url)
-                self.selected_index = new_index
+                self.selected_index = self.form_urls.index(selected_form_url)
 
             response = requests.get(selected_form_url)
+            if response.status_code != 200:
+                return
 
-            if response.status_code == 200:
-                data = response.json()
-                official_artwork_url = None
-                if "sprites" in data and "other" in data["sprites"]:
-                    if "official-artwork" in data["sprites"]["other"]:
-                        if self.pokemon_type == "shiny":
-                            official_artwork_url = data["sprites"]["other"]["official-artwork"]["front_shiny"]
-                            image_thumb = data["sprites"]["versions"]["generation-v"]["black-white"]["front_shiny"]
-                        else:
-                            official_artwork_url = data["sprites"]["other"]["official-artwork"]["front_default"]
-                            image_thumb = data["sprites"]["versions"]["generation-v"]["black-white"]["front_default"]
-
-                embed = interaction.message.embeds[0]
-                if official_artwork_url:
-                    embed.set_image(url=official_artwork_url)
-                else:
-                    embed.set_image(url=self.default_image_url)
-
-                pokemon_data = requests.get(selected_form_url).json()
-                if pokemon_data:
-                    description = self.get_pokemon_description(pokemon_data["id"])
-                    height, weight = (
-                        float(int(pokemon_data["height"])) / 10,
-                        float(int(pokemon_data["weight"])) / 10,
-                    )
-                    footer_text = (
-                        f"Height: {height:.2f} m\nWeight: {weight:.2f} kg"
-                        if self.gender is None
-                        else f"Height: {height:.2f} m\nWeight: {weight:.2f} kg\t\t"
-                        + self.gender
-                    )
-                    embed.title = (
-                        f"#{pokemon_data['id']} — {pokemon_data['name'].replace('-', ' ').title()}"
-                        if self.pokemon_type != "shiny"
-                        else f"#{pokemon_data['id']} — ✨ {pokemon_data['name'].replace('-', ' ').title()}"
-                    )
-                    embed.description = description
-                    if image_thumb:
-                        embed.set_footer(icon_url=str(image_thumb), text=footer_text)
+            data = response.json()
+            official_artwork_url = None
+            if "sprites" in data and "other" in data["sprites"]:
+                if "official-artwork" in data["sprites"]["other"]:
+                    if self.pokemon_type == "shiny":
+                        official_artwork_url = data["sprites"]["other"]["official-artwork"]["front_shiny"]
+                        image_thumb = data["sprites"]["versions"]["generation-v"]["black-white"]["front_shiny"]
                     else:
-                        embed.set_footer(text=footer_text)
+                        official_artwork_url = data["sprites"]["other"]["official-artwork"]["front_default"]
+                        image_thumb = data["sprites"]["versions"]["generation-v"]["black-white"]["front_default"]
 
-                    names_field = next((field for field in embed.fields if field.name == "Names"), None)
-                    if names_field:
-                        embed.remove_field(embed.fields.index(names_field))
+            embed = interaction.message.embeds[0]
+            embed.set_image(url=official_artwork_url or self.default_image_url)
 
-                    embed.clear_fields()
+            pokemon_data = requests.get(selected_form_url).json()
+            if not pokemon_data:
+                return
 
-                    pokemon_region = self.get_pokemon_region(pokemon_data["id"])
-                    if pokemon_region and pokemon_region in self.region_mappings:
-                        region_emoji = self.region_mappings[pokemon_region]
-                        embed.add_field(
-                            name="Region",
-                            value=f"{region_emoji} {pokemon_region.title()}",
-                            inline=True,
-                        )
+            description = self.get_pokemon_description(pokemon_data["id"])
+            height, weight = float(pokemon_data["height"]) / 10, float(pokemon_data["weight"]) / 10
+            footer_text = f"Height: {height:.2f} m\nWeight: {weight:.2f} kg"
+            if self.gender:
+                footer_text += f"\t\t{self.gender}"
 
-                    if names_field:
-                        alternate_names = self.get_alternate_names(pokemon_data["name"])
-                        alt_names_info = {}
-                        for name, lang in alternate_names:
-                            key = name.lower()
-                            flag = self.flag_mapping.get(lang, None)
-                            if name.lower() != lang.lower() and flag is not None:
-                                name_with_flag = f"{flag} {name}"
-                                alt_names_info[key] = name_with_flag
+            embed.title = (
+                f"#{pokemon_data['id']} — ✨ {pokemon_data['name'].replace('-', ' ').title()}"
+                if self.pokemon_type == "shiny"
+                else f"#{pokemon_data['id']} — {pokemon_data['name'].replace('-', ' ').title()}"
+            )
+            embed.description = description
+            embed.set_footer(icon_url=image_thumb, text=footer_text) if 'image_thumb' in locals() else embed.set_footer(text=footer_text)
+            embed.clear_fields()
 
-                        sorted_names_by_length = dict(sorted(alt_names_info.items(), key=lambda item: len(item[1])))
+            region = self.get_pokemon_region(pokemon_data["id"])
+            if region and region in self.region_mappings:
+                emoji = self.region_mappings[region]
+                embed.add_field(name="Region", value=f"{emoji} {region.title()}", inline=True)
 
-                        if len(sorted_names_by_length) != len(alt_names_info):
-                            sorted_names_by_name = dict(sorted(alt_names_info.items(), key=lambda item: item[1]))
-                            name_list = sorted(list(sorted_names_by_name.values()))
-                        else:
-                            name_list = sorted(list(sorted_names_by_length.values()))
+            alt_names = self.get_alternate_names(pokemon_data["name"])
+            name_flags = {
+                name.lower(): f"{self.flag_mapping.get(lang, '')} {name}"
+                for name, lang in alt_names if name.lower() != lang.lower()
+            }
+            sorted_names = sorted(name_flags.values(), key=len)
+            alt_names_str = "\n".join(sorted_names[:6]) or self.alt_names
+            embed.add_field(name="Names", value=alt_names_str, inline=True)
 
-                        alt_names_str = "\n".join(name_list[:6])
-                        embed.add_field(
-                            name="Names", value=alt_names_str if len(alt_names_str) > 0 else self.alt_names, inline=True)
+            # Update existing select options to reflect selected_index
+            for idx, option in enumerate(self.options):
+                option.default = (idx == self.selected_index)
 
-                view = discord.ui.View()
-                
-                new_select = PokeSelect(
-                    pokemon_forms=[{"name": form_url.split("/")[-1]} for form_url in self.form_urls],
-                    default_image_url=self.default_image_url,
-                    alt_names=self.alt_names,
-                    pokemon_shiny=self.pokemon_type,
-                    gender=self.gender,
-                    bot=self.bot,
-                    selected_index=self.selected_index
-                )
-                
-                view.add_item(new_select)
-                
-                await interaction.message.edit(embed=embed, view=view)
+            view = discord.ui.View()
+            sensor = CustomIdSensor()
+
+            # Add only this select (self) to view with consistent custom_id
+            view.add_item(self)
+
+            types = [t["type"]["name"].capitalize() for t in pokemon_data["types"]]
+            pokemon_commands = Pokemon_Commands(self.bot)
+            type_chart = await pokemon_commands.get_type_chart()
+            weaknesses, strengths = pokemon_commands.find_pokemon_weaknesses(pokemon_data, type_chart)
+
+            def format_base_stats(stats):
+                def bar(value):
+                    filled = int(value / 255 * 9)
+                    return "▰" * filled + "▱" * (9 - filled)
+
+                name_map = {"hp": "Health", "special-attack": "Sp. Atk", "special-defense": "Sp. Def"}
+                return [
+                    f"{name_map.get(s['stat']['name'], s['stat']['name'].title()):<10} {s['base_stat']:>5} {bar(s['base_stat'])}"
+                    for s in stats
+                ]
+
+            base_stats = "\n".join(format_base_stats(pokemon_data["stats"]))
+            wes = pokemon_commands.format_strengths_weaknesses(weaknesses, strengths)
+            formatted_types = pokemon_commands.format_pokemon_type(types)
+            h_w = f"Height: {height:.2f} m\nWeight: {weight:.2f} kg"
+
+            species_url = f"https://pokeapi.co/api/v2/pokemon-species/{pokemon_data['name']}/"
+            species_resp = requests.get(species_url)
+            gender_info = None
+            gender_differ = False
+            if species_resp.status_code == 200:
+                species_data = species_resp.json()
+                gender_info = pokemon_commands.get_pokemon_gender_ratio_display(species_data)
+                gender_differ = gender_info not in ["♀️ Female only", "♂️ Male only", "Genderless"]
+
+            buttons = Pokebuttons(
+                alt_names_str=alt_names_str,
+                name=pokemon_data["name"],
+                base_stats=base_stats,
+                type=self.pokemon_type,
+                wes=wes,
+                pokemon_type=formatted_types,
+                image_url=official_artwork_url,
+                h_w=h_w,
+                image_thumb=image_thumb if 'image_thumb' in locals() else None,
+                pokemon_dex_name=embed.title,
+                color=embed.color,
+                pokemon_data=pokemon_data,
+                gender_differ=gender_differ,
+                region=region,
+                description=description,
+                gender_info=gender_info,
+                bot=self.bot
+            )
+
+            for item in buttons.children:
+                if isinstance(item, discord.ui.Button):
+                    base_id = getattr(item, "custom_id", item.label or "button")
+                    item.custom_id = sensor.register(base_id)
+                    view.add_item(item)
+
+            await interaction.message.edit(embed=embed, view=view)
+
         except Exception as e:
             print(e)
+
+
+
+
+
 
 
 class Pokebuttons(discord.ui.View):
