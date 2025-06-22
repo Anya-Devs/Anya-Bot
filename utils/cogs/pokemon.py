@@ -1263,11 +1263,11 @@ class StatsView(discord.ui.View):
         view = discord.ui.View(timeout=300)
         total_pages = (len(self.moves_data) + self.moves_per_page - 1) // self.moves_per_page
 
-        first = discord.ui.Button(label="<<", style=discord.ButtonStyle.secondary, disabled=self.current_page == 0)
+        first = discord.ui.Button(label="<<", style=discord.ButtonStyle.secondary, disabled=self.current_page == 0, row=1)
         prev = discord.ui.Button(label="<", style=discord.ButtonStyle.secondary, disabled=self.current_page == 0)
         page = discord.ui.Button(label=f"{self.current_page + 1}/{total_pages}", style=discord.ButtonStyle.primary, disabled=True)
         next_btn = discord.ui.Button(label=">", style=discord.ButtonStyle.secondary, disabled=self.current_page >= total_pages - 1)
-        last = discord.ui.Button(label=">>", style=discord.ButtonStyle.secondary, disabled=self.current_page >= total_pages - 1)
+        last = discord.ui.Button(label=">>", style=discord.ButtonStyle.secondary, disabled=self.current_page >= total_pages - 1, row=1)
 
         first.callback = self.first_page
         prev.callback = self.prev_page
