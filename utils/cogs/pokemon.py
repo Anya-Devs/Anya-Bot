@@ -1274,11 +1274,11 @@ class StatsView(discord.ui.View):
         next_btn.callback = self.next_page
         last.callback = self.last_page
 
-        view.add_item(first)
+        #view.add_item(first)
         view.add_item(prev)
         view.add_item(page)
         view.add_item(next_btn)
-        view.add_item(last)
+        #view.add_item(last)
 
         return view
 
