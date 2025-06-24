@@ -596,18 +596,7 @@ class RoleLookupView(ui.View):
         if not self.selected:
             return await button.response.send_message("❌ No users selected.", ephemeral=True)
         try:
-            # Send overview message explaining usage
-            overview_embed = discord.Embed(
-                title="Role Lookup Overview",
-                description=(
-                    "Select users from the dropdown and click Validate.\n"
-                    "You will receive individual paginated messages per user with role breakdowns."
-                ),
-                color=discord.Color.blue(),
-                timestamp=datetime.now()
-            ).set_footer(text="Role Lookup Command")
-            await button.response.send_message(embed=overview_embed, ephemeral=True)
-
+            await button.response.defer(ephemeral=True)
             # Send each user's paginated role embeds with their own select menu
             for member in self.selected:
                 embeds = await self.create_user_embeds(member)
