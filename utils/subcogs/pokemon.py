@@ -185,7 +185,7 @@ class Ping_Pokemon(commands.Cog):
 
         # Create unified result view that handles all result types
         class UnifiedResultView(View):
-            def __init__(self, success_results, failed_results, exists_results, suggestions_list=None):
+            def __init__(self, success_results, failed_results, exists_results, suggestions_list=None, parent_cog=None):
                 super().__init__(timeout=300)
                 self.results = {
                     "success": success_results,
@@ -198,6 +198,7 @@ class Ping_Pokemon(commands.Cog):
                 self.items_per_page = RESULTS_PER_PAGE
                 self.selected_items = set()
                 self.show_suggestions = bool(suggestions_list)
+                self.parent_cog = parent_cog  # Store reference to parent cog
                 
                 # If no success results, default to first available type
                 if not success_results:
@@ -502,9 +503,8 @@ class Ping_Pokemon(commands.Cog):
                 embed = Embed(description=header + content[:3900], color=primary_color())
                 embed.set_footer(text="" if max_one else "Updated Your Pokemon Collection")
             
-            # Create unified view with all data
-            unified_view = UnifiedResultView(success, failed, exists, all_suggestions)
-            unified_view.parent_cog = self  # Add reference to parent cog
+            # Create unified view with all data - pass parent_cog reference in constructor
+            unified_view = UnifiedResultView(success, failed, exists, all_suggestions, parent_cog=self)
             
             # Send the single message
             await ctx.reply(embed=embed, view=unified_view, mention_author=False)
@@ -537,7 +537,6 @@ class Ping_Pokemon(commands.Cog):
     @commands.command(name="collection", aliases=["cl"])
     async def collection(self, ctx, action: str = "list", *, pokemon: str = None):
         await self.handle_collection(ctx, self.collection_collection, action, pokemon)
-
 
 
 
