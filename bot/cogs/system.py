@@ -12,7 +12,7 @@ class System(commands.Cog):
         self.bot = bot
         self.start_time = time.time()
         self.image_file = "data/commands/help/help_embed_images.json"
-        self.ticket_data = Ticket_Dataset()
+        self.ticket_system = TicketSystem(bot)
 
     def has_manage_role_or_perms(self, member):
         role = discord.utils.find(lambda r: r.name.lower() == "anya manager", member.roles)
@@ -80,47 +80,9 @@ class System(commands.Cog):
             await ctx.send(f"An error occurred loading the credits: {e}")
 
     @commands.command(name="ticket")
-    async def ticket_command(self, ctx,
-                             action: Literal["create", "activate", "delete", "edit"],
-                             param: Union[str, None] = None):
-        if not self.has_manage_role_or_perms(ctx.author):
-         embed = Embed(
-          title="⛔ Missing Permissions",
-          description=(
-            "```You need one of the following to use this command:```\n"
-            "• A role named `Anya Manager`\n"
-            "• The `Manage Server` or `Manage Channels` permission"
-           ),
-          color=discord.Color.red())
-         embed.set_footer(text="Permission Check Failed")
-         return await ctx.send(embed=embed, delete_after=15)
-    
-        if action == "create":
-            if not isinstance(param, TextChannel):
-                return await ctx.send("Please mention a valid text channel.")
-            await Ticket_View.TicketSetupView.start_setup(ctx, param)
+    async def ticket_command(self, ctx, action: Literal["create", "activate", "delete", "edit"], param: str = None):
+     await self.ticket_system.ticket_command(ctx, action, param)
 
-        elif action == "activate":
-            tickets = await self.ticket_data.load_all_tickets()
-            if not tickets:
-                return await ctx.send("No existing ticket configurations found.")
-            await ctx.send("Select a ticket configuration to activate:",
-                           view=Ticket_View.TicketActivateView(tickets, ctx.author.id))
-
-        elif action == "delete":
-            tickets = await self.ticket_data.load_all_tickets()
-            if not tickets:
-                return await ctx.send("No tickets available to delete.")
-            await ctx.send("Select a ticket configuration to delete:",
-                           view=Ticket_View.TicketDeleteView(tickets, ctx.author.id))
-
-        elif action == "edit":
-            if not param or "discord.com/channels/" not in param:
-                return await ctx.send("Please provide a valid message link.")
-            msg = await self.ticket_data.get_message_from_link(ctx, param)
-            if not msg:
-                return await ctx.send("Message not found.")
-            await Ticket_View.TicketSetupView.start_edit(ctx, msg, self.ticket_data)
 
     @ticket_command.error
     async def ticket_error(self, ctx, error):
