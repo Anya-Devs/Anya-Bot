@@ -482,14 +482,14 @@ class Ping_Pokemon(commands.Cog):
                 description_parts.append(chunk_text)
             
             embed = Embed(
-                title=f"{title} (Page {page + 1}/{total_pages})",
+                title=f"{title}",
                 description="\n\n".join(description_parts),
-                color=0x3498db
+                color=primary_color()
             )
             
             # Add statistics
             embed.add_field(
-                name="📊 Statistics",
+                name=" ",
                 value=f"**Total:** {len(entries)} Pokémon\n**Page:** {page + 1}/{total_pages}\n**Showing:** {start_idx + 1}-{end_idx}",
                 inline=True
             )
