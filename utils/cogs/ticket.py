@@ -60,7 +60,6 @@ class TicketSystem:
 
     # UI Components
     def create_ticket_button(self, ticket_data):
-        """Create a ticket button with the given data"""
         class TicketButton(discord.ui.Button):
             def __init__(self, parent_system, ticket_data):
                 button_data = ticket_data.get("button_data", {})
@@ -79,7 +78,6 @@ class TicketSystem:
         return TicketButton(self, ticket_data)
 
     def create_close_ticket_view(self, thread_id, close_button_data):
-        """Create a close ticket view"""
         class CloseTicketView(discord.ui.View):
             def __init__(self, parent_system, thread_id, close_button_data):
                 super().__init__(timeout=None)
@@ -101,7 +99,6 @@ class TicketSystem:
         return CloseTicketView(self, thread_id, close_button_data)
 
     def create_setup_modal(self, channel, existing_data=None):
-        """Create a ticket setup modal"""
         class TicketSetupModal(discord.ui.Modal):
             def __init__(self, parent_system, channel, existing_data=None):
                 super().__init__(title="Ticket System Setup")
@@ -156,7 +153,6 @@ class TicketSystem:
         return TicketSetupModal(self, channel, existing_data)
 
     def create_image_modal(self, ticket_data, setup_modal):
-        """Create modal for setting embed images"""
         class ImageSetupModal(discord.ui.Modal):
             def __init__(self, parent_system, ticket_data, setup_modal):
                 super().__init__(title="Embed Image Settings")
@@ -193,7 +189,6 @@ class TicketSystem:
         return ImageSetupModal(self, ticket_data, setup_modal)
 
     def create_management_view(self, tickets, author_id, action_type="activate"):
-        """Create ticket management view"""
         class TicketManagementView(discord.ui.View):
             def __init__(self, parent_system, tickets, author_id, action_type="activate"):
                 super().__init__(timeout=300)
@@ -240,7 +235,6 @@ class TicketSystem:
 
     # Event Handlers
     async def handle_ticket_creation(self, interaction, ticket_data):
-        """Handle ticket button click"""
         thread = await interaction.channel.create_thread(
             name=f"Ticket-{interaction.user.name}",
             type=discord.ChannelType.private_thread
@@ -271,7 +265,6 @@ class TicketSystem:
         await interaction.response.send_message(f"Ticket created: {thread.mention}", ephemeral=True)
 
     async def handle_ticket_close(self, interaction, thread_id):
-        """Handle ticket close button"""
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(
                 "Only administrators can close tickets.", ephemeral=True
@@ -283,7 +276,6 @@ class TicketSystem:
         await interaction.response.send_message("Thread closed.", ephemeral=True)
 
     async def handle_setup_submission(self, interaction, modal):
-        """Handle setup modal submission"""
         try:
             await interaction.response.defer(ephemeral=True)
             
@@ -341,7 +333,6 @@ class TicketSystem:
             traceback.print_exception(type(e), e, e.__traceback__)
 
     async def handle_image_setup(self, interaction, modal):
-        """Handle image setup modal submission"""
         try:
             await interaction.response.defer(ephemeral=True)
             
@@ -373,7 +364,6 @@ class TicketSystem:
             traceback.print_exception(type(e), e, e.__traceback__)
 
     async def finalize_ticket_setup(self, interaction, ticket_data, existing_data, channel):
-        """Finalize ticket setup and create/update the ticket"""
         try:
             # Create embed and view
             embed = discord.Embed.from_dict(ticket_data["embed"])
@@ -410,7 +400,6 @@ class TicketSystem:
             traceback.print_exception(type(e), e, e.__traceback__)
 
     async def activate_ticket(self, interaction, ticket_data):
-        """Activate a ticket system"""
         try:
             channel = interaction.guild.get_channel(ticket_data["channel_id"])
             if not channel:
@@ -429,7 +418,6 @@ class TicketSystem:
             await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 
     async def delete_ticket_with_confirmation(self, interaction, ticket_data, ticket_id, author_id):
-        """Delete ticket with confirmation"""
         # Create confirmation view
         confirm_view = discord.ui.View(timeout=60)
         
@@ -482,7 +470,6 @@ class TicketSystem:
 
     # Utility Methods
     def has_manage_role_or_perms(self, member):
-        """Check if user has required permissions"""
         # Check for "Anya Manager" role
         if any(role.name == "Anya Manager" for role in member.roles):
             return True
@@ -491,7 +478,6 @@ class TicketSystem:
 
     # Command Methods
     async def setup_ticket_command(self, ctx, channel):
-        """Start ticket setup for a channel"""
         modal = self.create_setup_modal(channel)
         view = discord.ui.View()
         
@@ -509,7 +495,6 @@ class TicketSystem:
         await ctx.send("Click to setup ticket system:", view=view)
 
     async def edit_ticket_command(self, ctx, message_ref):
-        """Edit an existing ticket system by message ID or link."""
         # Extract message ID from link if needed
         if "discord.com/channels/" in message_ref:
             try:
@@ -546,7 +531,6 @@ class TicketSystem:
         await ctx.send("Click to edit ticket system:", view=view)
 
     async def manage_tickets_command(self, ctx, action="activate"):
-        """Show ticket management interface"""
         tickets = await self.get_all_tickets(ctx.guild.id)
         
         if not tickets:
@@ -557,7 +541,6 @@ class TicketSystem:
         await ctx.send(f"Select a ticket to {action_word}:", view=view)
 
     async def ticket_command(self, ctx, action, param=None):
-        """Main ticket command handler"""
         # Permission check
         if not self.has_manage_role_or_perms(ctx.author):
             return await ctx.send(embed=discord.Embed(

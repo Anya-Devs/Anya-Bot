@@ -99,6 +99,12 @@
             "description": "View who has which role, useful for auditing, cleaning up unused roles, or checking access levels.",
             "example": "{}server_roles",
             "related_commands": "{}server_emojis, {}server"
+        },
+        "roles": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}roles",
+            "related_commands": "Provide related commands"
         }
     },
     "Quest_Data": {},
@@ -350,6 +356,12 @@
             "aliases": [],
             "description": "No description provided.",
             "example": "{}happy",
+            "related_commands": "Provide related commands"
+        },
+        "slap": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}slap",
             "related_commands": "Provide related commands"
         }
     },

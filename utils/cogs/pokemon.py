@@ -43,6 +43,7 @@ class Pokemon_Commands:
             "Kanto": "<:Kanto:1212335202341363713>",
             "Johto": "<:Kanto:1212335202341363713>",
         }
+       
         self.stat_name_mapping = {
             "hp": "Hp",
             "special-attack": "Sp. Atk",

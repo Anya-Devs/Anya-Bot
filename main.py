@@ -84,7 +84,7 @@ async def start_web_server():
     app.router.add_static('/html/', path=os.path.join(os.getcwd(), 'html'), name='html')
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 0 if ut else 8080)
+    site = web.TCPSite(runner, '0.0.0.0', 0 if ut else 0)
     await site.start()
     return runner, site
 

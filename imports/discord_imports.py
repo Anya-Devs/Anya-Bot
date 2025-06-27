@@ -1,6 +1,6 @@
 # Core Discord and Commands
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands, tasks, flags
 
 # Discord Types and Interactions
 from discord import (
@@ -58,6 +58,8 @@ from discord.ui import (
 
 # Typing Utilities
 from typing import Literal, Optional, List, Dict, Union
+from typing import Dict, List, Optional, Tuple, Any
+
 
 # Constants and Utilities
 from discord.utils import (
