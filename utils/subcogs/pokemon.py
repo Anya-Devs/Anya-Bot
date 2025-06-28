@@ -109,9 +109,6 @@ class AdvancedStringFlagParser:
         
         return text, action
 
-
-
-
 class NavigationView(View):
     def __init__(self, embeds, ctx, timeout=300):
         super().__init__(timeout=timeout)
@@ -151,7 +148,7 @@ class NavigationView(View):
 class Ping_Pokemon(commands.Cog):
     
     ICONS = {"success": "[✓]", "error": "[✕]", "exists": "[⍻]", "removed": "[−]", "not_found": "[𐄂]"}
-    MIN_SUGGEST_LEN, MAX_SUGGESTIONS = 3, 5
+    MIN_SUGGEST_LEN, MAX_SUGGESTIONS = 3, 20
     MAX_POKEMON, CHUNK_SIZE, RESULTS_PER_PAGE, MIN_SIMILARITY_RATIO = 50, 15, 10, 0.65
 
     def __init__(self, bot):
