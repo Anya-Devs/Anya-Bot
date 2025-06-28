@@ -510,7 +510,7 @@ class Ping_Pokemon(commands.Cog):
             else:
                 # Multiple pages, add navigation
                 view = NavigationView(embeds, ctx)
-                await ctx.send(embed=embeds[0], view=view)
+                await ctx.reply(embed=embeds[0], mention_author=False, view=view)
                 
         except Exception as e:
             print(f"Error in paginate_and_send: {e}")
