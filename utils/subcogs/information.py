@@ -29,8 +29,8 @@ class SelectMenu(Select):
                 interaction, interaction.message, role_id, page_num
             )
         except discord.errors.NotFound:
-            # This exception is raised when the message or interaction is not found.
-            # You can silently ignore it or handle it as you see fit.
+            
+            
             pass
         except Exception as e:
             print(f"Error in callback method: {e}")
@@ -58,7 +58,7 @@ class ButtonNavigationView(View):
         self.embeds = embeds
         self.current_page = 0
 
-        # Update buttons' state
+        
         self.update_buttons()
 
     def update_buttons(self):
@@ -103,7 +103,7 @@ class ButtonNavigationView(View):
             self.update_buttons()
 
     async def on_timeout(self):
-        # Disable all buttons when the view times out
+        
         for item in self.children:
             item.disabled = True
         await self.message.edit(view=self)
@@ -114,7 +114,7 @@ class Guide(commands.Cog):
         self.bot = bot
 
         self.data = {}
-        self.invites = {}  # Dictionary to track invites
+        self.invites = {}  
         self.current_page = 0
 
         self.afk_file_path = "Caster-Bot/Caster-main/afk_members.json"
@@ -155,9 +155,9 @@ class Guide(commands.Cog):
     @staticmethod
     async def get_avatar_emoji(ctx, member):
         if member.bot:
-            return "🤖"  # Bot emoji
+            return "🤖"  
         else:
-            return "👤"  # Member emoji
+            return "👤"  
 
     @staticmethod
     def timestamp_gen(timestamp: int) -> str:
@@ -169,7 +169,7 @@ class Guide(commands.Cog):
         self, interaction, message, role_id, page_num
     ):
         try:
-            wait_message = None  # Initialize wait_message variable
+            wait_message = None  
             print(
                 f"Navigation started for role ID: {role_id}, page number: {page_num}")
             guild = interaction.guild
@@ -187,13 +187,13 @@ class Guide(commands.Cog):
                     print(f"Total embeds to navigate: {len(embeds)}")
                     await message.edit(embed=embeds[0])
 
-                    if wait_message:  # Check if wait_message is not None
+                    if wait_message:  
                         await wait_message.edit(
                             content=f"`Completed`\n```Total embeds to navigate: {len(embeds)}```"
                         )
 
                     if len(embeds) > 1:
-                        # Create the buttons for navigation
+                        
                         prev_button = discord.ui.Button(
                             label="◀️", style=discord.ButtonStyle.primary
                         )
@@ -201,7 +201,7 @@ class Guide(commands.Cog):
                             label="▶️", style=discord.ButtonStyle.primary
                         )
 
-                        # Define the button callbacks
+                        
                         async def prev_callback(interaction: discord.Interaction):
                             nonlocal current_page
                             if current_page > 0:
@@ -214,23 +214,23 @@ class Guide(commands.Cog):
                                 current_page += 1
                                 await message.edit(embed=embeds[current_page])
 
-                        # Set the button callbacks
+                        
                         prev_button.callback = prev_callback
                         next_button.callback = next_callback
 
-                        # Create the view to hold the buttons
+                        
                         view = discord.ui.View()
                         view.add_item(prev_button)
                         view.add_item(next_button)
 
-                        # Send the message with the buttons
+                        
                         await message.edit(
                             content="page updated", embed=embeds[0], view=view
                         )
 
-                        current_page = 0  # Initialize current_page to 0 for navigation
+                        current_page = 0  
 
-                        # Ensure the message will have an interactive view
+                        
                         await message.edit(view=view)
 
         except Exception as e:
@@ -250,19 +250,19 @@ class Guide(commands.Cog):
             for role in roles
             if len(role.members) >= 5 and role.name
         ]
-        select_roles = most_common_roles[:25]  # Limit to 25 roles
+        select_roles = most_common_roles[:25]  
 
         select_view = SelectView(
             roles=[role for role, _ in select_roles], cog=self)
 
-        # Use self.current_page to maintain state across method calls
+        
         await message.edit(embed=embeds[self.current_page], view=select_view)
 
         if len(embeds) > 1:
-            # Create the view for navigation
+            
             view = discord.ui.View()
 
-            # Navigation buttons
+            
             prev_button = discord.ui.Button(
                 label="◀️", style=discord.ButtonStyle.primary
             )
@@ -270,33 +270,33 @@ class Guide(commands.Cog):
                 label="▶️", style=discord.ButtonStyle.primary
             )
 
-            # Define button callbacks
+            
             async def prev_callback(interaction):
-                await interaction.response.defer()  # Acknowledge the interaction
+                await interaction.response.defer()  
                 if self.current_page > 0:
                     self.current_page -= 1
                     await message.edit(embed=embeds[self.current_page], view=view)
 
             async def next_callback(interaction):
-                await interaction.response.defer()  # Acknowledge the interaction
+                await interaction.response.defer()  
                 if self.current_page < len(embeds) - 1:
                     self.current_page += 1
                     await message.edit(embed=embeds[self.current_page], view=view)
 
-            # Integrate SelectView
+            
             for item in select_view.children:
-                # Add each item from SelectView to the main view
+                
                 view.add_item(item)
 
-            # Add callbacks to buttons
+            
             prev_button.callback = prev_callback
             next_button.callback = next_callback
 
-            # Add buttons and select view to the view
+            
             view.add_item(prev_button)
             view.add_item(next_button)
 
-            # Update the message with navigation controls
+            
             await message.edit(
                 content="Page updated", embed=embeds[self.current_page], view=view
             )
@@ -305,7 +305,7 @@ class Guide(commands.Cog):
         self, interaction, message, role_id, page_num
     ):
         try:
-            wait_message = None  # Initialize wait_message variable
+            wait_message = None  
             print(
                 f"Navigation started for role ID: {role_id}, page number: {page_num}")
             guild = interaction.guild
@@ -321,7 +321,7 @@ class Guide(commands.Cog):
                 if embeds:
                     print(f"Total embeds to navigate: {len(embeds)}")
                     await message.edit(embed=embeds[0])
-                    if wait_message:  # Check if wait_message is not None
+                    if wait_message:  
                         await wait_message.edit(
                             content=f"`Completed`\n```Total embeds to navigate: {len(embeds)}```"
                         )
@@ -403,17 +403,17 @@ class Guide(commands.Cog):
                                 continue
                             data = await resp.read()
 
-                    # Save the image to a temporary file
+                    
                     temp_file = tempfile.NamedTemporaryFile(
                         suffix=".png", delete=False)
                     temp_file.write(data)
-                    temp_file.seek(0)  # Move to the beginning of the file
+                    temp_file.seek(0)  
                     temp_files.append(temp_file.name)
 
                     img = Image.open(temp_file.name)
                     row_images.append(img)
 
-                # Concatenate the images horizontally
+                
                 total_width = sum(img.width for img in row_images)
                 max_height = max(img.height for img in row_images)
                 concatenated_image = Image.new(
@@ -424,20 +424,20 @@ class Guide(commands.Cog):
                     concatenated_image.paste(img, (x_offset, 0))
                     x_offset += img.width
 
-                # Save the concatenated image to a temporary file
+                
                 temp_concatenated_file = tempfile.NamedTemporaryFile(
                     suffix=".png", delete=False
                 )
                 concatenated_image.save(
                     temp_concatenated_file.name, format="PNG")
 
-                # Upload the image as an attachment
+                
                 with open(temp_concatenated_file.name, "rb") as image_file:
                     file = discord.File(fp=image_file, filename="avatars.png")
                     log_channel = self.bot.get_channel(1262668450900480041)
                     message = await log_channel.send(
                         file=file
-                    )  # Send the file to the bot's DM
+                    )  
                     attachment_url = message.attachments[0].url
 
                 embed.set_image(url=attachment_url)
@@ -454,10 +454,10 @@ class Guide(commands.Cog):
                         ]
                     )
 
-                    # Fetch invite information
+                    
                     inviter_mention = await self.get_inviter_mention(
                         member
-                    )  # Fetch invite information
+                    )  
 
                     embed.add_field(
                         name=f"\n",
@@ -468,16 +468,16 @@ class Guide(commands.Cog):
 
                 embeds.append(embed)
 
-                # Close temporary files
+                
                 for file_path in temp_files:
-                    os.unlink(file_path)  # Remove temporary files
+                    os.unlink(file_path)  
 
             await log_channel.send(
                 f"Embed Completed with {total_pages} pages", delete_after=180
             )
             return embeds
         except discord.errors.InteractionResponded:
-            pass  # Interaction already responded to
+            pass  
 
     @commands.command(name="members", hidden=True)
     async def list_members(self, ctx, *, filter_option: str = None):
@@ -493,11 +493,11 @@ class Guide(commands.Cog):
                 for role in roles
                 if len(role.members) >= 5 and role.name
             ]
-            select_roles = most_common_roles[:25]  # Limit to 25 roles
+            select_roles = most_common_roles[:25]  
             select_view = SelectView(
                 roles=[role for role, _ in select_roles], cog=self)
 
-            # Fetch all members in the guild
+            
             all_members = guild.members
             usage_guide = (
                 "Usage: \n"
@@ -513,7 +513,7 @@ class Guide(commands.Cog):
                 "```"
             )
 
-            # Apply filtering if specified
+            
             if filter_option:
                 filter_option = filter_option.lower()
 
@@ -530,7 +530,7 @@ class Guide(commands.Cog):
                         await ctx.reply(usage_guide)
                         return
 
-            # Apply filtering to all members
+            
             if filter_option == FilterOption.NEWEST_TO_OLDEST.value:
                 all_members = sorted(
                     all_members, key=lambda member: member.joined_at, reverse=True
@@ -565,10 +565,10 @@ class Guide(commands.Cog):
                     all_members, key=lambda member: len(member.roles))
                 embed_title = "Server Member List (Least Roles to Most Roles)"
             else:
-                # Default to unfiltered list
+                
                 embed_title = "Server Member List"
 
-            # Filter out members with invalid avatars (NoneType)
+            
             valid_members = []
             for member in all_members:
                 if member.avatar and member.avatar.with_size(128):
@@ -577,12 +577,12 @@ class Guide(commands.Cog):
                     print(
                         f"Skipping {member.display_name} due to invalid avatar")
 
-            # Split valid members into chunks of 3 for embedding
+            
             chunked_members = [
                 valid_members[i: i + 3] for i in range(0, len(valid_members), 3)
             ]
 
-            # Create embeds for each chunk
+            
             embeds = []
             for chunk in chunked_members:
                 embed = discord.Embed(title=embed_title)
@@ -603,21 +603,21 @@ class Guide(commands.Cog):
                                 continue
                             data = await resp.read()
 
-                    # Save the image to a BytesIO object
+                    
                     temp_file = BytesIO()
                     temp_file.write(data)
                     temp_file.seek(
                         0
-                    )  # Reset the position of the file cursor to the beginning of the file
+                    )  
                     img = Image.open(temp_file)
                     row_images.append(img)
 
-                    # Add member information to the embed
+                    
                     embed = self.add_member_info_to_embed(
                         embed, member, emoji, joined_timestamp, filter_option
                     )
 
-                # Concatenate the images horizontally
+                
                 total_width = sum(img.width for img in row_images)
                 max_height = max(img.height for img in row_images)
                 concatenated_image = Image.new(
@@ -628,31 +628,31 @@ class Guide(commands.Cog):
                     concatenated_image.paste(img, (x_offset, 0))
                     x_offset += img.width
 
-                # Save the concatenated image to a BytesIO object
+                
                 temp_file = BytesIO()
                 concatenated_image.save(temp_file, format="PNG")
                 temp_file.seek(
                     0
-                )  # Reset the position of the file cursor to the beginning of the file
+                )  
 
-                # Upload the image as an attachment
+                
                 file = discord.File(temp_file, filename="avatars.png")
-                # Send the file as an attachment
+                
                 message = await ctx.send(file=file, delete_after=1)
-                # Get the attachment URL
+                
                 attachment_url = message.attachments[0].url
                 embed.set_image(url=attachment_url)
                 embeds.append(embed)
 
-            # Send the first embed
+            
             message = await ctx.send(embed=embeds[0], view=select_view)
 
-            # Add navigation reactions if needed
+            
             if len(embeds) > 1:
                 await self.navigate_embed(ctx, message, embeds)
 
         except Exception as e:
-            # Log the traceback and send an error message to the user
+            
             error_message = (
                 f"Error listing members: {str(e)}\n```{traceback.format_exc()}```"
             )
@@ -722,7 +722,7 @@ class Guide(commands.Cog):
             for member in chunk:
                 if not hasattr(
                     member.avatar, "with_size"
-                ):  # Check for NoneType attribute
+                ):  
                     continue
 
                 emoji = await self.get_avatar_emoji(ctx, member)
@@ -733,7 +733,7 @@ class Guide(commands.Cog):
                 if data:
                     row_images.append(data)
 
-                # Add member information to the embed
+                
                 embed = await self.add_member_info_to_embed(
                     embed, member, emoji, joined_timestamp, filter_option
                 )
@@ -774,14 +774,14 @@ class Guide(commands.Cog):
 
         temp_file = BytesIO()
         concatenated_image.save(temp_file, format="PNG")
-        temp_file.seek(0)  # Reset the position of the file cursor
+        temp_file.seek(0)  
         return temp_file
 
     @staticmethod
     def add_member_info_to_embed(
         embed, member, emoji, joined_timestamp, filter_option
     ):
-        # Add the member's display name and roles to the embed
+        
         embed.add_field(
             name=f"",
             value=f"{emoji} {member.mention}\n"
@@ -790,9 +790,9 @@ class Guide(commands.Cog):
             inline=False,
         )
 
-        # Optionally add extra information depending on the filter_option
+        
         if filter_option == FilterOption.MOST_ACTIVE_TO_LEAST_ACTIVE.value:
-            # Add activity status if available
+            
             activity = member.activity.name if member.activity else "No activity"
             embed.add_field(
                 name=f"{emoji} {member.display_name} Activity",
@@ -800,7 +800,7 @@ class Guide(commands.Cog):
                 inline=False,
             )
         elif filter_option == FilterOption.MOST_ROLES_TO_LEAST_ROLES.value:
-            # Display the number of roles if sorted by roles
+            
             embed.add_field(
                 name=f"{emoji} {member.display_name} Roles",
                 value=f"Role count: {len(member.roles) - 1}",
@@ -816,7 +816,7 @@ class Guide(commands.Cog):
         if msg is None:
             msg = "[ AFK ] "
 
-        # Add user ID and reason to AFK data
+        
         self.data[ctx.author.id] = msg
         self.save_data()
 
@@ -826,26 +826,26 @@ class Guide(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        # Load AFK data from the file
+        
 
         if not message.author.bot:
             author_id_str = str(message.author.id)
 
             if author_id_str in self.data:
-                # Send a welcome back message
+                
                 await message.channel.send(
                     f"Welcome back {message.author.mention}, I removed your AFK!",
                     delete_after=35,
                 )
 
-                # Remove the user from the AFK JSON file
+                
                 del self.data[author_id_str]
                 self.save_data()
 
-                # Remove AFK nickname and save data
+                
                 await message.author.edit(nick=None)
 
-            # Check for other mentions in the message
+            
             for user_id, afk_reason in dict(self.data).items():
                 if f"<@{user_id}>" in message.content:
                     await message.channel.send(

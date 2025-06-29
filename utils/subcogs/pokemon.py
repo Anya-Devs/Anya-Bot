@@ -18,7 +18,7 @@ MAX_POKEMON, CHUNK_SIZE, RESULTS_PER_PAGE, MIN_SIMILARITY_RATIO  = 50, 15, 10, 0
 class AdvancedStringFlagParser:
     
     def __init__(self):
-        # Define flag patterns and their variations
+        
         self.flag_patterns = {
             'alolan': r'\b(?:alolan?|alola)\b',
             'galarian': r'\b(?:galarians?|galar)\b', 
@@ -32,13 +32,13 @@ class AdvancedStringFlagParser:
             'skip': r'\b(?:skip|offset)\s+(\d+)\b',
         }
         
-        # Type patterns
+        
         self.type_pattern = r'\b(?:type|types?)\s+([a-zA-Z]+(?:\s*,\s*[a-zA-Z]+)*)\b'
         
-        # Name patterns  
+        
         self.name_pattern = r'\b(?:name|named?|pokemon)\s+([a-zA-Z0-9\s,\-\']+?)(?:\s+(?:type|limit|skip|legendary|mythical|alolan|galarian|hisuian|paldean|mega)|$)'
         
-        # Region patterns
+        
         self.region_pattern = r'\b(?:region|from)\s+([a-zA-Z]+(?:\s*,\s*[a-zA-Z]+)*)\b'
 
     def parse_flags_from_string(self, text: str) -> Dict[str, Any]:
@@ -49,7 +49,7 @@ class AdvancedStringFlagParser:
         text_lower = text.lower()
         flags = {}
         
-        # Parse boolean flags
+        
         for flag_name, pattern in self.flag_patterns.items():
             if flag_name in ['limit', 'skip']:
                 match = re.search(pattern, text_lower)
@@ -59,20 +59,20 @@ class AdvancedStringFlagParser:
                 if re.search(pattern, text_lower):
                     flags[flag_name] = True
         
-        # Parse type filters
+        
         type_match = re.search(self.type_pattern, text_lower)
         if type_match:
             types = [t.strip() for t in type_match.group(1).split(',')]
             flags['type'] = types
         
-        # Parse name filters
+        
         name_match = re.search(self.name_pattern, text_lower)
         if name_match:
             names = [n.strip() for n in name_match.group(1).split(',')]
-            # Group names for the existing filter logic
+            
             flags['name'] = [[name] for name in names]
         
-        # Parse region filters
+        
         region_match = re.search(self.region_pattern, text_lower)
         if region_match:
             regions = [r.strip() for r in region_match.group(1).split(',')]
@@ -85,11 +85,11 @@ class AdvancedStringFlagParser:
         if not text:
             return "", ""
             
-        # Remove action words
+        
         action_words = r'\b(?:add|remove|delete|clear|list|show|help)\b'
         text = re.sub(action_words, '', text, flags=re.IGNORECASE).strip()
         
-        # Remove flag-related words
+        
         flag_words = [
             r'\b(?:alolan?|alola|galarians?|galar|hisuians?|hisui|paldeans?|paldea|mega)\b',
             r'\b(?:legendary?|legendaries|leg|mythicals?|myth|shiny|shinies)\b',
@@ -102,7 +102,7 @@ class AdvancedStringFlagParser:
         for pattern in flag_words:
             text = re.sub(pattern, '', text, flags=re.IGNORECASE)
         
-        # Clean up extra whitespace and commas
+        
         text = re.sub(r'\s*,\s*', ',', text)
         text = re.sub(r'\s+', ' ', text).strip()
         text = text.strip(',')
@@ -116,7 +116,7 @@ class NavigationView(View):
         self.ctx = ctx
         self.current_index = 0
         
-        # Create navigation buttons
+        
         self.prev_button = Button(label="◀", style=ButtonStyle.secondary, disabled=self.current_index == 0)
         self.next_button = Button(label="▶", style=ButtonStyle.secondary, disabled=self.current_index >= len(embeds) - 1)
         self.prev_button.callback = self.go_prev
@@ -135,15 +135,16 @@ class NavigationView(View):
             await self.update_view(interaction)
     
     async def update_view(self, interaction):
-        # Update button states
+        
         self.prev_button.disabled = self.current_index == 0
         self.next_button.disabled = self.current_index >= len(self.embeds) - 1
         
-        # Update the message with new embed and view
+        
         await interaction.response.edit_message(embed=self.embeds[self.current_index], view=self)
     
     async def interaction_check(self, interaction):
         return interaction.user == self.ctx.author
+
 
 class Ping_Pokemon(commands.Cog):
     
@@ -160,9 +161,7 @@ class Ping_Pokemon(commands.Cog):
         self.pokemon_rarity_csv = os.path.join("data", "commands", "pokemon", "pokemon_rarity.csv")
         self.pokemon_species_url = "https://pokeapi.co/api/v2/pokemon-species"
         
-        # Initialize MongoDB connection
         try:
-            # You'll need to add your MongoHelper class or replace this with your actual MongoDB setup
             self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
         except:
             print("Warning: MongoDB connection failed. Make sure MongoHelper is imported and MONGO_URI is set.")
@@ -172,7 +171,6 @@ class Ping_Pokemon(commands.Cog):
         self._pokemon_types = None
         self._pokemon_rarity = None
         
-        # Initialize helper classes - you'll need to make sure these are imported
         try:
             self.pe = Pokemon_Emojis(bot)
             self.ph = PokemonNameHelper()
@@ -181,7 +179,6 @@ class Ping_Pokemon(commands.Cog):
             self.pe = None
             self.ph = None
         
-        # Initialize the advanced string parser
         self.flag_parser = AdvancedStringFlagParser()
         
         self.region_map = {"alolan": "-alola", "galarian": "-galar", "hisuian": "-hisui", "paldean": "-paldea", "mega": "-mega"}
@@ -360,12 +357,12 @@ class Ping_Pokemon(commands.Cog):
                 pokemon_name = self.extract_pokemon_name(entry)
                 slug = self.normalize_regional_name(pokemon_name.lower().replace(" ", "-"))
 
-                # Regional form checks
+                # Check regional flags
                 for flag, suffix in suffix_map.items():
                     if flags_dict.get(flag) and not slug.endswith(suffix):
                         break
                 else:
-                    # Get rarity data
+                    # Check rarity
                     try:
                         rarity_data = (await self.pokemon_rarity).get(slug, {})
                         rarity = rarity_data.get("rarity", "")
@@ -373,12 +370,12 @@ class Ping_Pokemon(commands.Cog):
                         rarity_data = {}
                         rarity = ""
 
-                    # Rarity checks
+                    # Check rarity flags
                     for flag, rarity_val in rarity_checks.items():
                         if flags_dict.get(flag) and rarity != rarity_val:
                             break
                     else:
-                        # Name filter
+                        # Check name filter
                         if flags_dict.get('name'):
                             name_matches = False
                             for name_group in flags_dict['name']:
@@ -391,7 +388,7 @@ class Ping_Pokemon(commands.Cog):
                             if not name_matches:
                                 continue
 
-                        # Type filter
+                        # Check type filter
                         if flags_dict.get('type'):
                             try:
                                 pokemon_types_data = (await self.pokemon_types).get(slug, [])
@@ -401,7 +398,7 @@ class Ping_Pokemon(commands.Cog):
                             except:
                                 continue
 
-                        # Region filter
+                        # Check region filter
                         if flags_dict.get('region'):
                             region_data = rarity_data.get("region", "").lower()
                             if not any(region_filter.lower() == region_data for region_filter in flags_dict['region']):
@@ -409,7 +406,7 @@ class Ping_Pokemon(commands.Cog):
 
                         filtered.append(entry)
 
-            # Apply limit and skip
+            # Apply skip and limit
             if flags_dict.get('skip'):
                 filtered = filtered[flags_dict['skip']:]
             if flags_dict.get('limit'):
@@ -445,7 +442,7 @@ class Ping_Pokemon(commands.Cog):
             embed = Embed(
                 title=title,
                 description="No Pokémon found matching your criteria.",
-                color=0x3498db
+                color=0x7289da  # Using a default color instead of primary_color()
             )
             embed.set_footer(text=f"Use {ctx.prefix}{ctx.invoked_with} help for more information")
             return [embed]
@@ -458,7 +455,7 @@ class Ping_Pokemon(commands.Cog):
             end_idx = min(start_idx + self.RESULTS_PER_PAGE, len(entries))
             page_entries = entries[start_idx:end_idx]
             
-            # Create chunks for better formatting
+            # Create chunks
             chunks = []
             current_chunk = []
             
@@ -471,7 +468,7 @@ class Ping_Pokemon(commands.Cog):
             if current_chunk:
                 chunks.append(current_chunk)
             
-            # Build embed description
+            # Build description
             description_parts = []
             for i, chunk in enumerate(chunks):
                 chunk_text = "\n".join(f"{start_idx + (i * self.CHUNK_SIZE) + j + 1}. {entry}" 
@@ -481,10 +478,10 @@ class Ping_Pokemon(commands.Cog):
             embed = Embed(
                 title=f"{title}",
                 description="\n\n".join(description_parts),
-                color=primary_color()
+                color=0x7289da  # Using a default color instead of primary_color()
             )
             
-            # Add statistics
+            # Add info field
             embed.add_field(
                 name=" ",
                 value=f"**Total:** {len(entries)} Pokémon\n**Page:** {page + 1}/{total_pages}\n**Showing:** {start_idx + 1}-{end_idx}",
@@ -502,12 +499,15 @@ class Ping_Pokemon(commands.Cog):
             embeds = self.create_collection_embeds(entries, title, ctx)
             
             if len(embeds) == 1:
-                # Single page, no navigation needed
+                # Single page
                 await ctx.send(embed=embeds[0])
             else:
-                # Multiple pages, add navigation
-                view = NavigationView(embeds, ctx)
-                await ctx.reply(embed=embeds[0], mention_author=False, view=view)
+                # Multiple pages - would need NavigationView class
+                view = NavigationView(embeds, ctx) if 'NavigationView' in globals() else None
+                if view:
+                    await ctx.reply(embed=embeds[0], mention_author=False, view=view)
+                else:
+                    await ctx.reply(embed=embeds[0], mention_author=False)
                 
         except Exception as e:
             print(f"Error in paginate_and_send: {e}")
@@ -520,174 +520,295 @@ class Ping_Pokemon(commands.Cog):
             await ctx.send(embed=error_embed)
 
     async def handle_collection(self, ctx, col, action, pokemon=None, max_one=False, flags_obj=None):
-     if not self.mongo:
-        await ctx.reply("❌ Database connection not available.", mention_author=False)
-        return
+        if not self.mongo:
+            await ctx.reply("❌ Database connection not available.", mention_author=False)
+            return
 
-     try:
-        valid_slugs = await self.valid_slugs
-        valid_slugs_list = list(valid_slugs)
-        uid = ctx.author.id
-        cur = await self.mongo.list(col, uid)
+        try:
+            valid_slugs = await self.valid_slugs
+            valid_slugs_list = list(valid_slugs)
+            uid = ctx.author.id
+            cur = await self.mongo.list(col, uid)
 
-        # Clean invalid entries
-        invalids = [n for n in cur if n.lower() not in valid_slugs]
-        for n in invalids:
-            await self.mongo.remove(col, n, uid)
+            invalids = [n for n in cur if n.lower() not in valid_slugs]
 
-        cur = await self.mongo.list(col, uid)
-        if len(cur) > self.MAX_POKEMON:
-            for n in cur[self.MAX_POKEMON:]:
-                await self.mongo.remove(col, n, uid)
-            cur = cur[:self.MAX_POKEMON]
+            if action == "list" and invalids:
+                for n in invalids:
+                    await self.mongo.remove(col, n, uid)
 
-        if action == "list":
-            if not cur:
-                embed = Embed(description="Your list is empty.", color=0x3498db)
+                cur = await self.mongo.list(col, uid)
+
+                all_suggestions = []
+                for invalid_name in invalids:
+                    similar = self.find_similar_names(invalid_name, valid_slugs_list)
+                    if similar:
+                        for suggestion in similar:
+                            all_suggestions.append((invalid_name, suggestion))
+
+                if all_suggestions:
+                    embed = Embed(
+                        title="Invalid Pokémon Found in Collection",
+                        description=f"Found {len(invalids)} invalid Pokémon in your collection. Would you like to replace them with suggestions?",
+                        color=0x7289da
+                    )
+                    view = UnifiedResultView(
+                        success_results=[],
+                        failed_results=[],
+                        exists_results=[],
+                        suggestions_list=all_suggestions,
+                        parent_cog=self,
+                        ctx=ctx,
+                        col=col,
+                        uid=uid,
+                        action="add",
+                        max_one=max_one
+                    ) if 'UnifiedResultView' in globals() else None
+                    
+                    if view:
+                        return await ctx.reply(embed=embed, view=view, mention_author=False)
+                    else:
+                        return await ctx.reply(embed=embed, mention_author=False)
+            else:
+                for n in invalids:
+                    await self.mongo.remove(col, n, uid)
+
+            cur = await self.mongo.list(col, uid)
+
+            if len(cur) > self.MAX_POKEMON:
+                for n in cur[self.MAX_POKEMON:]:
+                    await self.mongo.remove(col, n, uid)
+                cur = cur[:self.MAX_POKEMON]
+
+            if action == "list":
+                if not cur:
+                    embed = Embed(description="Your list is empty.", color=0x7289da)
+                    embed.set_footer(text=f"Use {ctx.prefix}{ctx.invoked_with} help for more information")
+                    return await ctx.reply(embed=embed, mention_author=False)
+
+                entries = []
+                for n in cur:
+                    emoji = ""
+                    if self.pe:
+                        try:
+                            pid = Pokemon_Subcogs.pokemon_name_to_id(n) if 'Pokemon_Subcogs' in globals() else None
+                            if pid:
+                                emoji = self.pe.get_emoji_for_pokemon(pid) or ""
+                        except:
+                            pass
+                    display_name = self.display_name_with_region(n)
+                    entries.append(f"{emoji} {display_name}" if emoji else display_name)
+
+                if flags_obj:
+                    entries = await self.filter_by_flags(entries, flags_obj)
+
+                title = "Your Shiny Hunt Target" if col == self.shiny_collection else "Your Pokémon Collection"
+                return await self.paginate_and_send(ctx, entries, title, flags_obj=flags_obj)
+
+            if action == "clear":
+                await self.mongo.clear(col, uid)
+                embed = Embed(description="🗑️ Cleared your Pokémon list.", color=0x7289da)
                 embed.set_footer(text=f"Use {ctx.prefix}{ctx.invoked_with} help for more information")
                 return await ctx.reply(embed=embed, mention_author=False)
 
-            entries = []
-            for n in cur:
-                emoji = ""
-                if self.pe:
-                    try:
-                        pid = Pokemon_Subcogs.pokemon_name_to_id(n) if 'Pokemon_Subcogs' in globals() else None
-                        if pid:
-                            emoji = self.pe.get_emoji_for_pokemon(pid) or ""
-                    except:
-                        pass
+            if not pokemon:
+                embed = Embed(description=f"{self.ICONS['error']} Specify Pokémon name(s).", color=0xff0000)
+                embed.set_footer(text=f"Use {ctx.prefix}{ctx.invoked_with} help for more information")
+                return await ctx.reply(embed=embed, mention_author=False)
 
-                display_name = self.display_name_with_region(n)
-                entries.append(f"{emoji} {display_name}" if emoji else display_name)
+            names = []
+            success, failed, exists = [], [], []
+            user_input_suggestions = []
 
-            if flags_obj:
-                entries = await self.filter_by_flags(entries, flags_obj)
+            for entry in pokemon.split(","):
+                raw = entry.strip()
+                norm = self.normalize_regional_name(raw.lower().replace(" ", "-"))
+                names.append((raw, norm))
 
-            title = "Your Shiny Hunt Target" if col == self.shiny_collection else "Your Pokémon Collection"
-            return await self.paginate_and_send(ctx, entries, title, flags_obj=flags_obj)
+            cur = await self.mongo.list(col, uid)
 
-        if action == "clear":
-            await self.mongo.clear(col, uid)
-            embed = Embed(description="🗑️ Cleared your Pokémon list.", color=0x3498db)
-            embed.set_footer(text=f"Use {ctx.prefix}{ctx.invoked_with} help for more information")
-            return await ctx.reply(embed=embed, mention_author=False)
+            for raw, name in names:
+                name_lower = name.lower()
+                if name_lower in valid_slugs:
+                    matched_slug = name_lower
+                    pid = Pokemon_Subcogs.pokemon_name_to_id(matched_slug) if 'Pokemon_Subcogs' in globals() else None
+                    emoji = self.pe.get_emoji_for_pokemon(pid) or "" if self.pe and pid else ""
 
-        if not pokemon:
-            embed = Embed(description=f"{self.ICONS['error']} Specify Pokémon name(s).", color=0xff0000)
-            embed.set_footer(text=f"Use {ctx.prefix}{ctx.invoked_with} help for more information")
-            return await ctx.reply(embed=embed, mention_author=False)
-
-        names = []
-        success, failed, exists = [], [], []
-        all_suggestions = []
-
-        for entry in pokemon.split(","):
-            raw = entry.strip()
-            norm = self.normalize_regional_name(raw.lower().replace(" ", "-"))
-            names.append((raw, norm))
-
-        cur = await self.mongo.list(col, uid)
-
-        for raw, name in names:
-            name_lower = name.lower()
-            if name_lower in valid_slugs:
-                matched_slug = name_lower
-                pid = Pokemon_Subcogs.pokemon_name_to_id(matched_slug) if 'Pokemon_Subcogs' in globals() else None
-                emoji = self.pe.get_emoji_for_pokemon(pid) or "" if self.pe and pid else ""
-
-                if action == "add":
-                    if max_one:
-                        await self.mongo.replace(col, matched_slug, uid)
-                        name_disp = self.display_name_with_region(matched_slug)
-                        success.append(f"{self.ICONS['success']} Set your shiny hunt to {emoji} {name_disp}!")
-                        break
-                    if len(cur) >= self.MAX_POKEMON and matched_slug not in cur:
-                        exists.append(f"{self.ICONS['error']} Max {self.MAX_POKEMON} Pokémon. {matched_slug.title()} not added.")
-                        continue
-                    ok = await self.mongo.add(col, matched_slug, uid)
-                    (success if ok else exists).append(f"{self.ICONS['success'] if ok else self.ICONS['exists']} {emoji} {self.display_name_with_region(matched_slug)}")
-                    if ok:
-                        cur.append(matched_slug)
-                elif action == "remove":
-                    ok = await self.mongo.remove(col, matched_slug, uid)
-                    (success if ok else exists).append(f"{self.ICONS['removed'] if ok else self.ICONS['not_found']} {emoji} {self.display_name_with_region(matched_slug)}")
-            else:
-                similar = self.find_similar_names(raw, valid_slugs_list)
-                if similar:
-                    for suggestion in similar:
-                        all_suggestions.append((raw, suggestion))
+                    if action == "add":
+                        if max_one:
+                            await self.mongo.replace(col, matched_slug, uid)
+                            name_disp = self.display_name_with_region(matched_slug)
+                            success.append(f"`{self.ICONS['success']}` Set your shiny hunt to {emoji} {name_disp}!")
+                            break
+                        if len(cur) >= self.MAX_POKEMON and matched_slug not in cur:
+                            exists.append(f"{self.ICONS['error']} Max {self.MAX_POKEMON} Pokémon. {matched_slug.title()} not added.")
+                            continue
+                        ok = await self.mongo.add(col, matched_slug, uid)
+                        (success if ok else exists).append(f"{self.ICONS['success'] if ok else self.ICONS['exists']} {emoji} {self.display_name_with_region(matched_slug)}")
+                        if ok:
+                            cur.append(matched_slug)
+                    elif action == "remove":
+                        ok = await self.mongo.remove(col, matched_slug, uid)
+                        (success if ok else exists).append(f"{self.ICONS['removed'] if ok else self.ICONS['not_found']} {emoji} {self.display_name_with_region(matched_slug)}")
                 else:
-                    failed.append(f"{self.ICONS['error']} Invalid Pokémon name: {raw}.")
+                    similar = self.find_similar_names(raw, valid_slugs_list)
+                    if similar:
+                        for suggestion in similar:
+                            user_input_suggestions.append((raw, suggestion))
+                    else:
+                        failed.append(f"{self.ICONS['error']} Invalid Pokémon name: {raw}.")
 
-        if success or failed or exists or all_suggestions:
-            if success:
-                initial_type = "success"
-                initial_content = success
-            elif failed:
-                initial_type = "invalid"
-                initial_content = failed
-            elif exists:
-                initial_type = "other"
-                initial_content = exists
-            else:
-                initial_type = "suggestions"
-                initial_content = []
+            if success or failed or exists or user_input_suggestions:
+                if success and col == self.shiny_collection and max_one:
+                    embed = Embed(
+                        description=success[0],
+                        color=0x7289da
+                    )
+                    return await ctx.reply(embed=embed, mention_author=False)
 
-            if initial_type == "suggestions":
-                total = len(all_suggestions)
-                unique = len(set(orig for orig, _ in all_suggestions))
-                embed = Embed(
-                    title="Pokémon Suggestions",
-                    description=f"Found {total} suggestions for {unique} invalid name(s). Select the Pokémon to {action}:",
-                    color=0x3498db
-                )
-            else:
-                view_titles = {
-                    "success": "✅ Successful Results",
-                    "invalid": "❌ Invalid Results",
-                    "other": "⛔ Other Results"
-                }
-                content = "\n".join(initial_content[:self.RESULTS_PER_PAGE])
-                embed = Embed(
-                    description=f"{view_titles[initial_type]}\n\n{content[:3900]}",
-                    color=0x3498db
-                )
-                embed.set_footer(text="" if max_one else "Updated Your Pokémon Collection")
+                if user_input_suggestions and not success:
+                    total = len(user_input_suggestions)
+                    unique = len(set(orig for orig, _ in user_input_suggestions))
+                    embed = Embed(
+                        title="Pokémon Suggestions",
+                        description=f"Found {total} suggestions for {unique} invalid name(s). Select the Pokémon to {action}:",
+                        color=0x7289da
+                    )
+                    view = UnifiedResultView(
+                        success_results=success,
+                        failed_results=failed,
+                        exists_results=exists,
+                        suggestions_list=user_input_suggestions,
+                        parent_cog=self,
+                        ctx=ctx,
+                        col=col,
+                        uid=uid,
+                        action=action,
+                        max_one=max_one
+                    ) if 'UnifiedResultView' in globals() else None
+                    
+                    if view:
+                        return await ctx.reply(embed=embed, view=view, mention_author=False)
+                    else:
+                        return await ctx.reply(embed=embed, mention_author=False)
 
-            view = UnifiedResultView(
-                success_results=success,
-                failed_results=failed,
-                exists_results=exists,
-                suggestions_list=all_suggestions,
-                parent_cog=self,
-                ctx=ctx,
-                col=col,
-                uid=uid,
-                action=action,
-                max_one=max_one
+                if success:
+                    initial_type = "success"
+                    initial_content = success
+                elif failed:
+                    initial_type = "invalid"
+                    initial_content = failed
+                elif exists:
+                    initial_type = "other"
+                    initial_content = exists
+                else:
+                    initial_type = "suggestions"
+                    initial_content = []
+
+                if initial_type != "suggestions":
+                    view_titles = {
+                        "success": "✅ Successful Results",
+                        "invalid": "❌ Invalid Results",
+                        "other": "⛔ Other Results"
+                    }
+                    content = "\n".join(initial_content[:self.RESULTS_PER_PAGE])
+                    embed = Embed(
+                        description=f"{view_titles[initial_type]}\n\n{content[:3900]}",
+                        color=0x7289da
+                    )
+                    embed.set_footer(text="" if max_one else "Updated Your Pokémon Collection")
+
+                    view = UnifiedResultView(
+                        success_results=success,
+                        failed_results=failed,
+                        exists_results=exists,
+                        suggestions_list=user_input_suggestions,
+                        parent_cog=self,
+                        ctx=ctx,
+                        col=col,
+                        uid=uid,
+                        action=action,
+                        max_one=max_one
+                    ) if 'UnifiedResultView' in globals() else None
+                    
+                    if view:
+                        await ctx.reply(embed=embed, view=view, mention_author=False)
+                    else:
+                        await ctx.reply(embed=embed, mention_author=False)
+
+        except Exception as e:
+            print(f"Error in handle_collection: {e}")
+            embed = Embed(
+                title="❌ Error",
+                description="An error occurred while processing your request.",
+                color=0xff0000
             )
-            await ctx.reply(embed=embed, view=view, mention_author=False)
-
-     except Exception as e:
-        print(f"Error in handle_collection: {e}")
-        embed = Embed(
-            title="❌ Error",
-            description="An error occurred while processing your request.",
-            color=0xff0000
-        )
-        embed.set_footer(text=f"Use {ctx.prefix}{ctx.invoked_with} help for more information")
-        await ctx.reply(embed=embed, mention_author=False)
-    # MAIN COMMANDS
-    @commands.command(name="collection", aliases=["cl"])
-    async def collection_string(self, ctx, *, args: str = "list"):
-        """Collection command with advanced string flag detection"""
+            embed.set_footer(text=f"Use {ctx.prefix}{ctx.invoked_with} help for more information")
+            await ctx.reply(embed=embed, mention_author=False)   
+           
+    @commands.command(name="shiny_hunt", aliases=["sh"])
+    async def sh(self, ctx, action: str = None, *, pokemon: str = None):
+        prefix = ctx.prefix
         
-        # Parse the input string
-        action = "list"  # default
+        if action == "help":
+            help_text = (
+                f"**Usage:**\n"
+                f"`{prefix}sh` - Show your current shiny hunt\n"
+                f"`{prefix}sh <pokemon>` - Set a Pokémon as your shiny hunt target\n"
+                f"`{prefix}sh add <pokemon>` - Add a Pokémon to your shiny hunt\n"
+                f"`{prefix}sh remove` - Remove your current shiny hunt\n"
+                f"`{prefix}sh remove <pokemon>` - Remove specific Pokémon\n"
+                f"`{prefix}sh list` - List your shiny hunt targets\n"
+                f"`{prefix}sh clear` - Clear all shiny hunt entries\n\n"
+                f"**Examples:**\n"
+                f"`{prefix}sh eevee`\n"
+                f"`{prefix}sh add pikachu`\n"
+                f"`{prefix}sh add alolan vulpix`\n"
+                f"`{prefix}sh remove`"
+            )
+            embed = Embed(title="Shiny Hunt Help", description=help_text, color=0x7289da)
+            return await ctx.reply(embed=embed, mention_author=False)
+
+        if not action and not pokemon:
+            if not self.mongo:
+                await ctx.reply("❌ Database connection not available.", mention_author=False)
+                return
+                
+            cur = await self.mongo.list(self.shiny_collection, ctx.author.id)
+            if not cur:
+                return await ctx.reply(embed=Embed(description="You don't have a shiny hunt set.", color=0x7289da), mention_author=False)
+            
+            name = cur[0]
+            pid = Pokemon_Subcogs.pokemon_name_to_id(name) if 'Pokemon_Subcogs' in globals() else None
+            emoji = self.pe.get_emoji_for_pokemon(pid) or "" if self.pe and pid else ""
+            name_disp = self.display_name_with_region(name)
+            return await ctx.reply(embed=Embed(description=f"You are currently shiny hunting: **{emoji} {name_disp}**", color=0x7289da), mention_author=False)
+
+        if action == "remove" and not pokemon:
+            if not self.mongo:
+                await ctx.reply("❌ Database connection not available.", mention_author=False)
+                return
+                
+            await self.mongo.clear(self.shiny_collection, ctx.author.id)
+            return await ctx.reply(embed=Embed(description="🗑️ Your shiny hunt has been removed.", color=0x7289da), mention_author=False)
+
+        if action not in {"add", "remove", "list", "clear"}:
+            full_name = f"{action} {pokemon}".strip() if pokemon else action
+            if self.ph:
+                transformed_name, _ = self.ph.transform_name(full_name)
+                pokemon, action = transformed_name, "add"
+            else:
+                pokemon, action = full_name, "add"
+
+        await self.handle_collection(ctx, self.shiny_collection, action, pokemon, max_one=True)
+  
+  
+    @commands.command(name="collection", aliases=["cl"])
+    async def collection_string(self, ctx, *, args: str = "list"):        
+        
+        action = "list"  
         pokemon_names = ""
         
-        # Extract action if present
+        
         args_lower = args.lower().strip()
         if args_lower.startswith(('add ', 'remove ', 'delete ', 'clear', 'help')):
             parts = args.split(' ', 1)
@@ -698,12 +819,12 @@ class Ping_Pokemon(commands.Cog):
         else:
             remaining_text = args
         
-        # Handle help
+        
         if action == "help" or args_lower == "help":
             help_embed = Embed(
                 title="Collection Command Help",
                 description="Use natural language to filter and search your Pokemon collection",
-                color=0x3498db
+                color=primary_color()
             )
             help_embed.add_field(
                 name="Regional Filters",
@@ -743,11 +864,11 @@ class Ping_Pokemon(commands.Cog):
             help_embed.set_footer(text=f"Max {self.MAX_POKEMON} Pokémon per collection | {self.RESULTS_PER_PAGE} results per page")
             return await ctx.reply(embed=help_embed, mention_author=False)
         
-        # Parse flags and extract Pokemon names
+        
         flags_dict = self.flag_parser.parse_flags_from_string(remaining_text)
         pokemon_names, _ = self.flag_parser.extract_pokemon_names_from_string(remaining_text, action)
         
-        # Handle the collection action
+        
         await self.handle_collection(
             ctx, 
             self.collection_collection, 
@@ -1368,7 +1489,7 @@ class CollectionViewUI(View):
         self.special_path = "data/commands/pokemon/pokemon_special_names.csv"
         self.name_to_region = self._load_region_map()
         self.rare_names, self.regional_names = self._load_special_names()
-        # Do NOT update regional_names with name_to_region keys — ONLY from special CSV!
+        
         self.user_regions = self._extract_user_regions()
         self.has_rare = any(self._is_rare_pokemon(e) for e in self.entries)
         self.has_regional = any(self._is_regional_pokemon(e) for e in self.entries)
@@ -1432,7 +1553,7 @@ class CollectionViewUI(View):
                     if rare_name:
                         rare.add(rare_name)
                     if regional_name:
-                        # Only add raw names exactly as in Regional Pokémon column
+                        
                         regional.add(regional_name)
         except Exception as e:
             print(f"Error loading special names: {e}")
@@ -1667,15 +1788,6 @@ class CollectionViewUI(View):
     async def interaction_check(self, interaction):
         return interaction.user == self.ctx.author
 
-    @staticmethod
-    def primary_color():
-        return 0x3498db
-
-
-
-
-
-
 
 
 
@@ -1760,8 +1872,8 @@ class UnifiedResultView(View):
     def __init__(self, success_results, failed_results, exists_results, suggestions_list=None, parent_cog=None, ctx=None, col=None, uid=None, action=None, max_one=False):
         super().__init__(timeout=300)
         
-        # Store all instance variables first
-        self.parent_cog = parent_cog  # Store reference to parent cog
+        
+        self.parent_cog = parent_cog  
         self.ctx = ctx
         self.col = col
         self.uid = uid
@@ -1774,13 +1886,13 @@ class UnifiedResultView(View):
             "other": exists_results
         }
         self.suggestions = suggestions_list or []
-        self.current_view = "success"  # Default to success view
+        self.current_view = "success"  
         self.current_page = 0
         self.items_per_page = self.parent_cog.RESULTS_PER_PAGE if parent_cog else 10
         self.selected_items = set()
         self.show_suggestions = bool(suggestions_list)
         
-        # If no success results, default to first available type
+        
         if not success_results:
             if failed_results:
                 self.current_view = "invalid"
@@ -1800,48 +1912,55 @@ class UnifiedResultView(View):
             return [[]]
         return [data[i:i + self.items_per_page] for i in range(0, len(data), self.items_per_page)]
 
+    def should_show_category_buttons(self):
+        """Check if we should show category buttons (only if there are multiple categories with data)"""
+        categories_with_data = sum(1 for results in self.results.values() if results)
+        has_suggestions = bool(self.suggestions)
+        return categories_with_data + (1 if has_suggestions else 0) > 1
+
     def update_components(self):
         self.clear_items()
         
-        # Result type buttons (row 0)
-        if self.results["success"]:
-            btn_success = Button(
-                label=f"✅ Success ({len(self.results['success'])})",
-                style=ButtonStyle.success if self.current_view == "success" else ButtonStyle.secondary,
-                row=0
-            )
-            btn_success.callback = lambda i: self.switch_view(i, "success")
-            self.add_item(btn_success)
-        
-        if self.results["invalid"]:
-            btn_invalid = Button(
-                label=f"❌ Invalid ({len(self.results['invalid'])})",
-                style=ButtonStyle.danger if self.current_view == "invalid" else ButtonStyle.secondary,
-                row=0
-            )
-            btn_invalid.callback = lambda i: self.switch_view(i, "invalid")
-            self.add_item(btn_invalid)
-        
-        if self.results["other"]:
-            btn_other = Button(
-                label=f"⛔ Other ({len(self.results['other'])})",
-                style=ButtonStyle.primary if self.current_view == "other" else ButtonStyle.secondary,
-                row=0
-            )
-            btn_other.callback = lambda i: self.switch_view(i, "other")
-            self.add_item(btn_other)
+        # Only show category buttons if there are multiple categories with data
+        if self.should_show_category_buttons():
+            if self.results["success"]:
+                btn_success = Button(
+                    label=f"✅ Success ({len(self.results['success'])})",
+                    style=ButtonStyle.success if self.current_view == "success" else ButtonStyle.secondary,
+                    row=0
+                )
+                btn_success.callback = lambda i: self.switch_view(i, "success")
+                self.add_item(btn_success)
+            
+            if self.results["invalid"]:
+                btn_invalid = Button(
+                    label=f"❌ Invalid ({len(self.results['invalid'])})",
+                    style=ButtonStyle.danger if self.current_view == "invalid" else ButtonStyle.secondary,
+                    row=0
+                )
+                btn_invalid.callback = lambda i: self.switch_view(i, "invalid")
+                self.add_item(btn_invalid)
+            
+            if self.results["other"]:
+                btn_other = Button(
+                    label=f"⛔ Other ({len(self.results['other'])})",
+                    style=ButtonStyle.primary if self.current_view == "other" else ButtonStyle.secondary,
+                    row=0
+                )
+                btn_other.callback = lambda i: self.switch_view(i, "other")
+                self.add_item(btn_other)
 
-        if self.suggestions:
-            btn_suggestions = Button(
-                label=f"🔍 Suggestions ({len(self.suggestions)})",
-                style=ButtonStyle.primary if self.current_view == "suggestions" else ButtonStyle.secondary,
-                row=0
-            )
-            btn_suggestions.callback = lambda i: self.switch_view(i, "suggestions")
-            self.add_item(btn_suggestions)
+            if self.suggestions:
+                btn_suggestions = Button(
+                    label=f"🔍 Suggestions ({len(self.suggestions)})",
+                    style=ButtonStyle.primary if self.current_view == "suggestions" else ButtonStyle.secondary,
+                    row=0
+                )
+                btn_suggestions.callback = lambda i: self.switch_view(i, "suggestions")
+                self.add_item(btn_suggestions)
 
         if self.current_view == "suggestions":
-            # Add select dropdown for suggestions
+            
             pages = self.get_pages("suggestions")
             if pages and pages[self.current_page]:
                 page_items = pages[self.current_page]
@@ -1851,7 +1970,7 @@ class UnifiedResultView(View):
                     emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid)
                     display_name = self.parent_cog.display_name_with_region(suggestion)
                     option_label = f"{display_name} (for '{original_name}')"
-                    if len(option_label) > 100:  # Discord limit
+                    if len(option_label) > 100:  
                         option_label = f"{display_name[:80]}... (for '{original_name}')"
                     
                     option = SelectOption(
@@ -1872,7 +1991,7 @@ class UnifiedResultView(View):
                 select.callback = self.select_callback
                 self.add_item(select)
 
-            # Action buttons for suggestions (row 2)
+            
             confirm_btn = Button(
                 label=f"Confirm {self.action.title()} ({len(self.selected_items)})", 
                 style=ButtonStyle.success, 
@@ -1887,7 +2006,7 @@ class UnifiedResultView(View):
             self.add_item(confirm_btn)
             self.add_item(cancel_btn)
 
-        # Page navigation buttons (row 3 for suggestions, row 1 for others)
+        
         pages = self.get_pages(self.current_view)
         nav_row = 5 if self.current_view == "suggestions" else 1
         
@@ -1918,23 +2037,35 @@ class UnifiedResultView(View):
             self.add_item(page_btn)
             self.add_item(next_btn)
 
+    async def on_timeout(self):
+        """Called when the view times out - removes all components"""
+        self.clear_items()
+        try:
+            # Try to edit the message to remove buttons
+            # You'll need to store the message object when you first send it
+            if hasattr(self, 'message') and self.message:
+                await self.message.edit(view=None)
+        except:
+            # If editing fails (message deleted, etc.), just pass
+            pass
+
     async def select_callback(self, interaction: Interaction):
-        # Update selected items
+        
         selected_values = set(interaction.data['values'])
         pages = self.get_pages("suggestions")
         page_items = pages[self.current_page] if pages else []
         page_values = {f"{orig}|{sugg}" for orig, sugg in page_items}
         
-        # Remove deselected items from this page
+        
         self.selected_items = {item for item in self.selected_items if item not in page_values}
-        # Add selected items from this page
+        
         self.selected_items.update(selected_values)
         
         self.update_components()
         await interaction.response.edit_message(view=self)
 
     async def confirm_action(self, interaction: Interaction):
-        # Process selected items
+        
         current_list = await self.parent_cog.mongo.list(self.col, self.uid)
         new_success = []
         new_other = []
@@ -1978,10 +2109,10 @@ class UnifiedResultView(View):
                 else:
                     new_other.append(result_text)
 
-        # Update results and switch view
+        
         self.results["success"].extend(new_success)
         self.results["other"].extend(new_other)
-        self.suggestions = []  # Clear suggestions
+        self.suggestions = []  
         self.selected_items = set()
         self.current_view = "success" if new_success else ("other" if new_other else "success")
         self.current_page = 0
@@ -1989,7 +2120,7 @@ class UnifiedResultView(View):
         await self.update_message(interaction)
 
     async def cancel_action(self, interaction: Interaction):
-        # Clear suggestions and show results
+        
         self.suggestions = []
         self.current_view = "success" if self.results["success"] else ("invalid" if self.results["invalid"] else "other")
         self.current_page = 0
@@ -2007,7 +2138,7 @@ class UnifiedResultView(View):
 
     async def update_message(self, interaction: Interaction):
         if self.current_view == "suggestions":
-            # Show suggestions selection interface
+            
             total_suggestions = len(self.suggestions)
             unique_originals = len(set(orig for orig, _ in self.suggestions))
             
@@ -2018,7 +2149,7 @@ class UnifiedResultView(View):
                 color=primary_color()
             )
         else:
-            # Show results
+            
             pages = self.get_pages(self.current_view)
             current_data = pages[self.current_page] if pages else []
             content = "\n".join(current_data) if current_data else "No entries to display."
@@ -2028,7 +2159,12 @@ class UnifiedResultView(View):
                 "invalid": "❌ Invalid Results",
                 "other": "⛔ Other Results"
             }
-            header = f"**{view_names[self.current_view]}**\n\n"
+            
+            # Only show header if there are multiple categories
+            if self.should_show_category_buttons():
+                header = f"**{view_names[self.current_view]}**\n\n"
+            else:
+                header = ""
             
             embed = Embed(description=header + content[:3900], color=primary_color())
             
@@ -2042,11 +2178,6 @@ class UnifiedResultView(View):
 
     async def interaction_check(self, interaction: Interaction):
         return interaction.user == self.ctx.author
-
-
-
-
-
 
 
 
