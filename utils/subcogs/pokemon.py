@@ -16,9 +16,7 @@ MAX_POKEMON, CHUNK_SIZE, RESULTS_PER_PAGE, MIN_SIMILARITY_RATIO  = 50, 15, 10, 0
 
 
 class AdvancedStringFlagParser:
-    
     def __init__(self):
-        
         self.flag_patterns = {
             'alolan': r'\b(?:alolan?|alola)\b',
             'galarian': r'\b(?:galarians?|galar)\b', 
@@ -27,19 +25,18 @@ class AdvancedStringFlagParser:
             'mega': r'\b(?:mega)\b',
             'legendary': r'\b(?:legendary?|legendaries|leg)\b',
             'mythical': r'\b(?:mythicals?|myth)\b',
+            'ultra_beast': r'\b(?:ultra\s*beasts?|ub)\b',
             'shiny': r'\b(?:shiny|shinies)\b',
             'limit': r'\b(?:limit|max|top)\s+(\d+)\b',
             'skip': r'\b(?:skip|offset)\s+(\d+)\b',
         }
         
-        
-        self.type_pattern = r'\b(?:type|types?)\s+([a-zA-Z]+(?:\s*,\s*[a-zA-Z]+)*)\b'
-        
-        
-        self.name_pattern = r'\b(?:name|named?|pokemon)\s+([a-zA-Z0-9\s,\-\']+?)(?:\s+(?:type|limit|skip|legendary|mythical|alolan|galarian|hisuian|paldean|mega)|$)'
-        
-        
+        # Updated type pattern to handle --type or --t flags
+        self.type_pattern = r'(?:--type|--t)\s+([a-zA-Z]+(?:\s*,\s*[a-zA-Z]+)*)|(?:\btype\b)\s+([a-zA-Z]+(?:\s*,\s*[a-zA-Z]+)*)'
+        self.name_pattern = r'\b(?:name|named?|pokemon)\s+([a-zA-Z0-9\s,\-\']+?)(?:\s+(?:type|limit|skip|legendary|mythical|ultra|alolan|galarian|hisuian|paldean|mega)|$)'
         self.region_pattern = r'\b(?:region|from)\s+([a-zA-Z]+(?:\s*,\s*[a-zA-Z]+)*)\b'
+
+   
 
     def parse_flags_from_string(self, text: str) -> Dict[str, Any]:
         """Parse flags from a natural language string"""
@@ -49,7 +46,7 @@ class AdvancedStringFlagParser:
         text_lower = text.lower()
         flags = {}
         
-        
+        # Parse simple flags
         for flag_name, pattern in self.flag_patterns.items():
             if flag_name in ['limit', 'skip']:
                 match = re.search(pattern, text_lower)
@@ -59,91 +56,98 @@ class AdvancedStringFlagParser:
                 if re.search(pattern, text_lower):
                     flags[flag_name] = True
         
-        
+        # Parse type flags (handles both --type/--t and natural language)
         type_match = re.search(self.type_pattern, text_lower)
         if type_match:
-            types = [t.strip() for t in type_match.group(1).split(',')]
+            types_str = type_match.group(1) or type_match.group(2)
+            types = [t.strip() for t in types_str.split(',')]
             flags['type'] = types
         
-        
+        # Parse name
         name_match = re.search(self.name_pattern, text_lower)
         if name_match:
             names = [n.strip() for n in name_match.group(1).split(',')]
-            
             flags['name'] = [[name] for name in names]
         
-        
+        # Parse region
         region_match = re.search(self.region_pattern, text_lower)
         if region_match:
             regions = [r.strip() for r in region_match.group(1).split(',')]
             flags['region'] = regions
             
         return flags
-
-    def extract_pokemon_names_from_string(self, text: str, action: str) -> Tuple[str, str]:
-        """Extract Pokemon names from string, removing flag-related words"""
-        if not text:
-            return "", ""
+    
+    def extract_pokemon_names_from_string(self, text: str, action: str) -> tuple[str, dict]:
+     if not text:
+        return "", {}
+    
+     flags_dict = self.parse_flags_from_string(text)
+    
+     flag_keywords = {
+        'alolan', 'alola', 'galarian', 'galar', 'hisuian', 'hisui', 
+        'paldean', 'paldea', 'mega', 'legendary', 'legendaries', 'leg',
+        'mythical', 'myth', 'ultra', 'beast', 'beasts', 'ub', 'shiny', 'shinies',
+        'limit', 'max', 'top', 'skip', 'offset', 'type', 'region', 'from'
+     }
+    
+     words = text.lower().split()
+     pokemon_words = []
+    
+     i = 0
+     while i < len(words):
+        word = words[i].strip(',-')
+        
+        if word.startswith('--'):
+            i += 1
+            if i < len(words) and not words[i].startswith('--'):
+                i += 1
+            continue
             
+        if word in flag_keywords:
+            if word in ['limit', 'max', 'top', 'skip', 'offset'] and i + 1 < len(words):
+                if words[i + 1].isdigit():
+                    i += 2
+                    continue
+            elif word in ['type', 'region', 'from'] and i + 1 < len(words):
+                i += 2
+                continue
+            i += 1
+            continue
+            
+        if word.isdigit():
+            i += 1
+            continue
+            
+        type_names = {
+            'fire', 'water', 'grass', 'electric', 'psychic', 'ice', 'dragon', 
+            'dark', 'fairy', 'fighting', 'poison', 'ground', 'flying', 'bug', 
+            'rock', 'ghost', 'steel', 'normal'
+        }
         
-        action_words = r'\b(?:add|remove|delete|clear|list|show|help)\b'
-        text = re.sub(action_words, '', text, flags=re.IGNORECASE).strip()
+        if word in type_names:
+            if (i > 0 and words[i-1] in ['type']) or ',' in words[i]:
+                i += 1
+                continue
         
-        
-        flag_words = [
-            r'\b(?:alolan?|alola|galarians?|galar|hisuians?|hisui|paldeans?|paldea|mega)\b',
-            r'\b(?:legendary?|legendaries|leg|mythicals?|myth|shiny|shinies)\b',
-            r'\b(?:limit|max|top|skip|offset)\s+\d+\b',
-            r'\b(?:type|types?)\s+[a-zA-Z,\s]+?\b',
-            r'\b(?:region|from)\s+[a-zA-Z,\s]+?\b',
-            r'\b(?:name|named?|pokemon)\s+'
-        ]
-        
-        for pattern in flag_words:
-            text = re.sub(pattern, '', text, flags=re.IGNORECASE)
-        
-        
-        text = re.sub(r'\s*,\s*', ',', text)
-        text = re.sub(r'\s+', ' ', text).strip()
-        text = text.strip(',')
-        
-        return text, action
+        pokemon_words.append(words[i])
+        i += 1
+    
+     pokemon_names = ' '.join(pokemon_words).strip()
+     pokemon_names = re.sub(r'\s*,\s*', ', ', pokemon_names)
+     pokemon_names = re.sub(r'\s+', ' ', pokemon_names)
+    
+     if action in ['add', 'remove'] and not pokemon_names:
+        remaining_text = text
+        remaining_text = re.sub(self.type_pattern, '', remaining_text, flags=re.IGNORECASE)
+        for flag_name, pattern in self.flag_patterns.items():
+            remaining_text = re.sub(pattern, '', remaining_text, flags=re.IGNORECASE)
+        remaining_text = re.sub(self.region_pattern, '', remaining_text, flags=re.IGNORECASE)
+        pokemon_names = re.sub(r'\s+', ' ', remaining_text).strip()
+        pokemon_names = re.sub(r'^[,\s]+|[,\s]+$', '', pokemon_names)
+    
+     return pokemon_names, flags_dict
 
-class NavigationView(View):
-    def __init__(self, embeds, ctx, timeout=300):
-        super().__init__(timeout=timeout)
-        self.embeds = embeds
-        self.ctx = ctx
-        self.current_index = 0
-        
-        
-        self.prev_button = Button(label="◀", style=ButtonStyle.secondary, disabled=self.current_index == 0)
-        self.next_button = Button(label="▶", style=ButtonStyle.secondary, disabled=self.current_index >= len(embeds) - 1)
-        self.prev_button.callback = self.go_prev
-        self.next_button.callback = self.go_next
-        self.add_item(self.prev_button)
-        self.add_item(self.next_button)
-    
-    async def go_prev(self, interaction):
-        if self.current_index > 0:
-            self.current_index -= 1
-            await self.update_view(interaction)
-    
-    async def go_next(self, interaction):
-        if self.current_index < len(self.embeds) - 1:
-            self.current_index += 1
-            await self.update_view(interaction)
-    
-    async def update_view(self, interaction):
-        
-        self.prev_button.disabled = self.current_index == 0
-        self.next_button.disabled = self.current_index >= len(self.embeds) - 1
-        
-        
-        await interaction.response.edit_message(embed=self.embeds[self.current_index], view=self)
-    
-    async def interaction_check(self, interaction):
-        return interaction.user == self.ctx.author
+
 
 
 class Ping_Pokemon(commands.Cog):
@@ -160,6 +164,7 @@ class Ping_Pokemon(commands.Cog):
         self.pokemon_types_csv = os.path.join("data", "commands", "pokemon", "pokemon_types.csv")
         self.pokemon_rarity_csv = os.path.join("data", "commands", "pokemon", "pokemon_rarity.csv")
         self.pokemon_species_url = "https://pokeapi.co/api/v2/pokemon-species"
+        self.embed_defualt_color = 0x7289da
         
         try:
             self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
@@ -262,12 +267,14 @@ class Ping_Pokemon(commands.Cog):
                             pokemon_data = await response.json()
                             types = [t["type"]["name"] for t in pokemon_data["types"]]
                             
-                            detailed_pokemon.append({
+                            # Build type data dynamically - no limit on number of types
+                            type_data = {
                                 "id": pokemon_id,
                                 "name": pokemon["name"],
-                                "type1": types[0] if types else "",
-                                "type2": types[1] if len(types) > 1 else ""
-                            })
+                                "types": ",".join(types)  # Store all types as comma-separated string
+                            }
+                            
+                            detailed_pokemon.append(type_data)
                 except Exception as e:
                     print(f"Error fetching details for {pokemon['name']}: {e}")
                     continue
@@ -281,8 +288,10 @@ class Ping_Pokemon(commands.Cog):
             species_list = await self.afetch_pokemon_species()
             detailed_pokemon = await self.fetch_pokemon_details(species_list)
             
+            fieldnames = ["id", "name", "types"]
+            
             with open(self.pokemon_types_csv, "w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=["id", "name", "type1", "type2"])
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerows(detailed_pokemon)
 
@@ -295,14 +304,118 @@ class Ping_Pokemon(commands.Cog):
             reader = csv.DictReader(f)
             for row in reader:
                 name = row.get("name", "").lower()
-                type1 = row.get("type1", "").lower()
-                type2 = row.get("type2", "").lower()
-                types_map[name] = [type1] + ([type2] if type2 else [])
+                types_str = row.get("types", "").strip()
+                
+                # Split types by comma and clean them
+                types = [t.strip().lower() for t in types_str.split(",") if t.strip()]
+                types_map[name] = types
+                
         return types_map
+
+    async def fetch_pokemon_rarity_data(self):
+        """Fetch Pokemon rarity data from PokeAPI and classify them"""
+        rarity_data = []
+        
+        async with aiohttp.ClientSession() as session:
+            # Fetch legendary Pokemon
+            try:
+                async with session.get("https://pokeapi.co/api/v2/pokemon-species?limit=2000") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        species_list = data["results"]
+                        
+                        for species in tqdm(species_list, desc="Fetching Pokemon rarity data"):
+                            try:
+                                species_id = int(species["url"].rstrip("/").split("/")[-1])
+                                species_url = f"https://pokeapi.co/api/v2/pokemon-species/{species_id}"
+                                
+                                async with session.get(species_url) as species_response:
+                                    if species_response.status == 200:
+                                        species_data = await species_response.json()
+                                        
+                                        name = species_data["name"]
+                                        is_legendary = species_data.get("is_legendary", False)
+                                        is_mythical = species_data.get("is_mythical", False)
+                                        
+                                        # Get generation for region mapping
+                                        generation = species_data.get("generation", {})
+                                        generation_name = generation.get("name", "") if generation else ""
+                                        
+                                        # Map generation to region
+                                        region = self.map_generation_to_region(generation_name)
+                                        
+                                        # Determine rarity
+                                        if is_mythical:
+                                            rarity = "mythical"
+                                        elif is_legendary:
+                                            rarity = "legendary"
+                                        else:
+                                            # Check if it's an Ultra Beast (Gen 7 specific check)
+                                            if self.is_ultra_beast(name):
+                                                rarity = "ultra beast"
+                                            else:
+                                                rarity = "common"
+                                        
+                                        rarity_data.append({
+                                            "id": species_id,
+                                            "name": name,
+                                            "rarity": rarity,
+                                            "region": region
+                                        })
+                                        
+                            except Exception as e:
+                                print(f"Error processing species {species.get('name', 'unknown')}: {e}")
+                                continue
+                                
+            except Exception as e:
+                print(f"Error fetching species list: {e}")
+                
+        return rarity_data
+
+    def map_generation_to_region(self, generation_name: str) -> str:
+        """Map Pokemon generation to region"""
+        generation_map = {
+            "generation-i": "kanto",
+            "generation-ii": "johto", 
+            "generation-iii": "hoenn",
+            "generation-iv": "sinnoh",
+            "generation-v": "unova",
+            "generation-vi": "kalos",
+            "generation-vii": "alola",
+            "generation-viii": "galar",
+            "generation-ix": "paldea"
+        }
+        return generation_map.get(generation_name, "unknown")
+
+    def is_ultra_beast(self, pokemon_name: str) -> bool:
+        """Check if a Pokemon is an Ultra Beast"""
+        ultra_beasts = [
+            "nihilego", "buzzwole", "pheromosa", "xurkitree", 
+            "celesteela", "kartana", "guzzlord", "poipole", 
+            "naganadel", "stakataka", "blacephalon"
+        ]
+        return pokemon_name.lower() in ultra_beasts
+
+    async def generate_pokemon_rarity_csv(self):
+        """Generate the Pokemon rarity CSV file"""
+        if not os.path.isfile(self.pokemon_rarity_csv):
+            os.makedirs(os.path.dirname(self.pokemon_rarity_csv), exist_ok=True)
+            
+            print("Generating Pokemon rarity data...")
+            rarity_data = await self.fetch_pokemon_rarity_data()
+            
+            fieldnames = ["id", "name", "rarity", "region"]
+            
+            with open(self.pokemon_rarity_csv, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(rarity_data)
+                
+            print(f"Pokemon rarity data saved to {self.pokemon_rarity_csv}")
 
     async def load_pokemon_rarity(self):
         if not os.path.isfile(self.pokemon_rarity_csv):
-            return {}
+            await self.generate_pokemon_rarity_csv()
         
         rarity_map = {}
         with open(self.pokemon_rarity_csv, newline="", encoding="utf-8") as f:
@@ -333,7 +446,6 @@ class Ping_Pokemon(commands.Cog):
         return self._pokemon_rarity
 
     async def filter_by_flags(self, entries: list[str], flags_obj) -> list[str]:
-        """Filter entries based on flags"""
         try:
             flags_dict = flags_obj if isinstance(flags_obj, dict) else {}
             if not any(flags_dict.values()):
@@ -350,7 +462,8 @@ class Ping_Pokemon(commands.Cog):
 
             rarity_checks = {
                 'legendary': 'legendary',
-                'mythical': 'mythical'
+                'mythical': 'mythical',
+                'ultra_beast': 'ultra beast'
             }
 
             for entry in entries:
@@ -358,53 +471,69 @@ class Ping_Pokemon(commands.Cog):
                 slug = self.normalize_regional_name(pokemon_name.lower().replace(" ", "-"))
 
                 # Check regional flags
+                skip_pokemon = False
                 for flag, suffix in suffix_map.items():
                     if flags_dict.get(flag) and not slug.endswith(suffix):
+                        skip_pokemon = True
                         break
-                else:
-                    # Check rarity
-                    try:
-                        rarity_data = (await self.pokemon_rarity).get(slug, {})
-                        rarity = rarity_data.get("rarity", "")
-                    except:
-                        rarity_data = {}
-                        rarity = ""
+                
+                if skip_pokemon:
+                    continue
 
-                    # Check rarity flags
-                    for flag, rarity_val in rarity_checks.items():
-                        if flags_dict.get(flag) and rarity != rarity_val:
+                # Check rarity flags
+                try:
+                    rarity_data = (await self.pokemon_rarity).get(slug, {})
+                    rarity = rarity_data.get("rarity", "").lower()
+                except:
+                    rarity = ""
+
+                rarity_match = True
+                for flag, rarity_val in rarity_checks.items():
+                    if flags_dict.get(flag):
+                        if rarity != rarity_val:
+                            rarity_match = False
                             break
-                    else:
-                        # Check name filter
-                        if flags_dict.get('name'):
-                            name_matches = False
-                            for name_group in flags_dict['name']:
-                                for name_filter in name_group:
-                                    if name_filter.lower() in pokemon_name.lower():
-                                        name_matches = True
-                                        break
-                                if name_matches:
-                                    break
-                            if not name_matches:
-                                continue
+                
+                if not rarity_match:
+                    continue
 
-                        # Check type filter
-                        if flags_dict.get('type'):
-                            try:
-                                pokemon_types_data = (await self.pokemon_types).get(slug, [])
-                                type_filters = [t.lower() for t in pokemon_types_data]
-                                if not any(type_filter.lower() in type_filters for type_filter in flags_dict['type']):
-                                    continue
-                            except:
-                                continue
+                # Check name filter
+                if flags_dict.get('name'):
+                    name_matches = False
+                    for name_group in flags_dict['name']:
+                        for name_filter in name_group:
+                            if name_filter.lower() in pokemon_name.lower():
+                                name_matches = True
+                                break
+                        if name_matches:
+                            break
+                    if not name_matches:
+                        continue
 
-                        # Check region filter
-                        if flags_dict.get('region'):
-                            region_data = rarity_data.get("region", "").lower()
-                            if not any(region_filter.lower() == region_data for region_filter in flags_dict['region']):
-                                continue
+                # Check type filter - now supports all types
+                if flags_dict.get('type'):
+                    try:
+                        pokemon_types_data = (await self.pokemon_types).get(slug, [])
+                        type_match = False
+                        for filter_type in flags_dict['type']:
+                            if filter_type.lower() in [t.lower() for t in pokemon_types_data]:
+                                type_match = True
+                                break
+                        if not type_match:
+                            continue
+                    except:
+                        continue
 
-                        filtered.append(entry)
+                # Check region filter
+                if flags_dict.get('region'):
+                    try:
+                        region_data = rarity_data.get("region", "").lower()
+                        if not any(region_filter.lower() == region_data for region_filter in flags_dict['region']):
+                            continue
+                    except:
+                        continue
+
+                filtered.append(entry)
 
             # Apply skip and limit
             if flags_dict.get('skip'):
@@ -416,7 +545,7 @@ class Ping_Pokemon(commands.Cog):
         except Exception as e:
             print(f"Error in filter_by_flags: {e}")
             return entries
-     
+    
     def extract_pokemon_name(self, entry: str) -> str:
         return re.sub(r'<:[^:]+:\d+>\s*', '', entry).strip()
 
@@ -442,7 +571,7 @@ class Ping_Pokemon(commands.Cog):
             embed = Embed(
                 title=title,
                 description="No Pokémon found matching your criteria.",
-                color=0x7289da  # Using a default color instead of primary_color()
+                color=self.embed_defualt_color
             )
             embed.set_footer(text=f"Use {ctx.prefix}{ctx.invoked_with} help for more information")
             return [embed]
@@ -478,7 +607,7 @@ class Ping_Pokemon(commands.Cog):
             embed = Embed(
                 title=f"{title}",
                 description="\n\n".join(description_parts),
-                color=0x7289da  # Using a default color instead of primary_color()
+                color=self.embed_defualt_color
             )
             
             # Add info field
@@ -549,7 +678,7 @@ class Ping_Pokemon(commands.Cog):
                     embed = Embed(
                         title="Invalid Pokémon Found in Collection",
                         description=f"Found {len(invalids)} invalid Pokémon in your collection. Would you like to replace them with suggestions?",
-                        color=0x7289da
+                        color=self.embed_defualt_color
                     )
                     view = UnifiedResultView(
                         success_results=[],
@@ -581,7 +710,7 @@ class Ping_Pokemon(commands.Cog):
 
             if action == "list":
                 if not cur:
-                    embed = Embed(description="Your list is empty.", color=0x7289da)
+                    embed = Embed(description="Your list is empty.", color=self.embed_defualt_color)
                     embed.set_footer(text=f"Use {ctx.prefix}{ctx.invoked_with} help for more information")
                     return await ctx.reply(embed=embed, mention_author=False)
 
@@ -606,7 +735,7 @@ class Ping_Pokemon(commands.Cog):
 
             if action == "clear":
                 await self.mongo.clear(col, uid)
-                embed = Embed(description="🗑️ Cleared your Pokémon list.", color=0x7289da)
+                embed = Embed(description="🗑️ Cleared your Pokémon list.", color=self.embed_defualt_color)
                 embed.set_footer(text=f"Use {ctx.prefix}{ctx.invoked_with} help for more information")
                 return await ctx.reply(embed=embed, mention_author=False)
 
@@ -661,7 +790,7 @@ class Ping_Pokemon(commands.Cog):
                 if success and col == self.shiny_collection and max_one:
                     embed = Embed(
                         description=success[0],
-                        color=0x7289da
+                        color=self.embed_defualt_color
                     )
                     return await ctx.reply(embed=embed, mention_author=False)
 
@@ -671,7 +800,7 @@ class Ping_Pokemon(commands.Cog):
                     embed = Embed(
                         title="Pokémon Suggestions",
                         description=f"Found {total} suggestions for {unique} invalid name(s). Select the Pokémon to {action}:",
-                        color=0x7289da
+                        color=self.embed_defualt_color
                     )
                     view = UnifiedResultView(
                         success_results=success,
@@ -713,7 +842,7 @@ class Ping_Pokemon(commands.Cog):
                     content = "\n".join(initial_content[:self.RESULTS_PER_PAGE])
                     embed = Embed(
                         description=f"{view_titles[initial_type]}\n\n{content[:3900]}",
-                        color=0x7289da
+                        color=self.embed_defualt_color
                     )
                     embed.set_footer(text="" if max_one else "Updated Your Pokémon Collection")
 
@@ -765,7 +894,7 @@ class Ping_Pokemon(commands.Cog):
                 f"`{prefix}sh add alolan vulpix`\n"
                 f"`{prefix}sh remove`"
             )
-            embed = Embed(title="Shiny Hunt Help", description=help_text, color=0x7289da)
+            embed = Embed(title="Shiny Hunt Help", description=help_text, color=self.embed_defualt_color)
             return await ctx.reply(embed=embed, mention_author=False)
 
         if not action and not pokemon:
@@ -775,13 +904,13 @@ class Ping_Pokemon(commands.Cog):
                 
             cur = await self.mongo.list(self.shiny_collection, ctx.author.id)
             if not cur:
-                return await ctx.reply(embed=Embed(description="You don't have a shiny hunt set.", color=0x7289da), mention_author=False)
+                return await ctx.reply(embed=Embed(description="You don't have a shiny hunt set.", color=self.embed_defualt_color), mention_author=False)
             
             name = cur[0]
             pid = Pokemon_Subcogs.pokemon_name_to_id(name) if 'Pokemon_Subcogs' in globals() else None
             emoji = self.pe.get_emoji_for_pokemon(pid) or "" if self.pe and pid else ""
             name_disp = self.display_name_with_region(name)
-            return await ctx.reply(embed=Embed(description=f"You are currently shiny hunting: **{emoji} {name_disp}**", color=0x7289da), mention_author=False)
+            return await ctx.reply(embed=Embed(description=f"You are currently shiny hunting: **{emoji} {name_disp}**", color=self.embed_defualt_color), mention_author=False)
 
         if action == "remove" and not pokemon:
             if not self.mongo:
@@ -789,7 +918,7 @@ class Ping_Pokemon(commands.Cog):
                 return
                 
             await self.mongo.clear(self.shiny_collection, ctx.author.id)
-            return await ctx.reply(embed=Embed(description="🗑️ Your shiny hunt has been removed.", color=0x7289da), mention_author=False)
+            return await ctx.reply(embed=Embed(description="🗑️ Your shiny hunt has been removed.", color=self.embed_defualt_color), mention_author=False)
 
         if action not in {"add", "remove", "list", "clear"}:
             full_name = f"{action} {pokemon}".strip() if pokemon else action
@@ -804,79 +933,77 @@ class Ping_Pokemon(commands.Cog):
   
     @commands.command(name="collection", aliases=["cl"])
     async def collection_string(self, ctx, *, args: str = "list"):        
-        
-        action = "list"  
-        pokemon_names = ""
-        
-        
-        args_lower = args.lower().strip()
-        if args_lower.startswith(('add ', 'remove ', 'delete ', 'clear', 'help')):
-            parts = args.split(' ', 1)
-            action = parts[0].lower()
-            if action == "delete":
-                action = "remove"
-            remaining_text = parts[1] if len(parts) > 1 else ""
-        else:
-            remaining_text = args
-        
-        
-        if action == "help" or args_lower == "help":
-            help_embed = Embed(
-                title="Collection Command Help",
-                description="Use natural language to filter and search your Pokemon collection",
-                color=primary_color()
-            )
-            help_embed.add_field(
-                name="Regional Filters",
-                value="alolan | galarian | hisuian | paldean | mega",
-                inline=False
-            )
-            help_embed.add_field(
-                name="Special Filters", 
-                value="legendary | mythical | shiny",
-                inline=False
-            )
-            help_embed.add_field(
-                name="Search Filters",
-                value="name eevee | type fire | region kanto",
-                inline=False
-            )
-            help_embed.add_field(
-                name="Utility Filters",
-                value="limit 10 | skip 5 | max 20 | top 15",
-                inline=False
-            )
-            help_embed.add_field(
-                name="Examples",
-                value=f".{ctx.invoked_with} alolan - Show Alolan forms\n"
-                      f".{ctx.invoked_with} name eevee - Search for Eevee\n"
-                      f".{ctx.invoked_with} legendary type dragon - Legendary Dragon types\n"
-                      f".{ctx.invoked_with} hisuian limit 5 - First 5 Hisuian forms\n"
-                      f".{ctx.invoked_with} add pikachu - Add Pikachu to collection\n"
-                      f".{ctx.invoked_with} remove charizard mega - Remove Mega Charizard",
-                inline=False
-            )
-            help_embed.add_field(
-                name="Actions",
-                value="list (default) | add | remove | clear | help",
-                inline=False
-            )
-            help_embed.set_footer(text=f"Max {self.MAX_POKEMON} Pokémon per collection | {self.RESULTS_PER_PAGE} results per page")
-            return await ctx.reply(embed=help_embed, mention_author=False)
-        
-        
-        flags_dict = self.flag_parser.parse_flags_from_string(remaining_text)
-        pokemon_names, _ = self.flag_parser.extract_pokemon_names_from_string(remaining_text, action)
-        
-        
-        await self.handle_collection(
-            ctx, 
-            self.collection_collection, 
-            action, 
-            pokemon_names if pokemon_names else None, 
-            flags_obj=flags_dict
+    
+     action = "list"  
+     pokemon_names = ""
+    
+     # Parse action
+     args_lower = args.lower().strip()
+     if args_lower.startswith(('add ', 'remove ', 'delete ', 'clear', 'help')):
+        parts = args.split(' ', 1)
+        action = parts[0].lower()
+        if action == "delete":
+            action = "remove"
+        remaining_text = parts[1] if len(parts) > 1 else ""
+     else:
+        remaining_text = args
+    
+     # Help command
+     if action == "help" or args_lower == "help":
+        help_embed = Embed(
+            title="Collection Command Help",
+            description="Use natural language or flags to filter your Pokemon collection",
+            color=self.embed_defualt_color
         )
-
+        help_embed.add_field(
+            name="Regional Filters",
+            value="alolan | galarian | hisuian | paldean | mega",
+            inline=False
+        )
+        help_embed.add_field(
+            name="Special Filters", 
+            value="legendary | mythical | ultra beast | shiny",
+            inline=False
+        )
+        help_embed.add_field(
+            name="Search Filters",
+            value="name eevee | --type fire | --t water,grass | region kanto",
+            inline=False
+        )
+        help_embed.add_field(
+            name="Utility Filters",
+            value="limit 10 | skip 5 | max 20 | top 15",
+            inline=False
+        )
+        help_embed.add_field(
+            name="Examples",
+            value=f".{ctx.invoked_with} alolan --t ice - Alolan Ice types\n"
+                  f".{ctx.invoked_with} legendary --type dragon - Legendary Dragons\n"
+                  f".{ctx.invoked_with} ultra beast limit 5 - First 5 Ultra Beasts\n"
+                  f".{ctx.invoked_with} mythical --t psychic,fairy - Mythical Psychic/Fairy\n"
+                  f".{ctx.invoked_with} add pikachu - Add Pikachu\n"
+                  f".{ctx.invoked_with} remove charizard mega - Remove Mega Charizard",
+            inline=False
+        )
+        help_embed.add_field(
+            name="Actions",
+            value="list (default) | add | remove | clear | help",
+            inline=False
+        )
+        help_embed.set_footer(text=f"Max {self.MAX_POKEMON} Pokémon | {self.RESULTS_PER_PAGE} per page | Use --type or --t for types")
+        return await ctx.reply(embed=help_embed, mention_author=False)
+    
+     flags_dict = self.flag_parser.parse_flags_from_string(remaining_text)
+     pokemon_names, _ = self.flag_parser.extract_pokemon_names_from_string(remaining_text, action)
+    
+     # Handle collection
+     await self.handle_collection(
+        ctx, 
+        self.collection_collection, 
+        action, 
+        pokemon_names if pokemon_names else None, 
+        flags_obj=flags_dict
+     )
 
 
 
@@ -2186,3 +2313,41 @@ class UnifiedResultView(View):
 
 
 
+
+
+
+class NavigationView(View):
+    def __init__(self, embeds, ctx, timeout=300):
+        super().__init__(timeout=timeout)
+        self.embeds = embeds
+        self.ctx = ctx
+        self.current_index = 0
+        
+        
+        self.prev_button = Button(label="◀", style=ButtonStyle.secondary, disabled=self.current_index == 0)
+        self.next_button = Button(label="▶", style=ButtonStyle.secondary, disabled=self.current_index >= len(embeds) - 1)
+        self.prev_button.callback = self.go_prev
+        self.next_button.callback = self.go_next
+        self.add_item(self.prev_button)
+        self.add_item(self.next_button)
+    
+    async def go_prev(self, interaction):
+        if self.current_index > 0:
+            self.current_index -= 1
+            await self.update_view(interaction)
+    
+    async def go_next(self, interaction):
+        if self.current_index < len(self.embeds) - 1:
+            self.current_index += 1
+            await self.update_view(interaction)
+    
+    async def update_view(self, interaction):
+        
+        self.prev_button.disabled = self.current_index == 0
+        self.next_button.disabled = self.current_index >= len(self.embeds) - 1
+        
+        
+        await interaction.response.edit_message(embed=self.embeds[self.current_index], view=self)
+    
+    async def interaction_check(self, interaction):
+        return interaction.user == self.ctx.author
