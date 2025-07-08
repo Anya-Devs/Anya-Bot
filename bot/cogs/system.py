@@ -142,9 +142,9 @@ class System(commands.Cog):
 
         embed.add_field(name="System Health", value=(
             "```ansi\n"
-            f"\u001b[1;33m□ CPU:\u001b[0m {Config.health_bar(100 - sys_info['cpu'], inverse=True)}\n"
-            f"\u001b[1;33m□ Memory:\u001b[0m {Config.health_bar(sys_info['memory'])}\n"
-            f"\u001b[1;37m└── {sys_info['memory_used']:.1f}GB / {sys_info['memory_total']:.1f}GB\n"
+            f"\u001b[1;33m□ CPU:\u001b[0m {Config.health_bar(100 - sys_info['cpu'], inverse=True)}\n\n"
+            f"\u001b[1;33m□ Memory:\u001b[0m {Config.health_bar(sys_info['memory'])}\n\n"
+            f"\u001b[1;37m└── {sys_info['memory_used']:.1f}GB / {sys_info['memory_total']:.1f}GB\\n"
             f"\u001b[1;33m□ Disk:\u001b[0m {Config.health_bar(sys_info['disk'])}\n"
             "```"), inline=False)
 
