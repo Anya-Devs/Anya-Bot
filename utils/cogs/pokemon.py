@@ -1421,3 +1421,12 @@ class StatsView(discord.ui.View):
             traceback.print_exc()
             return []
 
+
+
+
+####################################
+
+
+
+
+        

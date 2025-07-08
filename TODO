@@ -13,3 +13,6 @@
 
 4. Add rare Pokémon ping:
    Scan spawn name and compare against rare Pokémon list in CSV file; alert when match is found.
+
+5. Fix Refractored Ping_Pokemon:
+   - None Now
