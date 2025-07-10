@@ -10,7 +10,7 @@ from imports.discord_imports import *
 from data.local.const import *
 from bot.token import use_test_bot as ut
 from utils.subcogs.pokemon import *
-from utils.subcogs.utils.cls_ping_pokemon import PokemonDataManager, PokemonEmbedManager, PokemonCollectionHandler, AdvancedStringFlagParser
+from utils.subcogs.utils.cls_ping_pokemon import PokemonDataManager, PokemonEmbedManager, PokemonCollectionHandler, AdvancedStringFlagParser, PokemonHelpEmbed
 
 
 
@@ -48,7 +48,7 @@ class Ping_Pokemon(commands.Cog):
 
         self.embed_manager = PokemonEmbedManager(
             embed_default_color=self.embed_default_color,
-            icons={"success": "[✓]", "error": "[✕]", "exists": "[⍻]", "removed": "[−]", "not_found": "[𐄂]"},
+            icons={"success": "✓", "error": "✕", "exists": "⍻", "removed": "−", "not_found": "?"},
             results_per_page=10,
             chunk_size=15
         )
@@ -126,24 +126,7 @@ class Ping_Pokemon(commands.Cog):
             remaining = args
 
         if action == "help":
-            embed = Embed(
-                title="Collection Command Help",
-                description="Use flags to manage your Pokémon collection. Short and full forms supported.",
-                color=self.embed_default_color
-            )
-            embed.add_field(name="Regional Flags", value="--alolan | --galarian | --hisuian | --paldean", inline=False)
-            embed.add_field(name="Special Flags", value="--legendary | --mythical | --ultra-beast", inline=False)
-            embed.add_field(name="Typed Filters", value="--type fire | --t grass,electric", inline=False)
-            embed.add_field(name="Region Filters", value="--region hoenn | --r kanto,johto", inline=False)
-            embed.add_field(name="Named Filters", value="--name eevee | --n bulbasaur,pikachu", inline=False)
-            embed.add_field(name="Pagination", value="--limit 10 | --skip 5", inline=False)
-            embed.add_field(name="Search Filters", value=(
-                f"```{ctx.prefix}{ctx.invoked_with} --t ice\n"
-                f"{ctx.prefix}{ctx.invoked_with} --n eevee, vulpix\n"
-                f"{ctx.prefix}{ctx.invoked_with} --r johto```\n"
-            ), inline=False)
-            embed.add_field(name="Actions", value="list (default) | add | remove | clear | help", inline=False)
-            embed.set_footer(text=f"Max {self.MAX_POKEMON} Pokémon | {self.RESULTS_PER_PAGE} per page")
+            embed = PokemonHelpEmbed.generate_collection_help_embed(self,ctx)
             return await ctx.reply(embed=embed, mention_author=False)
 
         flags_dict = self.flag_parser.parse_flags_from_string(remaining)
@@ -158,7 +141,7 @@ class Ping_Pokemon(commands.Cog):
         )
 
      except Exception as e:
-        await ctx.reply(f"❌ An error occurred while processing your command:\n`{type(e).__name__}: {e}`", mention_author=False)
+        await ctx.reply(f"An error occurred while processing your command:\n`{type(e).__name__}: {e}`", mention_author=False)
 
 
 class Pokemon_Emojis(commands.Cog):
@@ -634,6 +617,9 @@ class Pokemon_Subcogs:
         print(f"Error: {e}")
         return None
     
+
+
+
 class MongoHelper:
     def __init__(self, db): self.db = db
     async def add(self, col, pokemon, uid):

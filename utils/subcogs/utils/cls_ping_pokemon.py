@@ -1,4 +1,4 @@
-import os, re, csv,aiohttp
+import os, re, csv,aiohttp, traceback
 from tqdm import tqdm
 from imports.log_imports import *
 from utils.subcogs.pokemon import *
@@ -600,11 +600,11 @@ class PokemonCollectionHandler:
 
         except Exception as e:
             print(f"Error in handle_collection: {e}")
+            traceback.print_exc() 
             embed = self.embed_manager.create_error_embed(ctx)
             await ctx.reply(embed=embed, mention_author=False)
 
 ############################################
-
 
 
 
@@ -706,9 +706,9 @@ class UnifiedResultView(View):
                 page_items = pages[self.current_page]
                 options = []
                 for original_name, suggestion in page_items:
-                    pid = Pokemon_Subcogs.pokemon_name_to_id(suggestion)
-                    emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid)
-                    display_name = self.parent_cog.display_name_with_region(suggestion)
+                    pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(suggestion) if self.parent_cog.pokemon_subcogs else None
+                    emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid) if self.parent_cog.pe and pid else ""
+                    display_name = self.parent_cog.data_manager.display_name_with_region(suggestion)
                     option_label = f"{display_name} (for '{original_name}')"
                     if len(option_label) > 100:  
                         option_label = f"{display_name[:80]}... (for '{original_name}')"
@@ -806,7 +806,7 @@ class UnifiedResultView(View):
 
     async def confirm_action(self, interaction: Interaction):
         
-        current_list = await self.parent_cog.mongo.list(self.col, self.uid)
+        current_list = await self.parent_cog.data_manager.mongo.list(self.col, self.uid)
         new_success = []
         new_other = []
         
@@ -815,21 +815,21 @@ class UnifiedResultView(View):
             
             if self.action == "add":
                 if self.max_one:
-                    await self.parent_cog.mongo.replace(self.col, selected_slug, self.uid)
-                    pid = Pokemon_Subcogs.pokemon_name_to_id(selected_slug)
-                    emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid) or ""
-                    name_disp = self.parent_cog.display_name_with_region(selected_slug)
-                    new_success.append(f"`{self.parent_cog.ICONS['success']}` Set your shiny hunt to {emoji} {name_disp}!")
+                    await self.parent_cog.data_manager.mongo.replace(self.col, selected_slug, self.uid)
+                    pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(selected_slug) if self.parent_cog.pokemon_subcogs else None
+                    emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid) if self.parent_cog.pe and pid else ""
+                    name_disp = self.parent_cog.data_manager.display_name_with_region(selected_slug)
+                    new_success.append(f"`{self.parent_cog.icons['success']}` Set your shiny hunt to {emoji} {name_disp}!")
                     break
                 else:
-                    if len(current_list) >= MAX_POKEMON and selected_slug not in current_list:
-                        new_other.append(f"`{self.parent_cog.ICONS['error']}` Max {MAX_POKEMON} Pokémon. `{selected_slug.title()}` not added.")
+                    if len(current_list) >= self.parent_cog.max_pokemon and selected_slug not in current_list:
+                        new_other.append(f"`{self.parent_cog.icons['error']}` Max {self.parent_cog.max_pokemon} Pokémon. `{selected_slug.title()}` not added.")
                         continue
-                    ok = await self.parent_cog.mongo.add(self.col, selected_slug, self.uid)
-                    pid = Pokemon_Subcogs.pokemon_name_to_id(selected_slug)
-                    emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid) or ""
-                    icon = self.parent_cog.ICONS['success'] if ok else self.parent_cog.ICONS['exists']
-                    name_disp = self.parent_cog.display_name_with_region(selected_slug)
+                    ok = await self.parent_cog.data_manager.mongo.add(self.col, selected_slug, self.uid)
+                    pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(selected_slug) if self.parent_cog.pokemon_subcogs else None
+                    emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid) if self.parent_cog.pe and pid else ""
+                    icon = self.parent_cog.icons['success'] if ok else self.parent_cog.icons['exists']
+                    name_disp = self.parent_cog.data_manager.display_name_with_region(selected_slug)
                     result_text = f"`{icon}` {emoji} {name_disp}"
                     if ok:
                         new_success.append(result_text)
@@ -838,11 +838,11 @@ class UnifiedResultView(View):
                         new_other.append(result_text)
                         
             elif self.action == "remove":
-                ok = await self.parent_cog.mongo.remove(self.col, selected_slug, self.uid)
-                pid = Pokemon_Subcogs.pokemon_name_to_id(selected_slug)
-                emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid) or ""
-                icon = self.parent_cog.ICONS['removed'] if ok else self.parent_cog.ICONS['not_found']
-                name_disp = self.parent_cog.display_name_with_region(selected_slug)
+                ok = await self.parent_cog.data_manager.mongo.remove(self.col, selected_slug, self.uid)
+                pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(selected_slug) if self.parent_cog.pokemon_subcogs else None
+                emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid) if self.parent_cog.pe and pid else ""
+                icon = self.parent_cog.icons['removed'] if ok else self.parent_cog.icons['not_found']
+                name_disp = self.parent_cog.data_manager.display_name_with_region(selected_slug)
                 result_text = f"`{icon}` {emoji} {name_disp}"
                 if ok:
                     new_success.append(result_text)
@@ -886,7 +886,7 @@ class UnifiedResultView(View):
                 title="Pokémon Selection",
                 description=f"Found {total_suggestions} suggestions for {unique_originals} invalid name(s). "
                            f"Select the Pokémon you want to {self.action}:",
-                color=primary_color()
+                color=self.parent_cog.embed_manager.embed_default_color
             )
         else:
             
@@ -906,7 +906,7 @@ class UnifiedResultView(View):
             else:
                 header = ""
             
-            embed = Embed(description=header + content[:3900], color=primary_color())
+            embed = Embed(description=header + content[:3900], color=self.parent_cog.embed_manager.embed_default_color)
             
             if len(pages) > 1:
                 embed.set_footer(text=f"Page {self.current_page + 1} of {len(pages)} • {len(current_data)} entries shown")
@@ -918,7 +918,6 @@ class UnifiedResultView(View):
 
     async def interaction_check(self, interaction: Interaction):
         return interaction.user == self.ctx.author
-
 
 class NavigationView(View):
     def __init__(self, embeds, ctx, timeout=300):
@@ -1052,3 +1051,107 @@ class AdvancedStringFlagParser:
 
         return pokemon_names, flags_dict
 
+# ===================================================================================
+
+
+class Pokemon_Subcogs:
+    
+ @staticmethod
+ def pokemon_name_to_id(pokemon_name, file_path="data/commands/pokemon/pokemon_names.csv"):
+    try:
+        with open(file_path, mode="r", encoding="utf-8") as csv_file:
+            reader = csv.DictReader(csv_file)
+            for row in reader:
+                if row["name"].lower() == pokemon_name.lower():
+                    return row["id"]
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+    
+#####################
+
+class PokemonHelpEmbed:
+ @staticmethod
+ def generate_collection_help_embed(self, ctx):
+    prefix = ctx.prefix
+    embed = Embed(
+        title="Collection Command Help",
+        description="Manage your Pokémon collection with powerful filtering options!",
+        color=self.embed_default_color
+    )
+
+    embed.add_field(
+        name="Basic Commands",
+        value=(
+            f"**{prefix}cl** - View your collection\n"
+            f"**{prefix}cl add pikachu** - Add Pokémon\n"
+            f"**{prefix}cl remove charizard** - Remove Pokémon\n"
+            f"**{prefix}cl clear** - Clear entire collection"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="Regional Variants",
+        value=(
+            f"**{prefix}cl --galarian** - Show only Galarian forms\n"
+            f"**{prefix}cl --hisuian --paldean** - Show Hisuian and Paldean forms"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="Type & Region Filters",
+        value=(
+            f"**{prefix}cl --type fire** - Show only Fire types\n"
+            f"**{prefix}cl --t grass,water** - Show Grass and Water types\n"
+            f"**{prefix}cl --region kanto** - Show only Kanto Pokémon\n"
+            f"**{prefix}cl --r johto,hoenn** - Show Johto and Hoenn Pokémon"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="Special Categories",
+        value=(
+            f"**{prefix}cl --legendary** - Show only legendary Pokémon\n"
+            f"**{prefix}cl --mythical** - Show only mythical Pokémon\n"
+            f"**{prefix}cl --ultra-beast** - Show only Ultra Beasts"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="Name Searching",
+        value=(
+            f"**{prefix}cl --name eevee** - Show only Eevee\n"
+            f"**{prefix}cl --n pikachu,raichu** - Show Pikachu and Raichu\n"
+            f"**{prefix}cl add eevee, vaporeon, jolteon** - Add multiple Pokémon"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="Advanced Examples",
+        value=(
+            f"**{prefix}cl --type electric --region kanto** - Electric Kanto Pokémon\n"
+            f"**{prefix}cl --legendary --t psychic** - Legendary Psychic types\n"
+            f"**{prefix}cl --galarian --type steel** - Galarian Steel types\n"
+            f"**{prefix}cl --limit 5** - Show only first 5 results"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="Pro Tips",
+        value=(
+            "• Use short flags: **--t** for type, **--r** for region, **--n** for name\n"
+            "• Combine multiple filters for precise searches\n"
+            "• Add multiple Pokémon at once with commas\n"
+            "• Use **--limit** to control how many results you see"
+        ),
+        inline=False
+    )
+
+    embed.set_footer(text=f"Collection limit: {self.MAX_POKEMON} Pokémon • Results per page: {self.RESULTS_PER_PAGE}")
+    return embed
