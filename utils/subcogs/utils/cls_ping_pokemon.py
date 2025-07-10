@@ -376,8 +376,8 @@ class PokemonEmbedManager:
         return embeds
 
     def create_error_embed(self, ctx, message="An error occurred while processing your request."):
-        embed = Embed(title="❌ Error", description=message, color=0xff0000, icon_url=self)
-        embed.set_footer(text=f"Use {ctx.prefix}{ctx.invoked_with} help for more information",)
+        embed = Embed(title="❌ Error", description=message, color=0xff0000)
+        embed.set_footer(text=f"Use {ctx.prefix}{ctx.invoked_with} help for more information")
         return embed
 
     def create_success_embed(self, ctx, message, footer_text="", color=None):
