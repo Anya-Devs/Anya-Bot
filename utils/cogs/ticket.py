@@ -634,8 +634,6 @@ class Invalidation:
     def form_prompt():
         return "Fill out the embed form."
 
-
-
 async def setup_persistent_views(bot):
     try:
         mongo_url = os.getenv("MONGO_URI") or "mongodb://localhost:27017/"
@@ -716,12 +714,12 @@ async def setup_persistent_views(bot):
 
                                     try:
                                         async for thread in channel.archived_threads():
-                                            view = ticket_system.create_close_ticket_view(thread.id, close_button_data)
-                                            bot.add_view(view, message_id=None)
+                                            await thread.delete()
+                                            await ticket_system.collection.delete_many({"channel_id": thread.id})
                                             thread_button_count += 1
                                         async for thread in channel.archived_threads(private=True):
-                                            view = ticket_system.create_close_ticket_view(thread.id, close_button_data)
-                                            bot.add_view(view, message_id=None)
+                                            await thread.delete()
+                                            await ticket_system.collection.delete_many({"channel_id": thread.id})
                                             thread_button_count += 1
                                     except Exception as e:
                                         print(f"❌ Archived thread error [{channel.id}]: {e}")
@@ -740,3 +738,12 @@ async def setup_persistent_views(bot):
             bot.add_view(GenericTicketView())
         except Exception as e:
             print(f"❌ Fallback view error: {e}")
+
+
+
+
+
+
+
+
+

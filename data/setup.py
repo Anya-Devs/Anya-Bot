@@ -301,18 +301,18 @@ class SetupManager:
         self.progress.update(task_id, description=f"{status} Requirements {elapsed}", completed=100)
 
     async def run_setup(self):
-        self.console.print(Panel(Text("⚡ Ultra-Fast Setup Manager", justify="center"), 
+        self.console.print(Panel(Text("⚡ Setup Manager v2", justify="center"), 
                                 title="Setup", box=ROUNDED, border_style="bright_blue"))
         
         with self.progress:
             tasks = [
-                self.progress.add_task("□ Git submodules", total=100),
-                self.progress.add_task("□ pip upgrade", total=100),
-                self.progress.add_task("□ Package conflicts", total=100),
-                self.progress.add_task("□ Essential packages", total=100),
-                self.progress.add_task("□ Clean requirements", total=100),
-                self.progress.add_task("□ Outdated packages", total=100),
-                self.progress.add_task("□ Install requirements", total=100)
+                self.progress.add_task("Git submodules", total=100),
+                self.progress.add_task("pip upgrade", total=100),
+                self.progress.add_task("Package conflicts", total=100),
+                self.progress.add_task("Essential packages", total=100),
+                self.progress.add_task("Clean requirements", total=100),
+                self.progress.add_task("Outdated packages", total=100),
+                self.progress.add_task("Install requirements", total=100)
             ]
             
             await asyncio.gather(
@@ -329,7 +329,7 @@ class SetupManager:
         self.executor.shutdown(wait=False)
         
         self.console.print(Panel(
-            Text(f"🚀 Setup blazed through in {total_time:.1f}s", justify="center"), 
+            Text(f"🚀 Setup completed in {total_time:.1f}s", justify="center"), 
             title="Complete", box=ROUNDED, border_style="green"
         ))
 
