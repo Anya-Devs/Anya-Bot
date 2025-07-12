@@ -1,200 +1,337 @@
 import os
 import sys
+import asyncio
 import subprocess
+import time
+from rich.tree import Tree
+from rich.console import Console
+from rich.live import Live
+from rich.panel import Panel
+from rich.box import ROUNDED
+from rich.text import Text
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 import re
+from concurrent.futures import ThreadPoolExecutor
 
-submodule_url = "https://github.com/cringe-neko-girl/Poketwo-AutoNamer.git"
-submodule_path = "submodules/poketwo_autonamer"
-
-
-def run_python(*args, **kwargs):
-    return subprocess.run([sys.executable, *args], check=True, **kwargs)
-
-
-def install_package(package, force=False):
-    cmd = ["-m", "pip", "install", "--quiet", "--upgrade"]
-    if force:
-        cmd.append("--force-reinstall")
-    cmd.append(package)
-    run_python(*cmd)
-
-
-def update_all_packages():
-    try:
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "list", "--outdated", "--format=freeze"],
-            capture_output=True, text=True
+class SetupManager:
+    def __init__(self):
+        self.console = Console()
+        self.submodule_url = "https://github.com/cringe-neko-girl/Poketwo-AutoNamer.git"
+        self.submodule_path = "submodules/poketwo_autonamer"
+        self.essential_packages = [
+            "urllib3", "pipreqs", "onnxruntime", "opencv-python-headless", "python-Levenshtein"
+        ]
+        self.requirements_file = "requirements.txt"
+        self.start_time = time.time()
+        self.task_times = {}
+        self.executor = ThreadPoolExecutor(max_workers=8)
+        self.progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeRemainingColumn(),
+            console=self.console
         )
-        for line in result.stdout.strip().splitlines():
-            install_package(line.split("==")[0])
-        subprocess.run([sys.executable, "-m", "pip", "check"], capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        print(f"[!] Package update failed: {e}")
 
+    def log_time(self, task_name, start_time):
+        elapsed = time.time() - start_time
+        self.task_times[task_name] = elapsed
+        return f"[dim]({elapsed:.1f}s)[/dim]"
 
-def clean_requirements():
-    try:
-        subprocess.run(
-            [sys.executable, "-m", "pipreqs.pipreqs", "--force", "--ignore", "venv,.venv,submodules", "."],
-            check=True
+    async def run_cmd_ultra_fast(self, *args):
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            self.executor,
+            lambda: subprocess.run(
+                args,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=30
+            ).returncode
         )
-        if not os.path.exists("requirements.txt"):
-            return
 
-        with open("requirements.txt") as f:
-            lines = f.readlines()
+    async def run_cmd_with_output(self, *args):
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            self.executor,
+            lambda: subprocess.run(
+                args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+                text=True
+            )
+        )
 
-        deduped = {}
-        for line in lines:
-            if "==" in line:
-                name, version = line.strip().split("==")
-                deduped[name] = version
-
-        with open("requirements.txt", "w") as f:
-            for name, version in deduped.items():
-                f.write(f"{name}=={version}\n")
-
-    except subprocess.CalledProcessError as e:
-        print(f"[!] pipreqs failed: {e}")
-
-
-def ensure_git_login():
-    try:
-        subprocess.run(["git", "ls-remote", submodule_url], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print("[✓] GitHub access verified.")
-    except subprocess.CalledProcessError:
-        print("[!] GitHub authentication missing. Attempting token login...")
+    def ensure_git_login(self):
+        try:
+            result = subprocess.run(
+                ["git", "ls-remote", self.submodule_url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=3
+            )
+            if result.returncode == 0:
+                return True
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            pass
+        
         try:
             from dotenv import load_dotenv
             load_dotenv(dotenv_path=os.path.join(".github", ".env"))
-
+            
             token = os.getenv("GIT_ACCESS_TOKEN")
-            user = os.getenv("GIT_USERNAME")
-
+            user = os.getenv("GIT_USERNAME", "git")
+            
             if not token:
-                raise EnvironmentError("Missing GIT_ACCESS_TOKEN")
-
+                return False
+            
             with open(os.path.expanduser("~/.netrc"), "w") as netrc:
                 netrc.write(f"machine github.com\nlogin {user}\npassword {token}\n")
-
+            
             os.chmod(os.path.expanduser("~/.netrc"), 0o600)
-            print("[✓] Token written to ~/.netrc")
+            return True
+        except Exception:
+            return False
 
-        except Exception as e:
-            print(f"[!] Git authentication failed: {e}")
+    async def sync_submodule(self, task_id):
+        start = time.time()
+        self.progress.update(task_id, description="□ Git auth check...", completed=10)
+        
+        if not self.ensure_git_login():
+            self.progress.update(task_id, description="❌ Git auth failed", completed=100)
+            return
+        
+        self.progress.update(task_id, description="□ Submodule sync...", completed=30)
+        
+        try:
+            if not os.path.exists(os.path.join(self.submodule_path, ".git")):
+                await self.run_cmd_ultra_fast("git", "submodule", "add", self.submodule_url, self.submodule_path)
+            
+            self.progress.update(task_id, description="□ Parallel submodule update...", completed=60)
+            
+            await asyncio.gather(
+                self.run_cmd_ultra_fast("git", "submodule", "sync"),
+                self.run_cmd_ultra_fast("git", "submodule", "update", "--init", "--remote", "--jobs", "8", "--depth", "1")
+            )
+            
+            elapsed = self.log_time("submodule", start)
+            self.progress.update(task_id, description=f"✅ Submodules {elapsed}", completed=100)
+            
+        except Exception:
+            self.progress.update(task_id, description="❌ Submodule failed", completed=100)
 
+    async def resolve_conflicts(self, task_id):
+        start = time.time()
+        self.progress.update(task_id, description="□ Conflict check...", completed=20)
+        
+        if not os.path.exists(self.requirements_file):
+            elapsed = self.log_time("conflicts", start)
+            self.progress.update(task_id, description=f"✅ No conflicts {elapsed}", completed=100)
+            return
+        
+        with open(self.requirements_file, "r") as f:
+            content = f.read()
+        
+        if "numpy" in content and "opencv-python-headless" in content:
+            self.progress.update(task_id, description="□ Numpy/OpenCV fix...", completed=70)
+            
+            lines = content.strip().split("\n")
+            fixed_lines = []
+            
+            for line in lines:
+                line = line.strip()
+                if line.startswith("numpy=="):
+                    fixed_lines.append("numpy>=2.0.0,<2.3.0")
+                elif line.startswith("opencv-python-headless"):
+                    fixed_lines.append("opencv-python-headless")
+                elif line and not line.startswith("#"):
+                    fixed_lines.append(line)
+            
+            with open(self.requirements_file, "w") as f:
+                f.write("\n".join(fixed_lines) + "\n")
+        
+        elapsed = self.log_time("conflicts", start)
+        self.progress.update(task_id, description=f"✅ Conflicts fixed {elapsed}", completed=100)
 
-def sync_submodule():
-    def run_git(*args):
-        subprocess.run(args, check=True)
+    async def upgrade_pip(self, task_id):
+        start = time.time()
+        self.progress.update(task_id, description="□ pip --upgrade...", completed=0)
+        
+        retcode = await self.run_cmd_ultra_fast(
+            sys.executable, "-m", "pip", "install", "--upgrade", "pip", 
+            "--no-cache-dir", "--disable-pip-version-check", "--quiet"
+        )
+        
+        elapsed = self.log_time("pip", start)
+        status = "✅" if retcode == 0 else "❌"
+        self.progress.update(task_id, description=f"{status} pip {elapsed}", completed=100)
 
-    try:
-        ensure_git_login()
+    async def mega_install(self, packages, task_id, task_name):
+        start = time.time()
+        total = len(packages)
+        
+        self.progress.update(task_id, description=f"□ Installing {total} {task_name}...", completed=0)
+        
+        retcode = await self.run_cmd_ultra_fast(
+            sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir", 
+            "--disable-pip-version-check", "--quiet", "--no-warn-script-location",
+            *packages
+        )
+        
+        elapsed = self.log_time(task_name, start)
+        status = "✅" if retcode == 0 else "❌"
+        self.progress.update(task_id, description=f"{status} {total} {task_name} {elapsed}", completed=100)
 
-        if not os.path.exists(os.path.join(submodule_path, ".git")):
-            print(f"[~] Adding missing submodule: {submodule_path}")
-            try:
-                run_git("git", "submodule", "add", submodule_url, submodule_path)
-            except subprocess.CalledProcessError:
-                print("[!] Submodule add failed. Forcing update.")
-                run_git("git", "submodule", "update", "--force", "--init", "--recursive")
+    async def install_essentials(self, task_id):
+        await self.mega_install(self.essential_packages, task_id, "essentials")
 
-        print("[~] Syncing submodules...")
-        run_git("git", "submodule", "foreach", "--recursive", "git reset --hard")
-        run_git("git", "submodule", "foreach", "--recursive", "git clean -fd")
-        run_git("git", "submodule", "sync", "--recursive")
-        run_git("git", "submodule", "update", "--init", "--remote", "--recursive")
+    async def update_outdated(self, task_id):
+        start = time.time()
+        self.progress.update(task_id, description="□ Checking outdated...", completed=0)
+        
+        result = await self.run_cmd_with_output(sys.executable, "-m", "pip", "list", "--outdated", "--format=freeze")
+        
+        if result.returncode != 0:
+            elapsed = self.log_time("outdated", start)
+            self.progress.update(task_id, description=f"❌ Check failed {elapsed}", completed=100)
+            return
+        
+        packages = [line.split("==")[0] for line in result.stdout.strip().splitlines() if "==" in line]
+        
+        if not packages:
+            elapsed = self.log_time("outdated", start)
+            self.progress.update(task_id, description=f"✅ All current {elapsed}", completed=100)
+            return
+        
+        self.progress.update(task_id, description=f"□ Updating {len(packages)} packages...", completed=30)
+        
+        retcode = await self.run_cmd_ultra_fast(
+            sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
+            "--disable-pip-version-check", "--quiet", "--no-warn-script-location",
+            *packages
+        )
+        
+        elapsed = self.log_time("outdated", start)
+        status = "✅" if retcode == 0 else "❌"
+        self.progress.update(task_id, description=f"{status} {len(packages)} updated {elapsed}", completed=100)
 
-    except subprocess.CalledProcessError as e:
-        print(f"[!] Submodule sync failed: {e}")
-
-
-def fix_requests_urllib3():
-    try:
-        run_python("-m", "pip", "uninstall", "urllib3", "requests", "-y")
-        run_python("-m", "pip", "install", "--upgrade", "pip")
-        run_python("-m", "pip", "install", "--no-cache-dir", "urllib3", "requests")
-    except subprocess.CalledProcessError as e:
-        print(f"[!] Failed to fix requests/urllib3: {e}")
-
-
-def fix_dependency_conflicts():
-    try:
-        run_python("-m", "pip", "install", "--upgrade", "numpy<2.3.0")
-        print("[✓] Applied compatibility fix for numpy.")
-    except subprocess.CalledProcessError:
-        print("[!] Failed to resolve numpy conflict.")
-
-
-def install_requirements_with_auto_fix():
-    if not os.path.exists("requirements.txt"):
-        print("[!] No requirements.txt found.")
-        return
-
-    print("[~] Installing dependencies...")
-
-    try:
-        run_python("-m", "pip", "install", "--upgrade", "--no-cache-dir", "-r", "requirements.txt")
-        print("[✓] All requirements installed.")
-        return
-    except subprocess.CalledProcessError:
-        print("[!] Installation failed. Attempting auto-fix...")
-
-    fix_dependency_conflicts()
-
-    try:
-        with open("requirements.txt") as f:
+    async def clean_requirements(self, task_id):
+        start = time.time()
+        self.progress.update(task_id, description="□ Generating requirements...", completed=0)
+        
+        retcode = await self.run_cmd_ultra_fast(
+            sys.executable, "-m", "pipreqs.pipreqs", "--force", "--ignore", 
+            "venv,.venv,submodules,node_modules", "."
+        )
+        
+        if retcode != 0:
+            elapsed = self.log_time("clean_req", start)
+            self.progress.update(task_id, description=f"❌ pipreqs failed {elapsed}", completed=100)
+            return
+        
+        self.progress.update(task_id, description="□ Deduplicating...", completed=60)
+        
+        if not os.path.exists(self.requirements_file):
+            elapsed = self.log_time("clean_req", start)
+            self.progress.update(task_id, description=f"❌ No requirements.txt {elapsed}", completed=100)
+            return
+        
+        with open(self.requirements_file, "r") as f:
             lines = f.readlines()
+        
+        deduped = {}
+        for line in lines:
+            if "==" in line:
+                name, version = line.strip().split("==", 1)
+                deduped[name] = version
+        
+        with open(self.requirements_file, "w") as f:
+            for name, version in deduped.items():
+                f.write(f"{name}=={version}\n")
+        
+        elapsed = self.log_time("clean_req", start)
+        self.progress.update(task_id, description=f"✅ {len(deduped)} packages cleaned {elapsed}", completed=100)
 
-        cleaned = []
+    async def install_requirements(self, task_id):
+        start = time.time()
+        self.progress.update(task_id, description="□ Installing requirements...", completed=0)
+        
+        if not os.path.exists(self.requirements_file):
+            elapsed = self.log_time("install_req", start)
+            self.progress.update(task_id, description=f"❌ No requirements.txt {elapsed}", completed=100)
+            return
+        
+        self.progress.update(task_id, description="□ Batch requirements install...", completed=30)
+        
+        retcode = await self.run_cmd_ultra_fast(
+            sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
+            "--disable-pip-version-check", "--quiet", "--no-warn-script-location",
+            "-r", self.requirements_file
+        )
+        
+        if retcode == 0:
+            elapsed = self.log_time("install_req", start)
+            self.progress.update(task_id, description=f"✅ Requirements installed {elapsed}", completed=100)
+            return
+        
+        self.progress.update(task_id, description="□ Individual package install...", completed=60)
+        
+        with open(self.requirements_file, "r") as f:
+            lines = f.readlines()
+        
+        packages = []
         for line in lines:
             line = line.strip()
             if line and not line.startswith("#"):
-                if any(pkg in line for pkg in ["numpy", "opencv-python-headless"]):
-                    cleaned.append(re.split(r"[<=>]", line)[0])
+                if "numpy" in line or "opencv" in line:
+                    packages.append(re.split(r"[<=>]", line)[0])
                 else:
-                    cleaned.append(line)
+                    packages.append(line)
+        
+        retcode = await self.run_cmd_ultra_fast(
+            sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
+            "--disable-pip-version-check", "--quiet", "--no-warn-script-location",
+            *packages
+        )
+        
+        elapsed = self.log_time("install_req", start)
+        status = "✅" if retcode == 0 else "❌"
+        self.progress.update(task_id, description=f"{status} Requirements {elapsed}", completed=100)
 
-        for req in cleaned:
-            try:
-                run_python("-m", "pip", "install", "--upgrade", req)
-                print(f"[✓] Installed: {req}")
-            except subprocess.CalledProcessError:
-                print(f"[!] Failed: {req}")
-
-    except Exception as e:
-        print(f"[!] Auto-fix failed: {e}")
-        raise
-
-
-def start():
-    print("=== Initializing Setup ===")
-
-    run_python("-m", "pip", "install", "--upgrade", "pip")
-    fix_requests_urllib3()
-
-    essentials = [
-        "urllib3",
-        "pipreqs",
-        "onnxruntime",
-        "opencv-python-headless",
-        "python-Levenshtein"
-    ]
-
-    for pkg in essentials:
-        try:
-            install_package(pkg)
-            print(f"[✓] Installed: {pkg}")
-        except subprocess.CalledProcessError:
-            print(f"[!] Failed to install: {pkg}")
-
-    sync_submodule()
-    update_all_packages()
-    clean_requirements()
-    install_requirements_with_auto_fix()
-
-    print("| Setup Complete ✅ ")
-
+    async def run_setup(self):
+        self.console.print(Panel(Text("⚡ Ultra-Fast Setup Manager", justify="center"), 
+                                title="Setup", box=ROUNDED, border_style="bright_blue"))
+        
+        with self.progress:
+            tasks = [
+                self.progress.add_task("□ Git submodules", total=100),
+                self.progress.add_task("□ pip upgrade", total=100),
+                self.progress.add_task("□ Package conflicts", total=100),
+                self.progress.add_task("□ Essential packages", total=100),
+                self.progress.add_task("□ Clean requirements", total=100),
+                self.progress.add_task("□ Outdated packages", total=100),
+                self.progress.add_task("□ Install requirements", total=100)
+            ]
+            
+            await asyncio.gather(
+                self.sync_submodule(tasks[0]),
+                self.upgrade_pip(tasks[1]),
+                self.resolve_conflicts(tasks[2]),
+                self.install_essentials(tasks[3]),
+                self.clean_requirements(tasks[4]),
+                self.update_outdated(tasks[5]),
+                self.install_requirements(tasks[6])
+            )
+        
+        total_time = time.time() - self.start_time
+        self.executor.shutdown(wait=False)
+        
+        self.console.print(Panel(
+            Text(f"🚀 Setup blazed through in {total_time:.1f}s", justify="center"), 
+            title="Complete", box=ROUNDED, border_style="green"
+        ))
 
 if __name__ == "__main__":
-    start()
+    asyncio.run(SetupManager().run_setup())
