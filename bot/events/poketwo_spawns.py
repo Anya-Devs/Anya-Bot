@@ -7,12 +7,10 @@ from bot.token import use_test_bot as ut
 from data.local.const import *
 from motor.motor_asyncio import AsyncIOMotorClient
 
+
 class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.test_mode = ut
-        self.target_id = 716390085896962058
-        self.target_title = "pokémon has appeared!"
         self.pokemon_special_names_file = 'data/commands/pokemon/pokemon_special_names.csv'
         self.pokemon_types_file = 'data/commands/pokemon/pokemon_types.csv'
         self.pokemon_description_file = 'data/commands/pokemon/pokemon_description.csv'
@@ -39,6 +37,16 @@ class PoketwoSpawnDetector(commands.Cog):
         self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
         self.pokemon_types = self.load_pokemon_types()
         self.quest_regions = self.load_quest_regions()
+        self._type_emojis = None
+        self.load_type_emojis()
+
+    def load_type_emojis(self):
+        try:
+            with open("data/commands/pokemon/pokemon_emojis/_pokemon_types.json", "r", encoding="utf-8") as f:
+                self._type_emojis = json.load(f)
+        except Exception as e:
+            print(f"⚠️ Failed to load type emojis: {e}")
+            self._type_emojis = {}
 
     def load_pokemon_types(self):
         types = set()
@@ -76,15 +84,17 @@ class PoketwoSpawnDetector(commands.Cog):
         try:
             config = await self.mongo.db["server_config"].find_one({"guild_id": guild_id})
             return config or {}
-        except:
+        except Exception:
             return {}
 
-    def format_name(self, n):
-        p = n.lower().split('-')
-        return (self.regional_forms[p[1]] + ' ' + p[0] if len(p) > 1 and p[1] in self.regional_forms else n).replace('-', ' ').title()
+    def format_name(self, name):
+        parts = name.lower().split('-')
+        if len(parts) > 1 and parts[1] in self.regional_forms:
+            return f"{self.regional_forms[parts[1]]} {parts[0]}".title()
+        return name.replace('-', ' ').title()
 
     def load_pokemon_data(self):
-        rare, reg = [], []
+        rare, regional = [], []
         try:
             with open(self.pokemon_special_names_file, 'r', newline='', encoding='utf-8') as f:
                 reader = csv.reader(f)
@@ -93,41 +103,44 @@ class PoketwoSpawnDetector(commands.Cog):
                     if len(row) >= 1 and row[0]:
                         rare.append(row[0].strip().lower())
                     if len(row) >= 2 and row[1]:
-                        reg.append(row[1].strip().lower())
+                        regional.append(row[1].strip().lower())
         except FileNotFoundError:
             print(f"⚠️ Pokemon special names file not found: {self.pokemon_special_names_file}")
-        return rare, reg
+        return rare, regional
 
     async def filter_members_in_guild(self, guild, user_ids):
         return [m.mention for uid in user_ids if (m := guild.get_member(int(uid.strip('<@!>'))))]
 
     async def get_type_ping_users(self, guild, pokemon_name):
         try:
+            if self._type_emojis is None:
+                self.load_type_emojis()
             pokemon_types_data = await self.pp.data_manager.pokemon_types
             pokemon_types = pokemon_types_data.get(pokemon_name.lower(), [])
             if not pokemon_types:
-                return [], []
-            shiny_pings = []
-            collection_pings = []
+                return {}
+            type_pings = {}
             for ptype in pokemon_types:
-                shiny_users = await self.mongo.db[f"{self.shiny_collection}_types"].find({"type": ptype}).to_list(None)
-                collection_users = await self.mongo.db[f"{self.collection_collection}_types"].find({"type": ptype}).to_list(None)
-                for user_data in shiny_users:
+                ptype = ptype.lower()
+                emoji_key = f"{ptype}_type"
+                emoji = self._type_emojis.get(emoji_key)
+                type_ping_users = await self.mongo.db["type_ping_types"].find({"type": ptype}).to_list(None)
+                mentions = set()
+                for user_data in type_ping_users:
                     user_id = user_data.get("user_id")
-                    if guild.get_member(user_id):
-                        ping = f"<@{user_id}>"
-                        if ping not in shiny_pings:
-                            shiny_pings.append(ping)
-                for user_data in collection_users:
-                    user_id = user_data.get("user_id")
-                    if guild.get_member(user_id):
-                        ping = f"<@{user_id}>"
-                        if ping not in collection_pings:
-                            collection_pings.append(ping)
-            return shiny_pings, collection_pings
+                    if not user_id:
+                        continue
+                    member = guild.get_member(user_id)
+                    if member:
+                        mentions.add(f"<@{user_id}>")
+                if mentions:
+                    joined_mentions = " ".join(sorted(mentions))
+                    type_label = f"{emoji if emoji else ''} {ptype.capitalize()}"
+                    type_pings[type_label] = joined_mentions
+            return type_pings
         except Exception as e:
-            print(f"Error in get_type_ping_users: {e}")
-            return [], []
+            print(f"{self.error_emoji} Error in get_type_ping_users: {e}")
+            return {}
 
     async def get_quest_ping_users(self, guild, pokemon_name):
         try:
@@ -151,50 +164,15 @@ class PoketwoSpawnDetector(commands.Cog):
                         quest_pings.append(ping)
             return quest_pings
         except Exception as e:
-            print(f"Error in get_quest_ping_users: {e}")
+            print(f"{self.error_emoji} Error in get_quest_ping_users: {e}")
             return []
-
-    async def output_prediction(self, message, image_url):
-        name, conf = self.predictor.predict(image_url)
-        formatted_name = self.format_name(name)
-        try:
-            conf_value = float(conf)
-            pred_text = f"{formatted_name}: {conf_value:.2f}%"
-        except:
-            pred_text = f"{formatted_name}: {conf}"
-        lines = []
-        server_config = await self.get_server_config(message.guild.id)
-        match = re.search(r"([a-zA-Z\s-]+):\s*([\d\.]+)%", pred_text)
-        if match:
-            pname = match.group(1).strip().lower()
-            pname, _ = Pokemon.transform_pokemon_name(pname)
-            rare, reg = self.load_pokemon_data()
-            is_regional_prefix = any(formatted_name.startswith(v) for v in self.regional_forms.values())
-            if any(p in pname for p in rare) and server_config.get("rare_role"):
-                lines.append(f"<@&{server_config['rare_role']}>")
-            if (any(p in pname for p in reg) or is_regional_prefix) and server_config.get("regional_role"):
-                lines.append(f"<@&{server_config['regional_role']}>")
-        transformed_name, _ = Pokemon.transform_pokemon_name(formatted_name)
-        shiny, collect = await self.get_ping_users(message.guild, transformed_name)
-        type_shiny, type_collect = await self.get_type_ping_users(message.guild, transformed_name)
-        quest_pings = await self.get_quest_ping_users(message.guild, transformed_name)
-        all_shiny = list(set(shiny + type_shiny))
-        all_collect = list(set(collect + type_collect))
-        if all_shiny:
-            lines.append(f"Shiny Pings: {' '.join(all_shiny)}")
-        if all_collect:
-            lines.append(f"Collection Pings: {' '.join(all_collect)}")
-        if quest_pings:
-            lines.append(f"Quest Pings: {' '.join(quest_pings)}")
-        lines += ["", pred_text]
-        await message.channel.send("\n".join(lines), reference=message)
 
     async def get_ping_users(self, guild, pokemon_name):
         def fuzzy_match(t, n): return t == n or fuzz.ratio(t, n) > 85
         try:
             c_users = await self.mongo.db[self.collection_collection].find({}).to_list(None)
             s_users = await self.mongo.db[self.shiny_collection].find({}).to_list(None)
-        except:
+        except Exception:
             return [], []
         shiny_ping, collection_ping = [], []
         for d in s_users:
@@ -211,34 +189,72 @@ class PoketwoSpawnDetector(commands.Cog):
                     break
         return shiny_ping, collection_ping
 
-    @commands.Cog.listener()
-    async def on_message(self, m):
+    async def output_prediction(self, message, image_url):
+        name, conf = self.predictor.predict(image_url)
+        formatted_name = self.format_name(name)
         try:
-            if m.author.id != (self.bot.user.id if self.test_mode else self.target_id):
+            conf_value = float(conf)
+            pred_text = f"{formatted_name}: {conf_value:.2f}%"
+        except Exception:
+            pred_text = f"{formatted_name}: {conf}"
+        lines = []
+        server_config = await self.get_server_config(message.guild.id)
+        match = re.search(r"([a-zA-Z\s-]+):\s*([\d\.]+)%", pred_text)
+        if match:
+            pname = match.group(1).strip().lower()
+            pname, _ = Pokemon.transform_pokemon_name(pname)
+            rare, reg = self.load_pokemon_data()
+            is_regional_prefix = any(formatted_name.startswith(v) for v in self.regional_forms.values())
+            if any(p in pname for p in rare) and server_config.get("rare_role"):
+                lines.append(f"<@&{server_config['rare_role']}>")
+            if (any(p in pname for p in reg) or is_regional_prefix) and server_config.get("regional_role"):
+                lines.append(f"<@&{server_config['regional_role']}>")
+        transformed_name, _ = Pokemon.transform_pokemon_name(formatted_name)
+        shiny, collect = await self.get_ping_users(message.guild, transformed_name)
+        type_pings = await self.get_type_ping_users(message.guild, transformed_name)
+        quest_pings = await self.get_quest_ping_users(message.guild, transformed_name)
+        if shiny:
+            lines.append(f"Shiny Pings: {' '.join(sorted(set(shiny)))}")
+        if collect:
+            lines.append(f"Collection Pings: {' '.join(sorted(set(collect)))}")
+        for type_label, mentions in type_pings.items():
+            lines.append(f"{type_label}: {mentions}")
+        if quest_pings:
+            lines.append(f"Quest Pings: {' '.join(sorted(set(quest_pings)))}")
+        lines.append("")
+        lines.append(pred_text)
+        await message.channel.send("\n".join(lines), reference=message)
+
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        try:
+            if message.author.id != self.bot.user.id:
                 return
-            for e in m.embeds:
-                if self.target_title in (e.title or "").lower() and e.image:
-                    await self.output_prediction(m, e.image.url)
+            for e in message.embeds:
+                if e.title and "pokémon has appeared!" in e.title.lower() and e.image:
+                    await self.output_prediction(message, e.image.url)
         except Exception as e:
             print(f"{self.cross_emoji} Error in on_message: {type(e).__name__}: {e}")
 
     @commands.command(name="ps", hidden=True)
     async def predict_spawn(self, ctx, image_url=None):
         try:
-            m = ctx.message
+            message = ctx.message
             if not image_url:
-                ref = m.reference
+                ref = message.reference
                 if ref:
-                    m = await ctx.channel.fetch_message(ref.message_id)
-                if m.attachments:
-                    image_url = m.attachments[0].url
-                elif m.embeds and m.embeds[0].image:
-                    image_url = m.embeds[0].image.url
+                    message = await ctx.channel.fetch_message(ref.message_id)
+                if message.attachments:
+                    image_url = message.attachments[0].url
+                elif message.embeds and message.embeds[0].image:
+                    image_url = message.embeds[0].image.url
             if not image_url:
                 return await ctx.send(f"{self.cross_emoji} No image URL found.")
-            await self.output_prediction(m, image_url)
+            await self.output_prediction(message, image_url)
         except Exception as e:
             await ctx.send(f"{self.cross_emoji} Prediction error: {type(e).__name__}: {e}")
+
+
 
 
 def setup(bot):
