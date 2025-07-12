@@ -144,6 +144,38 @@
             "description": "No description provided.",
             "example": "{}shiny_hunt",
             "related_commands": "Provide related commands"
+        },
+        "type_ping": {
+            "aliases": [
+                "tp"
+            ],
+            "description": "No description provided.",
+            "example": "{}type_ping",
+            "related_commands": "Provide related commands"
+        },
+        "quest_ping": {
+            "aliases": [
+                "qp"
+            ],
+            "description": "Toggle quest pings for legendary/mythical Pokemon",
+            "example": "{}quest_ping",
+            "related_commands": "Provide related commands"
+        },
+        "server_config": {
+            "aliases": [
+                "sc"
+            ],
+            "description": "No description provided.",
+            "example": "{}server_config",
+            "related_commands": "Provide related commands"
+        },
+        "special_ping": {
+            "aliases": [
+                "sp"
+            ],
+            "description": "No description provided.",
+            "example": "{}special_ping",
+            "related_commands": "Provide related commands"
         }
     },
     "Pokemon": {

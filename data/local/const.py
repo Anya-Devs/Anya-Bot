@@ -774,3 +774,30 @@ class Pokemon:
                     base=[x for x in parts if x.lower()!=region]
                     if base: return base[0].lower()+suffix,region
         return c.lower(),None
+  
+
+
+
+
+POKEMON_TYPE_COLORS = {
+    "normal": "\x1b[38;5;223m",
+    "fire": "\x1b[38;5;202m",
+    "water": "\x1b[38;5;39m",
+    "electric": "\x1b[38;5;220m",
+    "grass": "\x1b[38;5;34m",
+    "ice": "\x1b[38;5;51m",
+    "fighting": "\x1b[38;5;160m",
+    "poison": "\x1b[38;5;127m",
+    "ground": "\x1b[38;5;130m",
+    "flying": "\x1b[38;5;117m",
+    "psychic": "\x1b[38;5;207m",
+    "bug": "\x1b[38;5;64m",
+    "rock": "\x1b[38;5;137m",
+    "ghost": "\x1b[38;5;57m",
+    "dragon": "\x1b[38;5;21m",
+    "dark": "\x1b[38;5;238m",
+    "steel": "\x1b[38;5;145m",
+    "fairy": "\x1b[38;5;213m",
+}
+
+ANSI_RESET = "\x1b[0m"

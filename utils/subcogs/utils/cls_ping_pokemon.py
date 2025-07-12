@@ -1,8 +1,11 @@
-import os, re, csv,aiohttp, traceback
+import os, re, csv,aiohttp, traceback, json
+
 from tqdm import tqdm
 from imports.log_imports import *
 from utils.subcogs.pokemon import *
 from imports.discord_imports import *
+from data.local.const import *
+
 
 MAX_POKEMON, CHUNK_SIZE, RESULTS_PER_PAGE, MIN_SIMILARITY_RATIO  = 50, 15, 10, 0.65
 
@@ -1155,3 +1158,349 @@ class PokemonHelpEmbed:
 
     embed.set_footer(text=f"Collection limit: {self.MAX_POKEMON} Pokémon • Results per page: {self.RESULTS_PER_PAGE}")
     return embed
+
+
+
+
+class RoleSelect(discord.ui.Select):
+    def __init__(self, guild: discord.Guild, role_type: str, mongo_helper, guild_id):
+        self.guild = guild
+        self.role_type = role_type
+        self.mongo = mongo_helper
+        self.guild_id = guild_id
+
+        options = [
+            discord.SelectOption(label=role.name, value=str(role.id))
+            for role in guild.roles if not role.is_bot_managed() and role.name != "@everyone"
+        ]
+
+        super().__init__(
+            placeholder=f"Select a role for {role_type.title()} Pokémon (optional)",
+            min_values=0, max_values=1,
+            options=options[:25]  # Discord limit
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        if not self.values:
+            await self.mongo.db["server_config"].update_one(
+                {"guild_id": self.guild_id},
+                {"$unset": {f"{self.role_type}_role": ""}},
+                upsert=True
+            )
+            return await interaction.response.send_message(
+                f"❎ Cleared {self.role_type.title()} Pokémon role.", ephemeral=True
+            )
+
+        role_id = int(self.values[0])
+        role = self.guild.get_role(role_id)
+
+        await self.mongo.db["server_config"].update_one(
+            {"guild_id": self.guild_id},
+            {"$set": {f"{self.role_type}_role": role_id}},
+            upsert=True
+        )
+
+        await interaction.response.send_message(
+            f"✅ {self.role_type.title()} Pokémon role set to {role.mention}",
+            ephemeral=True
+        )
+
+class ServerConfigView(discord.ui.View):
+    def __init__(self, guild: discord.Guild, mongo_helper):
+        super().__init__(timeout=300)
+        self.guild = guild
+        self.mongo = mongo_helper
+
+        self.add_item(RoleSelect(guild, "rare", mongo_helper, guild.id))
+        self.add_item(RoleSelect(guild, "regional", mongo_helper, guild.id))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class PokemonTypeButtons(discord.ui.View):
+    def __init__(self, user_id: int, collection_type: str, mongo_helper, pokemon_types: list[str], current_types: list[str] | None = None, editing=False, status=None):
+        super().__init__(timeout=300)
+        self.user_id = user_id
+        self.collection_type = collection_type
+        self.mongo = mongo_helper
+        self.pokemon_types = pokemon_types
+        self.current_types = current_types or []
+        self.status_message = status
+        self.message = None
+        with open("data/commands/pokemon/pokemon_emojis/_pokemon_types.json", "r", encoding="utf-8") as f:
+            raw_emojis = json.load(f)
+        self.emojis = {}
+        for key, raw in raw_emojis.items():
+            try:
+                parts = raw.strip('<>').split(':')
+                if len(parts) == 3:
+                    _, name, emoji_id = parts
+                    self.emojis[key] = discord.PartialEmoji(name=name, id=int(emoji_id))
+                else:
+                    self.emojis[key] = raw
+            except Exception:
+                self.emojis[key] = raw
+        if editing:
+            self._add_type_select()
+        else:
+            self._add_edit_button()
+
+    def _get_emoji_by_name(self, name: str):
+        for key, emoji in self.emojis.items():
+            if name in key:
+                return emoji
+        return None
+
+    def _add_type_select(self):
+        options = [
+            discord.SelectOption(
+                label=ptype.title(),
+                value=ptype,
+                default=ptype in self.current_types,
+                emoji=self._get_emoji_by_name(ptype)
+            )
+            for ptype in self.pokemon_types
+        ]
+        select = discord.ui.Select(
+            placeholder="Select Pokémon Types...",
+            min_values=0,
+            max_values=len(self.pokemon_types),
+            options=options,
+            custom_id="pokemon_type_select"
+        )
+        select.callback = self._select_callback
+        self.add_item(select)
+        confirm_btn = discord.ui.Button(label="Confirm", style=discord.ButtonStyle.secondary)
+        confirm_btn.callback = self._cancel_callback
+        self.add_item(confirm_btn)
+
+    def _add_edit_button(self):
+        edit_btn = discord.ui.Button(label="Edit", style=discord.ButtonStyle.secondary)
+        edit_btn.callback = self._edit_callback
+        self.add_item(edit_btn)
+
+    async def _select_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
+        selected_types = set(interaction.data.get("values", []))
+        try:
+            collection = self.mongo.db[f"{self.collection_type}_types"]
+            await collection.delete_many({"user_id": self.user_id})
+            docs = [{"user_id": self.user_id, "type": t} for t in selected_types]
+            if docs:
+                await collection.insert_many(docs)
+            self.current_types = list(selected_types)
+        except Exception as e:
+            return await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
+        self.clear_items()
+        self._add_type_select()
+        embed = interaction.message.embeds[0].copy()
+        self._update_embed_content(embed, "Selection updated.")
+        await interaction.response.edit_message(embed=embed, view=self)
+        self.message = interaction.message
+
+    async def _edit_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
+        new_view = PokemonTypeButtons(self.user_id, self.collection_type, self.mongo, self.pokemon_types, self.current_types, editing=True)
+        embed = interaction.message.embeds[0].copy()
+        new_view._update_embed_content(embed)
+        await interaction.response.edit_message(embed=embed, view=new_view)
+        new_view.message = interaction.message
+
+    async def _cancel_callback(self, interaction: discord.Interaction):
+        new_view = PokemonTypeButtons(self.user_id, self.collection_type, self.mongo, self.pokemon_types, self.current_types, editing=False)
+        embed = interaction.message.embeds[0].copy()
+        new_view._update_embed_content(embed)
+        await interaction.response.edit_message(embed=embed, view=new_view)
+        new_view.message = interaction.message
+        self.stop()
+
+    async def on_timeout(self):
+        self.clear_items()
+        if self.message and self.message.embeds:
+            embed = self.message.embeds[0].copy()
+            self._update_embed_content(embed, status_message="View expired.")
+            await self.message.edit(embed=embed, view=None)
+        self.stop()
+
+    def _update_embed_content(self, embed: discord.Embed, status_message: str = None):
+        if self.current_types:
+            lines = []
+            for pt in sorted(self.current_types):
+                emoji = self._get_emoji_by_name(pt)
+                lines.append(f"{emoji} {pt.title()}")
+            embed.description = "\n".join(lines)
+        else:
+            embed.description = "No types selected."
+        embed.set_footer(text=status_message or self.status_message or "Get pings for Fire, Water, Ghost, etc. Pokémon spawns on PokéTwo")
+
+    def _create_embed(self, ctx=None, status_message=None):
+        embed = discord.Embed(title="Pokemon Type Ping")
+        if self.current_types:
+            lines = []
+            for pt in sorted(self.current_types):
+                emoji = self._get_emoji_by_name(pt)
+                lines.append(f"{emoji} {pt.title()}")
+            embed.description = "\n".join(lines)
+        else:
+            embed.description = "No types selected."
+        embed.set_footer(text=status_message or self.status_message or "Get pings for Fire, Water, Ghost, etc. Pokémon spawns on PokéTwo")
+        if ctx and hasattr(ctx, "author") and ctx.author.avatar:
+            embed.set_thumbnail(url=ctx.author.avatar)
+        return embed
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("Only the command author can use these buttons.", ephemeral=True)
+            return False
+        return True
+
+class PokemonRegionButtons(discord.ui.View):
+    def __init__(self, user_id: int, collection_type: str, mongo_helper, pokemon_regions: list[str], current_regions: list[str] | None = None, editing=False, status=None):
+        super().__init__(timeout=300)
+        self.user_id = user_id
+        self.collection_type = collection_type
+        self.mongo = mongo_helper
+        self.pokemon_regions = pokemon_regions
+        self.current_regions = current_regions or []
+        self.status_message = status
+        if editing:
+            self._add_region_select()
+        else:
+            self._add_edit_button()
+
+    def _add_region_select(self):
+        options = [
+            discord.SelectOption(
+                label=region.title(), 
+                value=region, 
+                default=region in self.current_regions
+            ) for region in self.pokemon_regions
+        ]
+        select = discord.ui.Select(
+            placeholder="Select Pokémon Regions...", 
+            min_values=0, 
+            max_values=len(self.pokemon_regions), 
+            options=options, 
+            custom_id="pokemon_region_select"
+        )
+        select.callback = self._select_callback
+        self.add_item(select)
+        confirm_btn = discord.ui.Button(label="Confirm", style=discord.ButtonStyle.secondary)
+        confirm_btn.callback = self._confirm_callback
+        self.add_item(confirm_btn)
+
+    def _add_edit_button(self):
+        edit_btn = discord.ui.Button(label="Edit", style=discord.ButtonStyle.secondary)
+        edit_btn.callback = self._edit_callback
+        self.add_item(edit_btn)
+
+    async def _select_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
+        selected_regions = interaction.data.get("values", [])
+        self.current_regions = selected_regions
+        self.clear_items()
+        self._add_region_select()
+        await interaction.response.edit_message(embed=self._create_embed(interaction, "Selection updated."), view=self)
+
+    async def _edit_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
+        try:
+            #logging.info(f"Edit button clicked by user {interaction.user.id}")
+            new_view = PokemonRegionButtons(
+                self.user_id,
+                self.collection_type,
+                self.mongo,
+                self.pokemon_regions,
+                self.current_regions,
+                editing=True
+            )
+            await interaction.response.edit_message(embed=new_view._create_embed(interaction), view=new_view)
+            #logging.info("Edit view sent successfully.")
+        except Exception as e:
+            tb_str = traceback.format_exc()
+            logging.error(f"Exception in _edit_callback:\n{tb_str}")
+            try:
+                if interaction.response.is_done():
+                    await interaction.followup.send(f"Error occurred: {e}", ephemeral=True)
+                else:
+                    await interaction.response.send_message(f"Error occurred: {e}", ephemeral=True)
+            except Exception:
+                pass
+
+    async def _confirm_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
+        try:
+            await self.mongo.db[self.collection_type].update_one(
+                {"user_id": self.user_id},
+                {"$set": {"regions": self.current_regions}},
+                upsert=True
+            )
+            new_view = PokemonRegionButtons(
+                self.user_id,
+                self.collection_type,
+                self.mongo,
+                self.pokemon_regions,
+                self.current_regions,
+                editing=False,
+                status="Settings saved successfully!"
+            )
+            await interaction.response.edit_message(embed=new_view._create_embed(interaction), view=new_view)
+            self.stop()
+        except Exception as e:
+            await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
+
+    async def on_timeout(self):
+        self.clear_items()
+        if hasattr(self, 'message') and self.message:
+            embed = self._create_embed()
+            await self.message.edit(embed=embed, view=None)
+        self.stop()
+
+    def _create_embed(self, ctx=None, status_message=None):
+        embed = discord.Embed(title="Quest Ping")
+        if self.current_regions:
+            embed.description = "```\n" + "\n".join(sorted(region.title() for region in self.current_regions)) + "\n```"
+        else:
+            embed.description = "```No regions selected.```"
+        if status_message or self.status_message:
+            embed.set_footer(text=status_message or self.status_message)
+        else:
+            embed.set_footer(text="Get pings for Pokémon from specific regions when they spawn on PokéTwo")
+        if ctx and hasattr(ctx, "user") and ctx.user.avatar:
+            embed.set_thumbnail(url=ctx.user.avatar.url)
+        else:
+            embed.set_thumbnail(url="")
+        return embed
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("Only the command author can use these buttons.", ephemeral=True)
+            return False
+        return True
+

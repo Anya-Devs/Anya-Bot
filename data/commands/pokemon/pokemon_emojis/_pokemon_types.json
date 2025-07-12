@@ -1,0 +1,20 @@
+{
+  "water_type": "<:water_type:1393484684784173136>",
+  "steel_type": "<:steel_type:1393484592320745513>",
+  "rock_type": "<:rock_type:1393484295875596328>",
+  "psychic_type": "<:psychic_type:1393484975826796575>",
+  "poison_type": "<:poison_type:1393483349724762254>",
+  "normal_type": "<:normal_type:1393483098414514192>",
+  "ice_type": "<:ice_type:1393485114767315056>",
+  "ground_type": "<:ground_type:1393484161427177512>",
+  "grass_type": "<:grass_type:1393484742556385331>",
+  "ghost_type": "<:ghost_type:1393484426268119120>",
+  "flying_type": "<:flying_type:1393483274881470594>",
+  "fire_type": "<:fire_type:1393484638655348796>",
+  "fighting_type": "<:fighting_type:1393483195453800518>",
+  "fairy_type": "<:fairy_type:1393485403721433138>",
+  "electric_type": "<:electric_type:1393484854900953199>",
+  "dragon_type": "<:dragon_type:1393485171277434951>",
+  "dark_type": "<:dark_type:1393485321739440250>",
+  "bug_type": "<:bug_type:1393484357263691786>"
+}
