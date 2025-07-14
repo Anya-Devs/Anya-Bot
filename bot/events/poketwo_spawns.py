@@ -40,6 +40,11 @@ class PoketwoSpawnDetector(commands.Cog):
         self._type_emojis = None
         self.load_type_emojis()
 
+        self.emojis = {
+            "shiny" : "<:shiny_sparkle:1394386258406412380>",
+            "collection": "<:collection_ball:1394386212961124504>"
+        }
+
     def load_type_emojis(self):
         try:
             with open("data/commands/pokemon/pokemon_emojis/_pokemon_types.json", "r", encoding="utf-8") as f:
@@ -214,9 +219,9 @@ class PoketwoSpawnDetector(commands.Cog):
         type_pings = await self.get_type_ping_users(message.guild, transformed_name)
         quest_pings = await self.get_quest_ping_users(message.guild, transformed_name)
         if shiny:
-            lines.append(f"Shiny Pings: {' '.join(sorted(set(shiny)))}")
+            lines.append(f"{self.emojis['shiny']} Shiny Pings: {' '.join(sorted(set(shiny)))}")
         if collect:
-            lines.append(f"Collection Pings: {' '.join(sorted(set(collect)))}")
+            lines.append(f"{self.emojis['collection']} Collection Pings: {' '.join(sorted(set(collect)))}")
         for type_label, mentions in type_pings.items():
             lines.append(f"{type_label}: {mentions}")
         if quest_pings:
