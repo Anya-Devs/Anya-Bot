@@ -50,7 +50,7 @@ class SetupManager:
                 args,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                timeout=120
+                timeout=300
             ).returncode
         )
 
@@ -62,7 +62,7 @@ class SetupManager:
                 args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                timeout=30,
+                timeout=300,
                 text=True
             )
         )
@@ -73,7 +73,7 @@ class SetupManager:
                 ["git", "ls-remote", self.submodule_url],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                timeout=3
+                timeout=300
             )
             if result.returncode == 0:
                 return True
