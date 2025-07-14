@@ -15,7 +15,6 @@ from rich.progress import (
 )
 from concurrent.futures import ThreadPoolExecutor
 
-
 class SetupManager:
     def __init__(self):
         self.console = Console()
@@ -57,16 +56,15 @@ class SetupManager:
 
     async def run_cmd_with_output(self, *args):
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            self.executor,
-            lambda: subprocess.run(
+        def run_and_capture():
+            return subprocess.run(
                 args,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
                 timeout=300,
                 text=True
             )
-        )
+        return await loop.run_in_executor(self.executor, run_and_capture)
 
     def ensure_git_login(self):
         try:
@@ -80,15 +78,16 @@ class SetupManager:
                 return True
         except Exception:
             pass
-
         try:
             from dotenv import load_dotenv
             load_dotenv(dotenv_path=os.path.join(".github", ".env"))
             token = os.getenv("GIT_ACCESS_TOKEN")
+            user = os.getenv("GIT_USERNAME", "git")
             if not token:
                 return False
-            # Inject token into URL for Render compatibility
-            self.submodule_url = f"https://{token}@github.com/senko-sleep/Poketwo-AutoNamer.git"
+            with open(os.path.expanduser("~/.netrc"), "w") as netrc:
+                netrc.write(f"machine github.com\nlogin {user}\npassword {token}\n")
+            os.chmod(os.path.expanduser("~/.netrc"), 0o600)
             return True
         except Exception:
             return False
@@ -97,7 +96,11 @@ class SetupManager:
         start = time.time()
         self.progress.update(task_id, description="□ Git auth check...", completed=10)
         if not self.ensure_git_login():
-            self.progress.update(task_id, description="❌ Git auth failed", completed=100)
+            self.progress.update(task_id, description="→ ❌ Git auth failed", completed=100)
+            self.console.print(Panel(
+                "[bold red]Git authorization failed.[/bold red]\n• Check your token or SSH key\n• Did you forget to set up .env or ~/.netrc?",
+                title="Git Error",
+                border_style="red"))
             return
         self.progress.update(task_id, description="□ Submodule sync...", completed=30)
         try:
@@ -110,8 +113,9 @@ class SetupManager:
             )
             elapsed = self.log_time("submodule", start)
             self.progress.update(task_id, description=f"✅ Submodules {elapsed}", completed=100)
-        except Exception:
-            self.progress.update(task_id, description="❌ Submodule failed", completed=100)
+        except Exception as e:
+            self.progress.update(task_id, description="→ ❌ Submodule failed", completed=100)
+            self.console.print(Panel(str(e), title="Submodule Error", border_style="red"))
 
     async def resolve_conflicts(self, task_id):
         start = time.time()
@@ -147,7 +151,7 @@ class SetupManager:
             "--no-cache-dir", "--disable-pip-version-check", "--quiet"
         )
         elapsed = self.log_time("pip", start)
-        status = "✅" if retcode == 0 else "❌"
+        status = "✅" if retcode == 0 else "→ ❌"
         self.progress.update(task_id, description=f"{status} pip {elapsed}", completed=100)
 
     async def mega_install(self, packages, task_id, task_name):
@@ -160,7 +164,7 @@ class SetupManager:
             *packages
         )
         elapsed = self.log_time(task_name, start)
-        status = "✅" if retcode == 0 else "❌"
+        status = "✅" if retcode == 0 else "→ ❌"
         self.progress.update(task_id, description=f"{status} {total} {task_name} {elapsed}", completed=100)
 
     async def install_essentials(self, task_id):
@@ -172,7 +176,8 @@ class SetupManager:
         result = await self.run_cmd_with_output(sys.executable, "-m", "pip", "list", "--outdated", "--format=freeze")
         if result.returncode != 0:
             elapsed = self.log_time("outdated", start)
-            self.progress.update(task_id, description=f"❌ Check failed {elapsed}", completed=100)
+            self.progress.update(task_id, description=f"→ ❌ Check failed {elapsed}", completed=100)
+            self.console.print(Panel(result.stderr or "[red]Unknown error[/red]", title="Outdated Check Error", border_style="red"))
             return
         packages = [line.split("==")[0] for line in result.stdout.strip().splitlines() if "==" in line]
         if not packages:
@@ -186,7 +191,7 @@ class SetupManager:
             *packages
         )
         elapsed = self.log_time("outdated", start)
-        status = "✅" if retcode == 0 else "❌"
+        status = "✅" if retcode == 0 else "→ ❌"
         self.progress.update(task_id, description=f"{status} {len(packages)} updated {elapsed}", completed=100)
 
     async def clean_requirements(self, task_id):
@@ -198,12 +203,13 @@ class SetupManager:
         )
         if retcode != 0:
             elapsed = self.log_time("clean_req", start)
-            self.progress.update(task_id, description=f"❌ pipreqs failed {elapsed}", completed=100)
+            self.progress.update(task_id, description=f"→ ❌ pipreqs failed {elapsed}", completed=100)
+            self.console.print(Panel(f"[bold red]pipreqs failed. Possible causes:[/bold red]\n• Missing __init__.py\n• Syntax error in .py files", title="pipreqs Error", border_style="red"))
             return
         self.progress.update(task_id, description="□ Deduplicating...", completed=60)
         if not os.path.exists(self.requirements_file):
             elapsed = self.log_time("clean_req", start)
-            self.progress.update(task_id, description=f"❌ No requirements.txt {elapsed}", completed=100)
+            self.progress.update(task_id, description=f"→ ❌ No requirements.txt {elapsed}", completed=100)
             return
         with open(self.requirements_file, "r") as f:
             lines = f.readlines()
@@ -223,7 +229,7 @@ class SetupManager:
         self.progress.update(task_id, description="□ Installing requirements...", completed=0)
         if not os.path.exists(self.requirements_file):
             elapsed = self.log_time("install_req", start)
-            self.progress.update(task_id, description=f"❌ No requirements.txt {elapsed}", completed=100)
+            self.progress.update(task_id, description=f"→ ❌ No requirements.txt {elapsed}", completed=100)
             return
         self.progress.update(task_id, description="□ Batch requirements install...", completed=30)
         retcode = await self.run_cmd_ultra_fast(
@@ -252,7 +258,7 @@ class SetupManager:
             *packages
         )
         elapsed = self.log_time("install_req", start)
-        status = "✅" if retcode == 0 else "❌"
+        status = "✅" if retcode == 0 else "→ ❌"
         self.progress.update(task_id, description=f"{status} Requirements {elapsed}", completed=100)
 
     async def run_setup(self):
@@ -283,7 +289,6 @@ class SetupManager:
             Text(f"🚀 Setup completed in {total_time:.1f}s", justify="center"),
             title="Complete", box=ROUNDED, border_style="green"
         ))
-
 
 if __name__ == "__main__":
     asyncio.run(SetupManager().run_setup())
