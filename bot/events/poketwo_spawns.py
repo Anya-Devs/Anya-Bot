@@ -227,9 +227,11 @@ class PoketwoSpawnDetector(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+
         try:
-            if message.author.id != self.target_id or message.author.bot is False:
+            if message.author.id != self.target_id:
                 return
+            #print(f"{self.check_emoji} Message from {message.author.name}: {message.content}")
             for e in message.embeds:
                 if e.title and "pokémon has appeared!" in e.title.lower() and e.image:
                     await self.output_prediction(message, e.image.url)
