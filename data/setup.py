@@ -178,6 +178,23 @@ class SetupManager:
         except Exception:
             pass
 
+    def check_syntax_errors(self):
+        # Check for syntax errors in all .py files
+        result = subprocess.run(
+            [sys.executable, "-m", "compileall", "-q", "."],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        if result.returncode != 0:
+            self.console.print(Panel(
+                f"[bold red]Syntax errors detected in your Python files.[/bold red]\n{result.stdout}\n{result.stderr}",
+                title="Syntax Error",
+                border_style="red"
+            ))
+            return False
+        return True
+
     async def update_outdated(self, task_id):
         start = time.time()
         self.progress.update(task_id, description="□ Checking outdated...", completed=0)
@@ -224,6 +241,11 @@ class SetupManager:
         self.progress.update(task_id, description="□ Generating requirements...", completed=0)
         await asyncio.sleep(0.2)
         self.add_missing_init_py()
+        # Check for syntax errors before running pipreqs
+        if not self.check_syntax_errors():
+            elapsed = self.log_time("clean_req", start)
+            self.progress.update(task_id, description=f"→ ❌ Syntax error {elapsed}", completed=100)
+            return
         retcode = await self.run_cmd_ultra_fast(
             sys.executable, "-m", "pipreqs.pipreqs", "--force", "--ignore",
             "venv,.venv,submodules,node_modules", "."
