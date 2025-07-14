@@ -11,6 +11,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.target_id = 716390085896962058
         self.pokemon_special_names_file = 'data/commands/pokemon/pokemon_special_names.csv'
         self.pokemon_types_file = 'data/commands/pokemon/pokemon_types.csv'
         self.pokemon_description_file = 'data/commands/pokemon/pokemon_description.csv'
@@ -228,7 +229,7 @@ class PoketwoSpawnDetector(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message):
         try:
-            if ut and message.author.id != self.bot.user.id:
+            if message.author.id != self.bot.user.id or self.target_id:
                 return
             for e in message.embeds:
                 if e.title and "pokémon has appeared!" in e.title.lower() and e.image:
