@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 class SetupManager:
     def __init__(self):
         self.console = Console()
-        self.submodule_url = "https://github.com/cringe-neko-girl/Poketwo-AutoNamer.git"
+        self.submodule_url = "https://github.com/senko-sleep/Poketwo-AutoNamer.git"
         self.submodule_path = "submodules/poketwo_autonamer"
         self.essential_packages = [
             "urllib3", "pipreqs", "onnxruntime",
