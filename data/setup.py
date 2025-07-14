@@ -4,12 +4,6 @@ import subprocess
 import time
 import os
 import re
-from rich.console import Console
-from rich.panel import Panel
-from rich.box import ROUNDED
-from rich.text import Text
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
-from concurrent.futures import ThreadPoolExecutor
 
 def ensure_rich():
     try:
@@ -18,6 +12,15 @@ def ensure_rich():
         subprocess.check_call([sys.executable, "-m", "pip", "install", "rich"])
 
 ensure_rich()
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.box import ROUNDED
+from rich.text import Text
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
+from concurrent.futures import ThreadPoolExecutor
+
+
 
 class SetupManager:
     def __init__(self):
