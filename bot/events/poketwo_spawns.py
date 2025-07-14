@@ -1,12 +1,11 @@
 from imports.discord_imports import *
 from fuzzywuzzy import fuzz
-import os, csv, re
+import os, csv, re, json
 from utils.subcogs.pokemon import *
 from submodules.poketwo_autonamer.predict import Prediction
 from bot.token import use_test_bot as ut
 from data.local.const import *
 from motor.motor_asyncio import AsyncIOMotorClient
-
 
 class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot):
@@ -229,7 +228,7 @@ class PoketwoSpawnDetector(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message):
         try:
-            if message.author.id != self.target_id or self.bot.user.id:
+            if message.author.id != self.target_id or message.author.bot is False:
                 return
             for e in message.embeds:
                 if e.title and "pokémon has appeared!" in e.title.lower() and e.image:
@@ -254,9 +253,6 @@ class PoketwoSpawnDetector(commands.Cog):
             await self.output_prediction(message, image_url)
         except Exception as e:
             await ctx.send(f"{self.cross_emoji} Prediction error: {type(e).__name__}: {e}")
-
-
-
 
 def setup(bot):
     bot.add_cog(PoketwoSpawnDetector(bot))
