@@ -15,6 +15,7 @@ from rich.progress import (
 )
 from concurrent.futures import ThreadPoolExecutor
 
+
 class SetupManager:
     def __init__(self):
         self.console = Console()
@@ -84,12 +85,10 @@ class SetupManager:
             from dotenv import load_dotenv
             load_dotenv(dotenv_path=os.path.join(".github", ".env"))
             token = os.getenv("GIT_ACCESS_TOKEN")
-            user = os.getenv("GIT_USERNAME", "git")
             if not token:
                 return False
-            with open(os.path.expanduser("~/.netrc"), "w") as netrc:
-                netrc.write(f"machine github.com\nlogin {user}\npassword {token}\n")
-            os.chmod(os.path.expanduser("~/.netrc"), 0o600)
+            # Inject token into URL for Render compatibility
+            self.submodule_url = f"https://{token}@github.com/senko-sleep/Poketwo-AutoNamer.git"
             return True
         except Exception:
             return False
@@ -284,6 +283,7 @@ class SetupManager:
             Text(f"🚀 Setup completed in {total_time:.1f}s", justify="center"),
             title="Complete", box=ROUNDED, border_style="green"
         ))
+
 
 if __name__ == "__main__":
     asyncio.run(SetupManager().run_setup())
