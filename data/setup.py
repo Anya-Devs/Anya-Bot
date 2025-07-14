@@ -3,8 +3,8 @@ import asyncio
 import subprocess
 import time
 import os
-os.system('pip install rich')
 import re
+import json
 from rich.console import Console
 from rich.panel import Panel
 from rich.box import ROUNDED
@@ -14,6 +14,8 @@ from rich.progress import (
     TaskProgressColumn, TimeRemainingColumn
 )
 from concurrent.futures import ThreadPoolExecutor
+
+os.system('pip install rich')
 
 class SetupManager:
     def __init__(self):
@@ -66,7 +68,17 @@ class SetupManager:
             )
         return await loop.run_in_executor(self.executor, run_and_capture)
 
-    def ensure_git_login(self):
+    def inject_token_into_url(self):
+        token = os.getenv("GIT_ACCESS_TOKEN")
+        if token:
+            self.submodule_url = self.submodule_url.replace(
+                "https://", f"https://{token}@"
+            )
+
+    async def sync_submodule(self, task_id):
+        start = time.time()
+        self.progress.update(task_id, description="□ Git auth check...", completed=10)
+        self.inject_token_into_url()
         try:
             result = subprocess.run(
                 ["git", "ls-remote", self.submodule_url],
@@ -74,33 +86,13 @@ class SetupManager:
                 stderr=subprocess.DEVNULL,
                 timeout=300
             )
-            if result.returncode == 0:
-                return True
+            if result.returncode != 0:
+                raise Exception("Git remote check failed.")
         except Exception:
-            pass
-        try:
-            from dotenv import load_dotenv
-            load_dotenv(dotenv_path=os.path.join(".github", ".env"))
-            token = os.getenv("GIT_ACCESS_TOKEN")
-            user = os.getenv("GIT_USERNAME", "git")
-            if not token:
-                return False
-            with open(os.path.expanduser("~/.netrc"), "w") as netrc:
-                netrc.write(f"machine github.com\nlogin {user}\npassword {token}\n")
-            os.chmod(os.path.expanduser("~/.netrc"), 0o600)
-            return True
-        except Exception:
-            return False
-
-    async def sync_submodule(self, task_id):
-        start = time.time()
-        self.progress.update(task_id, description="□ Git auth check...", completed=10)
-        if not self.ensure_git_login():
             self.progress.update(task_id, description="→ ❌ Git auth failed", completed=100)
             self.console.print(Panel(
-                "[bold red]Git authorization failed.[/bold red]\n• Check your token or SSH key\n• Did you forget to set up .env or ~/.netrc?",
-                title="Git Error",
-                border_style="red"))
+                "[bold red]Git authorization failed.[/bold red]\n• Check your token on Render dashboard",
+                title="Git Error", border_style="red"))
             return
         self.progress.update(task_id, description="□ Submodule sync...", completed=30)
         try:
@@ -116,6 +108,15 @@ class SetupManager:
         except Exception as e:
             self.progress.update(task_id, description="→ ❌ Submodule failed", completed=100)
             self.console.print(Panel(str(e), title="Submodule Error", border_style="red"))
+
+    def ensure_inits(self):
+        for root, _, files in os.walk("."):
+            if any(part in root for part in ("venv", ".venv", "submodules", "node_modules", "__pycache__")):
+                continue
+            if any(f.endswith(".py") for f in files):
+                init_path = os.path.join(root, "__init__.py")
+                if not os.path.exists(init_path):
+                    open(init_path, "w").close()
 
     async def resolve_conflicts(self, task_id):
         start = time.time()
@@ -173,13 +174,17 @@ class SetupManager:
     async def update_outdated(self, task_id):
         start = time.time()
         self.progress.update(task_id, description="□ Checking outdated...", completed=0)
-        result = await self.run_cmd_with_output(sys.executable, "-m", "pip", "list", "--outdated", "--format=freeze")
+        result = await self.run_cmd_with_output(sys.executable, "-m", "pip", "list", "--outdated", "--format=json")
         if result.returncode != 0:
             elapsed = self.log_time("outdated", start)
             self.progress.update(task_id, description=f"→ ❌ Check failed {elapsed}", completed=100)
             self.console.print(Panel(result.stderr or "[red]Unknown error[/red]", title="Outdated Check Error", border_style="red"))
             return
-        packages = [line.split("==")[0] for line in result.stdout.strip().splitlines() if "==" in line]
+        try:
+            outdated = json.loads(result.stdout)
+            packages = [pkg["name"] for pkg in outdated]
+        except:
+            packages = []
         if not packages:
             elapsed = self.log_time("outdated", start)
             self.progress.update(task_id, description=f"✅ All current {elapsed}", completed=100)
@@ -196,6 +201,7 @@ class SetupManager:
 
     async def clean_requirements(self, task_id):
         start = time.time()
+        self.ensure_inits()
         self.progress.update(task_id, description="□ Generating requirements...", completed=0)
         retcode = await self.run_cmd_ultra_fast(
             sys.executable, "-m", "pipreqs.pipreqs", "--force", "--ignore",
