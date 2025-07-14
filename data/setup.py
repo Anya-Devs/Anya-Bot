@@ -3,7 +3,14 @@ import asyncio
 import subprocess
 import time
 import os
-os.system('pip install rich')
+
+def ensure_rich():
+    try:
+        import rich
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "rich"])
+
+ensure_rich()
 
 import re
 from rich.console import Console
@@ -27,7 +34,8 @@ class SetupManager:
         self.submodule_path = "submodules/poketwo_autonamer"
         self.essential_packages = [
             "urllib3", "pipreqs", "onnxruntime",
-            "opencv-python-headless", "python-Levenshtein"
+            "opencv-python-headless", "python-Levenshtein",
+            "pip", "setuptools", "wheel"  # Added essential system packages
         ]
         self.requirements_file = "requirements.txt"
         self.start_time = time.time()
@@ -47,6 +55,23 @@ class SetupManager:
         elapsed = time.time() - start_time
         self.task_times[task_name] = elapsed
         return f"[dim]({elapsed:.1f}s)[/dim]"
+
+    def ensure_pip(self):
+        try:
+            # First try to repair pip installation
+            subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"], 
+                         check=True, capture_output=True)
+            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade",
+                          "pip", "setuptools", "wheel"], 
+                         check=True, capture_output=True)
+            return True
+        except Exception as e:
+            self.console.print(Panel(
+                f"[bold red]Failed to repair pip: {e}[/bold red]",
+                title="pip Error",
+                border_style="red"
+            ))
+            return False
 
     async def run_cmd_ultra_fast(self, *args):
         loop = asyncio.get_event_loop()
@@ -135,27 +160,31 @@ class SetupManager:
         start = time.time()
         self.progress.update(task_id, description="□ pip --upgrade...", completed=0)
         await asyncio.sleep(0.2)
-        retcode = await self.run_cmd_ultra_fast(
-            sys.executable, "-m", "pip", "install", "--upgrade", "pip",
-            "--no-cache-dir", "--disable-pip-version-check", "--quiet"
-        )
-        elapsed = self.log_time("pip", start)
-        status = "✅" if retcode == 0 else "→ ❌"
-        self.progress.update(task_id, description=f"{status} pip {elapsed}", completed=100)
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade",
+                          "pip", "setuptools", "wheel"], check=True, capture_output=True)
+            elapsed = self.log_time("pip", start)
+            self.progress.update(task_id, description=f"✅ pip {elapsed}", completed=100)
+        except Exception as e:
+            elapsed = self.log_time("pip", start)
+            self.progress.update(task_id, description=f"→ ❌ pip failed {elapsed}", completed=100)
+            self.console.print(Panel(str(e), title="pip Error", border_style="red"))
 
     async def mega_install(self, packages, task_id, task_name):
         start = time.time()
         total = len(packages)
         self.progress.update(task_id, description=f"□ Installing {total} {task_name}...", completed=0)
         await asyncio.sleep(0.2)
-        retcode = await self.run_cmd_ultra_fast(
-            sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
-            "--disable-pip-version-check", "--quiet", "--no-warn-script-location",
-            *packages
-        )
-        elapsed = self.log_time(task_name, start)
-        status = "✅" if retcode == 0 else "→ ❌"
-        self.progress.update(task_id, description=f"{status} {total} {task_name} {elapsed}", completed=100)
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade",
+                          "--no-cache-dir", "--disable-pip-version-check"] + packages,
+                         check=True, capture_output=True)
+            elapsed = self.log_time(task_name, start)
+            self.progress.update(task_id, description=f"✅ {total} {task_name} {elapsed}", completed=100)
+        except Exception as e:
+            elapsed = self.log_time(task_name, start)
+            self.progress.update(task_id, description=f"→ ❌ {task_name} failed {elapsed}", completed=100)
+            self.console.print(Panel(str(e), title=f"{task_name.title()} Error", border_style="red"))
 
     async def install_essentials(self, task_id):
         await self.mega_install(self.essential_packages, task_id, "essentials")
@@ -179,7 +208,6 @@ class SetupManager:
             pass
 
     def check_syntax_errors(self):
-        # Check for syntax errors in all .py files
         result = subprocess.run(
             [sys.executable, "-m", "compileall", "-q", "."],
             stdout=subprocess.PIPE,
@@ -195,38 +223,6 @@ class SetupManager:
             return False
         return True
 
-    async def update_outdated(self, task_id):
-        start = time.time()
-        self.progress.update(task_id, description="□ Checking outdated...", completed=0)
-        await asyncio.sleep(0.2)
-        self.cleanup_invalid_distributions()
-        result = await self.run_cmd_with_output(sys.executable, "-m", "pip", "list", "--outdated", "--format=columns")
-        if result.returncode != 0:
-            elapsed = self.log_time("outdated", start)
-            self.progress.update(task_id, description=f"→ ❌ Check failed {elapsed}", completed=100)
-            self.console.print(Panel(result.stderr or "[red]Unknown error[/red]", title="Outdated Check Error", border_style="red"))
-            return
-        lines = result.stdout.strip().splitlines()
-        packages = []
-        for line in lines[2:]:  # skip header lines
-            parts = line.split()
-            if parts:
-                packages.append(parts[0])
-        if not packages:
-            elapsed = self.log_time("outdated", start)
-            self.progress.update(task_id, description=f"✅ All current {elapsed}", completed=100)
-            return
-        self.progress.update(task_id, description=f"□ Updating {len(packages)} packages...", completed=30)
-        await asyncio.sleep(0.2)
-        retcode = await self.run_cmd_ultra_fast(
-            sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
-            "--disable-pip-version-check", "--quiet", "--no-warn-script-location",
-            *packages
-        )
-        elapsed = self.log_time("outdated", start)
-        status = "✅" if retcode == 0 else "→ ❌"
-        self.progress.update(task_id, description=f"{status} {len(packages)} updated {elapsed}", completed=100)
-
     def add_missing_init_py(self):
         for root, dirs, files in os.walk("."):
             if "__pycache__" in root or "venv" in root or "submodules" in root or "node_modules" in root:
@@ -241,26 +237,33 @@ class SetupManager:
         self.progress.update(task_id, description="□ Generating requirements...", completed=0)
         await asyncio.sleep(0.2)
         self.add_missing_init_py()
-        # Check for syntax errors before running pipreqs
         if not self.check_syntax_errors():
             elapsed = self.log_time("clean_req", start)
             self.progress.update(task_id, description=f"→ ❌ Syntax error {elapsed}", completed=100)
             return
-        retcode = await self.run_cmd_ultra_fast(
-            sys.executable, "-m", "pipreqs.pipreqs", "--force", "--ignore",
-            "venv,.venv,submodules,node_modules", "."
-        )
-        if retcode != 0:
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pipreqs"],
+                         check=True, capture_output=True)
+            subprocess.run([sys.executable, "-m", "pipreqs.pipreqs", "--force",
+                          "--ignore", "venv,.venv,submodules,node_modules", "."],
+                         check=True, capture_output=True)
+        except Exception as e:
             elapsed = self.log_time("clean_req", start)
             self.progress.update(task_id, description=f"→ ❌ pipreqs failed {elapsed}", completed=100)
-            self.console.print(Panel(f"[bold red]pipreqs failed. Possible causes:[/bold red]\n• Missing __init__.py\n• Syntax error in .py files", title="pipreqs Error", border_style="red"))
+            self.console.print(Panel(
+                f"[bold red]pipreqs failed: {e}[/bold red]\n• Missing __init__.py\n• Syntax error in .py files",
+                title="pipreqs Error",
+                border_style="red"
+            ))
             return
+
         self.progress.update(task_id, description="□ Deduplicating...", completed=60)
         await asyncio.sleep(0.2)
         if not os.path.exists(self.requirements_file):
             elapsed = self.log_time("clean_req", start)
             self.progress.update(task_id, description=f"→ ❌ No requirements.txt {elapsed}", completed=100)
             return
+
         with open(self.requirements_file, "r") as f:
             lines = f.readlines()
         deduped = {}
@@ -282,39 +285,42 @@ class SetupManager:
             elapsed = self.log_time("install_req", start)
             self.progress.update(task_id, description=f"→ ❌ No requirements.txt {elapsed}", completed=100)
             return
-        self.progress.update(task_id, description="□ Batch requirements install...", completed=30)
-        await asyncio.sleep(0.2)
-        retcode = await self.run_cmd_ultra_fast(
-            sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
-            "--disable-pip-version-check", "--quiet", "--no-warn-script-location",
-            "-r", self.requirements_file
-        )
-        if retcode == 0:
+
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "-r",
+                          self.requirements_file, "--upgrade", "--no-cache-dir"],
+                         check=True, capture_output=True)
             elapsed = self.log_time("install_req", start)
             self.progress.update(task_id, description=f"✅ Requirements installed {elapsed}", completed=100)
-            return
-        self.progress.update(task_id, description="□ Individual package install...", completed=60)
-        await asyncio.sleep(0.2)
-        with open(self.requirements_file, "r") as f:
-            lines = f.readlines()
-        packages = []
-        for line in lines:
-            line = line.strip()
-            if line and not line.startswith("#"):
-                if "numpy" in line or "opencv" in line:
-                    packages.append(re.split(r"[<=>]", line)[0])
-                else:
-                    packages.append(line)
-        retcode = await self.run_cmd_ultra_fast(
-            sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
-            "--disable-pip-version-check", "--quiet", "--no-warn-script-location",
-            *packages
-        )
-        elapsed = self.log_time("install_req", start)
-        status = "✅" if retcode == 0 else "→ ❌"
-        self.progress.update(task_id, description=f"{status} Requirements {elapsed}", completed=100)
+        except Exception as e:
+            self.progress.update(task_id, description="□ Individual package install...", completed=60)
+            await asyncio.sleep(0.2)
+            with open(self.requirements_file, "r") as f:
+                lines = f.readlines()
+            packages = []
+            for line in lines:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    if "numpy" in line or "opencv" in line:
+                        packages.append(re.split(r"[<=>]", line)[0])
+                    else:
+                        packages.append(line)
+            try:
+                subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade",
+                              "--no-cache-dir"] + packages,
+                             check=True, capture_output=True)
+                elapsed = self.log_time("install_req", start)
+                self.progress.update(task_id, description=f"✅ Requirements {elapsed}", completed=100)
+            except Exception as e2:
+                elapsed = self.log_time("install_req", start)
+                self.progress.update(task_id, description=f"→ ❌ Install failed {elapsed}", completed=100)
+                self.console.print(Panel(str(e2), title="Requirements Error", border_style="red"))
 
     async def run_setup(self):
+        # First ensure pip is working
+        if not self.ensure_pip():
+            return
+
         self.console.print(Panel(Text("⚡ Setup Manager v2", justify="center"),
                                 title="Setup", box=ROUNDED, border_style="bright_blue"))
         with self.progress:
@@ -333,7 +339,6 @@ class SetupManager:
                 self.resolve_conflicts(tasks[2]),
                 self.install_essentials(tasks[3]),
                 self.clean_requirements(tasks[4]),
-                self.update_outdated(tasks[5]),
                 self.install_requirements(tasks[6])
             )
         total_time = time.time() - self.start_time
