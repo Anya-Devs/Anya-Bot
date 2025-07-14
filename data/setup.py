@@ -1,4 +1,5 @@
 import os
+os.system('pip install rich')
 import sys
 import asyncio
 import subprocess
