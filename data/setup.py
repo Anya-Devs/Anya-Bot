@@ -16,11 +16,9 @@ from rich.progress import (
 )
 from concurrent.futures import ThreadPoolExecutor
 
-
 class SetupManager:
     def __init__(self):
         self.console = Console()
-        # Use token if present for private submodules
         token = os.getenv("GIT_ACCESS_TOKEN")
         if token:
             self.submodule_url = f"https://{token}:x-oauth-basic@github.com/senko-sleep/Poketwo-AutoNamer.git"
@@ -41,7 +39,8 @@ class SetupManager:
             BarColumn(),
             TaskProgressColumn(),
             TimeRemainingColumn(),
-            console=self.console
+            console=self.console,
+            transient=True
         )
 
     def log_time(self, task_name, start_time):
@@ -74,12 +73,12 @@ class SetupManager:
         return await loop.run_in_executor(self.executor, run_and_capture)
 
     def ensure_git_login(self):
-        # No-op: handled by submodule_url with token
         return True
 
     async def sync_submodule(self, task_id):
         start = time.time()
         self.progress.update(task_id, description="□ Git auth check...", completed=10)
+        await asyncio.sleep(0.2)
         if not self.ensure_git_login():
             self.progress.update(task_id, description="→ ❌ Git auth failed", completed=100)
             self.console.print(Panel(
@@ -88,10 +87,12 @@ class SetupManager:
                 border_style="red"))
             return
         self.progress.update(task_id, description="□ Submodule sync...", completed=30)
+        await asyncio.sleep(0.2)
         try:
             if not os.path.exists(os.path.join(self.submodule_path, ".git")):
                 await self.run_cmd_ultra_fast("git", "submodule", "add", self.submodule_url, self.submodule_path)
             self.progress.update(task_id, description="□ Parallel submodule update...", completed=60)
+            await asyncio.sleep(0.2)
             await asyncio.gather(
                 self.run_cmd_ultra_fast("git", "submodule", "sync"),
                 self.run_cmd_ultra_fast("git", "submodule", "update", "--init", "--remote", "--jobs", "8", "--depth", "1")
@@ -105,6 +106,7 @@ class SetupManager:
     async def resolve_conflicts(self, task_id):
         start = time.time()
         self.progress.update(task_id, description="□ Conflict check...", completed=20)
+        await asyncio.sleep(0.2)
         if not os.path.exists(self.requirements_file):
             elapsed = self.log_time("conflicts", start)
             self.progress.update(task_id, description=f"✅ No conflicts {elapsed}", completed=100)
@@ -113,6 +115,7 @@ class SetupManager:
             content = f.read()
         if "numpy" in content and "opencv-python-headless" in content:
             self.progress.update(task_id, description="□ Numpy/OpenCV fix...", completed=70)
+            await asyncio.sleep(0.2)
             lines = content.strip().split("\n")
             fixed_lines = []
             for line in lines:
@@ -131,6 +134,7 @@ class SetupManager:
     async def upgrade_pip(self, task_id):
         start = time.time()
         self.progress.update(task_id, description="□ pip --upgrade...", completed=0)
+        await asyncio.sleep(0.2)
         retcode = await self.run_cmd_ultra_fast(
             sys.executable, "-m", "pip", "install", "--upgrade", "pip",
             "--no-cache-dir", "--disable-pip-version-check", "--quiet"
@@ -143,6 +147,7 @@ class SetupManager:
         start = time.time()
         total = len(packages)
         self.progress.update(task_id, description=f"□ Installing {total} {task_name}...", completed=0)
+        await asyncio.sleep(0.2)
         retcode = await self.run_cmd_ultra_fast(
             sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
             "--disable-pip-version-check", "--quiet", "--no-warn-script-location",
@@ -155,9 +160,29 @@ class SetupManager:
     async def install_essentials(self, task_id):
         await self.mega_install(self.essential_packages, task_id, "essentials")
 
+    def cleanup_invalid_distributions(self):
+        import site
+        try:
+            site_packages = next(p for p in site.getsitepackages() if "site-packages" in p)
+            for name in os.listdir(site_packages):
+                if name.startswith("~") or (name.endswith(".dist-info") and not os.path.isdir(os.path.join(site_packages, name))):
+                    try:
+                        path = os.path.join(site_packages, name)
+                        if os.path.isdir(path):
+                            import shutil
+                            shutil.rmtree(path)
+                        else:
+                            os.remove(path)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
     async def update_outdated(self, task_id):
         start = time.time()
         self.progress.update(task_id, description="□ Checking outdated...", completed=0)
+        await asyncio.sleep(0.2)
+        self.cleanup_invalid_distributions()
         result = await self.run_cmd_with_output(sys.executable, "-m", "pip", "list", "--outdated", "--format=columns")
         if result.returncode != 0:
             elapsed = self.log_time("outdated", start)
@@ -175,6 +200,7 @@ class SetupManager:
             self.progress.update(task_id, description=f"✅ All current {elapsed}", completed=100)
             return
         self.progress.update(task_id, description=f"□ Updating {len(packages)} packages...", completed=30)
+        await asyncio.sleep(0.2)
         retcode = await self.run_cmd_ultra_fast(
             sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
             "--disable-pip-version-check", "--quiet", "--no-warn-script-location",
@@ -185,7 +211,6 @@ class SetupManager:
         self.progress.update(task_id, description=f"{status} {len(packages)} updated {elapsed}", completed=100)
 
     def add_missing_init_py(self):
-        # Walk all folders and add __init__.py if missing
         for root, dirs, files in os.walk("."):
             if "__pycache__" in root or "venv" in root or "submodules" in root or "node_modules" in root:
                 continue
@@ -197,7 +222,7 @@ class SetupManager:
     async def clean_requirements(self, task_id):
         start = time.time()
         self.progress.update(task_id, description="□ Generating requirements...", completed=0)
-        # Add missing __init__.py files before running pipreqs
+        await asyncio.sleep(0.2)
         self.add_missing_init_py()
         retcode = await self.run_cmd_ultra_fast(
             sys.executable, "-m", "pipreqs.pipreqs", "--force", "--ignore",
@@ -209,6 +234,7 @@ class SetupManager:
             self.console.print(Panel(f"[bold red]pipreqs failed. Possible causes:[/bold red]\n• Missing __init__.py\n• Syntax error in .py files", title="pipreqs Error", border_style="red"))
             return
         self.progress.update(task_id, description="□ Deduplicating...", completed=60)
+        await asyncio.sleep(0.2)
         if not os.path.exists(self.requirements_file):
             elapsed = self.log_time("clean_req", start)
             self.progress.update(task_id, description=f"→ ❌ No requirements.txt {elapsed}", completed=100)
@@ -229,11 +255,13 @@ class SetupManager:
     async def install_requirements(self, task_id):
         start = time.time()
         self.progress.update(task_id, description="□ Installing requirements...", completed=0)
+        await asyncio.sleep(0.2)
         if not os.path.exists(self.requirements_file):
             elapsed = self.log_time("install_req", start)
             self.progress.update(task_id, description=f"→ ❌ No requirements.txt {elapsed}", completed=100)
             return
         self.progress.update(task_id, description="□ Batch requirements install...", completed=30)
+        await asyncio.sleep(0.2)
         retcode = await self.run_cmd_ultra_fast(
             sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
             "--disable-pip-version-check", "--quiet", "--no-warn-script-location",
@@ -244,6 +272,7 @@ class SetupManager:
             self.progress.update(task_id, description=f"✅ Requirements installed {elapsed}", completed=100)
             return
         self.progress.update(task_id, description="□ Individual package install...", completed=60)
+        await asyncio.sleep(0.2)
         with open(self.requirements_file, "r") as f:
             lines = f.readlines()
         packages = []
