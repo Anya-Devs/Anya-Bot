@@ -1,50 +1,42 @@
 import sys
-import subprocess
-import os
-import time
-import shutil
-import re
 import asyncio
-import traceback
-from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
-from typing import Dict, Any
+import subprocess
+import time
+import os
+import re
 
-def ensure_essentials():
-    essentials = ["pip", "setuptools", "wheel", "rich", "python-dotenv"]
+def ensure_rich():
     try:
-        import rich  # noqa: F401
-        import dotenv  # noqa: F401
+        import rich
     except ImportError:
-        print("Installing essential packages...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", *essentials])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "rich"])
 
-ensure_essentials()
+ensure_rich()
 
-from dotenv import load_dotenv
-from rich.traceback import install
 from rich.console import Console
 from rich.panel import Panel
 from rich.box import ROUNDED
 from rich.text import Text
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
+from concurrent.futures import ThreadPoolExecutor
 
-install(show_locals=True)
-load_dotenv(dotenv_path=os.path.join(".github", ".env"))
 
 
 class SetupManager:
     def __init__(self):
         self.console = Console()
-        self.debug = bool(os.getenv("DEBUG"))
         token = os.getenv("GIT_ACCESS_TOKEN")
-        base_url = "github.com/senko-sleep/Poketwo-AutoNamer.git"
-        self.submodule_url = f"https://{token}:x-oauth-basic@{base_url}" if token else f"https://{base_url}"
+        self.submodule_url = f"https://{token}:x-oauth-basic@github.com/senko-sleep/Poketwo-AutoNamer.git" if token else "https://github.com/senko-sleep/Poketwo-AutoNamer.git"
         self.submodule_path = "submodules/poketwo_autonamer"
+        self.essential_packages = [
+            "urllib3", "pipreqs", "onnxruntime",
+            "opencv-python-headless", "python-Levenshtein",
+            "pip", "setuptools", "wheel"
+        ]
         self.requirements_file = "requirements.txt"
         self.start_time = time.time()
         self.task_times = {}
-        self.executor = ThreadPoolExecutor(max_workers=32)
+        self.executor = ThreadPoolExecutor(max_workers=16)
         self.progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -54,158 +46,40 @@ class SetupManager:
             console=self.console,
             transient=True
         )
-        self.error_log = []
-        self.essential_packages = [
-            "pip", "setuptools", "wheel",
-            "rich", "aiohttp", "python-dotenv",
-            "pillow", "numpy", "opencv-python-headless"
-        ]
 
-    def log_error(self, error_type: str, details: Dict[str, Any]) -> None:
-        self.error_log.append({
-            "timestamp": time.time(),
-            "type": error_type,
-            **details
-        })
-        if self.debug:
-            self.console.print(f"[red]DEBUG: {error_type}[/red]", details)
+    def log_time(self, name, start):
+        elapsed = time.time() - start
+        self.task_times[name] = elapsed
+        return f"[dim]({elapsed:.1f}s)[/dim]"
 
-    async def run_cmd_with_details(self, *args, **kwargs):
+    def ensure_pip(self):
         try:
-            start_time = time.time()
-            proc = await asyncio.create_subprocess_exec(
-                *args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                **kwargs
-            )
-            stdout, stderr = await proc.communicate()
-            duration = time.time() - start_time
-            stdout_str = stdout.decode('utf-8', errors='replace').strip()
-            stderr_str = stderr.decode('utf-8', errors='replace').strip()
-            if proc.returncode != 0:
-                self.log_error("command_failed", {
-                    "command": args,
-                    "returncode": proc.returncode,
-                    "stdout": stdout_str,
-                    "stderr": stderr_str,
-                    "duration": duration
-                })
-            return proc.returncode == 0, stdout_str, stderr_str, None
+            subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"], check=True, capture_output=True, timeout=60)
+            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"], check=True, capture_output=True, timeout=60)
+            return True
         except Exception as e:
-            self.log_error("command_exception", {
-                "command": args,
-                "exception": str(e),
-                "traceback": traceback.format_exc()
-            })
-            return False, "", "", e
+            self.console.print(Panel(f"[bold red]Failed to repair pip: {e}[/bold red]", title="pip Error", border_style="red"))
+            return False
 
-    async def verify_git_setup(self):
-        checks = [
-            ("git", "--version"),
-            ("git", "config", "--get", "user.name"),
-            ("git", "config", "--get", "user.email"),
-            ("git", "config", "--get", "remote.origin.url")
-        ]
-        results = {}
-        all_passed = True
-        for cmd in checks:
-            success, stdout, stderr, exc = await self.run_cmd_with_details(*cmd)
-            check_name = " ".join(cmd)
-            results[check_name] = {
-                "success": success,
-                "output": stdout if success else stderr,
-                "exception": exc
-            }
-            all_passed &= success
-        return all_passed, results
-
-    async def fast_clone_attempt(self, url: str, path: str):
-        strategies = [
-            {"name": "Shallow clone", "cmd": ["git", "clone", "--depth", "1", "--single-branch", "--no-tags", url, path]},
-            {"name": "Standard clone", "cmd": ["git", "clone", url, path]},
-            {"name": "Fallback clone", "cmd": ["git", "clone", "--depth", "1", "--no-single-branch", url, path]}
-        ]
-        results = []
-        for s in strategies:
-            success, stdout, stderr, exc = await self.run_cmd_with_details(*s["cmd"])
-            results.append({
-                "strategy": s["name"],
-                "command": " ".join(s["cmd"]),
-                "success": success,
-                "stdout": stdout,
-                "stderr": stderr,
-                "exception": exc
-            })
-            if success:
-                return True, {"successful": results[-1]}
-        return False, {"attempts": results}
+    async def run_cmd_ultra_fast(self, *args):
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            self.executor,
+            lambda: subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60).returncode
+        )
 
     async def sync_submodule(self, task_id):
         start = time.time()
-        try:
-            if os.path.exists(self.submodule_path) and any(os.scandir(self.submodule_path)):
-                self.progress.update(task_id, description=f"✅ Using existing submodule {self.log_time('submodule', start)}", completed=100)
-                return True
-
-            self.progress.update(task_id, description="□ Verifying Git setup...", completed=5)
-            git_ok, git_status = await self.verify_git_setup()
-            if not git_ok:
-                raise RuntimeError(f"Git setup verification failed:\n{git_status}")
-
-            self.progress.update(task_id, description="□ Preparing workspace...", completed=15)
-            if os.path.exists(self.submodule_path):
-                shutil.rmtree(self.submodule_path)
-            os.makedirs(os.path.dirname(self.submodule_path), exist_ok=True)
-
-            self.progress.update(task_id, description="□ Cloning submodule...", completed=30)
-            success, result = await self.fast_clone_attempt(self.submodule_url, self.submodule_path)
-            if not success:
-                error_details = "\n".join(
-                    f"[bold]{a['strategy']}[/bold]\nCommand: {a['command']}\nError: {a['stderr']}"
-                    for a in result.get("attempts", [])
-                )
-                raise RuntimeError(f"All clone attempts failed:\n{error_details}")
-
-            self.progress.update(task_id, description="□ Initializing...", completed=70)
-            init_cmds = [
-                ["git", "submodule", "init"],
-                ["git", "submodule", "update", "--init", "--recursive", "--depth=1"]
-            ]
-            for cmd in init_cmds:
-                success, _, stderr, exc = await self.run_cmd_with_details(*cmd)
-                if not success:
-                    raise RuntimeError(f"Submodule init failed\nCommand: {' '.join(cmd)}\nError: {stderr}\nException: {exc}")
-
-            self.progress.update(task_id, description=f"✅ Submodule ready {self.log_time('submodule', start)}", completed=100)
-            return True
-
-        except Exception as e:
-            self.progress.update(task_id, description=f"→ ❌ Submodule failed {self.log_time('submodule', start)}", completed=100)
-            error_report = Panel(
-                f"[bold red]Submodule Error[/bold red]\n\n"
-                f"[yellow]Error Type:[/yellow] {type(e).__name__}\n"
-                f"[yellow]Message:[/yellow] {str(e)}\n\n"
-                f"[blue]Debug Info:[/blue]\n"
-                f"• Working Dir: {os.getcwd()}\n"
-                f"• Python Version: {sys.version}\n"
-                f"• Git Status: {git_status if 'git_status' in locals() else 'N/A'}\n"
-                f"• Submodule Path: {self.submodule_path}\n"
-                f"• URL: {self.submodule_url.replace(os.getenv('GIT_ACCESS_TOKEN', ''), '***')}\n\n"
-                f"[blue]Error Log (last 5):[/blue]\n" +
-                "\n".join(f"• {err['type']}: {err.get('command', 'N/A')} - {err.get('stderr', 'N/A')}" for err in self.error_log[-5:]) + "\n\n"
-                f"[blue]Traceback:[/blue]\n{traceback.format_exc()}\n\n"
-                f"[green]Suggestions:[/green]\n"
-                "• Check network connection\n"
-                "• Verify Git credentials\n"
-                "• Manual clone: git clone {url} {path}\n"
-                "• Set DEBUG=1 for more details\n"
-                "• Check filesystem permissions",
-                title="Detailed Error Report",
-                border_style="red"
-            )
-            self.console.print(error_report)
-            return False
+        self.progress.update(task_id, description="□ Git auth check...", completed=10)
+        if not os.path.exists(os.path.join(self.submodule_path, ".git")):
+            await self.run_cmd_ultra_fast("git", "submodule", "add", self.submodule_url, self.submodule_path)
+        self.progress.update(task_id, description="□ Parallel submodule update...", completed=60)
+        await asyncio.gather(
+            self.run_cmd_ultra_fast("git", "submodule", "sync"),
+            self.run_cmd_ultra_fast("git", "submodule", "update", "--init", "--remote", "--jobs", "16", "--depth", "1")
+        )
+        elapsed = self.log_time("submodule", start)
+        self.progress.update(task_id, description=f"✅ Submodules {elapsed}", completed=100)
 
     async def resolve_conflicts(self, task_id):
         start = time.time()
@@ -213,10 +87,8 @@ class SetupManager:
         if not os.path.exists(self.requirements_file):
             self.progress.update(task_id, description=f"✅ No conflicts {self.log_time('conflicts', start)}", completed=100)
             return
-        
         with open(self.requirements_file, "r") as f:
             content = f.read()
-            
         if "numpy" in content and "opencv-python-headless" in content:
             self.progress.update(task_id, description="□ Numpy/OpenCV fix...", completed=70)
             lines = content.strip().split("\n")
@@ -231,45 +103,25 @@ class SetupManager:
                     fixed_lines.append(line)
             with open(self.requirements_file, "w") as f:
                 f.write("\n".join(fixed_lines) + "\n")
-                
         self.progress.update(task_id, description=f"✅ Conflicts fixed {self.log_time('conflicts', start)}", completed=100)
 
     async def upgrade_pip(self, task_id):
         start = time.time()
         self.progress.update(task_id, description="□ pip --upgrade...", completed=0)
         try:
-            success, stdout, stderr, _ = await self.run_cmd_with_details(
-                sys.executable, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"
-            )
-            if success:
-                self.progress.update(task_id, description=f"✅ pip {self.log_time('pip', start)}", completed=100)
-            else:
-                raise RuntimeError(f"pip upgrade failed: {stderr}")
+            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"], check=True, capture_output=True, timeout=60)
+            self.progress.update(task_id, description=f"✅ pip {self.log_time('pip', start)}", completed=100)
         except Exception as e:
             self.progress.update(task_id, description=f"→ ❌ pip failed {self.log_time('pip', start)}", completed=100)
             self.console.print(Panel(str(e), title="pip Error", border_style="red"))
 
     async def mega_install(self, packages, task_id, task_name):
         start = time.time()
-        self.progress.update(task_id, description=f"□ Installing {len(packages)} {task_name}...", completed=0)
+        total = len(packages)
+        self.progress.update(task_id, description=f"□ Installing {total} {task_name}...", completed=0)
         try:
-            # Bulk install with no cache and no version check
-            success, stdout, stderr, _ = await self.run_cmd_with_details(
-                sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
-                "--disable-pip-version-check", *packages
-            )
-            # Retry without PIL if it fails due to PIL
-            if not success and "No matching distribution found for PIL" in stderr:
-                filtered_packages = [p for p in packages if not p.lower().startswith("pil")]
-                if filtered_packages != packages:
-                    success, stdout, stderr, _ = await self.run_cmd_with_details(
-                        sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
-                        "--disable-pip-version-check", *filtered_packages
-                    )
-            if success:
-                self.progress.update(task_id, description=f"✅ {len(packages)} {task_name} {self.log_time(task_name, start)}", completed=100)
-            else:
-                raise RuntimeError(f"Installation failed: {stderr}")
+            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir", "--disable-pip-version-check"] + packages, check=True, capture_output=True, timeout=300)
+            self.progress.update(task_id, description=f"✅ {total} {task_name} {self.log_time(task_name, start)}", completed=100)
         except Exception as e:
             self.progress.update(task_id, description=f"→ ❌ {task_name} failed {self.log_time(task_name, start)}", completed=100)
             self.console.print(Panel(str(e), title=f"{task_name.title()} Error", border_style="red"))
@@ -278,15 +130,9 @@ class SetupManager:
         await self.mega_install(self.essential_packages, task_id, "essentials")
 
     def check_syntax_errors(self):
-        # Synchronous, runs compileall quietly
-        import compileall
-        result = compileall.compile_dir('.', quiet=1)
-        if not result:
-            self.console.print(Panel(
-                "[bold red]Syntax errors detected in your Python files.[/bold red]",
-                title="Syntax Error",
-                border_style="red"
-            ))
+        result = subprocess.run([sys.executable, "-m", "compileall", "-q", "."], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode != 0:
+            self.console.print(Panel(f"[bold red]Syntax errors detected in your Python files.[/bold red]\n{result.stdout}\n{result.stderr}", title="Syntax Error", border_style="red"))
             return False
         return True
 
@@ -307,33 +153,16 @@ class SetupManager:
             self.progress.update(task_id, description=f"→ ❌ Syntax error {self.log_time('clean_req', start)}", completed=100)
             return
         try:
-            success, _, stderr, _ = await self.run_cmd_with_details(
-                sys.executable, "-m", "pip", "install", "--upgrade", "pipreqs"
-            )
-            if not success:
-                raise RuntimeError(f"pipreqs installation failed: {stderr}")
-
-            success, _, stderr, _ = await self.run_cmd_with_details(
-                sys.executable, "-m", "pipreqs.pipreqs", "--force", "--ignore",
-                "venv,.venv,submodules,node_modules", "."
-            )
-            if not success:
-                raise RuntimeError(f"pipreqs generation failed: {stderr}")
-
+            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pipreqs"], check=True, capture_output=True, timeout=60)
+            subprocess.run([sys.executable, "-m", "pipreqs.pipreqs", "--force", "--ignore", "venv,.venv,submodules,node_modules", "."], check=True, capture_output=True, timeout=120)
         except Exception as e:
             self.progress.update(task_id, description=f"→ ❌ pipreqs failed {self.log_time('clean_req', start)}", completed=100)
-            self.console.print(Panel(
-                f"[bold red]pipreqs failed: {e}[/bold red]\n• Missing __init__.py\n• Syntax error in .py files",
-                title="pipreqs Error",
-                border_style="red"
-            ))
+            self.console.print(Panel(f"[bold red]pipreqs failed: {e}[/bold red]\n• Missing __init__.py\n• Syntax error in .py files", title="pipreqs Error", border_style="red"))
             return
-
         self.progress.update(task_id, description="□ Deduplicating...", completed=60)
         if not os.path.exists(self.requirements_file):
             self.progress.update(task_id, description=f"→ ❌ No requirements.txt {self.log_time('clean_req', start)}", completed=100)
             return
-
         with open(self.requirements_file, "r") as f:
             lines = f.readlines()
         deduped = {}
@@ -353,56 +182,51 @@ class SetupManager:
             self.progress.update(task_id, description=f"→ ❌ No requirements.txt {self.log_time('install_req', start)}", completed=100)
             return
         try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "-r", self.requirements_file, "--upgrade", "--no-cache-dir"], check=True, capture_output=True, timeout=300)
+            self.progress.update(task_id, description=f"✅ Requirements installed {self.log_time('install_req', start)}", completed=100)
+        except Exception:
             with open(self.requirements_file, "r") as f:
-                packages = [line.strip() for line in f if line.strip() and not line.startswith("#")]
-            await self.mega_install(packages, task_id, "requirements")
-        except Exception as e:
-            self.progress.update(task_id, description=f"→ ❌ Install failed {self.log_time('install_req', start)}", completed=100)
-            self.console.print(Panel(str(e), title="Requirements Error", border_style="red"))
-
-    def log_time(self, name: str, start: float) -> str:
-        elapsed = time.time() - start
-        self.task_times[name] = elapsed
-        return f"[dim]({elapsed:.1f}s)[/dim]"
+                lines = f.readlines()
+            packages = []
+            for line in lines:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    if "numpy" in line or "opencv" in line:
+                        packages.append(re.split(r"[<=>]", line)[0])
+                    else:
+                        packages.append(line)
+            try:
+                subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir"] + packages, check=True, capture_output=True, timeout=300)
+                self.progress.update(task_id, description=f"✅ Requirements {self.log_time('install_req', start)}", completed=100)
+            except Exception as e2:
+                self.progress.update(task_id, description=f"→ ❌ Install failed {self.log_time('install_req', start)}", completed=100)
+                self.console.print(Panel(str(e2), title="Requirements Error", border_style="red"))
 
     async def run_setup(self):
-        try:
-            self.console.print(Panel(
-                Text("⚡ Setup Manager v4", justify="center"),
-                title="Setup",
-                box=ROUNDED,
-                border_style="bright_blue"
-            ))
-
-            with self.progress:
-                pip_task = self.progress.add_task("Upgrading pip", total=100)
-                essentials_task = self.progress.add_task("Installing essentials", total=100)
-                submodule_task = self.progress.add_task("Git submodules", total=100)
-                conflict_task = self.progress.add_task("Resolving conflicts", total=100)
-                requirements_task = self.progress.add_task("Installing requirements", total=100)
-
-                await self.upgrade_pip(pip_task)
-                await self.install_essentials(essentials_task)
-                if not await self.sync_submodule(submodule_task):
-                    return
-                await self.resolve_conflicts(conflict_task)
-                await self.install_requirements(requirements_task)
-
-            self.executor.shutdown(wait=False)
-            total_time = time.time() - self.start_time
-            self.console.print(Panel(
-                Text(f"🚀 Setup completed in {total_time:.1f}s", justify="center"),
-                title="Complete",
-                box=ROUNDED,
-                border_style="green"
-            ))
-        except Exception as e:
-            self.console.print(Panel(
-                f"[red]Setup failed: {e}[/red]\n{traceback.format_exc()}",
-                title="Error",
-                border_style="red"
-            ))
+        if not self.ensure_pip():
+            return
+        self.console.print(Panel(Text("⚡ Setup Manager v2", justify="center"), title="Setup", box=ROUNDED, border_style="bright_blue"))
+        with self.progress:
+            tasks = [
+                self.progress.add_task("Git submodules", total=100),
+                self.progress.add_task("pip upgrade", total=100),
+                self.progress.add_task("Package conflicts", total=100),
+                self.progress.add_task("Essential packages", total=100),
+                self.progress.add_task("Clean requirements", total=100),
+                self.progress.add_task("Outdated packages", total=100),
+                self.progress.add_task("Install requirements", total=100)
+            ]
+            await asyncio.gather(
+                self.sync_submodule(tasks[0]),
+                self.upgrade_pip(tasks[1]),
+                self.resolve_conflicts(tasks[2]),
+                self.install_essentials(tasks[3]),
+                self.clean_requirements(tasks[4]),
+                self.install_requirements(tasks[6])
+            )
+        self.executor.shutdown(wait=False)
+        total_time = time.time() - self.start_time
+        self.console.print(Panel(Text(f"🚀 Setup completed in {total_time:.1f}s", justify="center"), title="Complete", box=ROUNDED, border_style="green"))
 
 if __name__ == "__main__":
-    manager = SetupManager()
-    asyncio.run(manager.run_setup())
+    asyncio.run(SetupManager().run_setup())
