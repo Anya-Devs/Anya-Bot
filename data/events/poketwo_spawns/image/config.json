@@ -2,7 +2,7 @@
   "font_path_header": "data/commands/help/menu/initial/style/assets/font/valentine.ttf",
   "font_path_base": "data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf",
   "font_size_header": 33,
-  "font_size_base": 12,
+  "font_size_base": 15,
   "canvas_size": [418, 120],
   "background_color": [166, 237, 164],
   "background_blur": false,
