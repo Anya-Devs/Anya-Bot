@@ -129,7 +129,7 @@ class PoketwoSpawnDetector(commands.Cog):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
             info_button.callback = info_callback
-            view = discord.ui.View()
+            view = discord.ui.View(timeout=None)
             view.add_item(info_button)
 
             await message.channel.send(content=ping_msg, file=file, view=view, reference=message)
