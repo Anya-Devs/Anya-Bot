@@ -60,6 +60,21 @@ class PoketwoSpawnDetector(commands.Cog):
                 alt_names = [name.strip() for name in row[1].split(",") if name.strip()]
                 alt_map[slug] = {'names': alt_names, 'flags': flag_index_map}
         return alt_map
+        
+     async def load_special_names(self):
+        rare, regional = [], []
+        try:
+            with open('data/commands/pokemon/pokemon_special_names.csv', 'r', newline='', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                next(reader)
+                for row in reader:
+                    if len(row) >= 1 and row[0]:
+                        rare.append(row[0].strip().lower())
+                    if len(row) >= 2 and row[1]:
+                        regional.append(row[1].strip().lower())
+        except FileNotFoundError:
+            pass
+        return rare, regional
 
     def load_flag_map(self, filepath):
         if not Path(filepath).exists():
