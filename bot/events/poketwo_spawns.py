@@ -19,21 +19,12 @@ class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.target_id = 716390085896962058
-        self.regional_forms = {
-            'alola': 'Alolan', 'galar': 'Galarian', 'hisui': 'Hisuian',
-            'paldea': 'Paldean', 'unova': 'Unovan'
-        }
-
-        # Load flag mapping from JSON
-        self.flag_map = self.load_flag_map("data/commands/pokemon/flag_map.json")
-
+        self.regional_forms = {'alola': 'Alolan', 'galar': 'Galarian', 'hisui': 'Hisuian', 'paldea': 'Paldean', 'unova': 'Unovan'}
+        self.lang_flags = {"ja": "🇯🇵", "de": "🇩🇪", "fr": "🇫🇷", "en": "🇺🇸"}
         self.success_emoji = "<:green:1261639410181476443>"
         self.error_emoji = "<:red:1261639413943762944>"
         self.cross_emoji = "❌"
-        self.emojis = {
-            "shiny": "<:shiny_sparkle:1394386258406412380>",
-            "collection": "<:collection_ball:1394386212961124504>"
-        }
+        self.emojis = {"shiny": "<:shiny_sparkle:1394386258406412380>", "collection": "<:collection_ball:1394386212961124504>"}
         self.predictor = Prediction()
         self.pp = Ping_Pokemon(bot)
         self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
@@ -44,12 +35,13 @@ class PoketwoSpawnDetector(commands.Cog):
             description_file='data/commands/pokemon/pokemon_description.csv',
             id_file='data/commands/pokemon/pokemon_names.csv',
             regional_forms=self.regional_forms,
-            lang_flags=self.flag_map,
+            lang_flags=self.lang_flags,
             bot=self.bot,
             pp=self.pp
         )
         self.pokemon_image_builder = PokemonImageBuilder()
-        self.alt_names_map = self.load_alt_names("data/commands/pokemon/alt_name_v2.csv")
+        self.alt_names_map = self.load_alt_names("data/commands/pokemon/alt_names.csv")
+        self.flag_map = self.load_flag_map("data/commands/pokemon/flag_map.json")
 
     def load_alt_names(self, filepath):
         alt_map = {}
@@ -57,30 +49,14 @@ class PoketwoSpawnDetector(commands.Cog):
             return alt_map
         with open(filepath, newline="", encoding="utf-8") as f:
             reader = csv.reader(f)
-            header = next(reader)
-            flag_index_map = {col.split(" ")[1].strip("()"): col for col in header[1:]}
+            next(reader, None)
             for row in reader:
                 if len(row) < 2:
                     continue
                 slug = row[0].strip().lower()
                 alt_names = [name.strip() for name in row[1].split(",") if name.strip()]
-                alt_map[slug] = {'names': alt_names, 'flags': flag_index_map}
+                alt_map[slug] = alt_names
         return alt_map
-
-    async def load_special_names(self):
-        rare, regional = [], []
-        try:
-            with open('data/commands/pokemon/pokemon_special_names.csv', 'r', newline='', encoding='utf-8') as f:
-                reader = csv.reader(f)
-                next(reader)
-                for row in reader:
-                    if len(row) >= 1 and row[0]:
-                        rare.append(row[0].strip().lower())
-                    if len(row) >= 2 and row[1]:
-                        regional.append(row[1].strip().lower())
-        except FileNotFoundError:
-            pass
-        return rare, regional
 
     def load_flag_map(self, filepath):
         if not Path(filepath).exists():
@@ -93,7 +69,7 @@ class PoketwoSpawnDetector(commands.Cog):
             return None
         original_len = len(slug)
         candidates = [
-            name for name in self.alt_names_map[slug]['names']
+            name for name in self.alt_names_map[slug]
             if self.is_english_name(name) and len(name) < original_len
         ]
         if not candidates:
@@ -115,8 +91,7 @@ class PoketwoSpawnDetector(commands.Cog):
             slug_lower = slug.lower()
             if any(p in slug_lower for p in rare) and server_config.get("rare_role"):
                 special_roles.append(f"<@&{server_config['rare_role']}>")
-            if (any(p in slug_lower for p in regional) or
-                any(slug_lower.startswith(f"{form}-") for form in self.regional_forms.values())) and server_config.get("regional_role"):
+            if (any(p in slug_lower for p in regional) or any(slug_lower.startswith(f"{form}-") for form in self.regional_forms.values())) and server_config.get("regional_role"):
                 special_roles.append(f"<@&{server_config['regional_role']}>")
             special_roles_str = " ".join(special_roles)
 
@@ -134,7 +109,7 @@ class PoketwoSpawnDetector(commands.Cog):
             )
 
             best_alt = self.get_best_english_alt_name(slug_lower)
-            flag_emoji = self.get_flag_for_region(slug_lower)
+            flag_emoji = self.flag_map.get("en", "🇺🇸")
             if best_alt:
                 best_alt = f"{flag_emoji} {best_alt}"
 
@@ -163,12 +138,20 @@ class PoketwoSpawnDetector(commands.Cog):
             logger.error(f"Error in output_prediction: {type(e).__name__}: {e}")
             await message.channel.send(f"{self.error_emoji} Failed to process spawn", reference=message)
 
-    def get_flag_for_region(self, slug):
-        for region, flag_code in self.alt_names_map.get(slug, {}).get('flags', {}).items():
-            flag_emoji = self.flag_map.get(flag_code, "🇺🇸")
-            if flag_emoji:
-                return flag_emoji
-        return "🇺🇸"
+    async def load_special_names(self):
+        rare, regional = [], []
+        try:
+            with open('data/commands/pokemon/pokemon_special_names.csv', 'r', newline='', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                next(reader)
+                for row in reader:
+                    if len(row) >= 1 and row[0]:
+                        rare.append(row[0].strip().lower())
+                    if len(row) >= 2 and row[1]:
+                        regional.append(row[1].strip().lower())
+        except FileNotFoundError:
+            pass
+        return rare, regional
 
     async def format_messages(self, slug, type_pings, quest_pings, shiny_pings, collection_pings,
                               special_roles, pred_text, dex_number, description, image_url):
@@ -176,7 +159,8 @@ class PoketwoSpawnDetector(commands.Cog):
         try:
             if special_roles:
                 lines.append(special_roles)
-
+            formatted_name = self.pokemon_utils.format_name(slug)
+            best_alt = self.get_best_english_alt_name(slug.lower())
             display_name = self.pokemon_utils.format_name(slug)
             lines.append(f"**{display_name}**: {pred_text}")
 
@@ -196,21 +180,16 @@ class PoketwoSpawnDetector(commands.Cog):
 
             actual_types = self.pokemon_utils.get_pokemon_types(slug)
             actual_region = self.pokemon_utils.get_pokemon_region(slug)
-            emoji_types = [
-                f"{self.pokemon_utils._type_emojis.get(f'{t.lower()}_type', '')} {t.title()}"
-                for t in actual_types if t
-            ]
+            emoji_types = [f"{self.pokemon_utils._type_emojis.get(f'{t.lower()}_type','')} {t.title()}" for t in actual_types if t]
 
             alt_names_field = []
             if slug.lower() in self.alt_names_map:
-                alt_names_list = self.alt_names_map[slug.lower()]['names']
-                alt_names_field.extend(alt_names_list)
+                alt_names_list = self.alt_names_map[slug.lower()]
+                for alt_name in alt_names_list:
+                    alt_names_field.append(alt_name)
 
-            thumb_url = (
-                f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{dex_number}.png"
-                if slug and slug.lower() not in ("", "???")
-                else image_url
-            )
+            thumb_url = (f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{dex_number}.png"
+                         if slug and slug.lower() not in ("", "???") else image_url)
             color = await self.pokemon_utils.get_image_color(thumb_url)
 
             embed = discord.Embed(color=color)
