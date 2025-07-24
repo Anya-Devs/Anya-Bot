@@ -20,12 +20,6 @@ class PoketwoSpawnDetector(commands.Cog):
         self.bot = bot
         self.target_id = 716390085896962058
         self.regional_forms = {'alola': 'Alolan', 'galar': 'Galarian', 'hisui': 'Hisuian', 'paldea': 'Paldean', 'unova': 'Unovan'}
-        self.lang_flags = {
-            "ja": "{flag_jp}",
-            "de": "{flag_de}",
-            "fr": "{flag_fr}",
-            "en": "{flag_us}"
-        }
         self.success_emoji = "<:green:1261639410181476443>"
         self.error_emoji = "<:red:1261639413943762944>"
         self.cross_emoji = "❌"
@@ -33,6 +27,7 @@ class PoketwoSpawnDetector(commands.Cog):
         self.predictor = Prediction()
         self.pp = Ping_Pokemon(bot)
         self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
+        self.lang_flags = self.load_flag_map("data/commands/pokemon/flag_map.json")
         self.pokemon_utils = PokemonUtils(
             self.mongo,
             type_emojis_file="data/commands/pokemon/pokemon_emojis/_pokemon_types.json",
@@ -114,7 +109,12 @@ class PoketwoSpawnDetector(commands.Cog):
             )
 
             best_alt = self.get_best_english_alt_name(slug_lower)
-            flag_emoji = self.flag_map.get("en", "🇺🇸")
+
+            raw_flag = self.flag_map.get("en", "{flag_us}")
+            flag_emoji = PokemonImageBuilder.country_code_to_flag_emoji(
+                re.search(r'{flag_([a-z\-]+)}', raw_flag).group(1)
+            ) if '{flag_' in raw_flag else raw_flag
+
             if best_alt:
                 best_alt = f"{flag_emoji} {best_alt}"
 
