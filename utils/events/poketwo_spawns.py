@@ -172,6 +172,7 @@ class PokemonUtils:
             logger.warning(f"Failed to get image color: {e}")
             return fallback
 
+
 class PokemonImageBuilder:
     def __init__(self):
         self.config_path = "data/events/poketwo_spawns/image/config.json"
@@ -357,12 +358,13 @@ class PokemonImageBuilder:
 
 
 
+
 if __name__ == "__main__":
     builder = PokemonImageBuilder()
     builder.create_image(
         pokemon_id=25,
         pokemon_name="Pikachu",
-        best_name="{flag_jp} Sorboul",
+        best_name="🇬🇧 orboul",
         types=["electric"],
         bg_url=None,
         filename="test.png"
