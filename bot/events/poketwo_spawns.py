@@ -19,15 +19,21 @@ class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.target_id = 716390085896962058
-        self.regional_forms = {'alola': 'Alolan', 'galar': 'Galarian', 'hisui': 'Hisuian', 'paldea': 'Paldean', 'unova': 'Unovan'}
-        
+        self.regional_forms = {
+            'alola': 'Alolan', 'galar': 'Galarian', 'hisui': 'Hisuian',
+            'paldea': 'Paldean', 'unova': 'Unovan'
+        }
+
         # Load flag mapping from JSON
         self.flag_map = self.load_flag_map("data/commands/pokemon/flag_map.json")
 
         self.success_emoji = "<:green:1261639410181476443>"
         self.error_emoji = "<:red:1261639413943762944>"
         self.cross_emoji = "❌"
-        self.emojis = {"shiny": "<:shiny_sparkle:1394386258406412380>", "collection": "<:collection_ball:1394386212961124504>"}
+        self.emojis = {
+            "shiny": "<:shiny_sparkle:1394386258406412380>",
+            "collection": "<:collection_ball:1394386212961124504>"
+        }
         self.predictor = Prediction()
         self.pp = Ping_Pokemon(bot)
         self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
@@ -38,7 +44,7 @@ class PoketwoSpawnDetector(commands.Cog):
             description_file='data/commands/pokemon/pokemon_description.csv',
             id_file='data/commands/pokemon/pokemon_names.csv',
             regional_forms=self.regional_forms,
-            lang_flags=self.flag_map,  # Updated to use flag_map
+            lang_flags=self.flag_map,
             bot=self.bot,
             pp=self.pp
         )
@@ -51,8 +57,8 @@ class PoketwoSpawnDetector(commands.Cog):
             return alt_map
         with open(filepath, newline="", encoding="utf-8") as f:
             reader = csv.reader(f)
-            header = next(reader)  # Get the header row (languages/flags)
-            flag_index_map = {col.split(" ")[1].strip("()"): col for col in header[1:]}  # Map region code (en, fr, etc.) to header name
+            header = next(reader)
+            flag_index_map = {col.split(" ")[1].strip("()"): col for col in header[1:]}
             for row in reader:
                 if len(row) < 2:
                     continue
@@ -60,8 +66,8 @@ class PoketwoSpawnDetector(commands.Cog):
                 alt_names = [name.strip() for name in row[1].split(",") if name.strip()]
                 alt_map[slug] = {'names': alt_names, 'flags': flag_index_map}
         return alt_map
-        
-     async def load_special_names(self):
+
+    async def load_special_names(self):
         rare, regional = [], []
         try:
             with open('data/commands/pokemon/pokemon_special_names.csv', 'r', newline='', encoding='utf-8') as f:
@@ -109,7 +115,8 @@ class PoketwoSpawnDetector(commands.Cog):
             slug_lower = slug.lower()
             if any(p in slug_lower for p in rare) and server_config.get("rare_role"):
                 special_roles.append(f"<@&{server_config['rare_role']}>")
-            if (any(p in slug_lower for p in regional) or any(slug_lower.startswith(f"{form}-") for form in self.regional_forms.values())) and server_config.get("regional_role"):
+            if (any(p in slug_lower for p in regional) or
+                any(slug_lower.startswith(f"{form}-") for form in self.regional_forms.values())) and server_config.get("regional_role"):
                 special_roles.append(f"<@&{server_config['regional_role']}>")
             special_roles_str = " ".join(special_roles)
 
@@ -157,17 +164,72 @@ class PoketwoSpawnDetector(commands.Cog):
             await message.channel.send(f"{self.error_emoji} Failed to process spawn", reference=message)
 
     def get_flag_for_region(self, slug):
-        # Default to USA if region not found
         for region, flag_code in self.alt_names_map.get(slug, {}).get('flags', {}).items():
-            flag_emoji = self.flag_map.get(flag_code, "🇺🇸")  # Get flag emoji from flag map
+            flag_emoji = self.flag_map.get(flag_code, "🇺🇸")
             if flag_emoji:
                 return flag_emoji
-        return "🇺🇸"  # Default to USA if region not found
+        return "🇺🇸"
 
     async def format_messages(self, slug, type_pings, quest_pings, shiny_pings, collection_pings,
                               special_roles, pred_text, dex_number, description, image_url):
-        # The formatting function remains unchanged
-        ...
+        lines = []
+        try:
+            if special_roles:
+                lines.append(special_roles)
+
+            display_name = self.pokemon_utils.format_name(slug)
+            lines.append(f"**{display_name}**: {pred_text}")
+
+            ping_parts = []
+            if shiny_pings:
+                ping_parts.append(f"Shiny: {' '.join(shiny_pings)}")
+            if collection_pings:
+                ping_parts.append(f"Collectors: {' '.join(collection_pings)}")
+            if quest_pings:
+                ping_parts.append(f"Regional: {' '.join(quest_pings)}")
+            if type_pings:
+                type_parts = [f"{label}: {users}" for label, users in type_pings.items() if users]
+                if type_parts:
+                    ping_parts.append("Types: " + " | ".join(type_parts))
+            if ping_parts:
+                lines.append("\n".join(ping_parts))
+
+            actual_types = self.pokemon_utils.get_pokemon_types(slug)
+            actual_region = self.pokemon_utils.get_pokemon_region(slug)
+            emoji_types = [
+                f"{self.pokemon_utils._type_emojis.get(f'{t.lower()}_type', '')} {t.title()}"
+                for t in actual_types if t
+            ]
+
+            alt_names_field = []
+            if slug.lower() in self.alt_names_map:
+                alt_names_list = self.alt_names_map[slug.lower()]['names']
+                alt_names_field.extend(alt_names_list)
+
+            thumb_url = (
+                f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{dex_number}.png"
+                if slug and slug.lower() not in ("", "???")
+                else image_url
+            )
+            color = await self.pokemon_utils.get_image_color(thumb_url)
+
+            embed = discord.Embed(color=color)
+            if description:
+                embed.description = description
+            if alt_names_field:
+                embed.add_field(name="Alt Names", value="\n".join(alt_names_field[:10]), inline=True)
+            if emoji_types:
+                embed.add_field(name="Types", value="\n".join(emoji_types), inline=True)
+            if actual_region:
+                embed.add_field(name="Region", value=actual_region, inline=True)
+            embed.set_thumbnail(url=thumb_url)
+            return "\n".join(lines), embed
+
+        except Exception as e:
+            logger.error(f"Error in format_messages: {type(e).__name__}: {e}")
+            fallback = f"**{slug}**\nFailed to format spawn info."
+            embed = discord.Embed(color=0xFF0000, description="An error occurred generating this embed.")
+            return fallback, embed
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -195,5 +257,6 @@ class PoketwoSpawnDetector(commands.Cog):
             await self.output_prediction(message, image_url)
         except Exception as e:
             await ctx.send(f"{self.cross_emoji} Prediction error: {type(e).__name__}: {e}")
+
 def setup(bot):
     bot.add_cog(PoketwoSpawnDetector(bot))
