@@ -20,7 +20,12 @@ class PoketwoSpawnDetector(commands.Cog):
         self.bot = bot
         self.target_id = 716390085896962058
         self.regional_forms = {'alola': 'Alolan', 'galar': 'Galarian', 'hisui': 'Hisuian', 'paldea': 'Paldean', 'unova': 'Unovan'}
-        self.lang_flags = {"ja": "🇯🇵", "de": "🇩🇪", "fr": "🇫🇷", "en": "🇺🇸"}
+        self.lang_flags = {
+            "ja": "{flag_jp}",
+            "de": "{flag_de}",
+            "fr": "{flag_fr}",
+            "en": "{flag_us}"
+        }
         self.success_emoji = "<:green:1261639410181476443>"
         self.error_emoji = "<:red:1261639413943762944>"
         self.cross_emoji = "❌"
@@ -109,7 +114,7 @@ class PoketwoSpawnDetector(commands.Cog):
             )
 
             best_alt = self.get_best_english_alt_name(slug_lower)
-            flag_emoji = self.flag_map.get("en", "🇺🇸")
+            flag_emoji = self.flag_map.get("en", "{flag_us}")
             if best_alt:
                 best_alt = f"{flag_emoji} {best_alt}"
 
