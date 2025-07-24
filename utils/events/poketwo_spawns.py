@@ -364,7 +364,7 @@ if __name__ == "__main__":
     builder.create_image(
         pokemon_id=25,
         pokemon_name="Pikachu",
-        best_name="🇬🇧 orboul",
+        best_name="{flag_es} orboul",
         types=["electric"],
         bg_url=None,
         filename="test.png"

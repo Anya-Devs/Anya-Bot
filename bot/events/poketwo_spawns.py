@@ -114,7 +114,7 @@ class PoketwoSpawnDetector(commands.Cog):
             )
 
             best_alt = self.get_best_english_alt_name(slug_lower)
-            flag_emoji = self.flag_map.get("en", "{flag_us}")
+            flag_emoji = self.flag_map.get("en", "🇺🇸")
             if best_alt:
                 best_alt = f"{flag_emoji} {best_alt}"
 
