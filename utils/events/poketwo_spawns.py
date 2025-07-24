@@ -1,18 +1,8 @@
 import os, io, re, csv, json, logging, requests, aiohttp
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter, ImageSequence
 from colorthief import ColorThief
+from pilmoji import Pilmoji
 from fuzzywuzzy import fuzz
-
-
-def country_code_to_flag_emoji(code):
-    return ''.join(chr(0x1F1E6 + ord(c) - ord('a')) for c in code.lower())
-
-import json, requests, io, os, re
-from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter, ImageSequence
-from colorthief import ColorThief
-
-def country_code_to_flag_emoji(code):
-    return ''.join(chr(0x1F1E6 + ord(c) - ord('a')) for c in code.lower())
 
 
 
@@ -182,8 +172,6 @@ class PokemonUtils:
             logger.warning(f"Failed to get image color: {e}")
             return fallback
 
-
-
 class PokemonImageBuilder:
     def __init__(self):
         self.config_path = "data/events/poketwo_spawns/image/config.json"
@@ -206,6 +194,11 @@ class PokemonImageBuilder:
         if response.status_code == 200:
             return Image.open(io.BytesIO(response.content)).convert("RGBA"), io.BytesIO(response.content)
         raise Exception(f"Failed to fetch image for ID {pokemon_id}")
+
+    @staticmethod
+    def country_code_to_flag_emoji(cc):
+        OFFSET = 127397
+        return "".join(chr(ord(c) + OFFSET) for c in cc.upper())
 
     def get_dominant_color(self, image_bytes_io):
         return ColorThief(image_bytes_io).get_color(quality=1)
@@ -230,43 +223,36 @@ class PokemonImageBuilder:
         return Image.open(local_path).convert("RGBA")
 
     def draw_type_emojis(self, canvas, types, position):
-     x, y = position
-     spacing = self.config["type_spacing"]
-     icon_size = self.config["type_icon_size"]
-    
-     if len(types) == 1:
-        x += spacing  # shift to second emoji slot if only one type
+        x, y = position
+        spacing = self.config["type_spacing"]
+        icon_size = self.config["type_icon_size"]
 
-     for type_name in types:
-        emoji_str = self.type_emojis.get(f"{type_name.lower()}_type", "")
-        emoji_img = self.get_or_download_emoji_image(emoji_str)
-        if emoji_img:
-            emoji_img = emoji_img.resize(icon_size)
-            canvas.paste(emoji_img, (x, y), emoji_img)
+        if len(types) == 1:
             x += spacing
-    
+
+        for type_name in types:
+            emoji_str = self.type_emojis.get(f"{type_name.lower()}_type", "")
+            emoji_img = self.get_or_download_emoji_image(emoji_str)
+            if emoji_img:
+                emoji_img = emoji_img.resize(icon_size)
+                canvas.paste(emoji_img, (x, y), emoji_img)
+                x += spacing
+
     def resize_and_crop(self, img, target_size):
         width, height = target_size
         img_ratio = img.width / img.height
         target_ratio = width / height
-        if img_ratio > target_ratio:
-            scale_factor = height / img.height
-        else:
-            scale_factor = width / img.width
+        scale_factor = height / img.height if img_ratio > target_ratio else width / img.width
         new_size = (int(img.width * scale_factor), int(img.height * scale_factor))
         img = img.resize(new_size, Image.LANCZOS)
         left = (img.width - width) // 2
         top = (img.height - height) // 2
-        right = left + width
-        bottom = top + height
-        return img.crop((left, top, right, bottom))
-
-    def get_complementary_color(self, rgb):
-        comp = tuple((255 - c) for c in rgb)
-        lighten = lambda c: min(int(c + (255 - c) * 0.2), 255)
-        return tuple(lighten(c) for c in comp)
+        return img.crop((left, top, left + width, top + height))
 
     def get_type_colors(self, types):
+        def lighten_color(rgb, factor=0.45):
+            return tuple(min(int(c + (255 - c) * factor), 255) for c in rgb)
+
         colors = []
         for t in types:
             emoji_str = self.type_emojis.get(f"{t.lower()}_type", "")
@@ -276,10 +262,8 @@ class PokemonImageBuilder:
                     emoji_img.save(buf, format="PNG")
                     buf.seek(0)
                     dom_color = ColorThief(buf).get_color(quality=1)
-                    colors.append(self.get_complementary_color(dom_color))
-        if not colors:
-            colors = [(240, 240, 240)]  # fallback light gray
-        return colors
+                    colors.append(lighten_color(dom_color))
+        return colors or [(240, 240, 240)]
 
     def blend_colors(self, colors):
         r = sum(c[0] for c in colors) // len(colors)
@@ -290,14 +274,19 @@ class PokemonImageBuilder:
     def prepare_background_frames(self, bg_colors, bg_url=None):
         width, height = self.config["canvas_size"]
         blur_enabled = self.config.get("background_blur", False)
+        transparent = self.config.get("transparent_background", False)
+
+        if transparent:
+            canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+            return [canvas], [100]
+
         if bg_url:
             try:
                 response = requests.get(bg_url, timeout=5, allow_redirects=True)
                 response.raise_for_status()
                 img_bytes = io.BytesIO(response.content)
                 bg_image = Image.open(img_bytes)
-                frames = []
-                durations = []
+                frames, durations = [], []
                 for frame in ImageSequence.Iterator(bg_image):
                     frame = frame.convert("RGBA")
                     frame = self.resize_and_crop(frame, (width, height))
@@ -321,18 +310,35 @@ class PokemonImageBuilder:
             canvas = canvas.filter(ImageFilter.GaussianBlur(radius=8))
         return [canvas], [100]
 
-    def replace_flag_emojis(self, text):
-        return re.sub(r"\{flag_([a-z]{2})\}", lambda m: country_code_to_flag_emoji(m.group(1)), text)
+    def replace_flag_emojis_with_displacement(self, text):
+        parts, last_index = [], 0
+        for match in re.finditer(r"\{flag_([a-z]{2})\}", text):
+            start, end = match.span()
+            if start > last_index:
+                parts.append((text[last_index:start], False))
+            parts.append((self.country_code_to_flag_emoji(match.group(1)), True))
+            last_index = end
+        if last_index < len(text):
+            parts.append((text[last_index:], False))
+        return parts
+
+    def draw_text_with_flag_offset(self, pilmoji, position, text, font, fill, flag_offset=4):
+        x, y = position
+        parts = self.replace_flag_emojis_with_displacement(text)
+        for part, is_flag in parts:
+            width, _ = pilmoji.getsize(part, font=font)
+            offset_y = y + flag_offset if is_flag else y
+            pilmoji.text((x, offset_y), part, font=font, fill=fill)
+            x += width
 
     def compose_frame(self, bg_frame, poke_img, pokemon_name, best_name, types):
         frame = bg_frame.copy()
-        draw = ImageDraw.Draw(frame)
         poke_img_resized = poke_img.resize(self.config["pokemon_image_size"])
         frame.paste(poke_img_resized, self.config["pokemon_image_position"], poke_img_resized)
-        pokemon_name = self.replace_flag_emojis(pokemon_name)
-        best_name = self.replace_flag_emojis(best_name)
-        draw.text(self.config["pokemon_name_position"], pokemon_name, font=self.font_header, fill=self.config["name_color"])
-        draw.text(self.config["alt_name_position"], best_name, font=self.font_base, fill=self.config["alt_color"])
+
+        pilmoji = Pilmoji(frame)
+        self.draw_text_with_flag_offset(pilmoji, self.config["pokemon_name_position"], pokemon_name, self.font_header, self.config["name_color"])
+        self.draw_text_with_flag_offset(pilmoji, self.config["alt_name_position"], best_name, self.font_base, self.config["alt_color"])
         self.draw_type_emojis(frame, types, self.config["type_position"])
         return frame
 
@@ -340,27 +346,12 @@ class PokemonImageBuilder:
         poke_img, img_bytes = self.fetch_pokemon_image(pokemon_id)
         type_colors = self.get_type_colors(types)
         bg_frames, durations = self.prepare_background_frames(type_colors, bg_url)
-        frames = []
-        for bg_frame in bg_frames:
-            composed = self.compose_frame(bg_frame, poke_img, pokemon_name, best_name, types)
-            frames.append(composed)
+        frames = [self.compose_frame(bg_frame, poke_img, pokemon_name, best_name, types) for bg_frame in bg_frames]
         filepath = os.path.join(self.output_dir, filename)
         if len(frames) == 1:
             frames[0].save(filepath)
         else:
-            frames[0].save(
-                filepath,
-                save_all=True,
-                append_images=frames[1:],
-                duration=durations,
-                loop=0,
-                disposal=2,
-                transparency=0,
-            )
-
-
-
-
+            frames[0].save(filepath, save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2, transparency=0)
 
 
 
@@ -369,13 +360,18 @@ class PokemonImageBuilder:
 if __name__ == "__main__":
     builder = PokemonImageBuilder()
     builder.create_image(
-        pokemon_id=947,
-        pokemon_name="BRAMBLEGHAST",
-        best_name="🇺🇸 Brambleghast",
-        types=["Grass", "Ghost"],
-        bg_url='https://lh3.googleusercontent.com/gg-dl/AJfQ9KSCCkmg7YjOSW59ajl2lZGOTrznuWrg0_aOfWxENd6bXHH31Bs-nGuvfyuejDvnUq7Irj9X2h-0qDVHWsA23U2AjMYKIAs3YZqD2g6NI6Sz1dAykH_U6S7BhHmld7ZzoW4qcpQ3DNhJ3f7NjrsN0MdlYh18wNEaYFGV6axmjX6pcaB_Zg=s1024',
-        filename="test.png"  # You can change to "test.gif" if animated
+        pokemon_id=25,
+        pokemon_name="Pikachu",
+        best_name="{flag_jp} Sorboul",
+        types=["electric"],
+        bg_url=None,
+        filename="test.png"
     )
+    print("✅ Image created at:", os.path.join(builder.output_dir, "test.png"))
+
+
+
+
 
 
 

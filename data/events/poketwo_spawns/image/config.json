@@ -1,18 +1,22 @@
 {
   "font_path_header": "data/commands/help/menu/initial/style/assets/font/valentine.ttf",
   "font_path_base": "data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf",
+  "font_path_emoji": "data/commands/help/menu/initial/style/assets/font/seguiemj.ttf",
   "font_size_header": 33,
   "font_size_base": 15,
+  "font_size_emoji": 21,
   "canvas_size": [418, 120],
   "background_color": [166, 237, 164],
   "background_blur": false,
+  "transparent_background": false,
   "pokemon_image_position": [20, 20],
   "pokemon_image_size": [80, 80],
   "pokemon_name_position": [115, 45],
-  "alt_name_position": [115, 75],
+  "alt_name_position": [115, 78],
   "type_position": [335, 75],
   "type_spacing": 40,
   "name_color": "white",
   "alt_color": "white",
   "type_icon_size": [36, 36]
+
 }

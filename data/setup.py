@@ -21,7 +21,6 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskPr
 from concurrent.futures import ThreadPoolExecutor
 
 
-
 class SetupManager:
     def __init__(self):
         self.console = Console()
@@ -31,7 +30,7 @@ class SetupManager:
         self.essential_packages = [
             "urllib3", "pipreqs", "onnxruntime",
             "opencv-python-headless", "python-Levenshtein",
-            "pip", "setuptools", "wheel"
+            "pip", "setuptools", "wheel", "emoji==1.7.0"
         ]
         self.requirements_file = "requirements.txt"
         self.start_time = time.time()
@@ -227,6 +226,7 @@ class SetupManager:
         self.executor.shutdown(wait=False)
         total_time = time.time() - self.start_time
         self.console.print(Panel(Text(f"🚀 Setup completed in {total_time:.1f}s", justify="center"), title="Complete", box=ROUNDED, border_style="green"))
+
 
 if __name__ == "__main__":
     asyncio.run(SetupManager().run_setup())

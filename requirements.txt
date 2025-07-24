@@ -19,3 +19,4 @@ redis==5.2.1
 Requests==2.32.4
 rich==14.0.0
 tqdm==4.67.1
+emoji==1.7.0
