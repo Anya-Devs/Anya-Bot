@@ -43,7 +43,7 @@ class PoketwoSpawnDetector(commands.Cog):
             pp=self.pp
         )
         self.pokemon_image_builder = PokemonImageBuilder()
-        self.alt_names_map = self.load_alt_names("data/commands/pokemon/alt_names.csv")
+        self.alt_names_map = self.load_alt_names("data/commands/pokemon/alt_name_v2.csv")
 
     def load_alt_names(self, filepath):
         alt_map = {}
