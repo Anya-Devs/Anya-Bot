@@ -690,7 +690,7 @@ class TestCLI(TestCase):
         )
 
     def test_successful_validation_via_explicit_base_uri(self):
-        ref_schema_file = tempfile.NamedTemporaryFile(delete=False)
+        ref_schema_file = tempfile.NamedTemporaryFile(delete=False)  # noqa: SIM115
         ref_schema_file.close()
         self.addCleanup(os.remove, ref_schema_file.name)
 
@@ -711,7 +711,7 @@ class TestCLI(TestCase):
         )
 
     def test_unsuccessful_validation_via_explicit_base_uri(self):
-        ref_schema_file = tempfile.NamedTemporaryFile(delete=False)
+        ref_schema_file = tempfile.NamedTemporaryFile(delete=False)  # noqa: SIM115
         ref_schema_file.close()
         self.addCleanup(os.remove, ref_schema_file.name)
 
@@ -881,11 +881,8 @@ class TestParser(TestCase):
 
 class TestCLIIntegration(TestCase):
     def test_license(self):
-        output = subprocess.check_output(
-            [sys.executable, "-m", "pip", "show", "jsonschema"],
-            stderr=subprocess.STDOUT,
-        )
-        self.assertIn(b"License: MIT", output)
+        our_metadata = metadata.metadata("jsonschema")
+        self.assertEqual(our_metadata.get("License-Expression"), "MIT")
 
     def test_version(self):
         version = subprocess.check_output(

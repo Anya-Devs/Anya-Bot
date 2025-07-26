@@ -6,11 +6,13 @@ from pandas import (
     DataFrame,
     MultiIndex,
     Series,
+    StringDtype,
     date_range,
 )
 import pandas._testing as tm
+from pandas.util.version import Version
 
-pytest.importorskip("xarray")
+xarray = pytest.importorskip("xarray")
 
 
 class TestDataFrameToXArray:
@@ -52,7 +54,7 @@ class TestDataFrameToXArray:
         # column names are lost
         expected = df.copy()
         expected["f"] = expected["f"].astype(
-            object if not using_infer_string else "string[pyarrow_numpy]"
+            object if not using_infer_string else "str"
         )
         expected.columns.name = None
         tm.assert_frame_equal(result.to_dataframe(), expected)
@@ -81,15 +83,27 @@ class TestDataFrameToXArray:
         result = result.to_dataframe()
         expected = df.copy()
         expected["f"] = expected["f"].astype(
-            object if not using_infer_string else "string[pyarrow_numpy]"
+            object if not using_infer_string else "str"
         )
         expected.columns.name = None
         tm.assert_frame_equal(result, expected)
 
 
 class TestSeriesToXArray:
-    def test_to_xarray_index_types(self, index_flat):
+    def test_to_xarray_index_types(self, index_flat, request):
         index = index_flat
+        if (
+            isinstance(index.dtype, StringDtype)
+            and index.dtype.storage == "pyarrow"
+            and Version(xarray.__version__) > Version("2024.9.0")
+            and Version(xarray.__version__) < Version("2025.6.0")
+        ):
+            request.applymarker(
+                pytest.mark.xfail(
+                    reason="xarray calling reshape of ArrowExtensionArray",
+                    raises=NotImplementedError,
+                )
+            )
         # MultiIndex is tested in test_to_xarray_with_multiindex
 
         from xarray import DataArray

@@ -26,7 +26,7 @@ from pandas.util import _test_decorators as td
 
 from pandas.io.pytables import TableIterator
 
-pytestmark = pytest.mark.single_cpu
+pytestmark = [pytest.mark.single_cpu]
 
 
 def test_read_missing_key_close_store(tmp_path, setup_path):
@@ -75,7 +75,7 @@ def test_read_missing_key_opened_store(tmp_path, setup_path):
 def test_read_column(setup_path):
     df = DataFrame(
         np.random.default_rng(2).standard_normal((10, 4)),
-        columns=Index(list("ABCD"), dtype=object),
+        columns=Index(list("ABCD")),
         index=date_range("2000-01-01", periods=10, freq="B"),
     )
 
@@ -216,7 +216,7 @@ def test_legacy_table_read_py2(datapath):
     tm.assert_frame_equal(expected, result)
 
 
-def test_read_hdf_open_store(tmp_path, setup_path):
+def test_read_hdf_open_store(tmp_path, setup_path, using_infer_string):
     # GH10330
     # No check for non-string path_or-buf, and no test of open store
     df = DataFrame(
@@ -228,6 +228,12 @@ def test_read_hdf_open_store(tmp_path, setup_path):
     df = df.set_index(keys="E", append=True)
 
     path = tmp_path / setup_path
+    if using_infer_string:
+        # TODO(infer_string) make this work for string dtype
+        msg = "Saving a MultiIndex with an extension dtype is not supported."
+        with pytest.raises(NotImplementedError, match=msg):
+            df.to_hdf(path, key="df", mode="w")
+        return
     df.to_hdf(path, key="df", mode="w")
     direct = read_hdf(path, "df")
     with HDFStore(path, mode="r") as store:
@@ -398,7 +404,6 @@ def test_read_py2_hdf_file_in_py3(datapath):
 
 def test_read_infer_string(tmp_path, setup_path):
     # GH#54431
-    pytest.importorskip("pyarrow")
     df = DataFrame({"a": ["a", "b", None]})
     path = tmp_path / setup_path
     df.to_hdf(path, key="data", format="table")
@@ -406,7 +411,7 @@ def test_read_infer_string(tmp_path, setup_path):
         result = read_hdf(path, key="data", mode="r")
     expected = DataFrame(
         {"a": ["a", "b", None]},
-        dtype="string[pyarrow_numpy]",
-        columns=Index(["a"], dtype="string[pyarrow_numpy]"),
+        dtype=pd.StringDtype(na_value=np.nan),
+        columns=Index(["a"], dtype=pd.StringDtype(na_value=np.nan)),
     )
     tm.assert_frame_equal(result, expected)

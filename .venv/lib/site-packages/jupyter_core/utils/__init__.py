@@ -28,7 +28,8 @@ def ensure_dir_exists(path: str | Path, mode: int = 0o777) -> None:
         if e.errno != errno.EEXIST:
             raise
     if not Path(path).is_dir():
-        raise OSError("%r exists but is not a directory" % path)
+        msg = f"{path!r} exists but is not a directory"
+        raise OSError(msg)
 
 
 def _get_frame(level: int) -> FrameType | None:
@@ -144,25 +145,23 @@ def run_sync(coro: Callable[..., Awaitable[T]]) -> Callable[..., T]:
         Whatever the coroutine-function returns.
     """
 
-    if not inspect.iscoroutinefunction(coro):
-        raise AssertionError
+    assert inspect.iscoroutinefunction(coro)
 
     def wrapped(*args: Any, **kwargs: Any) -> Any:
         name = threading.current_thread().name
         inner = coro(*args, **kwargs)
         try:
-            # If a loop is currently running in this thread,
-            # use a task runner.
             asyncio.get_running_loop()
-            if name not in _runner_map:
-                _runner_map[name] = _TaskRunner()
-            return _runner_map[name].run(inner)
         except RuntimeError:
-            pass
+            # No loop running, run the loop for this thread.
+            loop = ensure_event_loop()
+            return loop.run_until_complete(inner)
 
-        # Run the loop for this thread.
-        loop = ensure_event_loop()
-        return loop.run_until_complete(inner)
+        # Loop is currently running in this thread,
+        # use a task runner.
+        if name not in _runner_map:
+            _runner_map[name] = _TaskRunner()
+        return _runner_map[name].run(inner)
 
     wrapped.__doc__ = coro.__doc__
     return wrapped
@@ -202,5 +201,4 @@ async def ensure_async(obj: Awaitable[T] | T) -> T:
                 return cast(T, obj)
             raise
         return result
-    # obj doesn't need to be awaited
-    return cast(T, obj)
+    return obj

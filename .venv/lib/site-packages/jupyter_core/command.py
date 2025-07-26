@@ -28,12 +28,13 @@ class JupyterParser(argparse.ArgumentParser):
     """A Jupyter argument parser."""
 
     @property
-    def epilog(self) -> str | None:
+    def epilog(self) -> str:
         """Add subcommands to epilog on request
 
         Avoids searching PATH for subcommands unless help output is requested.
         """
-        return "Available subcommands: %s" % " ".join(list_subcommands())
+        subcommands: str = " ".join(list_subcommands())
+        return f"Available subcommands: {subcommands}"
 
     @epilog.setter
     def epilog(self, x: Any) -> None:
@@ -42,7 +43,7 @@ class JupyterParser(argparse.ArgumentParser):
     def argcomplete(self) -> None:
         """Trigger auto-completion, if enabled"""
         try:
-            import argcomplete  # type: ignore[import-not-found]
+            import argcomplete
 
             argcomplete.autocomplete(self)
         except ImportError:
@@ -91,14 +92,15 @@ def list_subcommands() -> list[str]:
     # construct a set of `('foo', 'bar') from `jupyter-foo-bar`
     for d in _path_with_self():
         try:
-            names = os.listdir(d)
+            bin_paths = list(Path(d).iterdir())
         except OSError:
             continue
-        for name in names:
+        for path in bin_paths:
+            name = path.name
             if name.startswith("jupyter-"):
                 if sys.platform.startswith("win"):
                     # remove file-extension on Windows
-                    name = os.path.splitext(name)[0]  # noqa: PTH122, PLW2901
+                    name = path.stem
                 subcommand_tuples.add(tuple(name.split("-")[1:]))
     # build a set of subcommand strings, excluding subcommands whose parents are defined
     subcommands = set()
@@ -119,7 +121,8 @@ def _execvp(cmd: str, argv: list[str]) -> None:
         # so rely on shutil.which
         cmd_path = which(cmd)
         if cmd_path is None:
-            raise OSError("%r not found" % cmd, errno.ENOENT)
+            msg = f"{cmd!r} not found"
+            raise OSError(msg, errno.ENOENT)
         p = Popen([cmd_path] + argv[1:])  # noqa: S603
         # Don't raise KeyboardInterrupt in the parent process.
         # Set this after spawning, to avoid subprocess inheriting handler.
@@ -377,7 +380,7 @@ def main() -> None:
 
                 for name in sorted(data):
                     path = data[name]
-                    print("%s:" % name)
+                    print(f"{name}:")
                     for p in path:
                         print("    " + p)
             return

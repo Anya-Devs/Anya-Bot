@@ -14,7 +14,7 @@ from pandas import (
 )
 import pandas._testing as tm
 from pandas.core.strings.accessor import StringMethods
-from pandas.tests.strings import object_pyarrow_numpy
+from pandas.tests.strings import is_object_or_nan_string_dtype
 
 
 @pytest.mark.parametrize("pattern", [0, True, Series(["foo", "bar"])])
@@ -41,7 +41,9 @@ def test_iter_raises():
 def test_count(any_string_dtype):
     ser = Series(["foo", "foofoo", np.nan, "foooofooofommmfoo"], dtype=any_string_dtype)
     result = ser.str.count("f[o]+")
-    expected_dtype = np.float64 if any_string_dtype in object_pyarrow_numpy else "Int64"
+    expected_dtype = (
+        np.float64 if is_object_or_nan_string_dtype(any_string_dtype) else "Int64"
+    )
     expected = Series([1, 2, np.nan, 4], dtype=expected_dtype)
     tm.assert_series_equal(result, expected)
 
@@ -93,7 +95,8 @@ def test_repeat_with_null(any_string_dtype, arg, repeat):
 
 def test_empty_str_methods(any_string_dtype):
     empty_str = empty = Series(dtype=any_string_dtype)
-    if any_string_dtype in object_pyarrow_numpy:
+    empty_inferred_str = Series(dtype="str")
+    if is_object_or_nan_string_dtype(any_string_dtype):
         empty_int = Series(dtype="int64")
         empty_bool = Series(dtype=bool)
     else:
@@ -152,7 +155,7 @@ def test_empty_str_methods(any_string_dtype):
     tm.assert_series_equal(empty_str, empty.str.rstrip())
     tm.assert_series_equal(empty_str, empty.str.wrap(42))
     tm.assert_series_equal(empty_str, empty.str.get(0))
-    tm.assert_series_equal(empty_object, empty_bytes.str.decode("ascii"))
+    tm.assert_series_equal(empty_inferred_str, empty_bytes.str.decode("ascii"))
     tm.assert_series_equal(empty_bytes, empty.str.encode("ascii"))
     # ismethods should always return boolean (GH 29624)
     tm.assert_series_equal(empty_bool, empty.str.isalnum())
@@ -207,14 +210,29 @@ def test_ismethods(method, expected, any_string_dtype):
     ser = Series(
         ["A", "b", "Xy", "4", "3A", "", "TT", "55", "-", "  "], dtype=any_string_dtype
     )
-    expected_dtype = "bool" if any_string_dtype in object_pyarrow_numpy else "boolean"
+    expected_dtype = (
+        "bool" if is_object_or_nan_string_dtype(any_string_dtype) else "boolean"
+    )
     expected = Series(expected, dtype=expected_dtype)
     result = getattr(ser.str, method)()
     tm.assert_series_equal(result, expected)
 
     # compare with standard library
-    expected = [getattr(item, method)() for item in ser]
-    assert list(result) == expected
+    expected_stdlib = [getattr(item, method)() for item in ser]
+    assert list(result) == expected_stdlib
+
+    # with missing value
+    ser.iloc[[1, 2, 3, 4]] = np.nan
+    result = getattr(ser.str, method)()
+    if ser.dtype == "object":
+        expected = expected.astype(object)
+        expected.iloc[[1, 2, 3, 4]] = np.nan
+    elif ser.dtype == "str":
+        # NaN propagates as False
+        expected.iloc[[1, 2, 3, 4]] = False
+    else:
+        # nullable dtypes propagate NaN
+        expected.iloc[[1, 2, 3, 4]] = np.nan
 
 
 @pytest.mark.parametrize(
@@ -232,7 +250,9 @@ def test_isnumeric_unicode(method, expected, any_string_dtype):
     ser = Series(
         ["A", "3", "¼", "★", "፸", "３", "four"], dtype=any_string_dtype  # noqa: RUF001
     )
-    expected_dtype = "bool" if any_string_dtype in object_pyarrow_numpy else "boolean"
+    expected_dtype = (
+        "bool" if is_object_or_nan_string_dtype(any_string_dtype) else "boolean"
+    )
     expected = Series(expected, dtype=expected_dtype)
     result = getattr(ser.str, method)()
     tm.assert_series_equal(result, expected)
@@ -242,6 +262,7 @@ def test_isnumeric_unicode(method, expected, any_string_dtype):
     assert list(result) == expected
 
 
+@pytest.mark.filterwarnings("ignore:Downcasting object dtype arrays:FutureWarning")
 @pytest.mark.parametrize(
     "method, expected",
     [
@@ -252,8 +273,14 @@ def test_isnumeric_unicode(method, expected, any_string_dtype):
 def test_isnumeric_unicode_missing(method, expected, any_string_dtype):
     values = ["A", np.nan, "¼", "★", np.nan, "３", "four"]  # noqa: RUF001
     ser = Series(values, dtype=any_string_dtype)
-    expected_dtype = "object" if any_string_dtype in object_pyarrow_numpy else "boolean"
-    expected = Series(expected, dtype=expected_dtype)
+    if any_string_dtype == "str":
+        # NaN propagates as False
+        expected = Series(expected, dtype=object).fillna(False).astype(bool)
+    else:
+        expected_dtype = (
+            "object" if is_object_or_nan_string_dtype(any_string_dtype) else "boolean"
+        )
+        expected = Series(expected, dtype=expected_dtype)
     result = getattr(ser.str, method)()
     tm.assert_series_equal(result, expected)
 
@@ -283,7 +310,9 @@ def test_len(any_string_dtype):
         dtype=any_string_dtype,
     )
     result = ser.str.len()
-    expected_dtype = "float64" if any_string_dtype in object_pyarrow_numpy else "Int64"
+    expected_dtype = (
+        "float64" if is_object_or_nan_string_dtype(any_string_dtype) else "Int64"
+    )
     expected = Series([3, 4, 6, np.nan, 8, 4, 1], dtype=expected_dtype)
     tm.assert_series_equal(result, expected)
 
@@ -312,7 +341,9 @@ def test_index(method, sub, start, end, index_or_series, any_string_dtype, expec
     obj = index_or_series(
         ["ABCDEFG", "BCDEFEF", "DEFGHIJEF", "EFGHEF"], dtype=any_string_dtype
     )
-    expected_dtype = np.int64 if any_string_dtype in object_pyarrow_numpy else "Int64"
+    expected_dtype = (
+        np.int64 if is_object_or_nan_string_dtype(any_string_dtype) else "Int64"
+    )
     expected = index_or_series(expected, dtype=expected_dtype)
 
     result = getattr(obj.str, method)(sub, start, end)
@@ -353,7 +384,9 @@ def test_index_wrong_type_raises(index_or_series, any_string_dtype, method):
 )
 def test_index_missing(any_string_dtype, method, exp):
     ser = Series(["abcb", "ab", "bcbe", np.nan], dtype=any_string_dtype)
-    expected_dtype = np.float64 if any_string_dtype in object_pyarrow_numpy else "Int64"
+    expected_dtype = (
+        np.float64 if is_object_or_nan_string_dtype(any_string_dtype) else "Int64"
+    )
 
     result = getattr(ser.str, method)("b")
     expected = Series(exp + [np.nan], dtype=expected_dtype)
@@ -379,6 +412,7 @@ def test_pipe_failures(any_string_dtype):
         (2, 5, None, ["foo", "bar", np.nan, "baz"]),
         (0, 3, -1, ["", "", np.nan, ""]),
         (None, None, -1, ["owtoofaa", "owtrabaa", np.nan, "xuqzabaa"]),
+        (None, 2, -1, ["owtoo", "owtra", np.nan, "xuqza"]),
         (3, 10, 2, ["oto", "ato", np.nan, "aqx"]),
         (3, 0, -1, ["ofa", "aba", np.nan, "aba"]),
     ],
@@ -531,7 +565,7 @@ def test_string_slice_out_of_bounds(any_string_dtype):
 def test_encode_decode(any_string_dtype):
     ser = Series(["a", "b", "a\xe4"], dtype=any_string_dtype).str.encode("utf-8")
     result = ser.str.decode("utf-8")
-    expected = ser.map(lambda x: x.decode("utf-8")).astype(object)
+    expected = Series(["a", "b", "a\xe4"], dtype="str")
     tm.assert_series_equal(result, expected)
 
 
@@ -561,8 +595,32 @@ def test_decode_errors_kwarg():
         ser.str.decode("cp1252")
 
     result = ser.str.decode("cp1252", "ignore")
-    expected = ser.map(lambda x: x.decode("cp1252", "ignore")).astype(object)
+    expected = ser.map(lambda x: x.decode("cp1252", "ignore")).astype("str")
     tm.assert_series_equal(result, expected)
+
+
+def test_decode_string_dtype(string_dtype):
+    # https://github.com/pandas-dev/pandas/pull/60940
+    ser = Series([b"a", b"b"])
+    result = ser.str.decode("utf-8", dtype=string_dtype)
+    expected = Series(["a", "b"], dtype=string_dtype)
+    tm.assert_series_equal(result, expected)
+
+
+def test_decode_object_dtype(object_dtype):
+    # https://github.com/pandas-dev/pandas/pull/60940
+    ser = Series([b"a", rb"\ud800"])
+    result = ser.str.decode("utf-8", dtype=object_dtype)
+    expected = Series(["a", r"\ud800"], dtype=object_dtype)
+    tm.assert_series_equal(result, expected)
+
+
+def test_decode_bad_dtype():
+    # https://github.com/pandas-dev/pandas/pull/60940
+    ser = Series([b"a", b"b"])
+    msg = "dtype must be string or object, got dtype='int64'"
+    with pytest.raises(ValueError, match=msg):
+        ser.str.decode("utf-8", dtype="int64")
 
 
 @pytest.mark.parametrize(
@@ -716,5 +774,5 @@ def test_get_with_dict_label():
 def test_series_str_decode():
     # GH 22613
     result = Series([b"x", b"y"]).str.decode(encoding="UTF-8", errors="strict")
-    expected = Series(["x", "y"], dtype="object")
+    expected = Series(["x", "y"], dtype="str")
     tm.assert_series_equal(result, expected)

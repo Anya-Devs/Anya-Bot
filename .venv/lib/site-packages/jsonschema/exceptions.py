@@ -8,7 +8,7 @@ from pprint import pformat
 from textwrap import dedent, indent
 from typing import TYPE_CHECKING, Any, ClassVar
 import heapq
-import itertools
+import re
 import warnings
 
 from attrs import define
@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 
 WEAK_MATCHES: frozenset[str] = frozenset(["anyOf", "oneOf"])
 STRONG_MATCHES: frozenset[str] = frozenset()
+
+_JSON_PATH_COMPATIBLE_PROPERTY_PATTERN = re.compile("^[a-zA-Z][a-zA-Z0-9_]*$")
 
 _unset = _utils.Unset()
 
@@ -153,8 +155,11 @@ class _Error(Exception):
         for elem in self.absolute_path:
             if isinstance(elem, int):
                 path += "[" + str(elem) + "]"
-            else:
+            elif _JSON_PATH_COMPATIBLE_PROPERTY_PATTERN.match(elem):
                 path += "." + elem
+            else:
+                escaped_elem = elem.replace("\\", "\\\\").replace("'", r"\'")
+                path += "['" + escaped_elem + "']"
         return path
 
     def _set(
@@ -211,7 +216,7 @@ class SchemaError(_Error):
 
 
 @define(slots=False)
-class _RefResolutionError(Exception):
+class _RefResolutionError(Exception):  # noqa: PLW1641
     """
     A ref could not be resolved.
     """
@@ -471,11 +476,9 @@ def best_match(errors, key=relevance):
         set of inputs from version to version if better heuristics are added.
 
     """
-    errors = iter(errors)
-    best = next(errors, None)
+    best = max(errors, key=key, default=None)
     if best is None:
         return
-    best = max(itertools.chain([best], errors), key=key)
 
     while best.context:
         # Calculate the minimum via nsmallest, because we don't recurse if
