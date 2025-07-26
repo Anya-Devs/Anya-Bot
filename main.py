@@ -1,4 +1,4 @@
-#import asyncio; from data.setup import SetupManager; asyncio.run(SetupManager().run_setup())
+import asyncio; from data.setup import SetupManager; asyncio.run(SetupManager().run_setup())
  
 import os, sys, gc, asyncio, traceback, importlib, pkgutil, aiohttp
 from aiohttp import web
