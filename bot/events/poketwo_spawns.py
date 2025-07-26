@@ -48,14 +48,10 @@ class PoketwoSpawnDetector(commands.Cog):
         if not Path(filepath).exists():
             return alt_map
         with open(filepath, newline="", encoding="utf-8") as f:
-            reader = csv.reader(f)
-            next(reader, None)
+            reader = csv.DictReader(f)
             for row in reader:
-                if len(row) < 2:
-                    continue
-                slug = row[0].strip().lower()
-                alt_names = [name.strip() for name in row[1].split(",") if name.strip()]
-                alt_map[slug] = alt_names
+                slug = row["pokemon_species"].strip().lower()
+                alt_map[slug] = {lang: name.strip() for lang, name in row.items() if lang != "pokemon_species" and name.strip()}
         return alt_map
 
     def load_flag_map(self, filepath):
@@ -64,29 +60,31 @@ class PoketwoSpawnDetector(commands.Cog):
         with open(filepath, encoding="utf-8") as f:
             return json.load(f)
 
-    def get_best_english_alt_name(self, slug):
-        if slug not in self.alt_names_map:
-            return None
-        original_len = len(slug)
-        candidates = [
-            name for name in self.alt_names_map[slug]
-            if self.is_english_name(name) and len(name) < original_len
-        ]
-        if not candidates:
-            return None
-        return min(candidates, key=len)
-
-    def is_english_name(self, name):
-        return bool(re.fullmatch(r"[A-Za-z0-9\- ']+", name))
+    def get_best_normal_alt_name(self, slug):
+     if slug not in self.alt_names_map:
+        return None
+     slug_lower = slug.lower()
+     items = []
+     for lang, name in self.alt_names_map[slug].items():
+        if not re.fullmatch(r"[A-Za-z0-9\- ']+", name) or name.lower() == slug_lower:
+            continue
+        try:
+            flag = self.flag_map[lang]
+        except KeyError:
+            flag = ''
+            print(f"[WARN] No flag for language: {lang}")
+        items.append((flag, name))
+     if not items:
+        return None
+     flag, name = min(items, key=lambda x: (len(x[1]), 0 if x[0] else 1))
+     return f"{flag} {name}" if flag else name
 
     async def output_prediction(self, message, image_url):
         try:
             slug, conf = self.predictor.predict(image_url)
             pred_text = f"{float(conf):.2f}%" if isinstance(conf, (int, float)) else str(conf)
-
             rare, regional = await self.load_special_names()
             server_config = await self.pokemon_utils.get_server_config(message.guild.id)
-
             special_roles = []
             slug_lower = slug.lower()
             if any(p in slug_lower for p in rare) and server_config.get("rare_role"):
@@ -94,25 +92,18 @@ class PoketwoSpawnDetector(commands.Cog):
             if (any(p in slug_lower for p in regional) or any(slug_lower.startswith(f"{form}-") for form in self.regional_forms.values())) and server_config.get("regional_role"):
                 special_roles.append(f"<@&{server_config['regional_role']}>")
             special_roles_str = " ".join(special_roles)
-
             shiny_pings, collection_pings = await self.pokemon_utils.get_ping_users(message.guild, slug)
             type_pings = await self.pokemon_utils.get_type_ping_users(message.guild, slug)
             quest_pings = await self.pokemon_utils.get_quest_ping_users(message.guild, slug)
             description, dex_number, row = self.pokemon_utils.get_description(slug)
             if not dex_number or dex_number == "???":
                 dex_number = self.pokemon_utils.load_pokemon_ids().get(slug_lower, "???")
-
             ping_msg, embed = await self.format_messages(
                 slug, type_pings, quest_pings, shiny_pings,
                 collection_pings, special_roles_str, pred_text,
                 dex_number, description, image_url
             )
-
-            best_alt = self.get_best_english_alt_name(slug_lower)
-            flag_emoji = self.flag_map.get("en", "🇺🇸")
-            if best_alt:
-                best_alt = f"{flag_emoji} {best_alt}"
-
+            best_alt = self.get_best_normal_alt_name(slug_lower)
             self.pokemon_image_builder.create_image(
                 pokemon_id=int(self.pokemon_utils.load_pokemon_ids().get(slug_lower, 0)),
                 pokemon_name=self.pokemon_utils.format_name(slug),
@@ -122,18 +113,13 @@ class PoketwoSpawnDetector(commands.Cog):
             )
             saved_path = "data/events/poketwo_spawns/image/test.png"
             file = discord.File(saved_path, filename="pokemon_spawn.png")
-
             info_button = discord.ui.Button(label="Info", style=discord.ButtonStyle.primary)
-
             async def info_callback(interaction):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
-
             info_button.callback = info_callback
             view = discord.ui.View(timeout=None)
             view.add_item(info_button)
-
             await message.channel.send(content=ping_msg, file=file, view=view, reference=message)
-
         except Exception as e:
             logger.error(f"Error in output_prediction: {type(e).__name__}: {e}")
             await message.channel.send(f"{self.error_emoji} Failed to process spawn", reference=message)
@@ -160,10 +146,8 @@ class PoketwoSpawnDetector(commands.Cog):
             if special_roles:
                 lines.append(special_roles)
             formatted_name = self.pokemon_utils.format_name(slug)
-            best_alt = self.get_best_english_alt_name(slug.lower())
-            display_name = self.pokemon_utils.format_name(slug)
+            display_name = formatted_name
             lines.append(f"**{display_name}**: {pred_text}")
-
             ping_parts = []
             if shiny_pings:
                 ping_parts.append(f"Shiny: {' '.join(shiny_pings)}")
@@ -177,21 +161,17 @@ class PoketwoSpawnDetector(commands.Cog):
                     ping_parts.append("Types: " + " | ".join(type_parts))
             if ping_parts:
                 lines.append("\n".join(ping_parts))
-
             actual_types = self.pokemon_utils.get_pokemon_types(slug)
             actual_region = self.pokemon_utils.get_pokemon_region(slug)
             emoji_types = [f"{self.pokemon_utils._type_emojis.get(f'{t.lower()}_type','')} {t.title()}" for t in actual_types if t]
-
             alt_names_field = []
             if slug.lower() in self.alt_names_map:
                 alt_names_list = self.alt_names_map[slug.lower()]
-                for alt_name in alt_names_list:
-                    alt_names_field.append(alt_name)
-
+                if isinstance(alt_names_list, dict):
+                    alt_names_field.extend(name for name in alt_names_list.values())
             thumb_url = (f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{dex_number}.png"
                          if slug and slug.lower() not in ("", "???") else image_url)
             color = await self.pokemon_utils.get_image_color(thumb_url)
-
             embed = discord.Embed(color=color)
             if description:
                 embed.description = description
@@ -203,7 +183,6 @@ class PoketwoSpawnDetector(commands.Cog):
                 embed.add_field(name="Region", value=actual_region, inline=True)
             embed.set_thumbnail(url=thumb_url)
             return "\n".join(lines), embed
-
         except Exception as e:
             logger.error(f"Error in format_messages: {type(e).__name__}: {e}")
             fallback = f"**{slug}**\nFailed to format spawn info."

@@ -4,10 +4,6 @@ import subprocess
 import time
 import os
 import re
-import multiprocessing 
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-
-TIMEOUT = 1000  # global timeout in seconds for subprocess calls
 
 def ensure_rich():
     try:
@@ -22,15 +18,7 @@ from rich.panel import Panel
 from rich.box import ROUNDED
 from rich.text import Text
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
-
-def blocking_compile():
-    return subprocess.run(
-        [sys.executable, "-m", "compileall", "-q", "."],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        timeout=TIMEOUT,
-    )
+from concurrent.futures import ThreadPoolExecutor
 
 class SetupManager:
     def __init__(self):
@@ -40,15 +28,12 @@ class SetupManager:
         self.essential_packages = [
             "urllib3", "pipreqs", "onnxruntime",
             "opencv-python-headless", "python-Levenshtein",
-            "pip", "setuptools", "wheel", "emoji==1.7.0"
+            "pip", "setuptools", "wheel"
         ]
         self.requirements_file = "requirements.txt"
         self.start_time = time.time()
         self.task_times = {}
-
-        self.thread_executor = ThreadPoolExecutor(max_workers=16)
-        self.process_executor = ProcessPoolExecutor(max_workers=4)
-
+        self.executor = ThreadPoolExecutor(max_workers=16)
         self.progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -66,60 +51,29 @@ class SetupManager:
 
     def ensure_pip(self):
         try:
-            subprocess.run(
-                [sys.executable, "-m", "ensurepip", "--upgrade"],
-                check=True,
-                capture_output=True,
-                timeout=TIMEOUT
-            )
-            subprocess.run(
-                [sys.executable, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"],
-                check=True,
-                capture_output=True,
-                timeout=TIMEOUT
-            )
+            subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"], check=True, capture_output=True, timeout=60)
+            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"], check=True, capture_output=True, timeout=60)
             return True
         except Exception as e:
             self.console.print(Panel(f"[bold red]Failed to repair pip: {e}[/bold red]", title="pip Error", border_style="red"))
             return False
 
-    async def run_subprocess(self, *args, capture_output=True):
+    async def run_cmd_ultra_fast(self, *args):
         loop = asyncio.get_event_loop()
-        def blocking_call():
-            return subprocess.run(
-                args,
-                stdout=subprocess.PIPE if capture_output else None,
-                stderr=subprocess.PIPE if capture_output else None,
-                timeout=TIMEOUT,
-                check=False
-            )
-        result = await loop.run_in_executor(self.thread_executor, blocking_call)
-        return result
-
-    async def run_subprocess_quiet(self, *args):
-        loop = asyncio.get_event_loop()
-        def blocking_call():
-            return subprocess.run(
-                args,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=TIMEOUT,
-                check=False
-            )
-        result = await loop.run_in_executor(self.thread_executor, blocking_call)
-        return result
+        return await loop.run_in_executor(
+            self.executor,
+            lambda: subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60).returncode
+        )
 
     async def sync_submodule(self, task_id):
         start = time.time()
         self.progress.update(task_id, description="□ Git auth check...", completed=10)
         if not os.path.exists(os.path.join(self.submodule_path, ".git")):
-            res = await self.run_subprocess("git", "submodule", "add", self.submodule_url, self.submodule_path)
-            if res.returncode != 0:
-                self.console.print(Panel("[bold red]Failed to add submodule[/bold red]", title="Git Error", border_style="red"))
+            await self.run_cmd_ultra_fast("git", "submodule", "add", self.submodule_url, self.submodule_path)
         self.progress.update(task_id, description="□ Parallel submodule update...", completed=60)
         await asyncio.gather(
-            self.run_subprocess_quiet("git", "submodule", "sync"),
-            self.run_subprocess_quiet("git", "submodule", "update", "--init", "--remote", "--jobs", "16", "--depth", "1"),
+            self.run_cmd_ultra_fast("git", "submodule", "sync"),
+            self.run_cmd_ultra_fast("git", "submodule", "update", "--init", "--remote", "--jobs", "16", "--depth", "1")
         )
         elapsed = self.log_time("submodule", start)
         self.progress.update(task_id, description=f"✅ Submodules {elapsed}", completed=100)
@@ -152,12 +106,8 @@ class SetupManager:
         start = time.time()
         self.progress.update(task_id, description="□ pip --upgrade...", completed=0)
         try:
-            res = await self.run_subprocess(sys.executable, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel")
-            if res.returncode == 0:
-                self.progress.update(task_id, description=f"✅ pip {self.log_time('pip', start)}", completed=100)
-            else:
-                self.progress.update(task_id, description=f"→ ❌ pip failed {self.log_time('pip', start)}", completed=100)
-                self.console.print(Panel(res.stderr.decode() if res.stderr else "Unknown error", title="pip Error", border_style="red"))
+            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"], check=True, capture_output=True, timeout=60)
+            self.progress.update(task_id, description=f"✅ pip {self.log_time('pip', start)}", completed=100)
         except Exception as e:
             self.progress.update(task_id, description=f"→ ❌ pip failed {self.log_time('pip', start)}", completed=100)
             self.console.print(Panel(str(e), title="pip Error", border_style="red"))
@@ -167,11 +117,8 @@ class SetupManager:
         total = len(packages)
         self.progress.update(task_id, description=f"□ Installing {total} {task_name}...", completed=0)
         try:
-            res = await self.run_subprocess(sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir", "--disable-pip-version-check", *packages)
-            if res.returncode == 0:
-                self.progress.update(task_id, description=f"✅ {total} {task_name} {self.log_time(task_name, start)}", completed=100)
-            else:
-                raise subprocess.CalledProcessError(res.returncode, res.args, output=res.stdout, stderr=res.stderr)
+            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir", "--disable-pip-version-check"] + packages, check=True, capture_output=True, timeout=300)
+            self.progress.update(task_id, description=f"✅ {total} {task_name} {self.log_time(task_name, start)}", completed=100)
         except Exception as e:
             self.progress.update(task_id, description=f"→ ❌ {task_name} failed {self.log_time(task_name, start)}", completed=100)
             self.console.print(Panel(str(e), title=f"{task_name.title()} Error", border_style="red"))
@@ -179,10 +126,12 @@ class SetupManager:
     async def install_essentials(self, task_id):
         await self.mega_install(self.essential_packages, task_id, "essentials")
 
-    async def check_syntax_errors_async(self):
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(self.process_executor, blocking_compile)
-        return result
+    def check_syntax_errors(self):
+        result = subprocess.run([sys.executable, "-m", "compileall", "-q", "."], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode != 0:
+            self.console.print(Panel(f"[bold red]Syntax errors detected in your Python files.[/bold red]\n{result.stdout}\n{result.stderr}", title="Syntax Error", border_style="red"))
+            return False
+        return True
 
     def add_missing_init_py(self):
         for root, dirs, files in os.walk("."):
@@ -197,16 +146,12 @@ class SetupManager:
         start = time.time()
         self.progress.update(task_id, description="□ Generating requirements...", completed=0)
         self.add_missing_init_py()
-        result = await self.check_syntax_errors_async()
-        if result.returncode != 0:
+        if not self.check_syntax_errors():
             self.progress.update(task_id, description=f"→ ❌ Syntax error {self.log_time('clean_req', start)}", completed=100)
-            self.console.print(Panel(f"[bold red]Syntax errors detected in your Python files.[/bold red]\n{result.stdout}\n{result.stderr}", title="Syntax Error", border_style="red"))
             return
         try:
-            res1 = await self.run_subprocess(sys.executable, "-m", "pip", "install", "--upgrade", "pipreqs")
-            res2 = await self.run_subprocess(sys.executable, "-m", "pipreqs.pipreqs", "--force", "--ignore", "venv,.venv,submodules,node_modules", ".")
-            if res1.returncode != 0 or res2.returncode != 0:
-                raise Exception("pipreqs command failed")
+            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pipreqs"], check=True, capture_output=True, timeout=60)
+            subprocess.run([sys.executable, "-m", "pipreqs.pipreqs", "--force", "--ignore", "venv,.venv,submodules,node_modules", "."], check=True, capture_output=True, timeout=120)
         except Exception as e:
             self.progress.update(task_id, description=f"→ ❌ pipreqs failed {self.log_time('clean_req', start)}", completed=100)
             self.console.print(Panel(f"[bold red]pipreqs failed: {e}[/bold red]\n• Missing __init__.py\n• Syntax error in .py files", title="pipreqs Error", border_style="red"))
@@ -234,11 +179,8 @@ class SetupManager:
             self.progress.update(task_id, description=f"→ ❌ No requirements.txt {self.log_time('install_req', start)}", completed=100)
             return
         try:
-            res = await self.run_subprocess(sys.executable, "-m", "pip", "install", "-r", self.requirements_file, "--upgrade", "--no-cache-dir")
-            if res.returncode == 0:
-                self.progress.update(task_id, description=f"✅ Requirements installed {self.log_time('install_req', start)}", completed=100)
-                return
-            raise Exception("Failed to install requirements via -r")
+            subprocess.run([sys.executable, "-m", "pip", "install", "-r", self.requirements_file, "--upgrade", "--no-cache-dir"], check=True, capture_output=True, timeout=300)
+            self.progress.update(task_id, description=f"✅ Requirements installed {self.log_time('install_req', start)}", completed=100)
         except Exception:
             with open(self.requirements_file, "r") as f:
                 lines = f.readlines()
@@ -251,11 +193,8 @@ class SetupManager:
                     else:
                         packages.append(line)
             try:
-                res2 = await self.run_subprocess(sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir", *packages)
-                if res2.returncode == 0:
-                    self.progress.update(task_id, description=f"✅ Requirements {self.log_time('install_req', start)}", completed=100)
-                else:
-                    raise Exception("Fallback install failed")
+                subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir"] + packages, check=True, capture_output=True, timeout=300)
+                self.progress.update(task_id, description=f"✅ Requirements {self.log_time('install_req', start)}", completed=100)
             except Exception as e2:
                 self.progress.update(task_id, description=f"→ ❌ Install failed {self.log_time('install_req', start)}", completed=100)
                 self.console.print(Panel(str(e2), title="Requirements Error", border_style="red"))
@@ -271,7 +210,7 @@ class SetupManager:
                 self.progress.add_task("Package conflicts", total=100),
                 self.progress.add_task("Essential packages", total=100),
                 self.progress.add_task("Clean requirements", total=100),
-                self.progress.add_task("Outdated packages", total=100),  # Placeholder
+                self.progress.add_task("Outdated packages", total=100),
                 self.progress.add_task("Install requirements", total=100)
             ]
             await asyncio.gather(
@@ -280,10 +219,9 @@ class SetupManager:
                 self.resolve_conflicts(tasks[2]),
                 self.install_essentials(tasks[3]),
                 self.clean_requirements(tasks[4]),
-                self.install_requirements(tasks[6]),
+                self.install_requirements(tasks[6])
             )
-        self.thread_executor.shutdown(wait=False)
-        self.process_executor.shutdown(wait=False)
+        self.executor.shutdown(wait=False)
         total_time = time.time() - self.start_time
         self.console.print(Panel(Text(f"🚀 Setup completed in {total_time:.1f}s", justify="center"), title="Complete", box=ROUNDED, border_style="green"))
 
