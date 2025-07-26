@@ -4,10 +4,10 @@ import subprocess
 import time
 import os
 import re
-import multiprocessing  # Added multiprocessing import
+import multiprocessing 
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
-TIMEOUT = 300  # global timeout in seconds for subprocess calls
+TIMEOUT = 1000  # global timeout in seconds for subprocess calls
 
 def ensure_rich():
     try:
