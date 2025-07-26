@@ -28,7 +28,7 @@ class SetupManager:
         self.essential_packages = [
             "urllib3", "pipreqs", "onnxruntime",
             "opencv-python-headless", "python-Levenshtein",
-            "pip", "setuptools", "wheel"
+            "pip", "setuptools", "wheel", "emoji==1.7.0"
         ]
         self.requirements_file = "requirements.txt"
         self.start_time = time.time()
