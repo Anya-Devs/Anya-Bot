@@ -750,7 +750,7 @@ bot_config = {
     },
     False: { 
         "prefix": ".",
-        "token_key": "Token"
+        "token_key": "Backup_Token"
     }
 }
 
