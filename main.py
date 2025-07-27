@@ -1,12 +1,12 @@
 import asyncio; from data.setup import SetupManager; asyncio.run(SetupManager().run_setup())
  
-import os, sys, gc, asyncio, traceback, importlib, pkgutil, aiohttp
-from aiohttp import web
+import os, sys, gc, asyncio, traceback, importlib, pkgutil, threading
+from dotenv import load_dotenv
+from flask import Flask, send_from_directory
 from art import text2art
 from rich.tree import Tree
 from rich.align import Align
 from rich.console import Console
-from dotenv import load_dotenv
 from data.local.const import AvatarToTextArt
 from bot.token import get_bot_token, prefix, use_test_bot as ut
 from imports.log_imports import logger
@@ -16,7 +16,26 @@ from utils.cogs.ticket import setup_persistent_views
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 load_dotenv(dotenv_path=os.path.join(".github", ".env"))
 
+# === Web Server ===
+app = Flask(__name__, static_folder="html")
 
+@app.route("/")
+def index():
+    index_path = os.path.join(app.static_folder, "index.html")
+    if os.path.exists(index_path):
+        return send_from_directory(app.static_folder, "index.html")
+    return "⚠️ index.html not found.", 404
+
+@app.route("/html/<path:filename>")
+def serve_static(filename):
+    return send_from_directory(app.static_folder, filename)
+
+def run_flask():
+    port = int(os.environ.get("PORT", 8080 if not ut else 0))
+    print(f"🌐 Hosting Flask server on port {port}")
+    app.run(host="0.0.0.0", port=port)
+
+# === Discord Bot Setup ===
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
@@ -46,10 +65,9 @@ class BotSetup(commands.AutoShardedBot):
             msg += f"🌐  Connected: {len(g)} server{'s'*(len(g)!=1)}  |  Users served: ~{sum(m.member_count or 0 for m in g)}".center(term)
             print(msg)
             try:
-                await setup_persistent_views(self)  # print("✅ Persistent ticket views restored.")
+                await setup_persistent_views(self)
             except Exception as e:
                 logger.error(f"Persistent views error: {e}\n{traceback.format_exc()}")
-                print(f"❌ Failed to restore persistent ticket views: {e}")
         except Exception as e:
             logger.error(f"Error in on_ready: {e}\n{traceback.format_exc()}")
 
@@ -114,64 +132,12 @@ class BotSetup(commands.AutoShardedBot):
         console.print(Align(tree, align='center', width=console.width))
 
 
-async def handle_index(request):
-    index_path = os.path.join(os.getcwd(), 'html', 'index.html')
-    if os.path.exists(index_path):
-        with open(index_path, 'r', encoding='utf-8') as f:
-            return web.Response(text=f.read(), content_type='text/html')
-    return web.Response(text="⚠️ index.html not found.", content_type='text/plain', status=404)
-
-
-async def start_web_server():
-    app = web.Application()
-    app.router.add_get("/", handle_index)
-    app.router.add_static('/html/', path=os.path.join(os.getcwd(), 'html'), name='html')
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 0 if ut else 8080)
-    await site.start()
-    return runner, site
-
-
-async def periodic_ping(host, port):
-    backoff = 5
-    max_backoff = 60
-    while True:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"http://{host}:{port}") as resp:
-                    if resp.status == 200:
-                        logger.debug("Ping successful!")
-                        backoff = 5
-                    elif resp.status == 1015:
-                        logger.warning("Rate limited (HTTP 1015). Backing off...")
-                        await asyncio.sleep(backoff)
-                        backoff = min(backoff * 2, max_backoff)
-                        continue
-                    else:
-                        logger.warning(f"Unexpected status {resp.status}")
-        except Exception as e:
-            logger.debug(f"Ping failed: {e}")
-        await asyncio.sleep(60)
-
-
-async def start_all_services():
+def main():
     gc.collect()
-    runner = site = None
-    try:
-        bot = BotSetup()
-        runner, site = await start_web_server()
-        port = site._server.sockets[0].getsockname()[1]
-        print(f"Web server started on port {port}")
-        await asyncio.gather(bot.start_bot(), periodic_ping("localhost", port))
-    except Exception as e:
-        traceback.print_exc()
-        logger.error(f"Fatal error: {e}\n{traceback.format_exc()}")
-    finally:
-        if runner:
-            await runner.cleanup()
-        await asyncio.sleep(1)
+    threading.Thread(target=run_flask, daemon=True).start()
+    bot = BotSetup()
+    asyncio.run(bot.start_bot())
 
 
 if __name__ == "__main__":
-    asyncio.run(start_all_services())
+    main()
