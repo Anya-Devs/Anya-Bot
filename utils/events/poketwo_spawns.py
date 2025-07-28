@@ -180,10 +180,12 @@ class PokemonImageBuilder:
         self.emoji_icon_dir = "data/commands/pokemon/pokemon_emojis/icons/types"
         self.base_url = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/"
         os.makedirs(self.emoji_icon_dir, exist_ok=True)
+
         with open(self.config_path, 'r') as f:
             self.config = json.load(f)
         with open(self.type_emojis_file, 'r', encoding='utf-8') as f:
             self.type_emojis = json.load(f)
+
         self.font_header = ImageFont.truetype(self.config["font_path_header"], self.config["font_size_header"])
         self.font_base = ImageFont.truetype(self.config["font_path_base"], self.config["font_size_base"])
         self.output_dir = "data/events/poketwo_spawns/image"
@@ -323,13 +325,20 @@ class PokemonImageBuilder:
             parts.append((text[last_index:], False))
         return parts
 
-    def draw_text_with_flag_offset(self, pilmoji, position, text, font, fill, flag_offset=4):
+    def draw_text_with_flag_offset(self, pilmoji, position, text, font, fill, stroke_fill=None, stroke_width=0, flag_offset=4):
         x, y = position
         parts = self.replace_flag_emojis_with_displacement(text)
         for part, is_flag in parts:
             width, _ = pilmoji.getsize(part, font=font)
             offset_y = y + flag_offset if is_flag else y
-            pilmoji.text((x, offset_y), part, font=font, fill=fill)
+            pilmoji.text(
+                (x, offset_y),
+                part,
+                font=font,
+                fill=fill,
+                stroke_fill=stroke_fill,
+                stroke_width=stroke_width
+            )
             x += width
 
     def compose_frame(self, bg_frame, poke_img, pokemon_name, best_name, types):
@@ -338,8 +347,27 @@ class PokemonImageBuilder:
         frame.paste(poke_img_resized, self.config["pokemon_image_position"], poke_img_resized)
 
         pilmoji = Pilmoji(frame)
-        self.draw_text_with_flag_offset(pilmoji, self.config["pokemon_name_position"], pokemon_name, self.font_header, self.config["name_color"])
-        self.draw_text_with_flag_offset(pilmoji, self.config["alt_name_position"], best_name, self.font_base, self.config["alt_color"])
+
+        self.draw_text_with_flag_offset(
+            pilmoji,
+            self.config["pokemon_name_position"],
+            pokemon_name,
+            self.font_header,
+            self.config["name_color"],
+            stroke_fill=self.config.get("name_outline_color"),
+            stroke_width=self.config.get("name_stroke_width", 0)
+        )
+
+        self.draw_text_with_flag_offset(
+            pilmoji,
+            self.config["alt_name_position"],
+            best_name,
+            self.font_base,
+            self.config["alt_color"],
+            stroke_fill=self.config.get("alt_outline_color"),
+            stroke_width=self.config.get("alt_stroke_width", 0)
+        )
+
         self.draw_type_emojis(frame, types, self.config["type_position"])
         return frame
 
@@ -362,10 +390,10 @@ class PokemonImageBuilder:
 if __name__ == "__main__":
     builder = PokemonImageBuilder()
     builder.create_image(
-        pokemon_id=25,
-        pokemon_name="Pikachu",
-        best_name="{flag_es} orboul",
-        types=["electric"],
+        pokemon_id=943,
+        pokemon_name="Mabosstiff",
+        best_name="{flag_fr} Dogrino",
+        types=["dark"],
         bg_url=None,
         filename="test.png"
     )

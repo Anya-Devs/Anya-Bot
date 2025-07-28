@@ -61,24 +61,23 @@ class PoketwoSpawnDetector(commands.Cog):
             return json.load(f)
 
     def get_best_normal_alt_name(self, slug):
-     if slug not in self.alt_names_map:
+     try:
+        slug_lower = slug.lower()
+        slug_len = len(slug)
+        items = [(self.flag_map.get(lang, ''), name) for lang, name in self.alt_names_map.get(slug, {}).items()
+                 if name.strip().lower() != slug_lower and re.fullmatch(r"[A-Za-z0-9\- ']+", name)]
+        if not items:
+            return None
+        filtered = [(f, n) for f, n in items if len(n) < slug_len]
+        if not filtered:
+            return None
+        flag, name = min(filtered, key=lambda x: (len(x[1]), 0 if x[0] else 1))
+        return f"{flag} {name}" if flag else name
+     except Exception as e:
+        print(f"[ERROR] alt name selection failed for '{slug}': {e}")
         return None
-     slug_lower = slug.lower()
-     items = []
-     for lang, name in self.alt_names_map[slug].items():
-        if not re.fullmatch(r"[A-Za-z0-9\- ']+", name) or name.lower() == slug_lower:
-            continue
-        try:
-            flag = self.flag_map[lang]
-        except KeyError:
-            flag = ''
-            print(f"[WARN] No flag for language: {lang}")
-        items.append((flag, name))
-     if not items:
-        return None
-     flag, name = min(items, key=lambda x: (len(x[1]), 0 if x[0] else 1))
-     return f"{flag} {name}" if flag else name
-
+    
+    
     async def output_prediction(self, message, image_url):
         try:
             slug, conf = self.predictor.predict(image_url)
@@ -158,9 +157,10 @@ class PoketwoSpawnDetector(commands.Cog):
             if type_pings:
                 type_parts = [f"{label}: {users}" for label, users in type_pings.items() if users]
                 if type_parts:
-                    ping_parts.append("Types: " + " | ".join(type_parts))
+                    ping_parts.append("\n".join(type_parts))
             if ping_parts:
                 lines.append("\n".join(ping_parts))
+                
             actual_types = self.pokemon_utils.get_pokemon_types(slug)
             actual_region = self.pokemon_utils.get_pokemon_region(slug)
             emoji_types = [f"{self.pokemon_utils._type_emojis.get(f'{t.lower()}_type','')} {t.title()}" for t in actual_types if t]
