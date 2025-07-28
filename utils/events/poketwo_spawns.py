@@ -54,10 +54,9 @@ class PokemonUtils:
         return id_map
 
     def format_name(self, name):
-        parts = name.lower().split('-')
-        if len(parts) > 1 and parts[1] in self.regional_forms:
-            return f"{self.regional_forms.get(parts[1], '').title()} {parts[0].title()}"
+     if name.startswith("iron-") or any(name.endswith(f"-{form}") for form in self.regional_forms):
         return name.replace('-', ' ').title()
+     return name.split('-')[0].title()
 
     def get_pokemon_row(self, slug):
         try:
