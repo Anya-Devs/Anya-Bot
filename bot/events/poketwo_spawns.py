@@ -13,6 +13,8 @@ from data.local.const import *
 from motor.motor_asyncio import AsyncIOMotorClient
 from utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils
 
+
+
 logger = logging.getLogger(__name__)
 
 class PoketwoSpawnDetector(commands.Cog):
@@ -61,22 +63,37 @@ class PoketwoSpawnDetector(commands.Cog):
             return json.load(f)
 
     def get_best_normal_alt_name(self, slug):
-     try:
-        slug_lower = slug.lower()
-        slug_len = len(slug)
-        items = [(self.flag_map.get(lang, ''), name) for lang, name in self.alt_names_map.get(slug, {}).items()
-                 if name.strip().lower() != slug_lower and re.fullmatch(r"[A-Za-z0-9\- ']+", name)]
-        if not items:
+        try:
+            slug_lower = slug.lower()
+            slug_len = len(slug)
+            alt_names = self.alt_names_map.get(slug_lower, {})
+
+            seen = set()
+            valid = []
+            for lang, name in alt_names.items():
+                if not name:
+                    continue
+                name_clean = name.strip()
+                if name_clean.lower() == slug_lower:
+                    continue
+                if name_clean in seen:
+                    continue
+                if not re.fullmatch(r"[A-Za-z0-9\- ']+", name_clean):
+                    continue
+                if len(name_clean) >= slug_len:
+                    continue
+                seen.add(name_clean)
+                valid.append((self.flag_map.get(lang, ''), name_clean))
+
+            if not valid:
+                return None
+
+            flag, name = min(valid, key=lambda x: len(x[1]))
+            return f"{flag} {name}" if flag else name
+
+        except Exception as e:
+            print(f"[ERROR] get_best_normal_alt_name('{slug}') failed: {e}")
             return None
-        filtered = [(f, n) for f, n in items if len(n) < slug_len]
-        if not filtered:
-            return None
-        flag, name = min(filtered, key=lambda x: (len(x[1]), 0 if x[0] else 1))
-        return f"{flag} {name}" if flag else name
-     except Exception as e:
-        print(f"[ERROR] alt name selection failed for '{slug}': {e}")
-        return None
-    
     
     async def output_prediction(self, message, image_url):
         try:
