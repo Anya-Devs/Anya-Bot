@@ -54,10 +54,15 @@ class PokemonUtils:
         return id_map
 
     def format_name(self, name):
-     if name.startswith("iron-") or any(name.endswith(f"-{form}") for form in self.regional_forms):
+     lens = {
+        "iron-treads", "iron-bundle", "iron-hands", "iron-jugulis", "iron-moth", "iron-thorns",
+        "great-tusk", "scream-tail", "brute-bonnet", "flutter-mane", "slither-wing", "sandy-shocks", "roaring-moon",
+        "walking-wake", "raging-bolt", "gouging-fire", "iron-leaves", "iron-valiant", "iron-boulder", "iron-crown"
+     }
+     if name in lens or any(name.endswith(f"-{form}") for form in self.regional_forms):
         return name.replace('-', ' ').title()
      return name.split('-')[0].title()
-
+ 
     def get_pokemon_row(self, slug):
         try:
             with open(self.pokemon_description_file, 'r', encoding='utf-8') as f:
