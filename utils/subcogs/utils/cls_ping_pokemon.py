@@ -526,7 +526,7 @@ class PokemonCollectionHandler:
                         if max_one:
                             await self.data_manager.mongo.replace(col, matched_slug, uid)
                             name_disp = self.data_manager.display_name_with_region(matched_slug)
-                            success.append(f"`{self.icons['success']}` Set your shiny hunt to {emoji} {name_disp}!")
+                            success.append(f"{self.icons['success']} Set your shiny hunt to {emoji} {name_disp}!")
                             break
                         if len(cur) >= self.max_pokemon and matched_slug not in cur:
                             exists.append(f"{self.icons['error']} Max {self.max_pokemon} Pokémon. {matched_slug.title()} not added.")
@@ -822,18 +822,18 @@ class UnifiedResultView(View):
                     pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(selected_slug) if self.parent_cog.pokemon_subcogs else None
                     emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid) if self.parent_cog.pe and pid else ""
                     name_disp = self.parent_cog.data_manager.display_name_with_region(selected_slug)
-                    new_success.append(f"`{self.parent_cog.icons['success']}` Set your shiny hunt to {emoji} {name_disp}!")
+                    new_success.append(f"{self.parent_cog.icons['success']} Set your shiny hunt to {emoji} {name_disp}!")
                     break
                 else:
                     if len(current_list) >= self.parent_cog.max_pokemon and selected_slug not in current_list:
-                        new_other.append(f"`{self.parent_cog.icons['error']}` Max {self.parent_cog.max_pokemon} Pokémon. `{selected_slug.title()}` not added.")
+                        new_other.append(f"{self.parent_cog.icons['error']} Max {self.parent_cog.max_pokemon} Pokémon. {selected_slug.title()} not added.")
                         continue
                     ok = await self.parent_cog.data_manager.mongo.add(self.col, selected_slug, self.uid)
                     pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(selected_slug) if self.parent_cog.pokemon_subcogs else None
                     emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid) if self.parent_cog.pe and pid else ""
                     icon = self.parent_cog.icons['success'] if ok else self.parent_cog.icons['exists']
                     name_disp = self.parent_cog.data_manager.display_name_with_region(selected_slug)
-                    result_text = f"`{icon}` {emoji} {name_disp}"
+                    result_text = f"{icon} {emoji} {name_disp}"
                     if ok:
                         new_success.append(result_text)
                         current_list.append(selected_slug)
@@ -846,7 +846,7 @@ class UnifiedResultView(View):
                 emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid) if self.parent_cog.pe and pid else ""
                 icon = self.parent_cog.icons['removed'] if ok else self.parent_cog.icons['not_found']
                 name_disp = self.parent_cog.data_manager.display_name_with_region(selected_slug)
-                result_text = f"`{icon}` {emoji} {name_disp}"
+                result_text = f"{icon} {emoji} {name_disp}"
                 if ok:
                     new_success.append(result_text)
                 else:
