@@ -1239,19 +1239,20 @@ class ServerConfigView(discord.ui.View):
 
 
 
-
 class PokemonTypeButtons(discord.ui.View):
-    def __init__(self, user_id: int, collection_type: str, mongo_helper, pokemon_types: list[str], current_types: list[str] | None = None, editing=False, status=None):
+    def __init__(self, user_id: int, collection_type: str, mongo_helper, pokemon_types: list[str], current_types: list[str] | None = None, status=None):
         super().__init__(timeout=300)
         self.user_id = user_id
         self.collection_type = collection_type
         self.mongo = mongo_helper
         self.pokemon_types = pokemon_types
-        self.current_types = current_types or []
+        self.current_types = set(current_types or [])
         self.status_message = status
         self.message = None
+
         with open("data/commands/pokemon/pokemon_emojis/_pokemon_types.json", "r", encoding="utf-8") as f:
             raw_emojis = json.load(f)
+
         self.emojis = {}
         for key, raw in raw_emojis.items():
             try:
@@ -1263,10 +1264,8 @@ class PokemonTypeButtons(discord.ui.View):
                     self.emojis[key] = raw
             except Exception:
                 self.emojis[key] = raw
-        if editing:
-            self._add_type_select()
-        else:
-            self._add_edit_button()
+
+        self._add_toggle_buttons()
 
     def _get_emoji_by_name(self, name: str):
         for key, emoji in self.emojis.items():
@@ -1274,76 +1273,50 @@ class PokemonTypeButtons(discord.ui.View):
                 return emoji
         return None
 
-    def _add_type_select(self):
-        options = [
-            discord.SelectOption(
-                label=ptype.title(),
-                value=ptype,
-                default=ptype in self.current_types,
-                emoji=self._get_emoji_by_name(ptype)
-            )
-            for ptype in self.pokemon_types
-        ]
-        select = discord.ui.Select(
-            placeholder="Select Pokémon Types...",
-            min_values=0,
-            max_values=len(self.pokemon_types),
-            options=options,
-            custom_id="pokemon_type_select"
-        )
-        select.callback = self._select_callback
-        self.add_item(select)
-        confirm_btn = discord.ui.Button(label="Confirm", style=discord.ButtonStyle.secondary)
-        confirm_btn.callback = self._cancel_callback
-        self.add_item(confirm_btn)
+    def _add_toggle_buttons(self):
+        row = 0
+        for i, ptype in enumerate(self.pokemon_types):
+            if i and i % 5 == 0:
+                row += 1
+            selected = ptype in self.current_types
+            style = discord.ButtonStyle.success if selected else discord.ButtonStyle.secondary
+            emoji = self._get_emoji_by_name(ptype)
+            button = discord.ui.Button(label=ptype.title(), style=style, emoji=emoji, custom_id=ptype, row=row)
+            button.callback = self._toggle_callback
+            self.add_item(button)
 
-    def _add_edit_button(self):
-        edit_btn = discord.ui.Button(label="Edit", style=discord.ButtonStyle.secondary)
-        edit_btn.callback = self._edit_callback
-        self.add_item(edit_btn)
-
-    async def _select_callback(self, interaction: discord.Interaction):
+    async def _toggle_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
-        selected_types = set(interaction.data.get("values", []))
+
+        ptype = interaction.data['custom_id']
+        if ptype in self.current_types:
+            self.current_types.remove(ptype)
+        else:
+            self.current_types.add(ptype)
+
         try:
             collection = self.mongo.db[f"{self.collection_type}_types"]
             await collection.delete_many({"user_id": self.user_id})
-            docs = [{"user_id": self.user_id, "type": t} for t in selected_types]
+            docs = [{"user_id": self.user_id, "type": t} for t in self.current_types]
             if docs:
                 await collection.insert_many(docs)
-            self.current_types = list(selected_types)
         except Exception as e:
             return await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
+
         self.clear_items()
-        self._add_type_select()
+        self._add_toggle_buttons()
+
         embed = interaction.message.embeds[0].copy()
         self._update_embed_content(embed, "Selection updated.")
         await interaction.response.edit_message(embed=embed, view=self)
         self.message = interaction.message
 
-    async def _edit_callback(self, interaction: discord.Interaction):
-        if interaction.user.id != self.user_id:
-            return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
-        new_view = PokemonTypeButtons(self.user_id, self.collection_type, self.mongo, self.pokemon_types, self.current_types, editing=True)
-        embed = interaction.message.embeds[0].copy()
-        new_view._update_embed_content(embed)
-        await interaction.response.edit_message(embed=embed, view=new_view)
-        new_view.message = interaction.message
-
-    async def _cancel_callback(self, interaction: discord.Interaction):
-        new_view = PokemonTypeButtons(self.user_id, self.collection_type, self.mongo, self.pokemon_types, self.current_types, editing=False)
-        embed = interaction.message.embeds[0].copy()
-        new_view._update_embed_content(embed)
-        await interaction.response.edit_message(embed=embed, view=new_view)
-        new_view.message = interaction.message
-        self.stop()
-
     async def on_timeout(self):
         self.clear_items()
         if self.message and self.message.embeds:
             embed = self.message.embeds[0].copy()
-            self._update_embed_content(embed, status_message="View expired.")
+            self._update_embed_content(embed, "View expired.")
             await self.message.edit(embed=embed, view=None)
         self.stop()
 
@@ -1355,11 +1328,11 @@ class PokemonTypeButtons(discord.ui.View):
                 lines.append(f"{emoji} {pt.title()}")
             embed.description = "\n".join(lines)
         else:
-            embed.description = "No types selected."
-        embed.set_footer(text=status_message or self.status_message or "Get pings for Fire, Water, Ghost, etc. Pokémon spawns on PokéTwo")
+            embed.description = "No types selected yet. Tap a type below to add it!"
+        embed.set_footer(text=status_message or self.status_message or "Toggle types below to get spawn pings for Fire, Water, Ghost, etc.")
 
     def _create_embed(self, ctx=None, status_message=None):
-        embed = discord.Embed(title="Pokemon Type Ping")
+        embed = discord.Embed(title="Pokémon Type Ping Setup")
         if self.current_types:
             lines = []
             for pt in sorted(self.current_types):
@@ -1367,8 +1340,8 @@ class PokemonTypeButtons(discord.ui.View):
                 lines.append(f"{emoji} {pt.title()}")
             embed.description = "\n".join(lines)
         else:
-            embed.description = "No types selected."
-        embed.set_footer(text=status_message or self.status_message or "Get pings for Fire, Water, Ghost, etc. Pokémon spawns on PokéTwo")
+            embed.description = "No types selected yet. Tap a type below to add it!"
+        embed.set_footer(text=status_message or self.status_message or "Toggle types below to get spawn pings for Fire, Water, Ghost, etc.")
         if ctx and hasattr(ctx, "author") and ctx.author.avatar:
             embed.set_thumbnail(url=ctx.author.avatar)
         return embed
@@ -1378,126 +1351,105 @@ class PokemonTypeButtons(discord.ui.View):
             await interaction.response.send_message("Only the command author can use these buttons.", ephemeral=True)
             return False
         return True
+    
+    async def on_timeout(self):
+     for item in self.children:
+        item.disabled = True
+     if self.message:
+        embed = self._create_embed(status_message="View expired.")
+        await self.message.edit(embed=embed, view=self)
+     self.stop()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 class PokemonRegionButtons(discord.ui.View):
-    def __init__(self, user_id: int, collection_type: str, mongo_helper, pokemon_regions: list[str], current_regions: list[str] | None = None, editing=False, status=None):
+    def __init__(self, user_id: int, collection_type: str, mongo_helper, pokemon_regions: list[str], current_regions: list[str] | None = None, status=None):
         super().__init__(timeout=300)
         self.user_id = user_id
         self.collection_type = collection_type
         self.mongo = mongo_helper
         self.pokemon_regions = pokemon_regions
-        self.current_regions = current_regions or []
+        self.current_regions = set(current_regions or [])
         self.status_message = status
-        if editing:
-            self._add_region_select()
-        else:
-            self._add_edit_button()
+        self.message = None
+        self._add_toggle_buttons()
 
-    def _add_region_select(self):
-        options = [
-            discord.SelectOption(
-                label=region.title(), 
-                value=region, 
-                default=region in self.current_regions
-            ) for region in self.pokemon_regions
-        ]
-        select = discord.ui.Select(
-            placeholder="Select Pokémon Regions...", 
-            min_values=0, 
-            max_values=len(self.pokemon_regions), 
-            options=options, 
-            custom_id="pokemon_region_select"
-        )
-        select.callback = self._select_callback
-        self.add_item(select)
-        confirm_btn = discord.ui.Button(label="Confirm", style=discord.ButtonStyle.secondary)
-        confirm_btn.callback = self._confirm_callback
-        self.add_item(confirm_btn)
-
-    def _add_edit_button(self):
-        edit_btn = discord.ui.Button(label="Edit", style=discord.ButtonStyle.secondary)
-        edit_btn.callback = self._edit_callback
-        self.add_item(edit_btn)
-
-    async def _select_callback(self, interaction: discord.Interaction):
-        if interaction.user.id != self.user_id:
-            return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
-        selected_regions = interaction.data.get("values", [])
-        self.current_regions = selected_regions
+    def _add_toggle_buttons(self):
         self.clear_items()
-        self._add_region_select()
-        await interaction.response.edit_message(embed=self._create_embed(interaction, "Selection updated."), view=self)
-
-    async def _edit_callback(self, interaction: discord.Interaction):
-        if interaction.user.id != self.user_id:
-            return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
-        try:
-            #logging.info(f"Edit button clicked by user {interaction.user.id}")
-            new_view = PokemonRegionButtons(
-                self.user_id,
-                self.collection_type,
-                self.mongo,
-                self.pokemon_regions,
-                self.current_regions,
-                editing=True
+        row = 0
+        for i, region in enumerate(self.pokemon_regions):
+            if i and i % 5 == 0:
+                row += 1
+            selected = region in self.current_regions
+            style = discord.ButtonStyle.success if selected else discord.ButtonStyle.secondary
+            button = discord.ui.Button(
+                label=region.title(),
+                style=style,
+                custom_id=region,
+                row=row
             )
-            await interaction.response.edit_message(embed=new_view._create_embed(interaction), view=new_view)
-            #logging.info("Edit view sent successfully.")
-        except Exception as e:
-            tb_str = traceback.format_exc()
-            logging.error(f"Exception in _edit_callback:\n{tb_str}")
-            try:
-                if interaction.response.is_done():
-                    await interaction.followup.send(f"Error occurred: {e}", ephemeral=True)
-                else:
-                    await interaction.response.send_message(f"Error occurred: {e}", ephemeral=True)
-            except Exception:
-                pass
+            button.callback = self._toggle_callback
+            self.add_item(button)
 
-    async def _confirm_callback(self, interaction: discord.Interaction):
+    async def _toggle_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
+
+        region = interaction.data["custom_id"]
+        if region in self.current_regions:
+            self.current_regions.remove(region)
+        else:
+            self.current_regions.add(region)
+
         try:
             await self.mongo.db[self.collection_type].update_one(
                 {"user_id": self.user_id},
-                {"$set": {"regions": self.current_regions}},
+                {"$set": {"regions": list(self.current_regions)}},
                 upsert=True
             )
-            new_view = PokemonRegionButtons(
-                self.user_id,
-                self.collection_type,
-                self.mongo,
-                self.pokemon_regions,
-                self.current_regions,
-                editing=False,
-                status="Settings saved successfully!"
-            )
-            await interaction.response.edit_message(embed=new_view._create_embed(interaction), view=new_view)
-            self.stop()
         except Exception as e:
-            await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
+            return await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
+
+        self._add_toggle_buttons()
+        embed = self._create_embed(interaction, status_message="Selection updated.")
+        await interaction.response.edit_message(embed=embed, view=self)
+        self.message = interaction.message
 
     async def on_timeout(self):
         self.clear_items()
-        if hasattr(self, 'message') and self.message:
-            embed = self._create_embed()
+        if self.message:
+            embed = self._create_embed(status_message="View expired.")
             await self.message.edit(embed=embed, view=None)
         self.stop()
 
     def _create_embed(self, ctx=None, status_message=None):
-        embed = discord.Embed(title="Quest Ping")
+        embed = discord.Embed(title="Pokémon Region Pings")
         if self.current_regions:
-            embed.description = "```\n" + "\n".join(sorted(region.title() for region in self.current_regions)) + "\n```"
+            region_list = "\n".join(sorted(region.title() for region in self.current_regions))
+            embed.description = f"```\n{region_list}\n```"
         else:
             embed.description = "```No regions selected.```"
-        if status_message or self.status_message:
-            embed.set_footer(text=status_message or self.status_message)
-        else:
-            embed.set_footer(text="Get pings for Pokémon from specific regions when they spawn on PokéTwo")
+
+        embed.set_footer(text=status_message or self.status_message or "Toggle regions below to get pings for Pokémon from specific regions on PokéTwo")
         if ctx and hasattr(ctx, "user") and ctx.user.avatar:
             embed.set_thumbnail(url=ctx.user.avatar.url)
-        else:
-            embed.set_thumbnail(url="")
         return embed
 
     async def interaction_check(self, interaction: discord.Interaction):
@@ -1505,4 +1457,11 @@ class PokemonRegionButtons(discord.ui.View):
             await interaction.response.send_message("Only the command author can use these buttons.", ephemeral=True)
             return False
         return True
-
+    
+    async def on_timeout(self):
+     for item in self.children:
+        item.disabled = True
+     if self.message:
+        embed = self._create_embed(status_message="View expired.")
+        await self.message.edit(embed=embed, view=self)
+     self.stop()
