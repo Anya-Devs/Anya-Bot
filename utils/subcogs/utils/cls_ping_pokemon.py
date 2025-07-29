@@ -400,13 +400,18 @@ class PokemonCollectionHandler:
         self.pe = pokemon_emojis
         self.pokemon_subcogs = pokemon_subcogs
         self.max_pokemon = max_pokemon
-        self.RESULTS_PER_PAGE= 10
-        self.icons = {"success": "<:check:1399603549100441723>", "error": "<:x_:1399603637105463386>", "exists": "<:already_exists:1399604560598663188>", "removed": "<:minus:1399613745784946728>", "not_found": "<:question_white:1399604993228804136>"}
+        self.RESULTS_PER_PAGE = 10
+        self.icons = {
+            "success": "<:check:1399603549100441723>",
+            "error": "<:x_:1399603637105463386>",
+            "exists": "<:already_exists:1399604560598663188>",
+            "removed": "<:minus:1399613745784946728>",
+            "not_found": "<:question_white:1399604993228804136>"
+        }
 
     async def paginate_and_send(self, ctx, entries: list[str], title="Your Pokémon Collection", flags_obj=None):
         try:
             embeds = self.embed_manager.create_collection_embeds(entries, title, ctx)
-            
             if len(embeds) == 1:
                 await ctx.send(embed=embeds[0])
             else:
@@ -417,7 +422,9 @@ class PokemonCollectionHandler:
                     await ctx.reply(embed=embeds[0], mention_author=False)
         except Exception as e:
             print(f"Error in paginate_and_send: {e}")
-            error_embed = self.embed_manager.create_error_embed(ctx, "Failed to display your Pokémon collection. Please try again.")
+            error_embed = self.embed_manager.create_error_embed(
+                ctx, "Failed to display your Pokémon collection. Please try again."
+            )
             await ctx.send(embed=error_embed)
 
     async def handle_collection(self, ctx, col, action, pokemon=None, max_one=False, flags_obj=None):
@@ -432,39 +439,37 @@ class PokemonCollectionHandler:
             cur = await self.data_manager.mongo.list(col, uid)
 
             invalids = [n for n in cur if n.lower() not in valid_slugs]
-
             if action == "list" and invalids:
                 for n in invalids:
                     await self.data_manager.mongo.remove(col, n, uid)
-
                 cur = await self.data_manager.mongo.list(col, uid)
-                all_suggestions = []
+                suggestions = []
                 for invalid_name in invalids:
                     similar = self.data_manager.find_similar_names(invalid_name, valid_slugs_list)
                     if similar:
-                        for suggestion in similar:
-                            all_suggestions.append((invalid_name, suggestion))
-
-                if all_suggestions:
+                        for s in similar:
+                            suggestions.append((invalid_name, s))
+                if suggestions:
                     embed = Embed(
                         title="Invalid Pokémon Found in Collection",
-                        description=f"Found {len(invalids)} invalid Pokémon in your collection. Would you like to replace them with suggestions?",
+                        description=(
+                            f"Found {len(invalids)} invalid Pokémon in your collection. "
+                            "Would you like to replace them with suggestions?"
+                        ),
                         color=self.embed_manager.embed_default_color
                     )
                     view = UnifiedResultView(
-                        success_results=[], failed_results=[], exists_results=[], suggestions_list=all_suggestions,
-                        parent_cog=self, ctx=ctx, col=col, uid=uid, action="add", max_one=max_one
+                        success_results=[], failed_results=[], exists_results=[],
+                        suggestions_list=suggestions,
+                        parent_cog=self, ctx=ctx, col=col, uid=uid,
+                        action="add", max_one=max_one
                     ) if 'UnifiedResultView' in globals() else None
-                    
-                    if view:
-                        return await ctx.reply(embed=embed, view=view, mention_author=False)
-                    else:
-                        return await ctx.reply(embed=embed, mention_author=False)
+                    return await ctx.reply(embed=embed, view=view, mention_author=False) \
+                        if view else await ctx.reply(embed=embed, mention_author=False)
             else:
                 for n in invalids:
                     await self.data_manager.mongo.remove(col, n, uid)
-
-            cur = await self.data_manager.mongo.list(col, uid)
+                cur = await self.data_manager.mongo.list(col, uid)
 
             if len(cur) > self.max_pokemon:
                 for n in cur[self.max_pokemon:]:
@@ -477,16 +482,16 @@ class PokemonCollectionHandler:
                     return await ctx.reply(embed=embed, mention_author=False)
 
                 entries = []
-                for n in cur:
+                for name in cur:
                     emoji = ""
                     if self.pe:
                         try:
-                            pid = self.pokemon_subcogs.pokemon_name_to_id(n) if self.pokemon_subcogs else None
-                            if pid:
-                                emoji = self.pe.get_emoji_for_pokemon(pid) or ""
+                            pid = (self.pokemon_subcogs.pokemon_name_to_id(name)
+                                   if self.pokemon_subcogs else None)
+                            emoji = self.pe.get_emoji_for_pokemon(pid) or ""
                         except:
                             pass
-                    display_name = self.data_manager.display_name_with_region(n)
+                    display_name = self.data_manager.display_name_with_region(name)
                     entries.append(f"{emoji} {display_name}" if emoji else display_name)
 
                 if flags_obj:
@@ -501,112 +506,109 @@ class PokemonCollectionHandler:
                 return await ctx.reply(embed=embed, mention_author=False)
 
             if not pokemon:
-                embed = self.embed_manager.create_error_embed(ctx, f"{self.icons['error']} Specify Pokémon name(s).")
+                embed = self.embed_manager.create_error_embed(
+                    ctx, f"{self.icons['error']} Specify Pokémon name(s)."
+                )
                 return await ctx.reply(embed=embed, mention_author=False)
 
-            names = []
-            success, failed, exists = [], [], []
-            user_input_suggestions = []
-
-            for entry in pokemon.split(","):
-                raw = entry.strip()
-                norm = self.data_manager.normalize_regional_name(raw.lower().replace(" ", "-"))
-                names.append((raw, norm))
-
+            names = [(raw.strip(), self.data_manager.normalize_regional_name(raw.strip().lower().replace(" ", "-")))
+                     for raw in pokemon.split(",")]
             cur = await self.data_manager.mongo.list(col, uid)
 
-            for raw, name in names:
-                name_lower = name.lower()
+            success, failed, exists = [], [], []
+            suggestions = []
+
+            for raw, norm in names:
+                name_lower = norm.lower()
                 if name_lower in valid_slugs:
-                    matched_slug = name_lower
-                    pid = self.pokemon_subcogs.pokemon_name_to_id(matched_slug) if self.pokemon_subcogs else None
-                    emoji = self.pe.get_emoji_for_pokemon(pid) or "" if self.pe and pid else ""
+                    pid = (self.pokemon_subcogs.pokemon_name_to_id(name_lower)
+                           if self.pokemon_subcogs else None)
+                    emoji = (self.pe.get_emoji_for_pokemon(pid) or "") if self.pe and pid else ""
+                    disp = self.data_manager.display_name_with_region(name_lower)
 
                     if action == "add":
                         if max_one:
-                            await self.data_manager.mongo.replace(col, matched_slug, uid)
-                            name_disp = self.data_manager.display_name_with_region(matched_slug)
-                            success.append(f"{self.icons['success']} Set your shiny hunt to {emoji} {name_disp}!")
+                            await self.data_manager.mongo.replace(col, name_lower, uid)
+                            success.append(f"{self.icons['success']} {emoji} {disp} has been set.")
                             break
-                        if len(cur) >= self.max_pokemon and matched_slug not in cur:
-                            exists.append(f"{self.icons['error']} Max {self.max_pokemon} Pokémon. {matched_slug.title()} not added.")
+                        if len(cur) >= self.max_pokemon and name_lower not in cur:
+                            exists.append(f"{self.icons['error']} Max {self.max_pokemon} reached. {disp} not added.")
                             continue
-                        ok = await self.data_manager.mongo.add(col, matched_slug, uid)
-                        (success if ok else exists).append(f"{self.icons['success'] if ok else self.icons['exists']} {emoji} {self.data_manager.display_name_with_region(matched_slug)}")
+                        ok = await self.data_manager.mongo.add(col, name_lower, uid)
                         if ok:
-                            cur.append(matched_slug)
+                            success.append(f"{self.icons['success']} {emoji} {disp} has been added.")
+                            cur.append(name_lower)
+                        else:
+                            exists.append(f"{self.icons['exists']} {emoji} {disp} already exists.")
                     elif action == "remove":
-                        ok = await self.data_manager.mongo.remove(col, matched_slug, uid)
-                        (success if ok else exists).append(f"{self.icons['removed'] if ok else self.icons['not_found']} {emoji} {self.data_manager.display_name_with_region(matched_slug)}")
+                        ok = await self.data_manager.mongo.remove(col, name_lower, uid)
+                        if ok:
+                            success.append(f"{self.icons['removed']} {emoji} {disp} has been removed.")
+                        else:
+                            exists.append(f"{self.icons['not_found']} {emoji} {disp} was not found.")
                 else:
                     similar = self.data_manager.find_similar_names(raw, valid_slugs_list)
                     if similar:
-                        for suggestion in similar:
-                            user_input_suggestions.append((raw, suggestion))
+                        for s in similar:
+                            suggestions.append((raw, s))
                     else:
-                        failed.append(f"{self.icons['error']} Invalid Pokémon name: {raw}.")
+                        failed.append(f"{self.icons['error']} Pokémon named '{raw}' is invalid and could not be processed.")
 
-            if success or failed or exists or user_input_suggestions:
+            if success or failed or exists or suggestions:
                 if success and col == "shiny_hunt" and max_one:
                     embed = self.embed_manager.create_success_embed(ctx, success[0])
                     return await ctx.reply(embed=embed, mention_author=False)
 
-                if user_input_suggestions and not success:
-                    total = len(user_input_suggestions)
-                    unique = len(set(orig for orig, _ in user_input_suggestions))
+                if suggestions and not success:
                     embed = Embed(
                         title="Pokémon Suggestions",
-                        description=f"Found {total} suggestions for {unique} invalid name(s). Select the Pokémon to {action}:",
+                        description=(f"Found {len(suggestions)} suggestion(s) for invalid name(s). "
+                                     f"Select the Pokémon to {action}:"),
                         color=self.embed_manager.embed_default_color
                     )
                     view = UnifiedResultView(
-                        success_results=success, failed_results=failed, exists_results=exists, suggestions_list=user_input_suggestions,
-                        parent_cog=self, ctx=ctx, col=col, uid=uid, action=action, max_one=max_one
+                        success_results=success, failed_results=failed, exists_results=exists,
+                        suggestions_list=suggestions,
+                        parent_cog=self, ctx=ctx, col=col, uid=uid,
+                        action=action, max_one=max_one
                     ) if 'UnifiedResultView' in globals() else None
-                    
-                    if view:
-                        return await ctx.reply(embed=embed, view=view, mention_author=False)
+                    return await ctx.reply(embed=embed, view=view, mention_author=False) \
+                        if view else await ctx.reply(embed=embed, mention_author=False)
+
+                if success or failed or exists:
+                    label_map = {
+                        "success": "✅ Successful Results",
+                        "invalid": "❌ Invalid Results",
+                        "other": "⛔ Other Results"
+                    }
+                    if success:
+                        init = success; key="success"
+                    elif failed:
+                        init = failed; key="invalid"
                     else:
-                        return await ctx.reply(embed=embed, mention_author=False)
-
-                if success:
-                    initial_type = "success"
-                    initial_content = success
-                elif failed:
-                    initial_type = "invalid"
-                    initial_content = failed
-                elif exists:
-                    initial_type = "other"
-                    initial_content = exists
-                else:
-                    initial_type = "suggestions"
-                    initial_content = []
-
-                if initial_type != "suggestions":
-                    view_titles = {"success": "✅ Successful Results", "invalid": "❌ Invalid Results", "other": "⛔ Other Results"}
-                    content = "\n".join(initial_content[:self.embed_manager.results_per_page])
+                        init = exists; key="other"
+                    content = "\n".join(init[:self.embed_manager.results_per_page])
                     embed = Embed(
-                        description=f"{view_titles[initial_type]}\n\n{content[:3900]}",
+                        description=f"{label_map[key]}\n\n{content[:3900]}",
                         color=self.embed_manager.embed_default_color
                     )
-                    embed.set_footer(text="" if max_one else "Updated Your Pokémon Collection")
-
+                    if not max_one:
+                        embed.set_footer(text="Updated Your Pokémon Collection")
                     view = UnifiedResultView(
-                        success_results=success, failed_results=failed, exists_results=exists, suggestions_list=user_input_suggestions,
-                        parent_cog=self, ctx=ctx, col=col, uid=uid, action=action, max_one=max_one
+                        success_results=success, failed_results=failed,
+                        exists_results=exists, suggestions_list=suggestions,
+                        parent_cog=self, ctx=ctx, col=col, uid=uid,
+                        action=action, max_one=max_one
                     ) if 'UnifiedResultView' in globals() else None
-                    
-                    if view:
-                        await ctx.reply(embed=embed, view=view, mention_author=False)
-                    else:
-                        await ctx.reply(embed=embed, mention_author=False)
+                    return await (ctx.reply(embed=embed, view=view, mention_author=False)
+                                  if view else ctx.reply(embed=embed, mention_author=False))
 
         except Exception as e:
             print(f"Error in handle_collection: {e}")
-            traceback.print_exc() 
+            import traceback; traceback.print_exc()
             embed = self.embed_manager.create_error_embed(ctx)
             await ctx.reply(embed=embed, mention_author=False)
-
+            
 ############################################
 
 
