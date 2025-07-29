@@ -59,17 +59,11 @@ class Ping_Pokemon(commands.Cog):
             pokemon_names_csv=self.pokemon_names_file,
             pokemon_types_csv=self.pokemon_types_file,
             pokemon_rarity_csv=self.pokemon_rarity_file
-        )
+        ) 
 
         self.embed_manager = PokemonEmbedManager(
             embed_default_color=self.embed_default_color,
-            icons={
-                "success": self.check_emoji,
-                "error": self.cross_emoji,
-                "exists": "⍻",
-                "removed": "−",
-                "not_found": "?"
-            },
+            icons = {"success": "<:check:1399603549100441723>", "error": "<:x_:1399603637105463386>", "exists": "<:already_exists:1399604560598663188>", "removed": "<:minus:1399604315978731652>", "not_found": "<:question_white:1399604993228804136>"},
             results_per_page=self.RESULTS_PER_PAGE,
             chunk_size=15
         )

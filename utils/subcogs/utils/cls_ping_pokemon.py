@@ -401,7 +401,7 @@ class PokemonCollectionHandler:
         self.pokemon_subcogs = pokemon_subcogs
         self.max_pokemon = max_pokemon
         self.RESULTS_PER_PAGE= 10
-        self.icons = {"success": "[✓]", "error": "[✕]", "exists": "[⍻]", "removed": "[−]", "not_found": "[𐄂]"}
+        self.icons = {"success": "<:check:1399603549100441723>", "error": "<:x_:1399603637105463386>", "exists": "<:already_exists:1399604560598663188>", "removed": "<:minus:1399604315978731652>", "not_found": "<:question_white:1399604993228804136>"}
 
     async def paginate_and_send(self, ctx, entries: list[str], title="Your Pokémon Collection", flags_obj=None):
         try:

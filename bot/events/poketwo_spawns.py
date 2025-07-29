@@ -53,7 +53,6 @@ class PoketwoSpawnDetector(commands.Cog):
         )
         self.pokemon_image_builder = PokemonImageBuilder()
 
-        # Load static data once in memory
         self.alt_names_map = self.load_alt_names("data/commands/pokemon/alt_names.csv")
         self.flag_map = self.load_flag_map("data/commands/pokemon/flag_map.json")
         self._pokemon_ids = self.pokemon_utils.load_pokemon_ids()
@@ -125,7 +124,6 @@ class PoketwoSpawnDetector(commands.Cog):
             if not valid:
                 return None
 
-            # Return shortest valid alt name (flag + name)
             flag, name = min(valid, key=lambda x: len(x[1]))
             return f"{flag} {name}" if flag else name
 
@@ -134,11 +132,8 @@ class PoketwoSpawnDetector(commands.Cog):
             return None
 
     async def _get_image_color_cached(self, url):
-        # Cache by url to avoid repeated ColorThief work
         if url in self._image_color_cache:
             return self._image_color_cache[url]
-
-        # ColorThief is blocking, run in executor
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as resp:
@@ -159,13 +154,11 @@ class PoketwoSpawnDetector(commands.Cog):
 
     async def output_prediction(self, message, image_url):
         try:
-            # Run predictor in thread (if sync)
             slug, conf = await asyncio.to_thread(self.predictor.predict, image_url)
             pred_text = f"{float(conf):.2f}%" if isinstance(conf, (int, float)) else str(conf)
 
             rare, regional = self._special_names
 
-            # Parallel fetches
             results = await asyncio.gather(
                 self.pokemon_utils.get_server_config(message.guild.id),
                 self.pokemon_utils.get_ping_users(message.guild, slug),
@@ -173,6 +166,19 @@ class PoketwoSpawnDetector(commands.Cog):
                 self.pokemon_utils.get_quest_ping_users(message.guild, slug),
             )
             server_config, (shiny_pings, collection_pings), type_pings, quest_pings = results
+
+            # --- Filter invalid mentions ---
+            def is_valid_mention(mention):
+                match = re.search(r'\d+', mention)
+                return match and message.guild.get_member(int(match.group())) is not None
+
+            shiny_pings = [u for u in shiny_pings if is_valid_mention(u)]
+            collection_pings = [u for u in collection_pings if is_valid_mention(u)]
+            quest_pings = [u for u in quest_pings if is_valid_mention(u)]
+            type_pings = {
+                label: [u for u in users if is_valid_mention(u)]
+                for label, users in type_pings.items()
+            }
 
             special_roles = []
             slug_lower = slug.lower()
@@ -235,7 +241,7 @@ class PoketwoSpawnDetector(commands.Cog):
             if quest_pings:
                 ping_parts.append(f"Regional: {' '.join(quest_pings)}")
             if type_pings:
-                type_parts = [f"{label}: {users}" for label, users in type_pings.items() if users]
+                type_parts = [f"{label}: {' '.join(users)}" for label, users in type_pings.items() if users]
                 if type_parts:
                     ping_parts.append("\n".join(type_parts))
             if ping_parts:
