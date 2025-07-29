@@ -1389,6 +1389,24 @@ class PokemonRegionButtons(discord.ui.View):
         self.current_regions = set(current_regions or [])
         self.status_message = status
         self.message = None
+
+        # Load emojis from JSON and parse them as PartialEmoji if possible
+        with open("data/commands/pokemon/pokemon_emojis/_pokemon_quest.json", "r", encoding="utf-8") as f:
+            raw_emojis = json.load(f)
+
+        self.emojis = {}
+        for key, raw in raw_emojis.items():
+            # raw is like "<:Name:ID>", parse it as PartialEmoji if possible
+            try:
+                parts = raw.strip('<>').split(':')
+                if len(parts) == 3:
+                    _, name, emoji_id = parts
+                    self.emojis[key.lower()] = discord.PartialEmoji(name=name, id=int(emoji_id))
+                else:
+                    self.emojis[key.lower()] = raw  # fallback as string emoji
+            except Exception:
+                self.emojis[key.lower()] = raw
+
         self._add_toggle_buttons()
 
     def _add_toggle_buttons(self):
@@ -1399,9 +1417,11 @@ class PokemonRegionButtons(discord.ui.View):
                 row += 1
             selected = region in self.current_regions
             style = discord.ButtonStyle.success if selected else discord.ButtonStyle.secondary
+            emoji = self.emojis.get(region.lower())
             button = discord.ui.Button(
                 label=region.title(),
                 style=style,
+                emoji=emoji,
                 custom_id=region,
                 row=row
             )
@@ -1433,23 +1453,30 @@ class PokemonRegionButtons(discord.ui.View):
         self.message = interaction.message
 
     async def on_timeout(self):
-        self.clear_items()
+        for item in self.children:
+            item.disabled = True
         if self.message:
             embed = self._create_embed(status_message="View expired.")
-            await self.message.edit(embed=embed, view=None)
+            await self.message.edit(embed=embed, view=self)
         self.stop()
 
     def _create_embed(self, ctx=None, status_message=None):
         embed = discord.Embed(title="Pokémon Region Pings")
+
         if self.current_regions:
-            region_list = "\n".join(sorted(region.title() for region in self.current_regions))
-            embed.description = f"```\n{region_list}\n```"
+            lines = []
+            for region in sorted(self.current_regions):
+                emoji = self.emojis.get(region.lower(), "")
+                lines.append(f"{emoji} {region.title()}")
+            embed.description = "\n".join(lines)
         else:
-            embed.description = "```No regions selected.```"
+            embed.description = "No regions selected."
 
         embed.set_footer(text=status_message or self.status_message or "Toggle regions below to get pings for Pokémon from specific regions on PokéTwo")
+
         if ctx and hasattr(ctx, "user") and ctx.user.avatar:
             embed.set_thumbnail(url=ctx.user.avatar.url)
+
         return embed
 
     async def interaction_check(self, interaction: discord.Interaction):
@@ -1457,11 +1484,27 @@ class PokemonRegionButtons(discord.ui.View):
             await interaction.response.send_message("Only the command author can use these buttons.", ephemeral=True)
             return False
         return True
-    
-    async def on_timeout(self):
-     for item in self.children:
-        item.disabled = True
-     if self.message:
-        embed = self._create_embed(status_message="View expired.")
-        await self.message.edit(embed=embed, view=self)
-     self.stop()
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     

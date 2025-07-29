@@ -232,8 +232,12 @@ class PoketwoSpawnDetector(commands.Cog):
                 ping_parts.append(f"Shiny: {' '.join(shiny_pings)}")
             if collection_pings:
                 ping_parts.append(f"Collectors: {' '.join(collection_pings)}")
+
             if quest_pings:
-                ping_parts.append(f"Regional: {' '.join(quest_pings)}")
+                region_name = self.pokemon_utils.get_pokemon_region(slug) or "Region"
+                region_emoji = self.pokemon_utils._quest_emojis.get(region_name.lower(), "")
+                ping_parts.append(f"{region_emoji} {region_name}: {' '.join(quest_pings)}")
+
             if type_pings:
                 type_parts = [f"{label}: {users}" for label, users in type_pings.items() if users]
                 if type_parts:
@@ -243,6 +247,7 @@ class PoketwoSpawnDetector(commands.Cog):
 
             actual_types = self.pokemon_utils.get_pokemon_types(slug)
             actual_region = self.pokemon_utils.get_pokemon_region(slug)
+            region_emoji = self.pokemon_utils._quest_emojis.get(actual_region.lower(), "") if actual_region else ""
             emoji_types = [
                 f"{self.pokemon_utils._type_emojis.get(f'{t.lower()}_type','')} {t.title()}"
                 for t in actual_types if t
@@ -265,7 +270,7 @@ class PoketwoSpawnDetector(commands.Cog):
             if emoji_types:
                 embed.add_field(name="Types", value="\n".join(emoji_types), inline=True)
             if actual_region:
-                embed.add_field(name="Region", value=actual_region, inline=True)
+                embed.add_field(name="Region", value=f"{region_emoji} {actual_region}", inline=True)
             embed.set_thumbnail(url=thumb_url)
             return "\n".join(lines), embed
         except Exception as e:
@@ -273,7 +278,6 @@ class PoketwoSpawnDetector(commands.Cog):
             fallback = f"**{slug}**\nFailed to format spawn info."
             embed = discord.Embed(color=0xFF0000, description="An error occurred generating this embed.")
             return fallback, embed
-
     @commands.Cog.listener()
     async def on_message(self, message):
         try:
@@ -300,6 +304,6 @@ class PoketwoSpawnDetector(commands.Cog):
             await self.output_prediction(message, image_url)
         except Exception as e:
             await ctx.send(f"{self.cross_emoji} Prediction error: {type(e).__name__}: {e}")
-
+            
 def setup(bot):
     bot.add_cog(PoketwoSpawnDetector(bot))
