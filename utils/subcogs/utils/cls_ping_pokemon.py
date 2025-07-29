@@ -1385,25 +1385,25 @@ class PokemonRegionButtons(discord.ui.View):
         self.user_id = user_id
         self.collection_type = collection_type
         self.mongo = mongo_helper
-        self.pokemon_regions = pokemon_regions
-        self.current_regions = set(current_regions or [])
+        # Exclude "hisui" from available regions
+        self.pokemon_regions = [r for r in pokemon_regions if r.lower() != "hisui"]
+        self.current_regions = set(r for r in (current_regions or []) if r.lower() != "hisui")
         self.status_message = status
         self.message = None
 
-        # Load emojis from JSON and parse them as PartialEmoji if possible
+        # Load emojis from JSON
         with open("data/commands/pokemon/pokemon_emojis/_pokemon_quest.json", "r", encoding="utf-8") as f:
             raw_emojis = json.load(f)
 
         self.emojis = {}
         for key, raw in raw_emojis.items():
-            # raw is like "<:Name:ID>", parse it as PartialEmoji if possible
             try:
                 parts = raw.strip('<>').split(':')
                 if len(parts) == 3:
                     _, name, emoji_id = parts
                     self.emojis[key.lower()] = discord.PartialEmoji(name=name, id=int(emoji_id))
                 else:
-                    self.emojis[key.lower()] = raw  # fallback as string emoji
+                    self.emojis[key.lower()] = raw
             except Exception:
                 self.emojis[key.lower()] = raw
 
@@ -1433,6 +1433,9 @@ class PokemonRegionButtons(discord.ui.View):
             return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
 
         region = interaction.data["custom_id"]
+        if region.lower() == "hisui":
+            return  # Do nothing if somehow "hisui" is clicked
+
         if region in self.current_regions:
             self.current_regions.remove(region)
         else:
@@ -1466,9 +1469,11 @@ class PokemonRegionButtons(discord.ui.View):
         if self.current_regions:
             lines = []
             for region in sorted(self.current_regions):
+                if region.lower() == "hisui":
+                    continue  # Skip showing Hisui
                 emoji = self.emojis.get(region.lower(), "")
                 lines.append(f"{emoji} {region.title()}")
-            embed.description = "\n".join(lines)
+            embed.description = "\n".join(lines) if lines else "No regions selected."
         else:
             embed.description = "No regions selected."
 
@@ -1484,8 +1489,6 @@ class PokemonRegionButtons(discord.ui.View):
             await interaction.response.send_message("Only the command author can use these buttons.", ephemeral=True)
             return False
         return True
-     
-     
      
      
      
