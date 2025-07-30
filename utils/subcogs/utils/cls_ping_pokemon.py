@@ -1236,10 +1236,7 @@ class ServerConfigView(discord.ui.View):
 
 
 
-
-
-
-class PokemonTypeButtons(discord.ui.View):
+class PokemonTypeSelect(discord.ui.View):
     def __init__(self, user_id: int, collection_type: str, mongo_helper, pokemon_types: list[str], current_types: list[str] | None = None, status=None):
         super().__init__(timeout=300)
         self.user_id = user_id
@@ -1259,41 +1256,54 @@ class PokemonTypeButtons(discord.ui.View):
                 parts = raw.strip('<>').split(':')
                 if len(parts) == 3:
                     _, name, emoji_id = parts
-                    self.emojis[key] = discord.PartialEmoji(name=name, id=int(emoji_id))
+                    self.emojis[key.lower()] = discord.PartialEmoji(name=name, id=int(emoji_id))
                 else:
-                    self.emojis[key] = raw
+                    self.emojis[key.lower()] = raw
             except Exception:
-                self.emojis[key] = raw
+                self.emojis[key.lower()] = raw
 
-        self._add_toggle_buttons()
+        self.add_type_select()
+        self.add_clear_button()
 
     def _get_emoji_by_name(self, name: str):
         for key, emoji in self.emojis.items():
-            if name in key:
+            if name.lower() in key:
                 return emoji
         return None
 
-    def _add_toggle_buttons(self):
-        row = 0
-        for i, ptype in enumerate(self.pokemon_types):
-            if i and i % 5 == 0:
-                row += 1
-            selected = ptype in self.current_types
-            style = discord.ButtonStyle.success if selected else discord.ButtonStyle.secondary
-            emoji = self._get_emoji_by_name(ptype)
-            button = discord.ui.Button(label=ptype.title(), style=style, emoji=emoji, custom_id=ptype, row=row)
-            button.callback = self._toggle_callback
-            self.add_item(button)
+    def add_type_select(self):
+        options = []
+        for pt in self.pokemon_types:
+            selected = pt in self.current_types
+            emoji = self._get_emoji_by_name(pt)
+            options.append(discord.SelectOption(
+                label=pt.title(),
+                value=pt,
+                emoji=emoji if isinstance(emoji, (discord.PartialEmoji, str)) else None,
+                default=selected
+            ))
 
-    async def _toggle_callback(self, interaction: discord.Interaction):
+        select = discord.ui.Select(
+            placeholder="Select Pokémon Types...",
+            min_values=0,
+            max_values=len(self.pokemon_types),
+            options=options,
+            custom_id="pokemon_type_select"
+        )
+        select.callback = self.select_callback
+        self.clear_items()
+        self.add_item(select)
+
+    def add_clear_button(self):
+        clear_button = discord.ui.Button(label="Clear All", style=discord.ButtonStyle.danger)
+        clear_button.callback = self.clear_callback
+        self.add_item(clear_button)
+
+    async def select_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
 
-        ptype = interaction.data['custom_id']
-        if ptype in self.current_types:
-            self.current_types.remove(ptype)
-        else:
-            self.current_types.add(ptype)
+        self.current_types = set(interaction.data.get("values", []))
 
         try:
             collection = self.mongo.db[f"{self.collection_type}_types"]
@@ -1305,34 +1315,43 @@ class PokemonTypeButtons(discord.ui.View):
             return await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
 
         self.clear_items()
-        self._add_toggle_buttons()
+        self.add_type_select()
+        self.add_clear_button()
 
-        embed = interaction.message.embeds[0].copy()
-        self._update_embed_content(embed, "Selection updated.")
+        embed = self._create_embed(interaction, status_message="Selection updated.")
+        await interaction.response.edit_message(embed=embed, view=self)
+        self.message = interaction.message
+
+    async def clear_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Only the command author can clear selections.", ephemeral=True)
+
+        self.current_types.clear()
+
+        try:
+            collection = self.mongo.db[f"{self.collection_type}_types"]
+            await collection.delete_many({"user_id": self.user_id})
+        except Exception as e:
+            return await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
+
+        self.clear_items()
+        self.add_type_select()
+        self.add_clear_button()
+
+        embed = self._create_embed(interaction, status_message="Selection cleared.")
         await interaction.response.edit_message(embed=embed, view=self)
         self.message = interaction.message
 
     async def on_timeout(self):
-        self.clear_items()
-        if self.message and self.message.embeds:
-            embed = self.message.embeds[0].copy()
-            self._update_embed_content(embed, "View expired.")
-            await self.message.edit(embed=embed, view=None)
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            embed = self._create_embed(status_message="View expired.")
+            await self.message.edit(embed=embed, view=self)
         self.stop()
 
-    def _update_embed_content(self, embed: discord.Embed, status_message: str = None):
-        if self.current_types:
-            lines = []
-            for pt in sorted(self.current_types):
-                emoji = self._get_emoji_by_name(pt)
-                lines.append(f"{emoji} {pt.title()}")
-            embed.description = "\n".join(lines)
-        else:
-            embed.description = "No types selected yet. Tap a type below to add it!"
-        embed.set_footer(text=status_message or self.status_message or "Toggle types below to get spawn pings for Fire, Water, Ghost, etc.")
-
     def _create_embed(self, ctx=None, status_message=None):
-        embed = discord.Embed(title="Pokémon Type Ping Setup")
+        embed = discord.Embed(title="Type Ping")
         if self.current_types:
             lines = []
             for pt in sorted(self.current_types):
@@ -1340,25 +1359,31 @@ class PokemonTypeButtons(discord.ui.View):
                 lines.append(f"{emoji} {pt.title()}")
             embed.description = "\n".join(lines)
         else:
-            embed.description = "No types selected yet. Tap a type below to add it!"
-        embed.set_footer(text=status_message or self.status_message or "Toggle types below to get spawn pings for Fire, Water, Ghost, etc.")
-        if ctx and hasattr(ctx, "author") and ctx.author.avatar:
-            embed.set_thumbnail(url=ctx.author.avatar)
+            embed.description = "No types selected."
+
+        embed.description += (
+            "\n\n> When a Pokémon spawns with any selected type, "
+            "<@716390085896962058> will mention you in this server."
+        )
+
+        footer_text = status_message or self.status_message or "Select types below to get spawn pings."
+        embed.set_footer(text=footer_text)
+
+        if ctx and hasattr(ctx, "user") and ctx.user.avatar:
+            embed.set_thumbnail(url=ctx.user.avatar.url)
+
         return embed
 
     async def interaction_check(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
-            await interaction.response.send_message("Only the command author can use these buttons.", ephemeral=True)
+            await interaction.response.send_message("Only the command author can use these options.", ephemeral=True)
             return False
         return True
-    
-    async def on_timeout(self):
-     for item in self.children:
-        item.disabled = True
-     if self.message:
-        embed = self._create_embed(status_message="View expired.")
-        await self.message.edit(embed=embed, view=self)
-     self.stop()
+
+    def parse_type_input(self, user_input: str) -> set[str]:
+        valid_types = {t.lower() for t in self.pokemon_types}
+        parts = [p.strip().lower() for p in user_input.replace(',', ' ').split()]
+        return {t for t in parts if t in valid_types}
 
 
 
@@ -1375,23 +1400,17 @@ class PokemonTypeButtons(discord.ui.View):
 
 
 
-
-
-
-
-class PokemonRegionButtons(discord.ui.View):
+class PokemonRegionSelect(discord.ui.View):
     def __init__(self, user_id: int, collection_type: str, mongo_helper, pokemon_regions: list[str], current_regions: list[str] | None = None, status=None):
         super().__init__(timeout=300)
         self.user_id = user_id
         self.collection_type = collection_type
         self.mongo = mongo_helper
-        # Exclude "hisui" from available regions
         self.pokemon_regions = [r for r in pokemon_regions if r.lower() != "hisui"]
         self.current_regions = set(r for r in (current_regions or []) if r.lower() != "hisui")
         self.status_message = status
         self.message = None
 
-        # Load emojis from JSON
         with open("data/commands/pokemon/pokemon_emojis/_pokemon_quest.json", "r", encoding="utf-8") as f:
             raw_emojis = json.load(f)
 
@@ -1407,39 +1426,44 @@ class PokemonRegionButtons(discord.ui.View):
             except Exception:
                 self.emojis[key.lower()] = raw
 
-        self._add_toggle_buttons()
+        self.add_region_select()
+        self.add_clear_button()
 
-    def _add_toggle_buttons(self):
-        self.clear_items()
-        row = 0
-        for i, region in enumerate(self.pokemon_regions):
-            if i and i % 5 == 0:
-                row += 1
+    def add_region_select(self):
+        options = []
+        for region in self.pokemon_regions:
             selected = region in self.current_regions
-            style = discord.ButtonStyle.success if selected else discord.ButtonStyle.secondary
             emoji = self.emojis.get(region.lower())
-            button = discord.ui.Button(
+            options.append(discord.SelectOption(
                 label=region.title(),
-                style=style,
-                emoji=emoji,
-                custom_id=region,
-                row=row
-            )
-            button.callback = self._toggle_callback
-            self.add_item(button)
+                value=region,
+                emoji=emoji if isinstance(emoji, (discord.PartialEmoji, str)) else None,
+                default=selected
+            ))
 
-    async def _toggle_callback(self, interaction: discord.Interaction):
+        select = discord.ui.Select(
+            placeholder="Select Pokémon Regions...",
+            min_values=0,
+            max_values=len(self.pokemon_regions),
+            options=options,
+            custom_id="pokemon_region_select"
+        )
+        select.callback = self.select_callback
+        self.clear_items()
+        self.add_item(select)
+
+    def add_clear_button(self):
+        clear_button = discord.ui.Button(label="Clear All", style=discord.ButtonStyle.danger)
+        clear_button.callback = self.clear_callback
+        self.add_item(clear_button)
+
+    async def select_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
 
-        region = interaction.data["custom_id"]
-        if region.lower() == "hisui":
-            return  # Do nothing if somehow "hisui" is clicked
-
-        if region in self.current_regions:
-            self.current_regions.remove(region)
-        else:
-            self.current_regions.add(region)
+        selected_regions = interaction.data.get("values", [])
+        selected_regions = [r for r in selected_regions if r.lower() != "hisui"]
+        self.current_regions = set(selected_regions)
 
         try:
             await self.mongo.db[self.collection_type].update_one(
@@ -1450,8 +1474,34 @@ class PokemonRegionButtons(discord.ui.View):
         except Exception as e:
             return await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
 
-        self._add_toggle_buttons()
+        self.clear_items()
+        self.add_region_select()
+        self.add_clear_button()
+
         embed = self._create_embed(interaction, status_message="Selection updated.")
+        await interaction.response.edit_message(embed=embed, view=self)
+        self.message = interaction.message
+
+    async def clear_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Only the command author can clear selections.", ephemeral=True)
+
+        self.current_regions.clear()
+
+        try:
+            await self.mongo.db[self.collection_type].update_one(
+                {"user_id": self.user_id},
+                {"$set": {"regions": []}},
+                upsert=True
+            )
+        except Exception as e:
+            return await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
+
+        self.clear_items()
+        self.add_region_select()
+        self.add_clear_button()
+
+        embed = self._create_embed(interaction, status_message="Selection cleared.")
         await interaction.response.edit_message(embed=embed, view=self)
         self.message = interaction.message
 
@@ -1464,20 +1514,26 @@ class PokemonRegionButtons(discord.ui.View):
         self.stop()
 
     def _create_embed(self, ctx=None, status_message=None):
-        embed = discord.Embed(title="Pokémon Region Pings")
+        embed = discord.Embed(title="Region Ping")
 
         if self.current_regions:
             lines = []
             for region in sorted(self.current_regions):
                 if region.lower() == "hisui":
-                    continue  # Skip showing Hisui
+                    continue
                 emoji = self.emojis.get(region.lower(), "")
                 lines.append(f"{emoji} {region.title()}")
-            embed.description = "\n".join(lines) if lines else "No regions selected."
+            embed.description = "\n".join(lines)
         else:
             embed.description = "No regions selected."
 
-        embed.set_footer(text=status_message or self.status_message or "Toggle regions below to get pings for Pokémon from specific regions on PokéTwo")
+        embed.description += (
+            "\n\n> When a Pokémon spawns from any selected region, "
+            "<@716390085896962058> will mention you in this server."
+        )
+
+        footer_text = status_message or self.status_message or "Select regions below to get spawn pings."
+        embed.set_footer(text=footer_text)
 
         if ctx and hasattr(ctx, "user") and ctx.user.avatar:
             embed.set_thumbnail(url=ctx.user.avatar.url)
@@ -1486,15 +1542,17 @@ class PokemonRegionButtons(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
-            await interaction.response.send_message("Only the command author can use these buttons.", ephemeral=True)
+            await interaction.response.send_message("Only the command author can use these options.", ephemeral=True)
             return False
         return True
-     
-     
-     
-     
-     
-     
+
+    def parse_region_input(self, user_input: str) -> set[str]:
+        valid_regions = {r.lower() for r in self.pokemon_regions}
+        parts = [p.strip().lower() for p in user_input.replace(',', ' ').split()]
+        return {r for r in parts if r in valid_regions and r != "hisui"}
+
+
+
      
      
      

@@ -11,7 +11,7 @@ from imports.discord_imports import *
 from data.local.const import *
 from bot.token import use_test_bot as ut
 from utils.subcogs.pokemon import *
-from utils.subcogs.utils.cls_ping_pokemon import PokemonDataManager, PokemonEmbedManager, PokemonCollectionHandler, AdvancedStringFlagParser, PokemonHelpEmbed, ServerConfigView, PokemonTypeButtons, PokemonRegionButtons
+from utils.subcogs.utils.cls_ping_pokemon import PokemonDataManager, PokemonEmbedManager, PokemonCollectionHandler, AdvancedStringFlagParser, PokemonHelpEmbed, ServerConfigView, PokemonTypeSelect, PokemonRegionSelect
 
 
 class Ping_Pokemon(commands.Cog):
@@ -119,7 +119,7 @@ class Ping_Pokemon(commands.Cog):
         except Exception:
             current_types = []
 
-        view = PokemonTypeButtons(user_id, "type_ping", self.mongo, self.pokemon_types, current_types)
+        view = PokemonTypeSelect(user_id, "type_ping", self.mongo, self.pokemon_types, current_types)
         embed = view._create_embed(ctx=ctx)
         await ctx.reply(embed=embed, view=view, mention_author=False)
 
@@ -133,7 +133,7 @@ class Ping_Pokemon(commands.Cog):
             current_regions = []
 
         available_regions = sorted(list(self.load_quest_regions()))
-        view = PokemonRegionButtons(user_id, self.quest_collection, self.mongo, available_regions, current_regions)
+        view = PokemonRegionSelect(user_id, self.quest_collection, self.mongo, available_regions, current_regions)
         embed = view._create_embed(ctx=ctx)
         await ctx.reply(embed=embed, view=view, mention_author=False)
 
