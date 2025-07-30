@@ -223,29 +223,28 @@ class PoketwoSpawnDetector(commands.Cog):
      lines = []
      try:
         if special_roles:
-            lines.append(special_roles)
+            lines.append(" ".join(special_roles))  # separate mentions by space
 
         formatted_name = self.pokemon_utils.format_name(slug)
         lines.append(f"**{formatted_name}**: {pred_text}")
 
-        # Structured ping sections
         if shiny_pings:
             lines.append("\n**Shinyhunt:**")
-            lines.append(" ".join(shiny_pings))
+            lines.append(" ".join(shiny_pings))  # space-separated
 
         if collection_pings:
             lines.append("\n**Collectors:**")
-            lines.append(" ".join(collection_pings))
+            lines.append(" ".join(collection_pings))  # space-separated
 
         if quest_pings:
             region_name = self.pokemon_utils.get_pokemon_region(slug) or "Region"
             region_emoji = self.pokemon_utils._quest_emojis.get(region_name.lower(), "")
-            lines.append(f"\n**{region_name} Ping:**") # {region_emoji} 
-            lines.append(" ".join(quest_pings))
+            lines.append(f"\n**{region_name} Ping:**")
+            lines.append(" ".join(quest_pings))  # space-separated
 
         if type_pings:
             type_parts = [
-                f"**{label}:**\n{users}"
+                f"**{label}:**\n{' '.join(users)}"  # space-separated
                 for label, users in type_pings.items() if users
             ]
             if type_parts:
@@ -293,7 +292,7 @@ class PoketwoSpawnDetector(commands.Cog):
         fallback = f"**{slug}**\nFailed to format spawn info."
         embed = discord.Embed(color=0xFF0000, description="An error occurred generating this embed.")
         return fallback, embed
-   
+    
     @commands.Cog.listener()
     async def on_message(self, message):
         try:
