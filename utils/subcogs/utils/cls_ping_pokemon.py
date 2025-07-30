@@ -1170,6 +1170,7 @@ class RoleSelect(discord.ui.Select):
         self.role_type = role_type
         self.mongo = mongo_helper
         self.guild_id = guild_id
+        
 
         options = [
             discord.SelectOption(label=role.name, value=str(role.id))
@@ -1237,7 +1238,7 @@ class ServerConfigView(discord.ui.View):
 
 
 class PokemonTypeSelect(discord.ui.View):
-    def __init__(self, user_id: int, collection_type: str, mongo_helper, pokemon_types: list[str], current_types: list[str] | None = None, status=None):
+    def __init__(self, bot, user_id: int, collection_type: str, mongo_helper, pokemon_types: list[str], current_types: list[str] | None = None, status=None):
         super().__init__(timeout=300)
         self.user_id = user_id
         self.collection_type = collection_type
@@ -1246,6 +1247,7 @@ class PokemonTypeSelect(discord.ui.View):
         self.current_types = set(current_types or [])
         self.status_message = status
         self.message = None
+        self.bot = bot
 
         with open("data/commands/pokemon/pokemon_emojis/_pokemon_types.json", "r", encoding="utf-8") as f:
             raw_emojis = json.load(f)
@@ -1362,9 +1364,9 @@ class PokemonTypeSelect(discord.ui.View):
             embed.description = "No types selected."
 
         embed.description += (
-            "\n\n> When a Pokémon spawns with any selected type, "
-            "<@716390085896962058> will mention you in this server."
-        )
+          "\n\n> Whenever a <@716390085896962058> Pokémon spawns with any selected type, "
+          f"{self.bot.user.mention} will mention you in this server."
+          )
 
         footer_text = status_message or self.status_message or "Select types below to get spawn pings."
         embed.set_footer(text=footer_text)
@@ -1401,7 +1403,7 @@ class PokemonTypeSelect(discord.ui.View):
 
 
 class PokemonRegionSelect(discord.ui.View):
-    def __init__(self, user_id: int, collection_type: str, mongo_helper, pokemon_regions: list[str], current_regions: list[str] | None = None, status=None):
+    def __init__(self, bot, user_id: int, collection_type: str, mongo_helper, pokemon_regions: list[str], current_regions: list[str] | None = None, status=None):
         super().__init__(timeout=300)
         self.user_id = user_id
         self.collection_type = collection_type
@@ -1410,6 +1412,7 @@ class PokemonRegionSelect(discord.ui.View):
         self.current_regions = set(r for r in (current_regions or []) if r.lower() != "hisui")
         self.status_message = status
         self.message = None
+        self.bot = bot
 
         with open("data/commands/pokemon/pokemon_emojis/_pokemon_quest.json", "r", encoding="utf-8") as f:
             raw_emojis = json.load(f)
@@ -1528,9 +1531,9 @@ class PokemonRegionSelect(discord.ui.View):
             embed.description = "No regions selected."
 
         embed.description += (
-            "\n\n> When a Pokémon spawns from any selected region, "
-            "<@716390085896962058> will mention you in this server."
-        )
+          "\n\n> Whenever a <@716390085896962058> Pokémon spawns in any selected region, "
+          f"{self.bot.user.mention} will mention you in this server."
+          )
 
         footer_text = status_message or self.status_message or "Select regions below to get spawn pings."
         embed.set_footer(text=footer_text)

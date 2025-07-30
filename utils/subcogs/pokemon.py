@@ -119,7 +119,7 @@ class Ping_Pokemon(commands.Cog):
         except Exception:
             current_types = []
 
-        view = PokemonTypeSelect(user_id, "type_ping", self.mongo, self.pokemon_types, current_types)
+        view = PokemonTypeSelect(self.bot, user_id, "type_ping", self.mongo, self.pokemon_types, current_types)
         embed = view._create_embed(ctx=ctx)
         await ctx.reply(embed=embed, view=view, mention_author=False)
 
@@ -133,7 +133,7 @@ class Ping_Pokemon(commands.Cog):
             current_regions = []
 
         available_regions = sorted(list(self.load_quest_regions()))
-        view = PokemonRegionSelect(user_id, self.quest_collection, self.mongo, available_regions, current_regions)
+        view = PokemonRegionSelect(self.bot, user_id, self.quest_collection, self.mongo, available_regions, current_regions)
         embed = view._create_embed(ctx=ctx)
         await ctx.reply(embed=embed, view=view, mention_author=False)
 
