@@ -220,37 +220,46 @@ class PoketwoSpawnDetector(commands.Cog):
 
     async def format_messages(self, slug, type_pings, quest_pings, shiny_pings, collection_pings,
                           special_roles, pred_text, dex_number, description, image_url):
-     lines = []
      try:
-        if special_roles:
-            lines.append(special_roles)
-
         formatted_name = self.pokemon_utils.format_name(slug)
-        lines.append(f"**{formatted_name}**: {pred_text}")
+        header_line = f"**{formatted_name}**: {pred_text}"
 
-        # Structured ping sections
+        # Gather lines to be quoted under blockquote
+        quote_lines = []
+
+        if special_roles:
+            quote_lines.append(special_roles)
+
         if shiny_pings:
-            lines.append("\n**Shinyhunt:**")
-            lines.append(" ".join(shiny_pings))
+            quote_lines.append(f"**Shinyhunt:**")
+            quote_lines.append(" ".join(shiny_pings))
 
         if collection_pings:
-            lines.append("\n**Collectors:**")
-            lines.append(" ".join(collection_pings))
+            quote_lines.append(f"**Collectors:**")
+            quote_lines.append("".join(collection_pings))
 
         if quest_pings:
             region_name = self.pokemon_utils.get_pokemon_region(slug) or "Region"
             region_emoji = self.pokemon_utils._quest_emojis.get(region_name.lower(), "")
-            lines.append(f"\n**{region_name} Ping:**") # {region_emoji} 
-            lines.append(" ".join(quest_pings))
+            quote_lines.append(f"**{region_name} Ping:**")  # {region_emoji} ignored for now
+            quote_lines.append("".join(quest_pings))
 
         if type_pings:
             type_parts = [
-                f"**{label}:**\n{users}"
+                f"**{label}:**\n{''.join(users)}"
                 for label, users in type_pings.items() if users
             ]
             if type_parts:
-                lines.append("\n" + "\n\n".join(type_parts))
+                quote_lines.append("\n".join(type_parts))
 
+        # Join all quote lines with newlines, then prefix each line with '> '
+        quoted_content = "\n".join(quote_lines)
+        blockquote = "\n".join("> " + line for line in quoted_content.splitlines())
+
+        # Compose final message with two newlines separating header and blockquote
+        message = f"{header_line}\n\n{blockquote}"
+
+        # Prepare embed as before
         actual_types = self.pokemon_utils.get_pokemon_types(slug)
         actual_region = self.pokemon_utils.get_pokemon_region(slug)
         region_emoji = self.pokemon_utils._quest_emojis.get(actual_region.lower(), "") if actual_region else ""
@@ -286,14 +295,15 @@ class PoketwoSpawnDetector(commands.Cog):
             embed.add_field(name="Region", value=f"{region_emoji} {actual_region}", inline=True)
 
         embed.set_thumbnail(url=thumb_url)
-        return "\n".join(lines), embed
+
+        return message, embed
 
      except Exception as e:
         logger.error(f"Error in format_messages: {type(e).__name__}: {e}")
         fallback = f"**{slug}**\nFailed to format spawn info."
         embed = discord.Embed(color=0xFF0000, description="An error occurred generating this embed.")
         return fallback, embed
-   
+    
     @commands.Cog.listener()
     async def on_message(self, message):
         try:
