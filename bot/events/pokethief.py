@@ -50,36 +50,41 @@ class Anti_Thief(commands.Cog):
         self.ignore_channel = 'incense'
 
     async def process_pings(self, guild, message_content):
-     shiny_hunters = []
-     if isinstance(guild, int):
-        guild = self.bot.get_guild(guild)
+        shiny_hunters = []
 
-     if not guild:
-        logger.warning("Guild not found!")
+        if isinstance(guild, int):
+            guild = self.bot.get_guild(guild)
+        if not guild:
+            logger.warning("Guild not found!")
+            return shiny_hunters
+
+        if self.shiny_ping_phrase in message_content:
+            mention_start_index = message_content.find(self.shiny_ping_phrase) + len(self.shiny_ping_phrase)
+            # Get the line immediately after the shiny ping phrase line
+            lines_after = message_content[mention_start_index:].split("\n")
+            if len(lines_after) > 1:
+                mention_part = lines_after[1].strip()
+            else:
+                mention_part = ""
+
+            if mention_part:
+                try:
+                    shiny_match = re.findall(self.shiny_regex, mention_part)
+                    if shiny_match:
+                        shiny_hunters = [
+                            member for member in [
+                                await self.get_member(guild, int(user_id)) for user_id in shiny_match
+                            ] if member
+                        ]
+                except re.error as e:
+                    logger.error(f"Regex error: {e}")
+
         return shiny_hunters
-
-     if self.shiny_ping_phrase in message_content:
-        mention_start_index = message_content.find(self.shiny_ping_phrase) + len(self.shiny_ping_phrase)
-        mention_part = message_content[mention_start_index:].split("\n")[0].strip()
-
-        if mention_part:
-            try:
-                shiny_match = re.findall(self.shiny_regex, mention_part)
-                if shiny_match:
-                    shiny_hunters = [
-                        member for member in [
-                            await self.get_member(guild, int(user_id)) for user_id in shiny_match
-                            ] if member]
-            except re.error as e:
-                logger.error(f"Regex error: {e}")
-
-     return shiny_hunters
 
     async def get_member(self, guild, user_id):
         try:
             if isinstance(guild, int):
                 guild = self.bot.get_guild(guild)
-
             return await guild.fetch_member(user_id)
         except Exception as e:
             logger.error(f"Error fetching member {user_id}: {e}")
@@ -90,7 +95,6 @@ class Anti_Thief(commands.Cog):
 
     @commands.command(name='set_phrase', hidden=True)
     async def set_ping_phrase(self, ctx, *, new_phrase: str):
-
         if ctx.author.id != 1124389055598170182:
             return
 
@@ -100,13 +104,18 @@ class Anti_Thief(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-      if ut: 
-          return
-      if 'incense' not in message.channel.name.lower():
+        if ut:
+            return
+        if self.ignore_channel in message.channel.name.lower():
+            return
         if message.author.id in self.bot_id and message.guild:
             self.shiny_hunters = await self.process_pings(message.guild, message.content)
             if self.shiny_hunters:
-                await self.bot.get_cog('EventGate').send_shiny_hunt_embed(message.channel, self.shiny_hunters, reference_message=message)
+                await self.bot.get_cog('EventGate').send_shiny_hunt_embed(
+                    message.channel,
+                    self.shiny_hunters,
+                    reference_message=message
+                )
 
 
 class EventGate(commands.Cog):
