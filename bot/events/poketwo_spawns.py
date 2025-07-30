@@ -230,7 +230,7 @@ class PoketwoSpawnDetector(commands.Cog):
 
         # Structured ping sections
         if shiny_pings:
-            lines.append("\n**Shiny:**")
+            lines.append("\n**Shinyhunt:**")
             lines.append(" ".join(shiny_pings))
 
         if collection_pings:
