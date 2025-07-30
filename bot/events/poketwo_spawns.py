@@ -125,7 +125,6 @@ class PoketwoSpawnDetector(commands.Cog):
             if not valid:
                 return None
 
-            # Return shortest valid alt name (flag + name)
             flag, name = min(valid, key=lambda x: len(x[1]))
             return f"{flag} {name}" if flag else name
 
@@ -220,64 +219,81 @@ class PoketwoSpawnDetector(commands.Cog):
             await message.channel.send(f"{self.error_emoji} Failed to process spawn", reference=message)
 
     async def format_messages(self, slug, type_pings, quest_pings, shiny_pings, collection_pings,
-                              special_roles, pred_text, dex_number, description, image_url):
-        lines = []
-        try:
-            if special_roles:
-                lines.append(special_roles)
-            formatted_name = self.pokemon_utils.format_name(slug)
-            lines.append(f"**{formatted_name}**: {pred_text}")
-            ping_parts = []
-            if shiny_pings:
-                ping_parts.append(f"Shiny: {' '.join(shiny_pings)}")
-            if collection_pings:
-                ping_parts.append(f"Collectors: {' '.join(collection_pings)}")
+                          special_roles, pred_text, dex_number, description, image_url):
+     lines = []
+     try:
+        if special_roles:
+            lines.append(special_roles)
 
-            if quest_pings:
-                region_name = self.pokemon_utils.get_pokemon_region(slug) or "Region"
-                region_emoji = self.pokemon_utils._quest_emojis.get(region_name.lower(), "")
-                ping_parts.append(f"{region_emoji} {region_name}: {' '.join(quest_pings)}")
+        formatted_name = self.pokemon_utils.format_name(slug)
+        lines.append(f"**{formatted_name}**: {pred_text}")
 
-            if type_pings:
-                type_parts = [f"{label}: {users}" for label, users in type_pings.items() if users]
-                if type_parts:
-                    ping_parts.append("\n".join(type_parts))
-            if ping_parts:
-                lines.append("\n".join(ping_parts))
+        # Structured ping sections
+        if shiny_pings:
+            lines.append("**Shinyhunt Ping:**")
+            lines.append(" ".join(shiny_pings))
 
-            actual_types = self.pokemon_utils.get_pokemon_types(slug)
-            actual_region = self.pokemon_utils.get_pokemon_region(slug)
-            region_emoji = self.pokemon_utils._quest_emojis.get(actual_region.lower(), "") if actual_region else ""
-            emoji_types = [
-                f"{self.pokemon_utils._type_emojis.get(f'{t.lower()}_type','')} {t.title()}"
-                for t in actual_types if t
+        if collection_pings:
+            lines.append("\n**Collection Ping:**")
+            lines.append(" ".join(collection_pings))
+
+        if quest_pings:
+            region_name = self.pokemon_utils.get_pokemon_region(slug) or "Region"
+            region_emoji = self.pokemon_utils._quest_emojis.get(region_name.lower(), "")
+            lines.append(f"\n**{region_name} Ping:**") # {region_emoji} 
+            lines.append(" ".join(quest_pings))
+
+        if type_pings:
+            type_parts = [
+                f"**{label}:**\n{users}"
+                for label, users in type_pings.items() if users
             ]
-            alt_names_field = []
-            alt_names_list = self.alt_names_map.get(slug.lower(), {})
-            if isinstance(alt_names_list, dict):
-                alt_names_field.extend(name for name in alt_names_list.values())
+            if type_parts:
+                lines.append("\n" + "\n\n".join(type_parts))
 
-            thumb_url = (
-                f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{dex_number}.png"
-                if slug and slug.lower() not in ("", "???") else image_url
-            )
-            color = await self._get_image_color_cached(thumb_url)
-            embed = discord.Embed(color=color)
-            if description:
-                embed.description = description
-            if alt_names_field:
-                embed.add_field(name="Alt Names", value="\n".join(alt_names_field[:10]), inline=True)
-            if emoji_types:
-                embed.add_field(name="Types", value="\n".join(emoji_types), inline=True)
-            if actual_region:
-                embed.add_field(name="Region", value=f"{region_emoji} {actual_region}", inline=True)
-            embed.set_thumbnail(url=thumb_url)
-            return "\n".join(lines), embed
-        except Exception as e:
-            logger.error(f"Error in format_messages: {type(e).__name__}: {e}")
-            fallback = f"**{slug}**\nFailed to format spawn info."
-            embed = discord.Embed(color=0xFF0000, description="An error occurred generating this embed.")
-            return fallback, embed
+        actual_types = self.pokemon_utils.get_pokemon_types(slug)
+        actual_region = self.pokemon_utils.get_pokemon_region(slug)
+        region_emoji = self.pokemon_utils._quest_emojis.get(actual_region.lower(), "") if actual_region else ""
+
+        emoji_types = [
+            f"{self.pokemon_utils._type_emojis.get(f'{t.lower()}_type','')} {t.title()}"
+            for t in actual_types if t
+        ]
+
+        alt_names_field = []
+        alt_names_list = self.alt_names_map.get(slug.lower(), {})
+        if isinstance(alt_names_list, dict):
+            alt_names_field.extend(name for name in alt_names_list.values())
+
+        thumb_url = (
+            f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{dex_number}.png"
+            if slug and slug.lower() not in ("", "???") else image_url
+        )
+
+        color = await self._get_image_color_cached(thumb_url)
+        embed = discord.Embed(color=color)
+
+        if description:
+            embed.description = description
+
+        if alt_names_field:
+            embed.add_field(name="Alt Names", value="\n".join(alt_names_field[:10]), inline=True)
+
+        if emoji_types:
+            embed.add_field(name="Types", value="\n".join(emoji_types), inline=True)
+
+        if actual_region:
+            embed.add_field(name="Region", value=f"{region_emoji} {actual_region}", inline=True)
+
+        embed.set_thumbnail(url=thumb_url)
+        return "\n".join(lines), embed
+
+     except Exception as e:
+        logger.error(f"Error in format_messages: {type(e).__name__}: {e}")
+        fallback = f"**{slug}**\nFailed to format spawn info."
+        embed = discord.Embed(color=0xFF0000, description="An error occurred generating this embed.")
+        return fallback, embed
+   
     @commands.Cog.listener()
     async def on_message(self, message):
         try:

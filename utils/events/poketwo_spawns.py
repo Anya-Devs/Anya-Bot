@@ -128,7 +128,7 @@ class PokemonUtils:
                     if user.get("user_id") and guild.get_member(user["user_id"])
                 }
                 if mentions:
-                    label = f"{emoji} {ptype.capitalize()} Type".strip()
+                    label = f"{ptype.capitalize()} Type".strip() # {emoji}
                     type_pings[label] = "".join(sorted(mentions))
             return type_pings
         except Exception as e:
