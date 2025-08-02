@@ -220,10 +220,10 @@ class PoketwoSpawnDetector(commands.Cog):
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
         info_button.callback = info_callback
-        #view = discord.ui.View(timeout=None)
-        #view.add_item(info_button)
+        view = discord.ui.View(timeout=None)
+        view.add_item(info_button)
 
-        await message.channel.send(content=ping_msg, file=file, reference=message)
+        await message.channel.send(content=ping_msg, file=file, view=None, reference=message)
 
      except Exception as e:
         logger.error(f"Error in output_prediction: {type(e).__name__}: {e}")
@@ -302,28 +302,24 @@ class PoketwoSpawnDetector(commands.Cog):
             )
 
             color = await self._get_image_color_cached(thumb_url)
-            
-            """ 
-             embed = discord.Embed(color=color)
-            
-    
-             if description:
+            embed = discord.Embed(color=color)
+
+            if description:
                 embed.description = description
 
-             if alt_names_field:
+            if alt_names_field:
                 embed.add_field(name="Alt Names", value="\n".join(alt_names_field[:10]), inline=True)
 
-             if emoji_types:
+            if emoji_types:
                 embed.add_field(name="Types", value="\n".join(emoji_types), inline=True)
 
-             if actual_region:
+            if actual_region:
                 embed.add_field(name="Region", value=f"{region_emoji} {actual_region}", inline=True)
 
-             embed.set_thumbnail(url=thumb_url)
+            embed.set_thumbnail(url=thumb_url)
 
             return message, embed
-            """
-            
+
         except Exception as e:
             logger.error(f"Error in format_messages: {type(e).__name__}: {e}")
             fallback = f"**{slug}**\nFailed to format spawn info."
