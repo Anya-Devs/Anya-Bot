@@ -31,7 +31,7 @@ def serve_static(filename):
     return send_from_directory(app.static_folder, filename)
 
 def run_flask():
-    port = int(os.environ.get("PORT", 8080 if not ut else 0))
+    port = int(os.environ.get("PORT", 10000  if not ut else 0))
     print(f"🌐 Hosting Flask server on port {port}")
     app.run(host="0.0.0.0", port=port)
 
