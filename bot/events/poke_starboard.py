@@ -7,6 +7,8 @@ from datetime import datetime
 from imports.discord_imports import *
 from utils.subcogs.pokemon import *
 
+from bot.token import use_test_bot as ut
+
 SPECIAL_NAMES_CSV = Path("data/commands/pokemon/pokemon_special_names.csv")
 
 
@@ -164,7 +166,7 @@ class StarboardScanner(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if not message.guild or message.author.id != self.target_id or message.id in self.handled_congrats:
+        if not message.guild or message.author.id != self.target_id or message.id in self.handled_congrats or ut :
             return
         self.handled_congrats.add(message.id)
 
