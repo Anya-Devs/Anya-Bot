@@ -249,7 +249,8 @@ class PoketwoSpawnDetector(commands.Cog):
                 unsure_msg = "Anya is unsure about this guess, but here is her best effort."
                 return f"{unsure_msg}\n**{formatted_name}**: {pred_text}", None
 
-            header_line = f"**{formatted_name}**: {pred_text}"
+            has_pings = any([type_pings, quest_pings, shiny_pings, collection_pings])
+            header_line = f"{'- ' if has_pings else ''}**{formatted_name}**: {pred_text}"
             quote_lines = []
 
             if special_roles:
@@ -280,7 +281,7 @@ class PoketwoSpawnDetector(commands.Cog):
             quoted_content = "\n".join(quote_lines)
             blockquote = "\n".join("> " + line for line in quoted_content.splitlines())
 
-            message = f"{header_line}\n\n{blockquote}"
+            message = f"{header_line}\n{blockquote}"
 
             actual_types = self.pokemon_utils.get_pokemon_types(slug)
             actual_region = self.pokemon_utils.get_pokemon_region(slug)
