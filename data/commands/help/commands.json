@@ -449,5 +449,19 @@
     "PoketwoSpawnDetector": {},
     "Quest_Events": {},
     "Quest_Tools": {},
-    "Anime_Recommendation": {}
+    "Anime_Recommendation": {},
+    "StarboardScanner": {
+        "set_starboard": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}set_starboard",
+            "related_commands": "Provide related commands"
+        },
+        "testb": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}testb",
+            "related_commands": "Provide related commands"
+        }
+    }
 }

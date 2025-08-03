@@ -14,7 +14,7 @@ from imports.discord_imports import *
 from utils.cogs.ticket import setup_persistent_views
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-load_dotenv(dotenv_path=os.path.join(".github", ".env"))
+load_dotenv(dotenv_path=os.path.join(".github", ".env")) 
 
 # === Web Server ===
 app = Flask(__name__, static_folder="html")

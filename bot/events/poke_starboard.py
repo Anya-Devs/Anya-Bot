@@ -3,10 +3,10 @@ import re
 import csv
 from pathlib import Path
 from datetime import datetime
+import traceback
 
 from imports.discord_imports import *
 from utils.subcogs.pokemon import *
-
 from bot.token import use_test_bot as ut
 
 SPECIAL_NAMES_CSV = Path("data/commands/pokemon/pokemon_special_names.csv")
@@ -51,14 +51,15 @@ class StarboardScanner(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config_db = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
-        self.target_id = 716390085896962058
+        self.target_id = [716390085896962058, 1124389055598170182]
+        self.ignore_channels = [1278580578593148978]
         self.handled_congrats = set()
         self.pokemon_specials = PokemonSpecialNames()
 
         self.dic = {
             "patterns": {
                 "shiny_indicator": r"These colors seem unusual\.{3} ✨",
-                "congrats_message": r"Congratulations\s+<@!?(\d+)> \| (SH )?(.*?)! You caught a Level \d+ (.+?):",
+                "congrats_message": r"Congratulations\s+<@!?(\d+)>.*?caught a Level (\d+)\s+([A-Za-z\s\-]+).*?",
                 "spawn_message_title": r"pokémon has appeared",
             },
             "colors": {
@@ -90,18 +91,24 @@ class StarboardScanner(commands.Cog):
         return name_clean.lower(), None
 
     def extract_data(self, content):
-        match = re.match(self.dic["patterns"]["congrats_message"], content)
+        #print(f"[DEBUG] Extracting data from message: {content}")
+        match = re.search(self.dic["patterns"]["congrats_message"], content)
         if not match:
+            print("[WARN] Congrats pattern not matched.")
             return None, False, None
+
         user_id = int(match.group(1))
-        shiny = bool(match.group(2) or re.search(self.dic["patterns"]["shiny_indicator"], content))
-        name = match.group(3) or match.group(4)
-        name_transformed, _ = self.transform_name(name)
-        return user_id, shiny, name_transformed
+        level = int(match.group(2))
+        name_raw = match.group(3).strip()
+        shiny = bool(re.search(self.dic["patterns"]["shiny_indicator"], content)) or "unusual" in content.lower()
+
+        transformed_name, _ = self.transform_name(name_raw)
+        print(f"[INFO] Parsed user_id={user_id}, shiny={shiny}, name={transformed_name}")
+        return user_id, shiny, transformed_name
 
     async def find_spawn_message(self, message):
         async for msg in message.channel.history(limit=50, before=message):
-            if msg.author.id == self.target_id:
+            if msg.author.id in self.target_id:
                 for e in msg.embeds:
                     if e.title and re.search(self.dic["patterns"]["spawn_message_title"], e.title, re.IGNORECASE):
                         return msg
@@ -123,26 +130,30 @@ class StarboardScanner(commands.Cog):
         except:
             return f"<@{user_id}>"
 
-    async def create_embed(self, original_message, caught_name, shiny, catcher_id):
+    async def create_embed(self, original_message, caught_name, shiny, catcher_id, starboard_msg_url=None):
         color = self.determine_color(shiny, caught_name)
+        #print(f"[DEBUG] Creating embed for {caught_name}, shiny={shiny}, color={color}")
         embed = Embed(
             title=original_message.embeds[0].title if original_message.embeds else "Pokémon Caught!",
             color=color
         )
 
         catcher_name = await self.get_user_display(original_message.guild, catcher_id)
-        embed.description = (
+        desc = (
             f"Caught Pokémon: **{caught_name}**\n"
             f"Shiny: {'Yes ✨' if shiny else 'No'}\n"
             f"Caught by: {catcher_name}\n"
             f"[View spawn message]({original_message.jump_url})"
         )
+        if starboard_msg_url:
+            desc += f"\n[View starboard message]({starboard_msg_url})"
+        embed.description = desc
 
         try:
             user = await self.bot.fetch_user(catcher_id)
             embed.set_thumbnail(url=user.display_avatar.url)
-        except:
-            pass
+        except Exception as e:
+            print(f"[WARN] Could not fetch avatar: {e}")
 
         if original_message.embeds and original_message.embeds[0].image:
             embed.set_image(url=original_message.embeds[0].image.url)
@@ -151,57 +162,87 @@ class StarboardScanner(commands.Cog):
         return embed
 
     async def send_congrats_embed(self, channel, user, pokemon_name, shiny):
-        embed = Embed(
-            title="🎉 Congrats! Your catch was sent to the Starboard!",
-            description=(
-                f"**{user.mention}**, your catch of **{'Shiny ' if shiny else ''}{pokemon_name.title()}** "
-                "has been stored in the starboard for everyone to admire!\n\n"
-                "Keep hunting rare and shiny Pokémon!"
-            ),
-        
+     starboard_channel_id = await self.get_starboard_channel(channel.guild.id)
+     starboard_channel = self.bot.get_channel(starboard_channel_id)
+     channel_mention = starboard_channel.mention if starboard_channel else "the starboard channel"
+     if shiny:
+        type_label = "shiny"
+     elif self.pokemon_specials.is_rare(pokemon_name):
+        type_label = "rare"
+     elif self.pokemon_specials.is_regional(pokemon_name):
+        type_label = "regional"
+
+     embed = Embed(
+        title=f"<a:tada:1401401635439251587> Congrats!",
+        description=(
+            f"**{user.mention}**, **{type_label}** your catch of **{'Shiny ' if shiny else ''}{pokemon_name.title()}** "
+            f"has been stored in {channel_mention} for everyone to admire!"
         )
-        embed.set_thumbnail(url="https://media.discordapp.net/attachments/1279353553110040596/1400548137139179720/eskXPvubXzzyyHtVnk99TPURB9aicET47kEpgAAAABJRU5ErkJggg.png?ex=688d0998&is=688bb818&hm=92c59fe7fb495bc881bff57ab9e5ce67151be35683286e80dec7fa7647dd5f06&=&format=webp&quality=lossless&width=457&height=457")
-        embed.set_footer(text=f"Stored at: {datetime.now().strftime('%I:%M %p | %b %d, %Y')}")
-        await channel.send(embed=embed)
+     )
+     embed.set_thumbnail(url="https://media.discordapp.net/attachments/1279353553110040596/1400548137139179720/eskXPvubXzzyyHtVnk99TPURB9aicET47kEpgAAAABJRU5ErkJggg.png?ex=688d0998&is=688bb818&hm=92c59fe7fb495bc881bff57ab9e5ce67151be35683286e80dec7fa7647dd5f06&=&format=webp&quality=lossless&width=457&height=457")
+     embed.set_footer(text=f"Stored at: {datetime.now().strftime('%I:%M %p | %b %d, %Y')}")
+     await channel.send(embed=embed)
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if not message.guild or message.author.id != self.target_id or message.id in self.handled_congrats or ut :
-            return
-        self.handled_congrats.add(message.id)
-
-        if "Congratulations" in message.content and "caught a Level" in message.content:
-            catcher_id, shiny, caught_name = self.extract_data(message.content)
-            if not caught_name:
+        try:
+            if message.channel.id in self.ignore_channels or message.author.id not in self.target_id:
                 return
 
-            spawn_msg = await self.find_spawn_message(message)
-            if not spawn_msg:
-                return
+            #print(f"[INFO] Processing message from {message.author} in #{message.channel.name}: {message.content}")
+            self.handled_congrats.add(message.id)
 
-            await self.config_db.add_star(
-                message_id=str(message.id),
-                user_id=catcher_id,
-                pokemon=caught_name,
-                level=None,
-                shiny=shiny,
-                rare=self.pokemon_specials.is_rare(caught_name),
-                regional=self.pokemon_specials.is_regional(caught_name),
-                timestamp=datetime.now().isoformat(),
-                jump_url=spawn_msg.jump_url
-            )
+            if "Congratulations" in message.content and "caught a Level" in message.content:
+                catcher_id, shiny, caught_name = self.extract_data(message.content)
+                if not caught_name:
+                    #print("[ERROR] Could not extract Pokémon name. Skipping.")
+                    return
 
-            channel_id = await self.get_starboard_channel(message.guild.id)
-            if channel := self.bot.get_channel(channel_id):
-                embed = await self.create_embed(spawn_msg, caught_name, shiny, catcher_id)
-                await channel.send(embed=embed, reference=message)
+                # Validate rare or regional before proceeding
+                if not (self.pokemon_specials.is_rare(caught_name) or self.pokemon_specials.is_regional(caught_name)):
+                    #print(f"[INFO] Pokémon {caught_name} is neither rare nor regional. Ignoring.")
+                    return
 
-                # 🔔 Send confirmation/congrats message
-                try:
-                    member = await message.guild.fetch_member(catcher_id)
-                    await self.send_congrats_embed(message.channel, member, caught_name, shiny)
-                except:
-                    pass
+                spawn_msg = await self.find_spawn_message(message)
+                if not spawn_msg:
+                    #print("[WARN] Spawn message not found.")
+                    return
+
+                await self.config_db.add_star(
+                    message_id=str(message.id),
+                    user_id=catcher_id,
+                    pokemon=caught_name,
+                    level=None,
+                    shiny=shiny,
+                    rare=self.pokemon_specials.is_rare(caught_name),
+                    regional=self.pokemon_specials.is_regional(caught_name),
+                    timestamp=datetime.now().isoformat(),
+                    jump_url=spawn_msg.jump_url
+                )
+
+                channel_id = await self.get_starboard_channel(message.guild.id)
+                if channel := self.bot.get_channel(channel_id):
+                    embed = await self.create_embed(spawn_msg, caught_name, shiny, catcher_id)
+
+                    if message.channel.id == channel.id:
+                        starboard_msg = await channel.send(embed=embed, reference=message)
+                    else:
+                        starboard_msg = await channel.send(embed=embed)
+
+                    # Edit embed to include starboard message link
+                    starboard_msg_url = starboard_msg.jump_url
+                    updated_embed = await self.create_embed(spawn_msg, caught_name, shiny, catcher_id, starboard_msg_url)
+                    await starboard_msg.edit(embed=updated_embed)
+
+                    try:
+                        member = await message.guild.fetch_member(catcher_id)
+                        await self.send_congrats_embed(message.channel, member, caught_name, shiny)
+                    except Exception as e:
+                        print(f"[WARN] Failed to fetch member or send congrats: {e}")
+
+        except Exception:
+            print("[ERROR] Unhandled exception in on_message:")
+            traceback.print_exc()
 
     @commands.command(name="set_starboard")
     @commands.check(has_manager_role_or_manage_channel)
@@ -238,14 +279,11 @@ class StarboardScanner(commands.Cog):
         })()
 
         embed = await self.create_embed(fake, caught_name, False, ctx.author.id)
-
         channel_id = await self.get_starboard_channel(ctx.guild.id)
         channel = self.bot.get_channel(channel_id) or ctx.channel
 
         await channel.send(f"🧪 Test Starboard Embed for **{caught_name}** (Shiny: False) by {ctx.author.mention}")
         await channel.send(embed=embed)
-
-        # 🔔 Also send confirmation/congrats message for testing
         await self.send_congrats_embed(ctx.channel, ctx.author, caught_name, False)
 
 
