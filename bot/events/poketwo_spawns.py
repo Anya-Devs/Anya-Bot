@@ -250,7 +250,7 @@ class PoketwoSpawnDetector(commands.Cog):
                 return f"{unsure_msg}\n**{formatted_name}**: {pred_text}", None
 
             has_pings = any([type_pings, quest_pings, shiny_pings, collection_pings])
-            header_line = f"{'- ' if has_pings else ''}**{formatted_name}**: {pred_text}"
+            header_line = f"{'' if has_pings else ''}**{formatted_name}**: {pred_text}"
             quote_lines = []
 
             if special_roles:
