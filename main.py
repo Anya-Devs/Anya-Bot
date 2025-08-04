@@ -97,39 +97,39 @@ class BotSetup(commands.AutoShardedBot):
         print("\033[94m" + " Setup Completed ".center(__import__('shutil').get_terminal_size().columns, "=") + "\033[0m")
 
     async def import_cogs(self, dir_name):
-        console = Console()
-        tree = Tree(f"[bold cyan]◇ {dir_name}[/bold cyan]")
-        print('\n\n')
-        try:
-            package = importlib.import_module(dir_name)
-        except ModuleNotFoundError as e:
-            tree.add(f"[red]Could not import {dir_name}: {e}[/red]")
-            console.print(tree)
-            return
+     console = Console()
+     tree = Tree(f"[bold cyan]◇ {dir_name}[/bold cyan]")
+     print('\n\n')
+     try:
+        package = importlib.import_module(dir_name)
+     except ModuleNotFoundError as e:
+        tree.add(f"[red]Could not import {dir_name}: {e}[/red]")
+        console.print(tree)
+        return
 
-        for _, mod_name, is_pkg in pkgutil.iter_modules(package.__path__):
-            if is_pkg:
-                continue
-            branch = tree.add(f"[red]{mod_name}.py[/red]")
-            try:
-                mod = importlib.import_module(f"{dir_name}.{mod_name}")
-                found = False
-                for obj in vars(mod).values():
-                    if (
-                        isinstance(obj, type)
-                        and issubclass(obj, commands.Cog)
-                        and obj is not commands.Cog
-                        and not self.get_cog(obj.__name__)
-                    ):
-                        await self.add_cog(obj(self))
-                        if not found:
-                            branch.label = f"[green]□ {mod_name}.py[/green]"
-                            found = True
-                        branch.add(f"[cyan]→[/cyan] [bold white]{obj.__name__}[/bold white]")
-            except Exception as e:
-                branch.add(f"[red]Error: {type(e).__name__}: {e}[/red]")
-                logger.error(f"Error loading cog {mod_name}: {e}\n{traceback.format_exc()}")
-        console.print(Align(tree, align='center', width=console.width))
+     for _, mod_name, is_pkg in pkgutil.iter_modules(package.__path__):
+        if is_pkg:
+            continue
+        branch = tree.add(f"[red]{mod_name}.py[/red]")
+        try:
+            mod = importlib.import_module(f"{dir_name}.{mod_name}")
+            found = False
+            for obj in list(vars(mod).values()):  # <--- FIX HERE
+                if (
+                    isinstance(obj, type)
+                    and issubclass(obj, commands.Cog)
+                    and obj is not commands.Cog
+                    and not self.get_cog(obj.__name__)
+                ):
+                    await self.add_cog(obj(self))
+                    if not found:
+                        branch.label = f"[green]□ {mod_name}.py[/green]"
+                        found = True
+                    branch.add(f"[cyan]→[/cyan] [bold white]{obj.__name__}[/bold white]")
+        except Exception as e:
+            branch.add(f"[red]Error: {type(e).__name__}: {e}[/red]")
+            logger.error(f"Error loading cog {mod_name}: {e}\n{traceback.format_exc()}")
+     console.print(Align(tree, align='center', width=console.width))
 
 
 def main():

@@ -1,12 +1,17 @@
 import os, io, re, csv, json, logging, requests, aiohttp
+from imports.discord_imports import *
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter, ImageSequence
-from colorthief import ColorThief
 from pilmoji import Pilmoji
+from pathlib import Path
+import numpy as np
+import cv2
+from functools import lru_cache
 from fuzzywuzzy import fuzz
 
 
 
 logger = logging.getLogger(__name__)
+
 
 class PokemonUtils:
     def __init__(self, mongo, type_emojis_file, quest_emojis_file, description_file, id_file, regional_forms, lang_flags, bot=None, pp=None):
@@ -17,12 +22,29 @@ class PokemonUtils:
         self.pokemon_id_file = id_file
         self.regional_forms = regional_forms
         self.lang_flags = lang_flags
-        self.bot = bot  # Pass bot here explicitly if needed for async data access
+        self.bot = bot
         self.pp = pp
-
         self._type_emojis = {}
         self._quest_emojis = {}
         self.load_emojis()
+        self.alt_names_map = self.load_alt_names("data/commands/pokemon/alt_names.csv")
+        self._image_color_cache = {}
+        self._special_names = self._load_special_names_sync()
+        self._pokemon_name_map = self._load_pokemon_names("data/commands/pokemon/pokemon_names.csv")
+        self.alt_names_map = self.load_alt_names("data/commands/pokemon/alt_names.csv")
+        self.flag_map = self.load_flag_map("data/commands/pokemon/flag_map.json")
+
+    @staticmethod
+    @lru_cache(maxsize=None)
+    def load_alt_names(path):
+        if not Path(path).exists(): return {}
+        with open(path, newline="", encoding="utf-8") as f:
+            return {
+                row["pokemon_species"].strip().lower(): {
+                    lang: name.strip() for lang, name in row.items()
+                    if lang != "pokemon_species" and name.strip()
+                } for row in csv.DictReader(f)
+            }
 
     def load_emojis(self):
         for file, attr in [(self.type_emojis_file, "_type_emojis"), (self.quest_emojis_file, "_quest_emojis")]:
@@ -52,18 +74,170 @@ class PokemonUtils:
         except Exception as e:
             logger.warning(f"Failed to load Pokémon IDs: {e}")
         return id_map
+    
+    @staticmethod
+    def _load_pokemon_names(path) -> dict:
+        if not Path(path).exists(): return {}
+        with open(path, encoding="utf-8") as f:
+            return {row['name'].replace('-', '_'): row['id']
+                    for row in csv.DictReader(f) if 'name' in row and 'id' in row}
+
+    def get_base_pokemon_name(self, raw) -> str:
+        name_map, norm = self._pokemon_name_map, raw.replace('-', '_')
+        if norm in name_map: return norm
+        parts = norm.split('_')
+        for i in range(len(parts)):
+            if (c := '_'.join(parts[i:])) in name_map: return c
+        for p in reversed(parts):
+            if p in name_map: return p
+        return norm
+
+    @staticmethod
+    @lru_cache(maxsize=None)
+    def load_alt_names(path):
+        if not Path(path).exists(): return {}
+        with open(path, newline="", encoding="utf-8") as f:
+            return {
+                row["pokemon_species"].strip().lower(): {
+                    lang: name.strip() for lang, name in row.items()
+                    if lang != "pokemon_species" and name.strip()
+                } for row in csv.DictReader(f)
+            }
+
+    @staticmethod
+    @lru_cache(maxsize=None)
+    def load_flag_map(path):
+        return json.load(open(path, encoding="utf-8")) if Path(path).exists() else {}
+
+    def _load_special_names_sync(self):
+        rare, regional = [], []
+        try:
+            with open('data/commands/pokemon/pokemon_special_names.csv', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                next(reader, None)  # skip header
+                for row in reader:
+                    if row[0]: rare.append(row[0].strip().lower())
+                    if len(row) > 1 and row[1]: regional.append(row[1].strip().lower())
+        except FileNotFoundError: pass
+        return rare, regional
+
+    def get_best_normal_alt_name(self, slug):
+        try:
+            slug_lower = slug.lower()
+            alt_names = self.alt_names_map.get(slug_lower, {})
+            valid, seen = [], set()
+            for lang, name in alt_names.items():
+                name_clean = name.strip()
+                if name_clean.lower() == slug_lower or name_clean in seen: continue
+                if not re.fullmatch(r"[A-Za-z0-9\- ']+", name_clean): continue
+                if len(name_clean) >= len(slug): continue
+                seen.add(name_clean)
+                valid.append((self.flag_map.get(lang, ''), name_clean))
+            if not valid: return None
+            flag, name = min(valid, key=lambda x: len(x[1]))
+            return f"{flag} {name}" if flag else name
+        except Exception as e:
+            logger.error(f"get_best_normal_alt_name('{slug}') failed: {e}")
+            return None
+
+    async def _get_image_color_cached(self, url):
+        if url in self._image_color_cache:
+            return self._image_color_cache[url]
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status != 200:
+                        return 0xFFFFFF
+                    data = await response.read()
+            # Decode image to numpy array (BGR)
+            img_array = np.frombuffer(data, np.uint8)
+            img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            if img is None:
+                return 0xFFFFFF
+            # Resize for performance
+            small_img = cv2.resize(img, (50, 50), interpolation=cv2.INTER_AREA)
+            # Convert to RGB
+            small_img = cv2.cvtColor(small_img, cv2.COLOR_BGR2RGB)
+            # Reshape and cluster colors using kmeans to find dominant color
+            pixels = small_img.reshape((-1, 3)).astype(np.float32)
+            criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+            _, labels, centers = cv2.kmeans(pixels, 1, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+            dominant_color = centers[0].astype(int)
+            rgb = (dominant_color[0] << 16) + (dominant_color[1] << 8) + dominant_color[2]
+            self._image_color_cache[url] = rgb
+            return rgb
+        except Exception:
+            return 0xFFFFFF
+
+    
+    async def format_messages(self, slug, type_pings, quest_pings, shiny_pings, collection_pings,
+                              special_roles, pred_text, dex_number, description, image_url,
+                              low_confidence=True):
+        try:
+            formatted_name = self.format_name(slug.replace('_', ' ')).title()
+            if low_confidence:
+                unsure_msg = "Anya is unsure about this guess, but here is her best effort."
+                return f"{unsure_msg}\n**{formatted_name}**: {pred_text}", None
+            has_pings = any([type_pings, quest_pings, shiny_pings, collection_pings])
+            header_line = f"{'' if has_pings else ''}**{formatted_name}**: {pred_text}"
+            quote_lines = []
+            if special_roles:
+                quote_lines.append(special_roles)
+            if shiny_pings:
+                quote_lines.append(f"**Shinyhunt:**")
+                quote_lines.append(" ".join(shiny_pings))
+            if collection_pings:
+                quote_lines.append(f"**Collectors:**")
+                quote_lines.append("".join(collection_pings))
+            if quest_pings:
+                region_name = self.get_pokemon_region(slug) or "Region"
+                region_emoji = self._quest_emojis.get(region_name.lower(), "")
+                quote_lines.append(f"**{region_name} Ping:**")
+                quote_lines.append("".join(quest_pings))
+            if type_pings:
+                type_parts = [
+                    f"**{label}:**\n{''.join(users)}"
+                    for label, users in type_pings.items() if users
+                ]
+                if type_parts:
+                    quote_lines.append("\n".join(type_parts))
+            quoted_content = "\n".join(quote_lines)
+            blockquote = "\n".join("> " + line for line in quoted_content.splitlines())
+            message = f"{header_line}\n{blockquote}"
+            actual_types = self.get_pokemon_types(slug)
+            actual_region = self.get_pokemon_region(slug)
+            region_emoji = self._quest_emojis.get(actual_region.lower(), "") if actual_region else ""
+            emoji_types = [
+                f"{self._type_emojis.get(f'{t.lower()}_type','')} {t.title()}"
+                for t in actual_types if t
+            ]
+            alt_names_field = []
+            alt_names_list = self.alt_names_map.get(slug.lower(), {})
+            if isinstance(alt_names_list, dict):
+                alt_names_field.extend(name for name in alt_names_list.values())
+            thumb_url = (
+                f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{dex_number}.png"
+                if slug and slug.lower() not in ("", "???") else image_url
+            )
+            embed=None
+            return message, embed
+        except Exception as e:
+            logger.error(f"Error in format_messages: {type(e).__name__}: {e}")
+            fallback = f"**{slug}**\nFailed to format spawn info."
+            embed = discord.Embed(color=0xFF0000, description="An error occurred generating this embed.")
+            return fallback, embed
 
     def format_name(self, name):
-     name = name.replace('_', '-').lower()
-     lens = {
-        "iron-treads", "iron-bundle", "iron-hands", "iron-jugulis", "iron-moth", "iron-thorns",
-        "great-tusk", "scream-tail", "brute-bonnet", "flutter-mane", "slither-wing", "sandy-shocks", "roaring-moon",
-        "walking-wake", "raging-bolt", "gouging-fire", "iron-leaves", "iron-valiant", "iron-boulder", "iron-crown"
-     }
-     if name in lens or any(name.endswith(f"-{form}") for form in self.regional_forms):
-        return name.replace('-', ' ').title()
-     return name.split('-')[0].title()
- 
+        name = name.replace('_', '-').lower()
+        lens = {
+            "iron-treads", "iron-bundle", "iron-hands", "iron-jugulis", "iron-moth", "iron-thorns",
+            "great-tusk", "scream-tail", "brute-bonnet", "flutter-mane", "slither-wing", "sandy-shocks", "roaring-moon",
+            "walking-wake", "raging-bolt", "gouging-fire", "iron-leaves", "iron-valiant", "iron-boulder", "iron-crown"
+        }
+        if name in lens or any(name.endswith(f"-{form}") for form in self.regional_forms):
+            return name.replace('-', ' ').title()
+        return name.split('-')[0].title()
+
     def get_pokemon_row(self, slug):
         try:
             with open(self.pokemon_description_file, 'r', encoding='utf-8') as f:
@@ -105,19 +279,15 @@ class PokemonUtils:
         try:
             if not self._type_emojis:
                 self.load_emojis()
-
-            # Use self.bot passed in constructor instead of guild.bot
             if not self.bot:
                 logger.warning("Bot instance not set in PokemonUtils; cannot fetch pokemon_types")
                 return {}
-
             pokemon_types_data = await self.pp.data_manager.pokemon_types
             pokemon_types = pokemon_types_data.get(pokemon_name.lower(), [])
             if not pokemon_types:
                 pokemon_types = self.get_pokemon_types(pokemon_name)
             if not pokemon_types:
                 return {}
-
             type_pings = {}
             for ptype in pokemon_types:
                 ptype_lower = ptype.lower()
@@ -129,7 +299,7 @@ class PokemonUtils:
                     if user.get("user_id") and guild.get_member(user["user_id"])
                 }
                 if mentions:
-                    label = f"{ptype.capitalize()} Type".strip() # {emoji}
+                    label = f"{ptype.capitalize()} Type".strip()
                     type_pings[label] = "".join(sorted(mentions))
             return type_pings
         except Exception as e:
@@ -170,8 +340,20 @@ class PokemonUtils:
                         return fallback
                     data = await resp.read()
             with io.BytesIO(data) as img_bytes:
-                color_thief = ColorThief(img_bytes)
-                r, g, b = color_thief.get_color(quality=1)
+                img_bytes.seek(0)
+                arr = np.frombuffer(img_bytes.read(), np.uint8)
+                img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                if img is None:
+                    return fallback
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                pixels = img.reshape((-1, 3))
+                pixels = np.float32(pixels)
+                criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 20, 1.0)
+                K = 3
+                _, labels, centers = cv2.kmeans(pixels, K, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+                counts = np.bincount(labels.flatten())
+                dominant = centers[np.argmax(counts)]
+                r, g, b = map(int, dominant)
                 return (r << 16) + (g << 8) + b
         except Exception as e:
             logger.warning(f"Failed to get image color: {e}")
@@ -209,7 +391,18 @@ class PokemonImageBuilder:
         return "".join(chr(ord(c) + OFFSET) for c in cc.upper())
 
     def get_dominant_color(self, image_bytes_io):
-        return ColorThief(image_bytes_io).get_color(quality=1)
+        pil_image = Image.open(image_bytes_io).convert('RGB')
+        img = np.array(pil_image)
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        pixels = img.reshape((-1, 3))
+        pixels = np.float32(pixels)
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 20, 1.0)
+        K = 3
+        _, labels, centers = cv2.kmeans(pixels, K, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+        counts = np.bincount(labels.flatten())
+        dominant = centers[np.argmax(counts)]
+        dominant_rgb = tuple(int(c) for c in dominant[::-1])
+        return dominant_rgb
 
     def extract_emoji_id(self, emoji_str):
         match = re.search(r"<:.+?:(\d+)>", emoji_str)
@@ -234,10 +427,8 @@ class PokemonImageBuilder:
         x, y = position
         spacing = self.config["type_spacing"]
         icon_size = self.config["type_icon_size"]
-
         if len(types) == 1:
             x += spacing
-
         for type_name in types:
             emoji_str = self.type_emojis.get(f"{type_name.lower()}_type", "")
             emoji_img = self.get_or_download_emoji_image(emoji_str)
@@ -260,7 +451,6 @@ class PokemonImageBuilder:
     def get_type_colors(self, types):
         def lighten_color(rgb, factor=0.45):
             return tuple(min(int(c + (255 - c) * factor), 255) for c in rgb)
-
         colors = []
         for t in types:
             emoji_str = self.type_emojis.get(f"{t.lower()}_type", "")
@@ -269,7 +459,7 @@ class PokemonImageBuilder:
                 with io.BytesIO() as buf:
                     emoji_img.save(buf, format="PNG")
                     buf.seek(0)
-                    dom_color = ColorThief(buf).get_color(quality=1)
+                    dom_color = self.get_dominant_color(buf)
                     colors.append(lighten_color(dom_color))
         return colors or [(240, 240, 240)]
 
@@ -283,11 +473,9 @@ class PokemonImageBuilder:
         width, height = self.config["canvas_size"]
         blur_enabled = self.config.get("background_blur", False)
         transparent = self.config.get("transparent_background", False)
-
         if transparent:
             canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
             return [canvas], [100]
-
         if bg_url:
             try:
                 response = requests.get(bg_url, timeout=5, allow_redirects=True)
@@ -311,7 +499,6 @@ class PokemonImageBuilder:
                 return frames, durations
             except (requests.RequestException, OSError) as e:
                 print(f"[BG ERROR] Using color fallback. {e}")
-
         solid_color = self.blend_colors(bg_colors) if len(bg_colors) > 1 else bg_colors[0]
         canvas = Image.new("RGBA", (width, height), solid_color + (255,))
         if blur_enabled:
@@ -350,9 +537,7 @@ class PokemonImageBuilder:
         frame = bg_frame.copy()
         poke_img_resized = poke_img.resize(self.config["pokemon_image_size"])
         frame.paste(poke_img_resized, self.config["pokemon_image_position"], poke_img_resized)
-
         pilmoji = Pilmoji(frame)
-
         self.draw_text_with_flag_offset(
             pilmoji,
             self.config["pokemon_name_position"],
@@ -362,7 +547,6 @@ class PokemonImageBuilder:
             stroke_fill=self.config.get("name_outline_color"),
             stroke_width=self.config.get("name_stroke_width", 0)
         )
-
         self.draw_text_with_flag_offset(
             pilmoji,
             self.config["alt_name_position"],
@@ -372,7 +556,6 @@ class PokemonImageBuilder:
             stroke_fill=self.config.get("alt_outline_color"),
             stroke_width=self.config.get("alt_stroke_width", 0)
         )
-
         self.draw_type_emojis(frame, types, self.config["type_position"])
         return frame
 
@@ -386,8 +569,6 @@ class PokemonImageBuilder:
             frames[0].save(filepath)
         else:
             frames[0].save(filepath, save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2, transparency=0)
-
-
 
 
 

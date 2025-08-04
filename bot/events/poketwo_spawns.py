@@ -1,19 +1,12 @@
-import csv
-import json
-import re
+import os, re, csv, json, logging, asyncio, aiohttp
 from pathlib import Path
 from functools import lru_cache
-import asyncio
 from concurrent.futures import ThreadPoolExecutor
-import aiohttp
-import discord
-from discord.ext import commands
+
+import cv2
+import numpy as np
 
 from imports.discord_imports import *
-from rapidfuzz import fuzz
-import os
-import logging
-from colorthief import ColorThief
 from utils.subcogs.pokemon import *
 from submodules.poketwo_autonamer.predict import Prediction
 from bot.token import use_test_bot as ut
@@ -21,26 +14,13 @@ from data.local.const import *
 from motor.motor_asyncio import AsyncIOMotorClient
 from utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils
 
-logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=os.cpu_count() or 4)
-
+logger = logging.getLogger(__name__)
 
 class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.target_id = 716390085896962058
-        self.regional_forms = {
-            'alola': 'Alolan', 'galar': 'Galarian', 'hisui': 'Hisuian',
-            'paldea': 'Paldean', 'unova': 'Unovan'
-        }
-        self.lang_flags = {"ja": "🇯🇵", "de": "🇩🇪", "fr": "🇫🇷", "en": "🇺🇸"}
-        self.success_emoji = "<:green:1261639410181476443>"
-        self.error_emoji = "<:red:1261639413943762944>"
-        self.cross_emoji = "❌"
-        self.emojis = {
-            "shiny": "<:shiny_sparkle:1394386258406412380>",
-            "collection": "<:collection_ball:1394386212961124504>"
-        }
         self.predictor = Prediction()
         self.pp = Ping_Pokemon(bot)
         self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
@@ -50,301 +30,69 @@ class PoketwoSpawnDetector(commands.Cog):
             quest_emojis_file="data/commands/pokemon/pokemon_emojis/_pokemon_quest.json",
             description_file='data/commands/pokemon/pokemon_description.csv',
             id_file='data/commands/pokemon/pokemon_names.csv',
-            regional_forms=self.regional_forms,
-            lang_flags=self.lang_flags,
-            bot=self.bot,
+            regional_forms={
+                'alola': 'Alolan', 'galar': 'Galarian',
+                'hisui': 'Hisuian', 'paldea': 'Paldean', 'unova': 'Unovan'
+            },
+            lang_flags={"ja": "🇯🇵", "de": "🇩🇪", "fr": "🇫🇷", "en": "🇺🇸"},
+            bot=bot,
             pp=self.pp
         )
         self.pokemon_image_builder = PokemonImageBuilder()
-
-        self.alt_names_map = self.load_alt_names("data/commands/pokemon/alt_names.csv")
-        self.flag_map = self.load_flag_map("data/commands/pokemon/flag_map.json")
+       
         self._pokemon_ids = self.pokemon_utils.load_pokemon_ids()
-        self._special_names = self._load_special_names_sync()
-        self._image_color_cache = {}
+        self.success_emoji = "<:green:1261639410181476443>"
+        self.error_emoji = "<:red:1261639413943762944>"
+        self.cross_emoji = "❌"
+        self.emojis = {
+            "shiny": "<:shiny_sparkle:1394386258406412380>",
+            "collection": "<:collection_ball:1394386212961124504>"
+        }
 
-        self._pokemon_name_map = self._load_pokemon_names("data/commands/pokemon/pokemon_names.csv")
-
-    @staticmethod
-    def _load_pokemon_names(filepath: str) -> dict:
-        path = Path(filepath)
-        if not path.exists():
-            return {}
-        with path.open(encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            return {row['name'].replace('-', '_'): row['id'] for row in reader if 'name' in row and 'id' in row}
-
-    def get_base_pokemon_name(self, raw_name: str) -> str:
-        name_map = self._pokemon_name_map
-        normalized_name = raw_name.replace('-', '_')
-        if normalized_name in name_map:
-            return normalized_name
-        parts = normalized_name.split('_')
-        for i in range(len(parts)):
-            candidate = '_'.join(parts[i:])
-            if candidate in name_map:
-                return candidate
-        for part in reversed(parts):
-            if part in name_map:
-                return part
-        return normalized_name
-
-    @staticmethod
-    @lru_cache(maxsize=None)
-    def load_alt_names(filepath):
-        alt_map = {}
-        if not Path(filepath).exists():
-            return alt_map
-        with open(filepath, newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                slug = row["pokemon_species"].strip().lower()
-                alt_map[slug] = {
-                    lang: name.strip() for lang, name in row.items()
-                    if lang != "pokemon_species" and name.strip()
-                }
-        return alt_map
-
-    @staticmethod
-    @lru_cache(maxsize=None)
-    def load_flag_map(filepath):
-        if not Path(filepath).exists():
-            return {}
-        with open(filepath, encoding="utf-8") as f:
-            return json.load(f)
-
-    def _load_special_names_sync(self):
-        rare, regional = [], []
-        try:
-            with open('data/commands/pokemon/pokemon_special_names.csv', 'r', newline='', encoding='utf-8') as f:
-                reader = csv.reader(f)
-                next(reader)
-                for row in reader:
-                    if len(row) >= 1 and row[0]:
-                        rare.append(row[0].strip().lower())
-                    if len(row) >= 2 and row[1]:
-                        regional.append(row[1].strip().lower())
-        except FileNotFoundError:
-            pass
-        return (rare, regional)
-
-    def get_best_normal_alt_name(self, slug):
-        try:
-            slug_lower = slug.lower()
-            slug_len = len(slug)
-            alt_names = self.alt_names_map.get(slug_lower, {})
-
-            seen = set()
-            valid = []
-            for lang, name in alt_names.items():
-                if not name:
-                    continue
-                name_clean = name.strip()
-                if name_clean.lower() == slug_lower:
-                    continue
-                if name_clean in seen:
-                    continue
-                if not re.fullmatch(r"[A-Za-z0-9\- ']+", name_clean):
-                    continue
-                if len(name_clean) >= slug_len:
-                    continue
-                seen.add(name_clean)
-                valid.append((self.flag_map.get(lang, ''), name_clean))
-
-            if not valid:
-                return None
-
-            flag, name = min(valid, key=lambda x: len(x[1]))
-            return f"{flag} {name}" if flag else name
-
-        except Exception as e:
-            logger.error(f"get_best_normal_alt_name('{slug}') failed: {e}")
-            return None
-
-    async def _get_image_color_cached(self, url):
-        if url in self._image_color_cache:
-            return self._image_color_cache[url]
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as resp:
-                    if resp.status != 200:
-                        return 0xFFFFFF
-                    data = await resp.read()
-            def get_color(data):
-                from io import BytesIO
-                ct = ColorThief(BytesIO(data))
-                return ct.get_color(quality=1)
-
-            color = await asyncio.get_event_loop().run_in_executor(_executor, get_color, data)
-            rgb = (color[0] << 16) + (color[1] << 8) + color[2]
-            self._image_color_cache[url] = rgb
-            return rgb
-        except Exception:
-            return 0xFFFFFF
-
+    
     async def output_prediction(self, message, image_url):
         try:
             slug_raw, conf = await asyncio.to_thread(self.predictor.predict, image_url)
-            slug = self.get_base_pokemon_name(slug_raw)
-
+            slug = self.pokemon_utils.get_base_pokemon_name(slug_raw)
             try:
-                conf_str = str(conf).strip().rstrip('%')
-                conf_float = float(conf_str)
-                low_confidence = conf_float < 30.0
-            except Exception as ex:
-                print(f"Failed to parse confidence: {ex}")
-                low_confidence = False
-                conf_float = 0.0
+                conf_float = float(str(conf).strip().rstrip('%'))
+                low_conf = conf_float < 30
+            except: conf_float, low_conf = 0.0, False
 
-            pred_text = f"{conf_float:.2f}%"
-
-            rare, regional = self._special_names
-
-            results = await asyncio.gather(
+            rare, regional = self.pokemon_utils._special_names
+            server_config, (shiny_pings, collection_pings), type_pings, quest_pings = await asyncio.gather(
                 self.pokemon_utils.get_server_config(message.guild.id),
                 self.pokemon_utils.get_ping_users(message.guild, slug),
                 self.pokemon_utils.get_type_ping_users(message.guild, slug),
-                self.pokemon_utils.get_quest_ping_users(message.guild, slug),
+                self.pokemon_utils.get_quest_ping_users(message.guild, slug)
             )
-            server_config, (shiny_pings, collection_pings), type_pings, quest_pings = results
-
+            slug_l = slug.lower().replace('_', '-')
             special_roles = []
-            slug_lower = slug.lower().replace('_', '-')
-            if any(p in slug_lower for p in rare) and server_config.get("rare_role"):
+            if any(p in slug_l for p in rare) and server_config.get("rare_role"):
                 special_roles.append(f"<@&{server_config['rare_role']}>")
-            if (any(p in slug_lower for p in regional) or any(slug_lower.startswith(f"{form}-") for form in self.regional_forms.values())) and server_config.get("regional_role"):
-                special_roles.append(f"<@&{server_config['regional_role']}>")
-            special_roles_str = " ".join(special_roles)
+            if any(p in slug_l for p in regional) or any(slug_l.startswith(f"{f}-") for f in self.pokemon_utils.regional_forms.values()):
+                if server_config.get("regional_role"): special_roles.append(f"<@&{server_config['regional_role']}>")
+            description, dex, _ = self.pokemon_utils.get_description(slug)
+            if not dex or dex == "???": dex = self._pokemon_ids.get(slug_l, "???")
 
-            description, dex_number, _row = self.pokemon_utils.get_description(slug)
-            if not dex_number or dex_number == "???":
-                dex_number = self._pokemon_ids.get(slug_lower, "???")
-
-            ping_msg, embed = await self.format_messages(
-                slug, type_pings, quest_pings, shiny_pings,
-                collection_pings, special_roles_str, pred_text,
-                dex_number, description, image_url,
-                low_confidence=low_confidence
+            ping_msg, embed = await self.pokemon_utils.format_messages(
+                slug, type_pings, quest_pings, shiny_pings, collection_pings,
+                " ".join(special_roles), f"{conf_float:.2f}%", dex, description,
+                image_url, low_conf
             )
-            best_alt = self.get_best_normal_alt_name(slug_lower)
-
+            best_alt = self.pokemon_utils.get_best_normal_alt_name(slug_l)
             self.pokemon_image_builder.create_image(
-                pokemon_id=int(self._pokemon_ids.get(slug_lower, None)),
+                pokemon_id=int(self._pokemon_ids.get(slug_l, None)),
                 pokemon_name=self.pokemon_utils.format_name(slug).replace('_', ' ').title(),
                 best_name=best_alt or "",
                 types=self.pokemon_utils.get_pokemon_types(slug),
                 bg_url=None
             )
-
-            saved_path = "data/events/poketwo_spawns/image/test.png"
-            file = discord.File(saved_path, filename="pokemon_spawn.png")
-
-            info_button = discord.ui.Button(label="Info", style=discord.ButtonStyle.primary)
-
-            async def info_callback(interaction):
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-
-            info_button.callback = info_callback
-            view = discord.ui.View(timeout=None)
-            view.add_item(info_button)
-
+            file = discord.File("data/events/poketwo_spawns/image/test.png", filename="pokemon_spawn.png")
             await message.channel.send(content=ping_msg, file=file, view=None, reference=message)
-
         except Exception as e:
             logger.error(f"Error in output_prediction: {type(e).__name__}: {e}")
             await message.channel.send(f"{self.error_emoji} Failed to process spawn", reference=message)
-
-
-    async def format_messages(self, slug, type_pings, quest_pings, shiny_pings, collection_pings,
-                              special_roles, pred_text, dex_number, description, image_url,
-                              low_confidence=True):
-        try:
-            formatted_name = self.pokemon_utils.format_name(slug.replace('_', ' ')).title()
-
-
-
-            if low_confidence:
-                unsure_msg = "Anya is unsure about this guess, but here is her best effort."
-                return f"{unsure_msg}\n**{formatted_name}**: {pred_text}", None
-
-            has_pings = any([type_pings, quest_pings, shiny_pings, collection_pings])
-            header_line = f"{'' if has_pings else ''}**{formatted_name}**: {pred_text}"
-            quote_lines = []
-
-            if special_roles:
-                quote_lines.append(special_roles)
-
-            if shiny_pings:
-                quote_lines.append(f"**Shinyhunt:**")
-                quote_lines.append(" ".join(shiny_pings))
-
-            if collection_pings:
-                quote_lines.append(f"**Collectors:**")
-                quote_lines.append("".join(collection_pings))
-
-            if quest_pings:
-                region_name = self.pokemon_utils.get_pokemon_region(slug) or "Region"
-                region_emoji = self.pokemon_utils._quest_emojis.get(region_name.lower(), "")
-                quote_lines.append(f"**{region_name} Ping:**")
-                quote_lines.append("".join(quest_pings))
-
-            if type_pings:
-                type_parts = [
-                    f"**{label}:**\n{''.join(users)}"
-                    for label, users in type_pings.items() if users
-                ]
-                if type_parts:
-                    quote_lines.append("\n".join(type_parts))
-
-            quoted_content = "\n".join(quote_lines)
-            blockquote = "\n".join("> " + line for line in quoted_content.splitlines())
-
-            message = f"{header_line}\n{blockquote}"
-
-            actual_types = self.pokemon_utils.get_pokemon_types(slug)
-            actual_region = self.pokemon_utils.get_pokemon_region(slug)
-            region_emoji = self.pokemon_utils._quest_emojis.get(actual_region.lower(), "") if actual_region else ""
-
-            emoji_types = [
-                f"{self.pokemon_utils._type_emojis.get(f'{t.lower()}_type','')} {t.title()}"
-                for t in actual_types if t
-            ]
-
-            alt_names_field = []
-            alt_names_list = self.alt_names_map.get(slug.lower(), {})
-            if isinstance(alt_names_list, dict):
-                alt_names_field.extend(name for name in alt_names_list.values())
-
-            thumb_url = (
-                f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{dex_number}.png"
-                if slug and slug.lower() not in ("", "???") else image_url
-            )
-
-            color = await self._get_image_color_cached(thumb_url)
-            embed = discord.Embed(color=color)
-
-            if description:
-                embed.description = description
-
-            if alt_names_field:
-                embed.add_field(name="Alt Names", value="\n".join(alt_names_field[:10]), inline=True)
-
-            if emoji_types:
-                embed.add_field(name="Types", value="\n".join(emoji_types), inline=True)
-
-            if actual_region:
-                embed.add_field(name="Region", value=f"{region_emoji} {actual_region}", inline=True)
-
-            embed.set_thumbnail(url=thumb_url)
-
-            return message, embed
-
-        except Exception as e:
-            logger.error(f"Error in format_messages: {type(e).__name__}: {e}")
-            fallback = f"**{slug}**\nFailed to format spawn info."
-            embed = discord.Embed(color=0xFF0000, description="An error occurred generating this embed.")
-            return fallback, embed
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -361,17 +109,13 @@ class PoketwoSpawnDetector(commands.Cog):
         try:
             message = ctx.message
             if not image_url:
-                if ref := message.reference:
-                    message = await ctx.channel.fetch_message(ref.message_id)
-                if message.attachments:
-                    image_url = message.attachments[0].url
-                elif message.embeds and message.embeds[0].image:
-                    image_url = message.embeds[0].image.url
-            if not image_url:
-                return await ctx.send(f"{self.cross_emoji} No image URL found.")
+                ref = message.reference
+                if ref: message = await ctx.channel.fetch_message(ref.message_id)
+                if message.attachments: image_url = message.attachments[0].url
+                elif message.embeds and message.embeds[0].image: image_url = message.embeds[0].image.url
+            if not image_url: return await ctx.send(f"{self.cross_emoji} No image URL found.")
             await self.output_prediction(message, image_url)
         except Exception as e:
             await ctx.send(f"{self.cross_emoji} Prediction error: {type(e).__name__}: {e}")
 
-def setup(bot):
-    bot.add_cog(PoketwoSpawnDetector(bot))
+def setup(bot): bot.add_cog(PoketwoSpawnDetector(bot))

@@ -34,7 +34,7 @@ class SetupManager:
         )
         self.pkg_groups = {
             "heavy": ["onnxruntime", "opencv-python-headless"],
-            "medium": ["emoji==1.7.0", "python-Levenshtein"],
+            "medium": ["emoji==1.7.0", "python-Levenshtein""],
             "common": ["pip", "setuptools", "wheel", "urllib3", "pipreqs", "Flask", 'rapidfuzz']
         }
 
