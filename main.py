@@ -37,7 +37,7 @@ def run_flask():
     if port_env:
         port = int(port_env)
     else:
-        port = 8080
+        port = 8080 if not ut else 0 
 
     print(f"🌐 Hosting Flask server on port {port}")
     app.run(host="0.0.0.0", port=port, threaded=True)
