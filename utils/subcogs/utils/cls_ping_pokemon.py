@@ -1236,10 +1236,11 @@ class ServerConfigView(discord.ui.View):
 
 
 
-
 class PokemonTypeSelect(discord.ui.View):
-    def __init__(self, bot, user_id: int, collection_type: str, mongo_helper, pokemon_types: list[str], current_types: list[str] | None = None, status=None):
+    def __init__(self, bot, user_id: int, collection_type: str, mongo_helper,
+                 pokemon_types: list[str], current_types: list[str] | None = None, status=None):
         super().__init__(timeout=300)
+        self.bot = bot
         self.user_id = user_id
         self.collection_type = collection_type
         self.mongo = mongo_helper
@@ -1247,10 +1248,14 @@ class PokemonTypeSelect(discord.ui.View):
         self.current_types = set(current_types or [])
         self.status_message = status
         self.message = None
-        self.bot = bot
+        self.afk_collection = self.mongo.db["afk_type_storage"]
 
-        with open("data/commands/pokemon/pokemon_emojis/_pokemon_types.json", "r", encoding="utf-8") as f:
-            raw_emojis = json.load(f)
+        try:
+            with open("data/commands/pokemon/pokemon_emojis/_pokemon_types.json", "r", encoding="utf-8") as f:
+                raw_emojis = json.load(f)
+        except Exception:
+            print("Error loading emoji JSON:\n", traceback.format_exc())
+            raw_emojis = {}
 
         self.emojis = {}
         for key, raw in raw_emojis.items():
@@ -1262,10 +1267,14 @@ class PokemonTypeSelect(discord.ui.View):
                 else:
                     self.emojis[key.lower()] = raw
             except Exception:
+                print(f"Error parsing emoji for {key}:\n", traceback.format_exc())
                 self.emojis[key.lower()] = raw
 
-        self.add_type_select()
-        self.add_clear_button()
+        self.clear_items()
+        self.add_type_select(disabled=False)
+        self.add_clear_button(disabled=False)
+        self.add_afk_button(afk_on=False)
+        self.add_help_button()
 
     def _get_emoji_by_name(self, name: str):
         for key, emoji in self.emojis.items():
@@ -1273,7 +1282,7 @@ class PokemonTypeSelect(discord.ui.View):
                 return emoji
         return None
 
-    def add_type_select(self):
+    def add_type_select(self, disabled=False):
         options = []
         for pt in self.pokemon_types:
             selected = pt in self.current_types
@@ -1284,97 +1293,198 @@ class PokemonTypeSelect(discord.ui.View):
                 emoji=emoji if isinstance(emoji, (discord.PartialEmoji, str)) else None,
                 default=selected
             ))
-
         select = discord.ui.Select(
             placeholder="Select Pokémon Types...",
             min_values=0,
             max_values=len(self.pokemon_types),
             options=options,
-            custom_id="pokemon_type_select"
+            custom_id="pokemon_type_select",
+            disabled=disabled
         )
         select.callback = self.select_callback
-        self.clear_items()
         self.add_item(select)
 
-    def add_clear_button(self):
-        clear_button = discord.ui.Button(label="Clear All", style=discord.ButtonStyle.danger)
+    def add_clear_button(self, disabled=False):
+        clear_button = discord.ui.Button(label="Clear All", style=discord.ButtonStyle.danger, disabled=disabled)
         clear_button.callback = self.clear_callback
         self.add_item(clear_button)
 
-    async def select_callback(self, interaction: discord.Interaction):
-        if interaction.user.id != self.user_id:
-            return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
+    def add_help_button(self):
+        help_button = discord.ui.Button(label="Help", style=discord.ButtonStyle.primary)
+        help_button.callback = self.help_callback
+        self.add_item(help_button)
 
-        self.current_types = set(interaction.data.get("values", []))
+    def add_afk_button(self, afk_on: bool):
+        label = "AFK (ON)" if afk_on else "AFK (OFF)"
+        style = discord.ButtonStyle.success if afk_on else discord.ButtonStyle.secondary
+        afk_button = discord.ui.Button(label=label, style=style)
+        afk_button.callback = self.afk_toggle_callback
+        self.add_item(afk_button)
 
+    async def refresh_view(self):
         try:
+            afk_data = await self.afk_collection.find_one({"user_id": self.user_id})
+            afk_on = bool(afk_data)
+            self.clear_items()
+            self.add_type_select(disabled=afk_on)
+            self.add_clear_button(disabled=afk_on)
+            self.add_afk_button(afk_on)
+            self.add_help_button()
+        except Exception:
+            print("Error in refresh_view:\n", traceback.format_exc())
+
+    async def _create_embed(self, ctx=None, status_message=None):
+     try:
+        afk_data = await self.afk_collection.find_one({"user_id": self.user_id})
+        afk_on = bool(afk_data)
+
+        user = None
+        if ctx:
+            if hasattr(ctx, "author"):
+                user = ctx.author
+            elif hasattr(ctx, "user"):
+                user = ctx.user
+
+        if afk_on:
+            embed = discord.Embed(
+                title="Type Ping",
+                description="**:zzz: AFK mode is activated**",
+                color=discord.Color.red()
+            )
+            embed.set_footer(text="You can toggle AFK again to restore your type pings.")
+            if user and getattr(user, "avatar", None):
+                embed.set_thumbnail(url=user.avatar.url)
+        else:
+            embed = discord.Embed(title="Type Ping")
+            if self.current_types:
+                lines = []
+                for pt in sorted(self.current_types):
+                    emoji = self._get_emoji_by_name(pt)
+                    emoji_str = str(emoji) if emoji else ""
+                    lines.append(f"{emoji_str} {pt.title()}")
+                embed.description = "\n".join(lines)
+            else:
+                embed.description = "No types selected."
+            footer_text = status_message or self.status_message or "Select types below to get spawn pings."
+            embed.set_footer(text=footer_text)
+            if user and getattr(user, "avatar", None):
+                embed.set_thumbnail(url=user.avatar.url)
+
+        return embed
+
+     except Exception:
+        print("Error in _create_embed:\n", traceback.format_exc())
+        return discord.Embed(title="Error", description="Failed to render type selection.", color=discord.Color.red())
+   
+    async def select_callback(self, interaction: discord.Interaction):
+        try:
+            if interaction.user.id != self.user_id:
+                return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
+
+            self.current_types = set(interaction.data.get("values", []))
             collection = self.mongo.db[f"{self.collection_type}_types"]
+
             await collection.delete_many({"user_id": self.user_id})
             docs = [{"user_id": self.user_id, "type": t} for t in self.current_types]
             if docs:
                 await collection.insert_many(docs)
-        except Exception as e:
-            return await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
 
-        self.clear_items()
-        self.add_type_select()
-        self.add_clear_button()
-
-        embed = self._create_embed(interaction, status_message="Selection updated.")
-        await interaction.response.edit_message(embed=embed, view=self)
-        self.message = interaction.message
+            await self.refresh_view()
+            embed = await self._create_embed(interaction, status_message="Selection updated.")
+            await interaction.response.edit_message(embed=embed, view=self)
+            self.message = interaction.message
+        except Exception:
+            print("Error in select_callback:\n", traceback.format_exc())
+            await interaction.response.send_message("An error occurred. Please check logs.", ephemeral=True)
 
     async def clear_callback(self, interaction: discord.Interaction):
-        if interaction.user.id != self.user_id:
-            return await interaction.response.send_message("Only the command author can clear selections.", ephemeral=True)
-
-        self.current_types.clear()
-
         try:
+            if interaction.user.id != self.user_id:
+                return await interaction.response.send_message("Only the command author can clear selections.", ephemeral=True)
+
+            self.current_types.clear()
             collection = self.mongo.db[f"{self.collection_type}_types"]
             await collection.delete_many({"user_id": self.user_id})
-        except Exception as e:
-            return await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
 
-        self.clear_items()
-        self.add_type_select()
-        self.add_clear_button()
+            await self.refresh_view()
+            embed = await self._create_embed(interaction, status_message="Selection cleared.")
+            await interaction.response.edit_message(embed=embed, view=self)
+            self.message = interaction.message
+        except Exception:
+            print("Error in clear_callback:\n", traceback.format_exc())
+            await interaction.response.send_message("An error occurred while clearing.", ephemeral=True)
 
-        embed = self._create_embed(interaction, status_message="Selection cleared.")
-        await interaction.response.edit_message(embed=embed, view=self)
-        self.message = interaction.message
+    async def afk_toggle_callback(self, interaction: discord.Interaction):
+        try:
+            if interaction.user.id != self.user_id:
+                return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
+
+            user_id = self.user_id
+            collection = self.mongo.db[f"{self.collection_type}_types"]
+            afk_collection = self.afk_collection
+            afk_data = await afk_collection.find_one({"user_id": user_id})
+            current_data = list(self.current_types)
+
+            if afk_data:
+                self.current_types = set(afk_data.get("types", []))
+                await afk_collection.delete_one({"user_id": user_id})
+                await collection.delete_many({"user_id": user_id})
+                await collection.insert_many([{"user_id": user_id, "type": t} for t in self.current_types])
+                status_msg = "AFK disabled. Your type pings have been restored."
+                embed = await self._create_embed(interaction, status_message=status_msg)
+            else:
+                if not self.current_types:
+                    return await interaction.response.send_message("You have no active types to store.", ephemeral=True)
+
+                await afk_collection.insert_one({"user_id": user_id, "types": current_data})
+                await collection.delete_many({"user_id": user_id})
+                self.current_types.clear()
+
+                embed = discord.Embed(
+                    title="Type Ping",
+                    description="**:zzz: AFK mode is activated**",
+                    color=discord.Color.red()
+                )
+                embed.set_footer(text="You can toggle AFK again to restore your type pings.")
+                if interaction.user.avatar:
+                    embed.set_thumbnail(url=interaction.user.avatar.url)
+
+            await self.refresh_view()
+            await interaction.response.edit_message(embed=embed, view=self)
+            self.message = interaction.message
+        except Exception:
+            print("Error in afk_toggle_callback:\n", traceback.format_exc())
+            await interaction.response.send_message("Failed to toggle AFK mode.", ephemeral=True)
+
+    async def help_callback(self, interaction: discord.Interaction):
+        try:
+            if interaction.user.id != self.user_id:
+                return await interaction.response.send_message("Only the command author can view help.", ephemeral=True)
+
+            embed = discord.Embed(
+                title="Type Ping Help",
+                description=(
+                    "> Whenever a <@716390085896962058> Pokémon spawns with any __selected type__, "
+                    f"{self.bot.user.mention} will mention you in this server.\n\n"
+                    "> You can toggle AFK to pause pings and store your preferences. "
+                    "When you're back, toggle AFK again to restore them."
+                ),
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception:
+            print("Error in help_callback:\n", traceback.format_exc())
+            await interaction.response.send_message("Error displaying help.", ephemeral=True)
 
     async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
-        if self.message:
-            embed = self._create_embed(status_message="View expired.")
-            await self.message.edit(embed=embed, view=self)
-        self.stop()
-
-    def _create_embed(self, ctx=None, status_message=None):
-        embed = discord.Embed(title="Type Ping")
-        if self.current_types:
-            lines = []
-            for pt in sorted(self.current_types):
-                emoji = self._get_emoji_by_name(pt)
-                lines.append(f"{emoji} {pt.title()}")
-            embed.description = "\n".join(lines)
-        else:
-            embed.description = "No types selected."
-
-        embed.description += (
-          "\n\n> Whenever a <@716390085896962058> Pokémon spawns with any selected type, "
-          f"{self.bot.user.mention} will mention you in this server."
-          )
-
-        footer_text = status_message or self.status_message or "Select types below to get spawn pings."
-        embed.set_footer(text=footer_text)
-
-        if ctx and hasattr(ctx, "user") and ctx.user.avatar:
-            embed.set_thumbnail(url=ctx.user.avatar.url)
-
-        return embed
+        try:
+            for item in self.children:
+                item.disabled = True
+            if self.message:
+                embed = await self._create_embed(status_message="View expired.")
+                await self.message.edit(embed=embed, view=self)
+            self.stop()
+        except Exception:
+            print("Error in on_timeout:\n", traceback.format_exc())
 
     async def interaction_check(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
@@ -1386,33 +1496,22 @@ class PokemonTypeSelect(discord.ui.View):
         valid_types = {t.lower() for t in self.pokemon_types}
         parts = [p.strip().lower() for p in user_input.replace(',', ' ').split()]
         return {t for t in parts if t in valid_types}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    
+    
 class PokemonRegionSelect(discord.ui.View):
-    def __init__(self, bot, user_id: int, collection_type: str, mongo_helper, pokemon_regions: list[str], current_regions: list[str] | None = None, status=None):
+    def __init__(self, bot, user_id: int, collection_type: str, mongo_helper,
+                 pokemon_regions: list[str], current_regions: list[str] | None = None, status=None):
         super().__init__(timeout=300)
+        self.bot = bot
         self.user_id = user_id
         self.collection_type = collection_type
         self.mongo = mongo_helper
+        # Filter out "hisui" regions (case insensitive)
         self.pokemon_regions = [r for r in pokemon_regions if r.lower() != "hisui"]
         self.current_regions = set(r for r in (current_regions or []) if r.lower() != "hisui")
         self.status_message = status
         self.message = None
-        self.bot = bot
+        self.afk_collection = self.mongo.db["afk_region_storage"]
 
         with open("data/commands/pokemon/pokemon_emojis/_pokemon_quest.json", "r", encoding="utf-8") as f:
             raw_emojis = json.load(f)
@@ -1429,18 +1528,26 @@ class PokemonRegionSelect(discord.ui.View):
             except Exception:
                 self.emojis[key.lower()] = raw
 
-        self.add_region_select()
-        self.add_clear_button()
 
-    def add_region_select(self):
+    async def refresh_view(self):
+        self.clear_items()
+        afk_data = await self.afk_collection.find_one({"user_id": self.user_id})
+        afk_on = bool(afk_data)
+        self.add_region_select(disabled=afk_on)
+        self.add_clear_button(disabled=afk_on)
+        self.add_afk_toggle_button()
+        self.add_help_button()
+
+    def add_region_select(self, disabled=False):
         options = []
         for region in self.pokemon_regions:
             selected = region in self.current_regions
             emoji = self.emojis.get(region.lower())
+            emoji_val = emoji if isinstance(emoji, (discord.PartialEmoji, str)) else None
             options.append(discord.SelectOption(
                 label=region.title(),
                 value=region,
-                emoji=emoji if isinstance(emoji, (discord.PartialEmoji, str)) else None,
+                emoji=emoji_val,
                 default=selected
             ))
 
@@ -1449,24 +1556,33 @@ class PokemonRegionSelect(discord.ui.View):
             min_values=0,
             max_values=len(self.pokemon_regions),
             options=options,
-            custom_id="pokemon_region_select"
+            custom_id="pokemon_region_select",
+            disabled=disabled
         )
         select.callback = self.select_callback
-        self.clear_items()
         self.add_item(select)
 
-    def add_clear_button(self):
-        clear_button = discord.ui.Button(label="Clear All", style=discord.ButtonStyle.danger)
+    def add_clear_button(self, disabled=False):
+        clear_button = discord.ui.Button(label="Clear All", style=discord.ButtonStyle.danger, disabled=disabled)
         clear_button.callback = self.clear_callback
         self.add_item(clear_button)
+
+    def add_afk_toggle_button(self):
+        afk_button = discord.ui.Button(label="Toggle AFK", style=discord.ButtonStyle.secondary)
+        afk_button.callback = self.afk_toggle_callback
+        self.add_item(afk_button)
+
+    def add_help_button(self):
+        help_button = discord.ui.Button(label="Help", style=discord.ButtonStyle.primary)
+        help_button.callback = self.help_callback
+        self.add_item(help_button)
 
     async def select_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
 
-        selected_regions = interaction.data.get("values", [])
-        selected_regions = [r for r in selected_regions if r.lower() != "hisui"]
-        self.current_regions = set(selected_regions)
+        selected = [r for r in interaction.data.get("values", []) if r.lower() != "hisui"]
+        self.current_regions = set(selected)
 
         try:
             await self.mongo.db[self.collection_type].update_one(
@@ -1477,11 +1593,8 @@ class PokemonRegionSelect(discord.ui.View):
         except Exception as e:
             return await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
 
-        self.clear_items()
-        self.add_region_select()
-        self.add_clear_button()
-
-        embed = self._create_embed(interaction, status_message="Selection updated.")
+        await self.refresh_buttons()
+        embed = await self._create_embed(interaction, status_message="Selection updated.")
         await interaction.response.edit_message(embed=embed, view=self)
         self.message = interaction.message
 
@@ -1500,49 +1613,134 @@ class PokemonRegionSelect(discord.ui.View):
         except Exception as e:
             return await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
 
-        self.clear_items()
-        self.add_region_select()
-        self.add_clear_button()
-
-        embed = self._create_embed(interaction, status_message="Selection cleared.")
+        await self.refresh_buttons()
+        embed = await self._create_embed(interaction, status_message="Selection cleared.")
         await interaction.response.edit_message(embed=embed, view=self)
         self.message = interaction.message
+
+    async def afk_toggle_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Only the command author can use this.", ephemeral=True)
+
+        user_id = self.user_id
+        collection = self.mongo.db[self.collection_type]
+        afk_collection = self.afk_collection
+
+        afk_data = await afk_collection.find_one({"user_id": user_id})
+        current_data = list(self.current_regions)
+
+        if afk_data:
+            # AFK OFF: restore stored regions
+            self.current_regions = set(afk_data.get("regions", []))
+            await afk_collection.delete_one({"user_id": user_id})
+
+            await collection.update_one(
+                {"user_id": user_id},
+                {"$set": {"regions": list(self.current_regions)}},
+                upsert=True
+            )
+            status_msg = "AFK disabled. Your region pings have been restored."
+            embed = await self._create_embed(interaction, status_message=status_msg)
+        else:
+            # AFK ON: store current regions, clear active
+            if not self.current_regions:
+                return await interaction.response.send_message("You have no active regions to store.", ephemeral=True)
+
+            await afk_collection.insert_one({"user_id": user_id, "regions": current_data})
+            await collection.update_one(
+                {"user_id": user_id},
+                {"$set": {"regions": []}},
+                upsert=True
+            )
+            self.current_regions.clear()
+
+            embed = discord.Embed(
+                title="Region Ping",
+                description="**:zzz: AFK mode is activated**",
+                color=discord.Color.red()
+            )
+            embed.set_footer(text="You can toggle AFK again to restore your region pings.")
+            if interaction.user.avatar:
+                embed.set_thumbnail(url=interaction.user.avatar.url)
+
+            await self.refresh_view()
+            await interaction.response.edit_message(embed=embed, view=self)
+            self.message = interaction.message
+            return
+
+        await self.refresh_view()
+        await interaction.response.edit_message(embed=embed, view=self)
+        self.message = interaction.message
+
+    async def help_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Only the command author can view help.", ephemeral=True)
+
+        embed = discord.Embed(
+            title="Region Ping Help",
+            description=(
+                "> Whenever a <@716390085896962058> Pokémon spawns in any __selected region__, "
+                f"{self.bot.user.mention} will mention you in this server.\n\n"
+                "> You can toggle AFK to pause pings and store your preferences. "
+                "When you're back, toggle AFK again to restore them."
+            ),
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def on_timeout(self):
         for item in self.children:
             item.disabled = True
         if self.message:
-            embed = self._create_embed(status_message="View expired.")
+            embed = await self._create_embed(status_message="View expired.")
             await self.message.edit(embed=embed, view=self)
         self.stop()
 
-    def _create_embed(self, ctx=None, status_message=None):
-        embed = discord.Embed(title="Region Ping")
+    async def _create_embed(self, ctx=None, status_message=None):
+     try:
+        afk_data = await self.afk_collection.find_one({"user_id": self.user_id})
+        afk_on = bool(afk_data)
 
-        if self.current_regions:
-            lines = []
-            for region in sorted(self.current_regions):
-                if region.lower() == "hisui":
-                    continue
-                emoji = self.emojis.get(region.lower(), "")
-                lines.append(f"{emoji} {region.title()}")
-            embed.description = "\n".join(lines)
+        user = None
+        if ctx:
+            # ctx can be either context or interaction
+            if hasattr(ctx, "author"):
+                user = ctx.author
+            elif hasattr(ctx, "user"):
+                user = ctx.user
+
+        if afk_on:
+            embed = discord.Embed(
+                title="Region Ping",
+                description="**:zzz: AFK mode is activated**",
+                color=discord.Color.red()
+            )
+            embed.set_footer(text="You can toggle AFK again to restore your region pings.")
+            if user and getattr(user, "avatar", None):
+                embed.set_thumbnail(url=user.avatar.url)
         else:
-            embed.description = "No regions selected."
-
-        embed.description += (
-          "\n\n> Whenever a <@716390085896962058> Pokémon spawns in any selected region, "
-          f"{self.bot.user.mention} will mention you in this server."
-          )
-
-        footer_text = status_message or self.status_message or "Select regions below to get spawn pings."
-        embed.set_footer(text=footer_text)
-
-        if ctx and hasattr(ctx, "user") and ctx.user.avatar:
-            embed.set_thumbnail(url=ctx.user.avatar.url)
+            embed = discord.Embed(title="Region Ping")
+            if self.current_regions:
+                lines = []
+                for region in sorted(self.current_regions):
+                    emoji = self.emojis.get(region.lower(), "")
+                    emoji_str = str(emoji) if emoji else ""
+                    lines.append(f"{emoji_str} {region.title()}")
+                embed.description = "\n".join(lines)
+            else:
+                embed.description = "No regions selected."
+            footer_text = status_message or self.status_message or "Select regions below to get spawn pings."
+            embed.set_footer(text=footer_text)
+            if user and getattr(user, "avatar", None):
+                embed.set_thumbnail(url=user.avatar.url)
 
         return embed
 
+     except Exception:
+        print("Error in _create_embed:\n", traceback.format_exc())
+        return discord.Embed(title="Error", description="Failed to render region selection.", color=discord.Color.red())
+    
+    
+    
     async def interaction_check(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("Only the command author can use these options.", ephemeral=True)
@@ -1552,19 +1750,7 @@ class PokemonRegionSelect(discord.ui.View):
     def parse_region_input(self, user_input: str) -> set[str]:
         valid_regions = {r.lower() for r in self.pokemon_regions}
         parts = [p.strip().lower() for p in user_input.replace(',', ' ').split()]
-        return {r for r in parts if r in valid_regions and r != "hisui"}
-
-
-
-     
-     
-     
-     
-     
-     
-     
-     
-     
+        return {r for r in parts if r in valid_regions and r != "hisui"} 
      
      
      

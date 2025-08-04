@@ -120,22 +120,25 @@ class Ping_Pokemon(commands.Cog):
             current_types = []
 
         view = PokemonTypeSelect(self.bot, user_id, "type_ping", self.mongo, self.pokemon_types, current_types)
-        embed = view._create_embed(ctx=ctx)
+        await view.refresh_view() 
+        embed = await view._create_embed(ctx=ctx) 
         await ctx.reply(embed=embed, view=view, mention_author=False)
-
+        
     @commands.hybrid_command(name="quest_ping", aliases=["qp"])
     async def quest_ping(self, ctx):
-        user_id = ctx.author.id
-        try:
-            current_regions_data = await self.mongo.db[self.quest_collection].find_one({"user_id": user_id})
-            current_regions = current_regions_data.get("regions", []) if current_regions_data else []
-        except Exception:
-            current_regions = []
+     user_id = ctx.author.id
+     try:
+        current_regions_data = await self.mongo.db[self.quest_collection].find_one({"user_id": user_id})
+        current_regions = current_regions_data.get("regions", []) if current_regions_data else []
+     except Exception:
+        current_regions = []
 
-        available_regions = sorted(list(self.load_quest_regions()))
-        view = PokemonRegionSelect(self.bot, user_id, self.quest_collection, self.mongo, available_regions, current_regions)
-        embed = view._create_embed(ctx=ctx)
-        await ctx.reply(embed=embed, view=view, mention_author=False)
+     available_regions = sorted(list(self.load_quest_regions()))
+     view = PokemonRegionSelect(self.bot, user_id, self.quest_collection, self.mongo, available_regions, current_regions)
+     await view.refresh_view() 
+     embed = await view._create_embed(ctx=ctx) 
+     await ctx.reply(embed=embed, view=view, mention_author=False)
+
 
     @app_commands.command(
         name="specialping",
