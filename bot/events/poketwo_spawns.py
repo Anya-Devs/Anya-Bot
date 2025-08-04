@@ -24,6 +24,7 @@ from utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils
 logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=os.cpu_count() or 4)
 
+
 class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -61,6 +62,32 @@ class PoketwoSpawnDetector(commands.Cog):
         self._pokemon_ids = self.pokemon_utils.load_pokemon_ids()
         self._special_names = self._load_special_names_sync()
         self._image_color_cache = {}
+
+        self._pokemon_name_map = self._load_pokemon_names("data/commands/pokemon/pokemon_names.csv")
+
+    @staticmethod
+    def _load_pokemon_names(filepath: str) -> dict:
+        path = Path(filepath)
+        if not path.exists():
+            return {}
+        with path.open(encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            return {row['name'].replace('-', '_'): row['id'] for row in reader if 'name' in row and 'id' in row}
+
+    def get_base_pokemon_name(self, raw_name: str) -> str:
+        name_map = self._pokemon_name_map
+        normalized_name = raw_name.replace('-', '_')
+        if normalized_name in name_map:
+            return normalized_name
+        parts = normalized_name.split('_')
+        for i in range(len(parts)):
+            candidate = '_'.join(parts[i:])
+            if candidate in name_map:
+                return candidate
+        for part in reversed(parts):
+            if part in name_map:
+                return part
+        return normalized_name
 
     @staticmethod
     @lru_cache(maxsize=None)
@@ -157,86 +184,79 @@ class PoketwoSpawnDetector(commands.Cog):
             return 0xFFFFFF
 
     async def output_prediction(self, message, image_url):
-     try:
-        slug, conf = await asyncio.to_thread(self.predictor.predict, image_url)
-
         try:
-            conf_str = str(conf).strip().rstrip('%')
-            conf_float = float(conf_str)
-            low_confidence = conf_float < 30.0
-        except Exception as ex:
-            print(f"Failed to parse confidence: {ex}")
-            low_confidence = False
-            conf_float = 0.0
+            slug_raw, conf = await asyncio.to_thread(self.predictor.predict, image_url)
+            slug = self.get_base_pokemon_name(slug_raw)
 
-        pred_text = f"{conf_float:.2f}%"
+            try:
+                conf_str = str(conf).strip().rstrip('%')
+                conf_float = float(conf_str)
+                low_confidence = conf_float < 30.0
+            except Exception as ex:
+                print(f"Failed to parse confidence: {ex}")
+                low_confidence = False
+                conf_float = 0.0
+
+            pred_text = f"{conf_float:.2f}%"
+
+            rare, regional = self._special_names
+
+            results = await asyncio.gather(
+                self.pokemon_utils.get_server_config(message.guild.id),
+                self.pokemon_utils.get_ping_users(message.guild, slug),
+                self.pokemon_utils.get_type_ping_users(message.guild, slug),
+                self.pokemon_utils.get_quest_ping_users(message.guild, slug),
+            )
+            server_config, (shiny_pings, collection_pings), type_pings, quest_pings = results
+
+            special_roles = []
+            slug_lower = slug.lower()
+            if any(p in slug_lower for p in rare) and server_config.get("rare_role"):
+                special_roles.append(f"<@&{server_config['rare_role']}>")
+            if (any(p in slug_lower for p in regional) or any(slug_lower.startswith(f"{form}-") for form in self.regional_forms.values())) and server_config.get("regional_role"):
+                special_roles.append(f"<@&{server_config['regional_role']}>")
+            special_roles_str = " ".join(special_roles)
+
+            description, dex_number, _row = self.pokemon_utils.get_description(slug)
+            if not dex_number or dex_number == "???":
+                dex_number = self._pokemon_ids.get(slug_lower, "???")
+
+            ping_msg, embed = await self.format_messages(
+                slug, type_pings, quest_pings, shiny_pings,
+                collection_pings, special_roles_str, pred_text,
+                dex_number, description, image_url,
+                low_confidence=low_confidence
+            )
+
+            best_alt = self.get_best_normal_alt_name(slug_lower)
+
+            self.pokemon_image_builder.create_image(
+                pokemon_id=int(self._pokemon_ids.get(slug_lower, 0)),
+                pokemon_name=self.pokemon_utils.format_name(slug),
+                best_name=best_alt or "",
+                types=self.pokemon_utils.get_pokemon_types(slug),
+                bg_url=None
+            )
+
+            saved_path = "data/events/poketwo_spawns/image/test.png"
+            file = discord.File(saved_path, filename="pokemon_spawn.png")
+
+            info_button = discord.ui.Button(label="Info", style=discord.ButtonStyle.primary)
+
+            async def info_callback(interaction):
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+
+            info_button.callback = info_callback
+            view = discord.ui.View(timeout=None)
+            view.add_item(info_button)
+
+            await message.channel.send(content=ping_msg, file=file, view=None, reference=message)
+
+        except Exception as e:
+            logger.error(f"Error in output_prediction: {type(e).__name__}: {e}")
+            await message.channel.send(f"{self.error_emoji} Failed to process spawn", reference=message)
 
 
-        rare, regional = self._special_names
-
-        results = await asyncio.gather(
-            self.pokemon_utils.get_server_config(message.guild.id),
-            self.pokemon_utils.get_ping_users(message.guild, slug),
-            self.pokemon_utils.get_type_ping_users(message.guild, slug),
-            self.pokemon_utils.get_quest_ping_users(message.guild, slug),
-        )
-        server_config, (shiny_pings, collection_pings), type_pings, quest_pings = results
-
-        special_roles = []
-        slug_lower = slug.lower()
-        if any(p in slug_lower for p in rare) and server_config.get("rare_role"):
-            special_roles.append(f"<@&{server_config['rare_role']}>")
-        if (any(p in slug_lower for p in regional) or any(slug_lower.startswith(f"{form}-") for form in self.regional_forms.values())) and server_config.get("regional_role"):
-            special_roles.append(f"<@&{server_config['regional_role']}>")
-        special_roles_str = " ".join(special_roles)
-
-        description, dex_number, _row = self.pokemon_utils.get_description(slug)
-        if not dex_number or dex_number == "???":
-            dex_number = self._pokemon_ids.get(slug_lower, "???")
-
-        ping_msg, embed = await self.format_messages(
-            slug, type_pings, quest_pings, shiny_pings,
-            collection_pings, special_roles_str, pred_text,
-            dex_number, description, image_url,
-            low_confidence=low_confidence
-        )
-
-        best_alt = self.get_best_normal_alt_name(slug_lower)
-
-        self.pokemon_image_builder.create_image(
-            pokemon_id=int(self._pokemon_ids.get(slug_lower, 0)),
-            pokemon_name=self.pokemon_utils.format_name(slug),
-            best_name=best_alt or "",
-            types=self.pokemon_utils.get_pokemon_types(slug),
-            bg_url=None
-        )
-
-        saved_path = "data/events/poketwo_spawns/image/test.png"
-        file = discord.File(saved_path, filename="pokemon_spawn.png")
-
-        info_button = discord.ui.Button(label="Info", style=discord.ButtonStyle.primary)
-
-        async def info_callback(interaction):
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-
-        info_button.callback = info_callback
-        view = discord.ui.View(timeout=None)
-        view.add_item(info_button)
-
-        await message.channel.send(content=ping_msg, file=file, view=None, reference=message)
-
-     except Exception as e:
-        logger.error(f"Error in output_prediction: {type(e).__name__}: {e}")
-        await message.channel.send(f"{self.error_emoji} Failed to process spawn", reference=message)
-        
-        
-        
-        
-        
-        
-        
-        
-        
     async def format_messages(self, slug, type_pings, quest_pings, shiny_pings, collection_pings,
                               special_roles, pred_text, dex_number, description, image_url,
                               low_confidence=True):
