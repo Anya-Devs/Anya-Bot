@@ -1,10 +1,11 @@
-import sys, os, re, time, subprocess, asyncio
+import sys, os, time, asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 def ensure_rich():
     try:
         import rich
     except ImportError:
+        import subprocess
         subprocess.check_call([sys.executable, "-m", "pip", "install", "rich"])
 ensure_rich()
 
@@ -20,7 +21,6 @@ class SetupManager:
         self.submodule_url = "https://github.com/senko-sleep/Poketwo-AutoNamer.git"
         self.submodule_path = "submodules/poketwo_autonamer"
         self.requirements_file = "requirements.txt"
-        self.executor = ThreadPoolExecutor(max_workers=16)
         self.task_times = {}
         self.start_time = time.time()
         self.progress = Progress(
@@ -35,8 +35,9 @@ class SetupManager:
         self.pkg_groups = {
             "heavy": ["onnxruntime", "opencv-python-headless"],
             "medium": ["emoji==1.7.0", "python-Levenshtein"],
-            "common": ["pip", "setuptools", "wheel", "urllib3", "pipreqs", "Flask", 'rapidfuzz']
+            "common": ["pip", "setuptools", "wheel", "urllib3", "pipreqs", "Flask", "rapidfuzz"]
         }
+        # self.semaphore = asyncio.Semaphore(4)  # Optional concurrency limit
 
     def log_time(self, key, start):
         elapsed = time.time() - start
@@ -44,6 +45,7 @@ class SetupManager:
         return f"[dim]({elapsed:.1f}s)[/dim]"
 
     def ensure_pip(self):
+        import subprocess
         try:
             subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"], check=True, capture_output=True)
             subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"], check=True, capture_output=True)
@@ -53,8 +55,14 @@ class SetupManager:
             return False
 
     async def run_cmd(self, *args):
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(self.executor, lambda: subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode)
+        # Async subprocess call
+        proc = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL
+        )
+        await proc.wait()
+        return proc.returncode
 
     async def sync_submodule(self, task_id):
         start = time.time()
@@ -71,7 +79,15 @@ class SetupManager:
         start = time.time()
         self.progress.update(task_id, description=f"□ Installing {group_name}...", completed=10)
         try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade"] + pkgs, check=True, capture_output=True)
+            # Await pip install asynchronously
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, "-m", "pip", "install", "--upgrade", *pkgs,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                raise Exception(stderr.decode().strip() or "Unknown pip install error")
             self.progress.update(task_id, description=f"✅ {group_name} {self.log_time(group_name, start)}", completed=100)
         except Exception as e:
             self.progress.update(task_id, description=f"❌ {group_name} failed {self.log_time(group_name, start)}", completed=100)
@@ -102,7 +118,14 @@ class SetupManager:
             self.progress.update(task_id, description=f"⚠️ No requirements.txt", completed=100)
             return
         try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "-r", self.requirements_file, "--upgrade"], check=True, capture_output=True)
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, "-m", "pip", "install", "-r", self.requirements_file, "--upgrade",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                raise Exception(stderr.decode().strip() or "Unknown pip install error")
             self.progress.update(task_id, description=f"✅ Installed {self.log_time('requirements', start)}", completed=100)
         except Exception as e:
             self.progress.update(task_id, description=f"❌ Install failed {self.log_time('requirements', start)}", completed=100)
