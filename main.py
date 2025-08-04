@@ -9,19 +9,12 @@ from rich.align import Align
 from rich.console import Console
 from data.local.const import AvatarToTextArt
 from bot.token import get_bot_token, prefix, use_test_bot as ut
-from imports.log_imports import logger
+from imports.log_imports import *
 from imports.discord_imports import *
 from utils.cogs.ticket import setup_persistent_views
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 load_dotenv(dotenv_path=os.path.join(".github", ".env")) 
-
-# Insert current dir to sys.path
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-
-# Load environment variables
-load_dotenv(dotenv_path=os.path.join(".github", ".env"))
-
 
 # === Web Server ===
 app = Flask(__name__, static_folder="html")
@@ -37,24 +30,21 @@ def index():
 def serve_static(filename):
     return send_from_directory(app.static_folder, filename)
 
-
 def run_flask():
-    port = int(os.environ.get("PORT", 8080 if not ut else 0))
+    port = 8080 if not ut else 0
     print(f"🌐 Hosting Flask server on port {port}")
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, threaded=True)
 
-
-# === Discord Bot Setup ===
 class BotSetup(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         intents.members = True
-        self.shard_count = 5 if not ut else None
+        shard_count = 5 if not ut else None
         super().__init__(
             command_prefix=commands.when_mentioned_or(prefix),
             intents=intents,
             help_command=None,
-            shard_count=self.shard_count,
+            shard_count=shard_count,
             shard_reconnect_interval=20,
             heartbeat_timeout=120,
         )
@@ -76,26 +66,20 @@ class BotSetup(commands.AutoShardedBot):
             try:
                 await setup_persistent_views(self)
             except Exception as e:
-                logger.error(f"Persistent views error: {e}\n{traceback.format_exc()}")
+                logging.error(f"Persistent views error: {e}\n{traceback.format_exc()}")
         except Exception as e:
-            logger.error(f"Error in on_ready: {e}\n{traceback.format_exc()}")
-
-    async def on_disconnect(self):
-        print("⚠️ Bot disconnected! Attempting to reconnect...")
-
-    async def on_resumed(self):
-        print("✅ Bot session successfully resumed.")
+            logging.error(f"Error in on_ready: {e}\n{traceback.format_exc()}")
 
     async def start_bot(self):
         await self.setup()
         try:
             token = await get_bot_token()
             if not token:
-                logger.error("No token found. Check database.")
+                logging.error("No token found. Check database.")
                 return
             await self.start(token)
         except Exception as e:
-            logger.error(f"Error during bot start: {e}\n{traceback.format_exc()}")
+            logging.error(f"Error during bot start: {e}\n{traceback.format_exc()}")
         finally:
             await self.close()
 
@@ -137,18 +121,13 @@ class BotSetup(commands.AutoShardedBot):
                         branch.add(f"[cyan]→[/cyan] [bold white]{obj.__name__}[/bold white]")
             except Exception as e:
                 branch.add(f"[red]Error: {type(e).__name__}: {e}[/red]")
-                logger.error(f"Error loading cog {mod_name}: {e}\n{traceback.format_exc()}")
+                logging.error(f"Error loading cog {mod_name}: {e}\n{traceback.format_exc()}")
         console.print(Align(tree, align='center', width=console.width))
-
 
 def main():
     gc.collect()
-    # Run Flask server in background thread (consider revisiting this for stability)
     threading.Thread(target=run_flask, daemon=True).start()
-
-    # Run bot main async startup
     asyncio.run(BotSetup().start_bot())
-
 
 if __name__ == "__main__":
     main()
