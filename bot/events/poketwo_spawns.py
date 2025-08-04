@@ -210,7 +210,7 @@ class PoketwoSpawnDetector(commands.Cog):
             server_config, (shiny_pings, collection_pings), type_pings, quest_pings = results
 
             special_roles = []
-            slug_lower = slug.lower()
+            slug_lower = slug.lower().replace('_', '-')
             if any(p in slug_lower for p in rare) and server_config.get("rare_role"):
                 special_roles.append(f"<@&{server_config['rare_role']}>")
             if (any(p in slug_lower for p in regional) or any(slug_lower.startswith(f"{form}-") for form in self.regional_forms.values())) and server_config.get("regional_role"):
@@ -227,12 +227,11 @@ class PoketwoSpawnDetector(commands.Cog):
                 dex_number, description, image_url,
                 low_confidence=low_confidence
             )
-
             best_alt = self.get_best_normal_alt_name(slug_lower)
 
             self.pokemon_image_builder.create_image(
-                pokemon_id=int(self._pokemon_ids.get(slug_lower, 0)),
-                pokemon_name=self.pokemon_utils.format_name(slug),
+                pokemon_id=int(self._pokemon_ids.get(slug_lower, None)),
+                pokemon_name=self.pokemon_utils.format_name(slug).replace('_', ' ').title(),
                 best_name=best_alt or "",
                 types=self.pokemon_utils.get_pokemon_types(slug),
                 bg_url=None
@@ -261,7 +260,7 @@ class PoketwoSpawnDetector(commands.Cog):
                               special_roles, pred_text, dex_number, description, image_url,
                               low_confidence=True):
         try:
-            formatted_name = self.pokemon_utils.format_name(slug)
+            formatted_name = self.pokemon_utils.format_name(slug).replace('_', ' ').title()
 
 
 
