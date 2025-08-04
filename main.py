@@ -1,5 +1,5 @@
 import asyncio; from data.setup import SetupManager; asyncio.run(SetupManager().run_setup())
-  
+ 
 import os, sys, gc, asyncio, traceback, importlib, pkgutil, threading
 from dotenv import load_dotenv
 from flask import Flask, send_from_directory
@@ -14,7 +14,7 @@ from imports.discord_imports import *
 from utils.cogs.ticket import setup_persistent_views
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-load_dotenv(dotenv_path=os.path.join(".github", ".env")) 
+load_dotenv(dotenv_path=os.path.join(".github", ".env"))
 
 # === Web Server ===
 app = Flask(__name__, static_folder="html")
@@ -31,7 +31,14 @@ def serve_static(filename):
     return send_from_directory(app.static_folder, filename)
 
 def run_flask():
-    port = 8080 if not ut else 0
+    # Read port from environment variable (Render sets PORT)
+    # Fallback to 8080 locally
+    port_env = os.environ.get("PORT")
+    if port_env:
+        port = int(port_env)
+    else:
+        port = 8080
+
     print(f"🌐 Hosting Flask server on port {port}")
     app.run(host="0.0.0.0", port=port, threaded=True)
 
