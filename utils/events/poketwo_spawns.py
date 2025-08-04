@@ -54,6 +54,7 @@ class PokemonUtils:
         return id_map
 
     def format_name(self, name):
+     name = name.replace('_', '-').lower()
      lens = {
         "iron-treads", "iron-bundle", "iron-hands", "iron-jugulis", "iron-moth", "iron-thorns",
         "great-tusk", "scream-tail", "brute-bonnet", "flutter-mane", "slither-wing", "sandy-shocks", "roaring-moon",

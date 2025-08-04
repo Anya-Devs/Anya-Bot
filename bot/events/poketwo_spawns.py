@@ -260,7 +260,7 @@ class PoketwoSpawnDetector(commands.Cog):
                               special_roles, pred_text, dex_number, description, image_url,
                               low_confidence=True):
         try:
-            formatted_name = self.pokemon_utils.format_name(slug).replace('_', ' ').title()
+            formatted_name = self.pokemon_utils.format_name(slug.replace('_', ' ')).title()
 
 
 
