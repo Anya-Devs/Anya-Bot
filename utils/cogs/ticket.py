@@ -21,9 +21,9 @@ class TicketSystem:
 
     # Database Operations
     async def save_ticket(self, guild_id, message_id, channel_id, embed_data, button_data, 
-                         thread_message, close_button_data, ticket_name):
+                         thread_message, close_button_data, ticket_name, user_id=None, thread_id=None):
         message_link = f"https://discord.com/channels/{guild_id}/{channel_id}/{message_id}"
-        return await self.collection.insert_one({
+        ticket = {
             "guild_id": guild_id,
             "message_id": message_id,
             "channel_id": channel_id,
@@ -32,8 +32,14 @@ class TicketSystem:
             "thread_message": thread_message,
             "close_button_data": close_button_data,
             "ticket_name": ticket_name,
-            "message_link": message_link
-        })
+            "message_link": message_link,
+            "status": "open"  # Mark ticket as open when created
+        }
+        if user_id is not None:
+            ticket["user_id"] = user_id
+        if thread_id is not None:
+            ticket["thread_id"] = thread_id
+        return await self.collection.insert_one(ticket)
 
     async def update_ticket(self, message_id, embed_data, button_data, thread_message, 
                            close_button_data, ticket_name):
@@ -57,6 +63,15 @@ class TicketSystem:
 
     async def delete_ticket(self, ticket_id):
         return await self.collection.delete_one({"_id": ObjectId(ticket_id)})
+
+    # Check if a user has an open ticket in the guild
+    async def user_has_open_ticket(self, guild_id, user_id):
+        ticket = await self.collection.find_one({
+            "guild_id": guild_id,
+            "user_id": user_id,
+            "status": "open"
+        })
+        return ticket is not None
 
     # UI Components
     def create_ticket_button(self, ticket_data):
@@ -106,7 +121,6 @@ class TicketSystem:
                 self.channel = channel
                 self.existing_data = existing_data or {}
                 
-                # Extract current values for placeholders
                 embed_data = self.existing_data.get("embed", {})
                 button_data = self.existing_data.get("button_data", {})
                 
@@ -197,7 +211,6 @@ class TicketSystem:
                 self.author_id = author_id
                 self.action_type = action_type
                 
-                # Create select menu
                 options = [
                     discord.SelectOption(
                         label=ticket.get('ticket_name', 'Unnamed Ticket')[:100],
@@ -235,6 +248,15 @@ class TicketSystem:
 
     # Event Handlers
     async def handle_ticket_creation(self, interaction, ticket_data):
+        # Check if user already has an open ticket
+        if await self.user_has_open_ticket(interaction.guild.id, interaction.user.id):
+            await interaction.response.send_message(
+                "❌ You already have an open ticket! Please close it before opening a new one.",
+                ephemeral=True
+            )
+            return
+
+        # Create private thread for ticket
         thread = await interaction.channel.create_thread(
             name=f"Ticket-{interaction.user.name}",
             type=discord.ChannelType.private_thread
@@ -260,9 +282,23 @@ class TicketSystem:
 
         # Add close button
         close_view = self.create_close_ticket_view(thread.id, ticket_data.get("close_button_data", {}))
-        await thread.send(ticket_data.get("thread_message", "Welcome!"), view=close_view)
+        await thread.send(ticket_data.get("thread_message", "Welcome! A staff member will help you soon."), view=close_view)
         
-        await interaction.response.send_message(f"Ticket created: {thread.mention}", ephemeral=True)
+        # Save ticket info including user_id and thread_id with status "open"
+        await self.save_ticket(
+            guild_id=interaction.guild.id,
+            message_id=interaction.message.id,
+            channel_id=interaction.channel.id,
+            embed_data=ticket_data["embed"],
+            button_data=ticket_data["button_data"],
+            thread_message=ticket_data["thread_message"],
+            close_button_data=ticket_data["close_button_data"],
+            ticket_name=ticket_data["ticket_name"],
+            user_id=interaction.user.id,
+            thread_id=thread.id
+        )
+        
+        await interaction.response.send_message(f"✅ Ticket created: {thread.mention}", ephemeral=True)
 
     async def handle_ticket_close(self, interaction, thread_id):
         if not interaction.user.guild_permissions.administrator:
@@ -273,13 +309,19 @@ class TicketSystem:
         thread = interaction.guild.get_thread(thread_id)
         if thread:
             await thread.edit(locked=True, archived=True)
+        
+        # Update ticket status in DB to "closed"
+        await self.collection.update_one(
+            {"thread_id": thread_id},
+            {"$set": {"status": "closed"}}
+        )
+        
         await interaction.response.send_message("Thread closed.", ephemeral=True)
 
     async def handle_setup_submission(self, interaction, modal):
         try:
             await interaction.response.defer(ephemeral=True)
             
-            # Build initial ticket data
             ticket_data = {
                 "guild_id": interaction.guild.id,
                 "channel_id": modal.channel.id,
@@ -300,7 +342,6 @@ class TicketSystem:
                 "thread_message": modal.children[4].value or "Welcome! A staff member will help you soon."
             }
             
-            # Create image setup modal for additional customization
             image_modal = self.create_image_modal(ticket_data, modal)
             view = discord.ui.View(timeout=300)
             
@@ -323,7 +364,6 @@ class TicketSystem:
             view.add_item(image_btn)
             view.add_item(skip_btn)
             
-            # Store ticket data for image modal
             image_modal.ticket_data = ticket_data
             
             await interaction.followup.send("Configure embed images or skip:", view=view, ephemeral=True)
@@ -336,7 +376,6 @@ class TicketSystem:
         try:
             await interaction.response.defer(ephemeral=True)
             
-            # Update ticket data with image settings
             ticket_data = modal.ticket_data
             
             image_url = modal.children[0].value.strip()
@@ -351,11 +390,10 @@ class TicketSystem:
             
             if color_hex:
                 try:
-                    # Convert hex to int
                     color_int = int(color_hex, 16)
                     ticket_data["embed"]["color"] = color_int
                 except ValueError:
-                    pass  # Keep default color if invalid hex
+                    pass
             
             await self.finalize_ticket_setup(interaction, ticket_data, modal.setup_modal.existing_data, modal.setup_modal.channel)
             
@@ -365,12 +403,11 @@ class TicketSystem:
 
     async def finalize_ticket_setup(self, interaction, ticket_data, existing_data, channel):
         try:
-            # Create embed and view
             embed = discord.Embed.from_dict(ticket_data["embed"])
             view = discord.ui.View(timeout=None)
             view.add_item(self.create_ticket_button(ticket_data))
             
-            if existing_data:  # Edit mode
+            if existing_data:
                 message_id = existing_data["message_id"]
                 message = await channel.fetch_message(message_id)
                 await message.edit(embed=embed, view=view)
@@ -383,7 +420,7 @@ class TicketSystem:
                     await interaction.edit_original_response(content="✅ Ticket system updated!", view=None)
                 else:
                     await interaction.followup.send("✅ Ticket system updated!", ephemeral=True)
-            else:  # Create mode
+            else:
                 message = await channel.send(embed=embed, view=view)
                 ticket_data["message_id"] = message.id
                 await self.save_ticket(**ticket_data)
@@ -418,7 +455,6 @@ class TicketSystem:
             await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 
     async def delete_ticket_with_confirmation(self, interaction, ticket_data, ticket_id, author_id):
-        # Create confirmation view
         confirm_view = discord.ui.View(timeout=60)
         
         async def confirm_delete(confirm_interaction):
@@ -428,7 +464,6 @@ class TicketSystem:
             try:
                 await self.delete_ticket(ticket_id)
                 
-                # Try to delete Discord message
                 try:
                     channel = interaction.guild.get_channel(ticket_data["channel_id"])
                     if channel and ticket_data.get("message_id"):
@@ -470,10 +505,8 @@ class TicketSystem:
 
     # Utility Methods
     def has_manage_role_or_perms(self, member):
-        # Check for "Anya Manager" role
         if any(role.name == "Anya Manager" for role in member.roles):
             return True
-        # Check for manage permissions
         return member.guild_permissions.manage_guild or member.guild_permissions.manage_channels
 
     # Command Methods
@@ -495,7 +528,6 @@ class TicketSystem:
         await ctx.send("Click to setup ticket system:", view=view)
 
     async def edit_ticket_command(self, ctx, message_ref):
-        # Extract message ID from link if needed
         if "discord.com/channels/" in message_ref:
             try:
                 message_id = int(message_ref.strip().split("/")[-1])
@@ -541,7 +573,6 @@ class TicketSystem:
         await ctx.send(f"Select a ticket to {action_word}:", view=view)
 
     async def ticket_command(self, ctx, action, param=None):
-        # Permission check
         if not self.has_manage_role_or_perms(ctx.author):
             return await ctx.send(embed=discord.Embed(
                 title="⛔ Missing Permissions",
@@ -576,7 +607,6 @@ class TicketSystem:
 
         except Exception as e:
             await ctx.send(f"❌ An error occurred: {e}")
-            print(f"Ticket command error: {e}")
             traceback.print_exception(type(e), e, e.__traceback__)
 
 class Invalidation:
