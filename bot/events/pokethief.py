@@ -256,12 +256,12 @@ class EventGate(commands.Cog):
 
     @staticmethod
     async def timeout_user(user, message):
+     try:
         BOT_TOKEN = await get_bot_token()
         GUILD_ID = message.guild.id
         USER_ID = user.id
 
-        timeout_duration = 30  # seconds
-        timeout_end = datetime.datetime.utcnow() + datetime.timedelta(seconds=timeout_duration)
+        timeout_end = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
 
         headers = {
             "Authorization": f"Bot {BOT_TOKEN}",
@@ -274,13 +274,17 @@ class EventGate(commands.Cog):
 
         url = f"https://discord.com/api/v10/guilds/{GUILD_ID}/members/{USER_ID}"
 
-        response = requests.patch(url, json=payload, headers=headers)
+        async with aiohttp.ClientSession() as session:
+            async with session.patch(url, json=payload, headers=headers) as response:
+                if response.status == 204:
+                    print(f"INFO: User {user.mention} timed out for 3 hours.")
+                else:
+                    text = await response.text()
+                    print(f"ERROR: Failed to timeout user {user.mention}: {response.status} - {text}")
 
-        if response.status_code == 204:
-            print(f"INFO: User {user.mention} timed out for 30 seconds.")
-        else:
-            print(f"ERROR: Failed to timeout user {user.mention}: {response.status_code}")
-
+     except Exception as e:
+        print(f"EXCEPTION: An error occurred while trying to timeout {user.mention}: {e}")
+         
     @staticmethod
     async def delete_embed_on_catch(message):
         try:
