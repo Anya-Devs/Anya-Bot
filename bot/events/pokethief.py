@@ -209,7 +209,7 @@ class EventGate(commands.Cog):
 
                     embed = Embed(
                         title="Shiny Thief Detected!",
-                        description=f"<:sigh:1328502167153410068> {non_hunter.mention} stole **{pokemon_name}**. They've been timed out for 30 seconds.",
+                        description=f"<:sigh:1328502167153410068> {non_hunter.mention} stole **{pokemon_name}**. They've been timed out for 3 hour.",
                         color=self.primary_color
                     )
                     await catch_channel.send(embed=embed)
