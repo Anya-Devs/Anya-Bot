@@ -149,10 +149,10 @@ class StarboardScanner(commands.Cog):
         type_summary = ", ".join(types) if types else "Normal"
 
         desc = (
-            f"Caught Pokémon: **{display_name}**\n"
             f"Caught by: {catcher_name}\n"
             f"Location: [View spawn message]({original_message.jump_url})"
         )
+        embed.title = display_name
         embed.description = desc
         embed.timestamp = original_message.created_at
         embed.set_footer(text=f"Type: {type_summary}")
