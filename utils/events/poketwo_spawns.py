@@ -12,7 +12,6 @@ from fuzzywuzzy import fuzz
 
 logger = logging.getLogger(__name__)
 
-
 class PokemonUtils:
     def __init__(self, mongo, type_emojis_file, quest_emojis_file, description_file, id_file, regional_forms, lang_flags, bot=None, pp=None):
         self.mongo = mongo
@@ -37,7 +36,8 @@ class PokemonUtils:
     @staticmethod
     @lru_cache(maxsize=None)
     def load_alt_names(path):
-        if not Path(path).exists(): return {}
+        if not Path(path).exists():
+            return {}
         with open(path, newline="", encoding="utf-8") as f:
             return {
                 row["pokemon_species"].strip().lower(): {
@@ -74,35 +74,27 @@ class PokemonUtils:
         except Exception as e:
             logger.warning(f"Failed to load Pokémon IDs: {e}")
         return id_map
-    
+
     @staticmethod
     def _load_pokemon_names(path) -> dict:
-        if not Path(path).exists(): return {}
+        if not Path(path).exists():
+            return {}
         with open(path, encoding="utf-8") as f:
             return {row['name'].replace('-', '_'): row['id']
                     for row in csv.DictReader(f) if 'name' in row and 'id' in row}
 
     def get_base_pokemon_name(self, raw) -> str:
         name_map, norm = self._pokemon_name_map, raw.replace('-', '_')
-        if norm in name_map: return norm
+        if norm in name_map:
+            return norm.replace('_', '-')
         parts = norm.split('_')
         for i in range(len(parts)):
-            if (c := '_'.join(parts[i:])) in name_map: return c
+            if (c := '_'.join(parts[i:])) in name_map:
+                return c.replace('_', '-')
         for p in reversed(parts):
-            if p in name_map: return p
-        return norm
-
-    @staticmethod
-    @lru_cache(maxsize=None)
-    def load_alt_names(path):
-        if not Path(path).exists(): return {}
-        with open(path, newline="", encoding="utf-8") as f:
-            return {
-                row["pokemon_species"].strip().lower(): {
-                    lang: name.strip() for lang, name in row.items()
-                    if lang != "pokemon_species" and name.strip()
-                } for row in csv.DictReader(f)
-            }
+            if p in name_map:
+                return p.replace('_', '-')
+        return norm.replace('_', '-')
 
     @staticmethod
     @lru_cache(maxsize=None)
@@ -114,11 +106,14 @@ class PokemonUtils:
         try:
             with open('data/commands/pokemon/pokemon_special_names.csv', encoding='utf-8') as f:
                 reader = csv.reader(f)
-                next(reader, None)  # skip header
+                next(reader, None)
                 for row in reader:
-                    if row[0]: rare.append(row[0].strip().lower())
-                    if len(row) > 1 and row[1]: regional.append(row[1].strip().lower())
-        except FileNotFoundError: pass
+                    if row[0]:
+                        rare.append(row[0].strip().lower())
+                    if len(row) > 1 and row[1]:
+                        regional.append(row[1].strip().lower())
+        except FileNotFoundError:
+            pass
         return rare, regional
 
     def get_best_normal_alt_name(self, slug):
@@ -128,12 +123,16 @@ class PokemonUtils:
             valid, seen = [], set()
             for lang, name in alt_names.items():
                 name_clean = name.strip()
-                if name_clean.lower() == slug_lower or name_clean in seen: continue
-                if not re.fullmatch(r"[A-Za-z0-9\- ']+", name_clean): continue
-                if len(name_clean) >= len(slug): continue
+                if name_clean.lower() == slug_lower or name_clean in seen:
+                    continue
+                if not re.fullmatch(r"[A-Za-z0-9\- ']+", name_clean):
+                    continue
+                if len(name_clean) >= len(slug):
+                    continue
                 seen.add(name_clean)
                 valid.append((self.flag_map.get(lang, ''), name_clean))
-            if not valid: return None
+            if not valid:
+                return None
             flag, name = min(valid, key=lambda x: len(x[1]))
             return f"{flag} {name}" if flag else name
         except Exception as e:
@@ -149,16 +148,12 @@ class PokemonUtils:
                     if response.status != 200:
                         return 0xFFFFFF
                     data = await response.read()
-            # Decode image to numpy array (BGR)
             img_array = np.frombuffer(data, np.uint8)
             img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
             if img is None:
                 return 0xFFFFFF
-            # Resize for performance
             small_img = cv2.resize(img, (50, 50), interpolation=cv2.INTER_AREA)
-            # Convert to RGB
             small_img = cv2.cvtColor(small_img, cv2.COLOR_BGR2RGB)
-            # Reshape and cluster colors using kmeans to find dominant color
             pixels = small_img.reshape((-1, 3)).astype(np.float32)
             criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
             _, labels, centers = cv2.kmeans(pixels, 1, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
@@ -169,7 +164,6 @@ class PokemonUtils:
         except Exception:
             return 0xFFFFFF
 
-    
     async def format_messages(self, slug, type_pings, quest_pings, shiny_pings, collection_pings,
                               special_roles, pred_text, dex_number, description, image_url,
                               low_confidence=True):
@@ -219,7 +213,7 @@ class PokemonUtils:
                 f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{dex_number}.png"
                 if slug and slug.lower() not in ("", "???") else image_url
             )
-            embed=None
+            embed = None
             return message, embed
         except Exception as e:
             logger.error(f"Error in format_messages: {type(e).__name__}: {e}")
@@ -358,6 +352,13 @@ class PokemonUtils:
         except Exception as e:
             logger.warning(f"Failed to get image color: {e}")
             return fallback
+
+    def find_full_name_for_slug(self, slug_raw: str) -> str:
+     slug_lower = slug_raw.lower()
+     for name in self._pokemon_name_map.keys():
+        if slug_lower in name.lower():
+            return name
+     return slug_raw
 
 
 class PokemonImageBuilder:
