@@ -118,19 +118,18 @@ class PokemonUtils:
 
     def get_best_normal_alt_name(self, slug):
      try:
-        slug_lower = slug.lower()
-        seen, valid = set(), []
-        for lang, name in self.alt_names_map.get(slug_lower, {}).items():
-            name_clean = name.strip()
-            if (name_clean.lower() != slug_lower and name_clean not in seen
-                and re.fullmatch(r"[A-Za-z0-9\- ']+", name_clean)
-                and len(name_clean) < len(slug)):
-                seen.add(name_clean)
-                valid.append((self.flag_map.get(lang, ''), name_clean))
-        if not valid:
-            return None
-        flag, name = min(valid, key=lambda x: len(x[1]))
-        return f"{flag} {name}" if flag else name
+        p = re.compile(r"[A-Za-z0-9\- ']+")
+        s, v = set(), []
+        sl = slug.lower()
+        for lang, name in self.alt_names_map.get(sl, {}).items():
+            n = name.strip()
+            if n.lower() != sl and n.lower() not in s and p.fullmatch(n) and len(n) < len(sl):
+                s.add(n.lower())
+                v.append((self.flag_map.get(lang, ''), n))
+        if not v: return None
+        m = min(len(n) for _, n in v)
+        f, n = min((f, n) for f, n in v if len(n) == m), key=lambda x: x[1].lower())
+        return f"{f} {n}" if f else n
      except Exception as e:
         logger.error(f"get_best_normal_alt_name('{slug}') failed: {e}")
         return None
