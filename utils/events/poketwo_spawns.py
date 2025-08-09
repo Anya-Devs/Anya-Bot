@@ -117,28 +117,24 @@ class PokemonUtils:
         return rare, regional
 
     def get_best_normal_alt_name(self, slug):
-        try:
-            slug_lower = slug.lower()
-            alt_names = self.alt_names_map.get(slug_lower, {})
-            valid, seen = [], set()
-            for lang, name in alt_names.items():
-                name_clean = name.strip()
-                if name_clean.lower() == slug_lower or name_clean in seen:
-                    continue
-                if not re.fullmatch(r"[A-Za-z0-9\- ']+", name_clean):
-                    continue
-                if len(name_clean) >= len(slug):
-                    continue
+     try:
+        slug_lower = slug.lower()
+        seen, valid = set(), []
+        for lang, name in self.alt_names_map.get(slug_lower, {}).items():
+            name_clean = name.strip()
+            if (name_clean.lower() != slug_lower and name_clean not in seen
+                and re.fullmatch(r"[A-Za-z0-9\- ']+", name_clean)
+                and len(name_clean) < len(slug)):
                 seen.add(name_clean)
                 valid.append((self.flag_map.get(lang, ''), name_clean))
-            if not valid:
-                return None
-            flag, name = min(valid, key=lambda x: len(x[1]))
-            return f"{flag} {name}" if flag else name
-        except Exception as e:
-            logger.error(f"get_best_normal_alt_name('{slug}') failed: {e}")
+        if not valid:
             return None
-
+        flag, name = min(valid, key=lambda x: len(x[1]))
+        return f"{flag} {name}" if flag else name
+     except Exception as e:
+        logger.error(f"get_best_normal_alt_name('{slug}') failed: {e}")
+        return None
+         
     async def _get_image_color_cached(self, url):
         if url in self._image_color_cache:
             return self._image_color_cache[url]
