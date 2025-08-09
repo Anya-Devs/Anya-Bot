@@ -30,7 +30,6 @@ class PokemonUtils:
         self._image_color_cache = {}
         self._special_names = self._load_special_names_sync()
         self._pokemon_name_map = self._load_pokemon_names("data/commands/pokemon/pokemon_names.csv")
-        self.alt_names_map = self.load_alt_names("data/commands/pokemon/alt_names.csv")
         self.flag_map = self.load_flag_map("data/commands/pokemon/flag_map.json")
 
     @staticmethod
@@ -43,7 +42,8 @@ class PokemonUtils:
                 row["pokemon_species"].strip().lower(): {
                     lang: name.strip() for lang, name in row.items()
                     if lang != "pokemon_species" and name.strip()
-                } for row in csv.DictReader(f)
+                }
+                for row in csv.DictReader(f)
             }
 
     def load_emojis(self):
@@ -117,23 +117,24 @@ class PokemonUtils:
         return rare, regional
 
     def get_best_normal_alt_name(self, slug):
-     try:
-        p = re.compile(r"[A-Za-z0-9\- ']+")
-        s, v = set(), []
-        sl = slug.lower()
-        for lang, name in self.alt_names_map.get(sl, {}).items():
-            n = name.strip()
-            if n.lower() != sl and n.lower() not in s and p.fullmatch(n) and len(n) < len(sl):
-                s.add(n.lower())
-                v.append((self.flag_map.get(lang, ''), n))
-        if not v: return None
-        m = min(len(n) for _, n in v)
-        f, n = min((f, n) for f, n in v if len(n) == m), key=lambda x: x[1].lower())
-        return f"{f} {n}" if f else n
-     except Exception as e:
-        logger.error(f"get_best_normal_alt_name('{slug}') failed: {e}")
-        return None
-         
+        try:
+            p = re.compile(r"[A-Za-z0-9\- ']+")
+            s, v = set(), []
+            sl = slug.lower()
+            for lang, name in self.alt_names_map.get(sl, {}).items():
+                n = name.strip()
+                if n.lower() != sl and n.lower() not in s and p.fullmatch(n) and len(n) < len(sl):
+                    s.add(n.lower())
+                    v.append((self.flag_map.get(lang, ''), n))
+            if not v:
+                return None
+            m = min(len(n) for _, n in v)
+            f, n = min((f, n) for f, n in v if len(n) == m, key=lambda x: x[1].lower())
+            return f"{f} {n}" if f else n
+        except Exception as e:
+            logger.error(f"get_best_normal_alt_name('{slug}') failed: {e}")
+            return None
+
     async def _get_image_color_cached(self, url):
         if url in self._image_color_cache:
             return self._image_color_cache[url]
@@ -159,6 +160,7 @@ class PokemonUtils:
         except Exception:
             return 0xFFFFFF
 
+    
     async def format_messages(self, slug, type_pings, quest_pings, shiny_pings, collection_pings,
                               special_roles, pred_text, dex_number, description, image_url,
                               low_confidence=True):
