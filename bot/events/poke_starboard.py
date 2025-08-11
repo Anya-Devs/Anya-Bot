@@ -56,7 +56,7 @@ class StarboardConfig:
             "thumbnail_url": congrats_thumbnail,
         },
         "starboard": {
-            "title_template": "{pokemon_name}",
+            "title_template": "{shiny_emoji} {pokemon_name}",
             "description_template": "Caught by {mention}\nLocation: {spawn_location}",
         }
     }
@@ -188,14 +188,13 @@ class StarboardScanner(commands.Cog):
 
             starboard_cfg = StarboardConfig.embed_layout["starboard"]
             starboard_title = starboard_cfg["title_template"].format(pokemon_name=pokemon_name)
-            if shiny:
-                starboard_title += f" {sparkle_emoji}"
 
             starboard_embed = Embed(
                 title=starboard_title,
                 description=starboard_cfg["description_template"].format(
                     mention=f"<@{catcher_id}>",
                     spawn_location=spawn_location_text,
+                    shiny_emoji=sparkle_emoji if shiny else "",
                 ),
                 color=spawn_color or self.determine_color(shiny, pokemon_name)
             )
