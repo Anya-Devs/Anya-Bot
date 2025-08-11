@@ -2,6 +2,7 @@
 from datetime import datetime
 from typing import Union, Optional, Literal
 
+from utils.subcogs.reviews import *
 from utils.cogs.information import *
 from utils.cogs.information import Information_Commands, Information_Embed
 
@@ -176,3 +177,5 @@ class Information(commands.Cog):
  
 def setup(bot):
     bot.add_cog(Information(bot))
+    bot.add_cog(Reviews(bot))
+
