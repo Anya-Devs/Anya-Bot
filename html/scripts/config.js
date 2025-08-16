@@ -58,8 +58,20 @@ class LayoutElements {
 
     const botAvatar = document.createElement("img");
     botAvatar.className = "bot-avatar";
-    botAvatar.src = "https://media.discordapp.net/attachments/1387627277889703966/1387627278074380308/EyF9hRWmQAAAABJRU5ErkJggg.png";
     botAvatar.alt = `${config.siteTitle} Avatar`;
+    botAvatar.src = "https://cdn.discordapp.com/embed/avatars/0.png"; // default
+
+    // Fetch avatar async, update when ready
+    fetch(`https://discord.com/api/v10/applications/${botConfig.botId}/rpc`, {
+      headers: { "Content-Type": "application/json" }
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(botData => {
+        if (botData && botData.icon) {
+          botAvatar.src = `https://cdn.discordapp.com/app-icons/${botConfig.botId}/${botData.icon}.png?size=256`;
+        }
+      })
+      .catch(err => console.error("Failed to fetch bot avatar:", err));
 
     logoContainer.append(botAvatar, logo);
 
