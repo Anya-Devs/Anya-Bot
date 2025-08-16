@@ -1,9 +1,9 @@
-
+from bson import ObjectId
 from datetime import datetime
 from typing import Union, Optional, Literal
 
-from utils.subcogs.reviews import *
 from utils.cogs.information import *
+from utils.subcogs.utils.reviews import *
 from utils.cogs.information import Information_Commands, Information_Embed
 
 from imports.discord_imports import * 
@@ -16,6 +16,84 @@ class Information(commands.Cog):
         self.members_per_page = 25
         self.ic = Information_Commands()
         self.iv = Information_View()
+        self.mongo = MongoManager()
+        self.utils_review = ReviewUtils(self.mongo)
+
+    
+        
+        
+        
+    @commands.command(name="reviews")
+    async def reviews_command(
+        self,
+        ctx,
+        member: Optional[discord.Member] = None,
+        action: str = "view"
+    ):
+        if member is None:
+            member = ctx.author
+
+        action = action.lower()
+        valid_actions = ["view", "add", "edit", "remove"]
+
+        if action not in valid_actions:
+            embed = discord.Embed(
+                title="Invalid Action",
+                description=(f"The action `{action}` is not valid.\n\n"
+                             f"**Usage:** `{ctx.prefix}reviews <member> <action>`\n"
+                             f"**Actions:** view | add | edit | remove\n"
+                             f"Example: `{ctx.prefix}reviews @User add`"),
+                color=discord.Color.red()
+            )
+            await ctx.reply(embed=embed, mention_author=False)
+            return
+
+        try:
+            result = await self.handle_action(ctx, action, member)
+            embed, view = result if isinstance(result, tuple) else (None, None)
+            if embed:
+                await ctx.reply(**{k: v for k, v in {"embed": embed, "view": view}.items() if v}, mention_author=False)
+        except Exception as e:
+            embed = discord.Embed(
+                title="Error",
+                description=f"An unexpected error occurred while processing your request.\n\n`{e}`",
+                color=discord.Color.red()
+            )
+            await ctx.reply(embed=embed, mention_author=False)
+
+    async def handle_action(self, ctx, action, member):
+        func_map = {
+            "view": self.utils_review.get_overview,
+            "add": self.utils_review.add_review,
+            "edit": self.utils_review.edit_review,
+            "remove": self.utils_review.remove_review
+        }
+        func = func_map.get(action)
+        if func is None:
+            return None, None
+
+        # Prevent editing/removing non-existent reviews
+        if action in ("edit", "remove"):
+            existing_review = await self.mongo.collection.find_one({
+                "reviewer_id": str(ctx.author.id),
+                "target_id": str(member.id)
+            })
+            if not existing_review:
+                embed = discord.Embed(
+                    title="No Review Found",
+                    description=(f"You don't have a review for {member.mention} yet.\n"
+                                 f"Use `{ctx.prefix}reviews {member.display_name} add` to create one first."),
+                    color=discord.Color.orange()
+                )
+                await ctx.reply(embed=embed, mention_author=False)
+                return None, None
+
+        result = await func(ctx, member)
+        return result if isinstance(result, tuple) else (result, None)
+
+
+
+
 
     @commands.command(name="about", aliases=["info", "details"])
     async def about(self, ctx, args: Union[discord.Member, int, str] = None):
@@ -177,5 +255,4 @@ class Information(commands.Cog):
  
 def setup(bot):
     bot.add_cog(Information(bot))
-    bot.add_cog(Reviews(bot))
 

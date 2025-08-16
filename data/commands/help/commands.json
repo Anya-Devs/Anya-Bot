@@ -105,6 +105,12 @@
             "description": "No description provided.",
             "example": "{}roles",
             "related_commands": "Provide related commands"
+        },
+        "reviews": {
+            "aliases": [],
+            "description": "No description provided.",
+            "example": "{}reviews",
+            "related_commands": "Provide related commands"
         }
     },
     "Quest_Data": {},
