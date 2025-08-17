@@ -529,7 +529,7 @@ class PokemonCollectionHandler:
                     if action == "add":
                         if max_one:
                             await self.data_manager.mongo.replace(col, name_lower, uid)
-                            success.append(f"{self.icons['success']} {emoji} {disp} has been set.")
+                            success.append(f"{self.icons['success']} {emoji} You are now shiny hunting {disp}!")
                             break
                         if len(cur) >= self.max_pokemon and name_lower not in cur:
                             exists.append(f"{self.icons['error']} Max {self.max_pokemon} reached. {disp} not added.")
