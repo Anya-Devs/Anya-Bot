@@ -137,7 +137,7 @@ class LayoutElements {
       div.className = "feature";
       div.innerHTML = `
         <h3>${f.title}</h3>
-        <p>${f.desc} ${f.comingSoon ? '<span class="coming-soon">Coming Soon</span>' : ""}</p>
+        <p>${f.desc}${f.comingSoon ? '<span class="coming-soon">Coming Soon</span>' : ""}</p>
       `;
       features.appendChild(div);
     });

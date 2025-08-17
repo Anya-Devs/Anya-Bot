@@ -2,7 +2,6 @@ import csv
 import re
 from pathlib import Path
 
-SPECIAL_NAMES_CSV = Path("data/commands/pokemon/pokemon_special_names.csv")
 
 
 SPECIAL_NAMES_CSV = Path("data/commands/pokemon/pokemon_special_names.csv")

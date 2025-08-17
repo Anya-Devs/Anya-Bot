@@ -228,15 +228,7 @@ class PokemonUtils:
             return fallback, embed
 
     def format_name(self, name):
-        name = name.replace('_', '-').lower()
-        lens = {
-            "iron-treads", "iron-bundle", "iron-hands", "iron-jugulis", "iron-moth", "iron-thorns",
-            "great-tusk", "scream-tail", "brute-bonnet", "flutter-mane", "slither-wing", "sandy-shocks", "roaring-moon",
-            "walking-wake", "raging-bolt", "gouging-fire", "iron-leaves", "iron-valiant", "iron-boulder", "iron-crown"
-        }
-        if name in lens or any(name.endswith(f"-{form}") for form in self.regional_forms):
-            return name.replace('-', ' ').title()
-        return name.split('-')[0].title()
+        return name.replace('-',' ').title()
 
     def get_pokemon_row(self, slug):
         try:
@@ -365,6 +357,7 @@ class PokemonUtils:
         if slug_lower in name.lower():
             return name
      return slug_raw
+
 
 
 class PokemonImageBuilder:
@@ -540,16 +533,25 @@ class PokemonImageBuilder:
             )
             x += width
 
+    def get_scaled_font(self, base_font, text, step=12, shrink=10):
+        base_size = base_font.size
+        shrink_steps = len(text) // step
+        new_size = max(10, base_size - shrink_steps * shrink)
+        return ImageFont.truetype(base_font.path, new_size)
+
     def compose_frame(self, bg_frame, poke_img, pokemon_name, best_name, types):
         frame = bg_frame.copy()
         poke_img_resized = poke_img.resize(self.config["pokemon_image_size"])
         frame.paste(poke_img_resized, self.config["pokemon_image_position"], poke_img_resized)
         pilmoji = Pilmoji(frame)
+
+        scaled_font = self.get_scaled_font(self.font_header, pokemon_name)
+
         self.draw_text_with_flag_offset(
             pilmoji,
             self.config["pokemon_name_position"],
             pokemon_name,
-            self.font_header,
+            scaled_font,
             self.config["name_color"],
             stroke_fill=self.config.get("name_outline_color"),
             stroke_width=self.config.get("name_stroke_width", 0)
@@ -576,10 +578,10 @@ class PokemonImageBuilder:
             frames[0].save(filepath)
         else:
             frames[0].save(filepath, save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2, transparency=0)
-
-
-
-
+            
+            
+            
+            
 if __name__ == "__main__":
     builder = PokemonImageBuilder()
     builder.create_image(
@@ -591,7 +593,6 @@ if __name__ == "__main__":
         filename="test.png"
     )
     print("✅ Image created at:", os.path.join(builder.output_dir, "test.png"))
-
 
 
 
