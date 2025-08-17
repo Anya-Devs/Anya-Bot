@@ -1,0 +1,86 @@
+{
+  "prefix": ".",
+  "cogs": {
+    "Anime": [
+      {
+        "name": "anime",
+        "description": "Search for an anime by title.",
+        "args": "<title>",
+        "hybrid": true,
+        "examples": [
+          { "usage": "anime Naruto", "description": "Searches for the anime 'Naruto'." }
+        ]
+      },
+      {
+        "name": "character",
+        "description": "Search for an anime character.",
+        "args": "<name>",
+        "hybrid": true,
+        "examples": [
+          { "usage": "character Mikasa", "description": "Searches for the character 'Mikasa'." }
+        ]
+      },
+      {
+        "name": "manga",
+        "description": "Search for a manga by title.",
+        "args": "<title>",
+        "hybrid": true,
+        "examples": [
+          { "usage": "manga One Piece", "description": "Searches for the manga 'One Piece'." }
+        ]
+      }
+    ],
+    "Fun": [
+      { "name": "8ball", "description": "Ask the magic 8-ball a question.", "hybrid": true, "examples": [{ "usage": "8ball Will I win?", "description": "Ask the 8-ball a question." }] },
+      { "name": "pat", "description": "Pat another user.", "hybrid": false, "examples": [{ "usage": "pat @User", "description": "Pats the mentioned user." }] },
+      { "name": "cuddle", "description": "Cuddle with another user.", "hybrid": false, "examples": [{ "usage": "cuddle @User", "description": "Cuddles with the mentioned user." }] },
+      { "name": "kiss", "description": "Send a kiss to another user.", "hybrid": false, "examples": [{ "usage": "kiss @User", "description": "Sends a kiss to the mentioned user." }] },
+      { "name": "hug", "description": "Send a hug to another user.", "hybrid": false, "examples": [{ "usage": "hug @User", "description": "Sends a hug to the mentioned user." }] },
+      { "name": "bite", "description": "Bite another user playfully.", "hybrid": false, "examples": [{ "usage": "bite @User", "description": "Bites the mentioned user playfully." }] },
+      { "name": "lick", "description": "Lick another user.", "hybrid": false, "examples": [{ "usage": "lick @User", "description": "Licks the mentioned user." }] },
+      { "name": "slap", "description": "Slap another user.", "hybrid": false, "examples": [{ "usage": "slap @User", "description": "Slaps the mentioned user." }] },
+      { "name": "cry", "description": "Cry.", "hybrid": false, "examples": [{ "usage": "cry", "description": "Displays crying animation." }] },
+      { "name": "slowclap", "description": "Slow clap.", "hybrid": false, "examples": [{ "usage": "slowclap", "description": "Displays slow clapping animation." }] },
+      { "name": "wave", "description": "Wave.", "hybrid": false, "examples": [{ "usage": "wave", "description": "Displays waving animation." }] },
+      { "name": "smug", "description": "Smug reaction.", "hybrid": false, "examples": [{ "usage": "smug", "description": "Displays a smug animation." }] },
+      { "name": "dance", "description": "Dance.", "hybrid": false, "examples": [{ "usage": "dance", "description": "Displays dancing animation." }] },
+      { "name": "happy", "description": "Happy reaction.", "hybrid": false, "examples": [{ "usage": "happy", "description": "Displays a happy animation." }] },
+      { "name": "gamble", "description": "Gamble coins for a chance to win more.", "hybrid": false, "examples": [{ "usage": "gamble 50", "description": "Gambles 50 coins for a chance to win more." }] }
+    ],
+    "Information": [
+      { "name": "reviews", "description": "Show server reviews.", "hybrid": true, "examples": [{ "usage": "reviews", "description": "Displays server reviews." }] },
+      { "name": "about", "description": "Show information about the server.", "hybrid": true, "examples": [{ "usage": "about", "description": "Displays info about the server." }] },
+      { "name": "server", "description": "Show server details.", "hybrid": true, "examples": [{ "usage": "server", "description": "Displays server information." }] },
+      { "name": "pfp", "description": "Show user's profile picture.", "hybrid": true, "examples": [{ "usage": "pfp @User", "description": "Displays the user's profile picture." }] },
+      { "name": "banner", "description": "Show user's banner.", "hybrid": true, "examples": [{ "usage": "banner @User", "description": "Displays the user's banner image." }] },
+      { "name": "invite", "description": "Get server invite link.", "hybrid": true, "examples": [{ "usage": "invite", "description": "Shows server invite link." }] },
+      { "name": "perms", "description": "Check permissions.", "hybrid": true, "examples": [{ "usage": "perms @User", "description": "Displays the user's permissions." }] },
+      { "name": "roles", "description": "List roles in server.", "hybrid": true, "examples": [{ "usage": "roles", "description": "Displays all server roles." }] }
+    ],
+    "Pokemon": [
+      { "name": "pokedex", "description": "Search Pokémon in the Pokédex.", "hybrid": true, "examples": [{ "usage": "pokedex Pikachu", "description": "Shows information about Pikachu." }] }
+    ],
+    "Ping Pokemon": [
+      { "name": "tp", "description": "Ping for a type event.", "hybrid": true, "examples": [{ "usage": "tp", "description": "Displays type ping info." }] },
+      { "name": "qp", "description": "Ping for quest updates.", "hybrid": true, "examples": [{ "usage": "tp", "description": "Displays quest ping info." }] },
+      { "name": "shiny_hunt", "description": "Ping for shiny hunt events.", "hybrid": true, "examples": [{ "usage": "shiny_hunt", "description": "Displays shiny hunt info." }] },
+      { "name": "collection", "description": "Ping collection events.", "hybrid": true, "examples": [{ "usage": "collection", "description": "Displays collection event info." }] },
+      { "name": "server_config", "description": "Ping server config.", "hybrid": true, "examples": [{ "usage": "server_config", "description": "Displays server configuration info." }] }
+    ],
+    "Quest": [
+      { "name": "redirect", "description": "Redirect quest commands.", "hybrid": true, "examples": [{ "usage": "redirect", "description": "Redirects to relevant quest." }] },
+      { "name": "quest", "description": "Show current quest progress.", "hybrid": true, "examples": [{ "usage": "quest", "description": "Displays your quest progress." }] },
+      { "name": "quest_roles", "description": "Show quest role rewards.", "hybrid": true, "examples": [{ "usage": "quest_roles", "description": "Displays quest role rewards." }] },
+      { "name": "inventory", "description": "Show your inventory.", "hybrid": true, "examples": [{ "usage": "inventory", "description": "Displays your inventory items." }] },
+      { "name": "balance", "description": "Check your coin balance.", "hybrid": true, "examples": [{ "usage": "balance", "description": "Displays your current coin balance." }] },
+      { "name": "shop", "description": "Access the shop.", "hybrid": true, "examples": [{ "usage": "shop", "description": "Displays available shop items." }] }
+    ],
+    "System": [
+      { "name": "memory", "description": "Show bot memory usage.", "hybrid": true, "examples": [{ "usage": "memory", "description": "Displays bot memory usage." }] },
+      { "name": "ping", "description": "Show bot ping.", "hybrid": true, "examples": [{ "usage": "ping", "description": "Displays bot latency." }] },
+      { "name": "uptime", "description": "Show bot uptime.", "hybrid": true, "examples": [{ "usage": "uptime", "description": "Displays how long the bot has been online." }] },
+      { "name": "credit", "description": "Show credits.", "hybrid": true, "examples": [{ "usage": "credit", "description": "Displays bot credits." }] },
+      { "name": "ticket", "description": "Access support tickets.", "hybrid": true, "examples": [{ "usage": "ticket", "description": "Displays your support tickets." }] }
+    ]
+  }
+}
