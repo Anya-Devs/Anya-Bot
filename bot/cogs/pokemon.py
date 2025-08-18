@@ -5,7 +5,7 @@ from PIL import Image
 from imports.log_imports import *
 from imports.discord_imports import *
 from utils.cogs.pokemon import *
-from utils.subcogs.pokemon import Ping_Pokemon, Pokemon_Emojis
+from utils.subcogs.pokemon import PoketwoCommands, Pokemon_Emojis
 from data.local.const import error_custom_embed as err_embed, primary_color as p_color
 
 class Pokemon(commands.Cog):
@@ -25,7 +25,7 @@ class Pokemon(commands.Cog):
     async def pokedex(self, ctx, *, pokemon=None, form=None):
      async with ctx.typing():
         ph = PokemonNameHelper()
-        pc, pp = Pokemon_Commands(self.bot), Ping_Pokemon(self.bot)
+        pc, pp = Pokemon_Commands(self.bot), PoketwoCommands(self.bot)
 
         if not pokemon:
             with open(self.pokemon_names_csv, newline="", encoding="utf-8") as f:
@@ -64,5 +64,5 @@ class Pokemon(commands.Cog):
 
 def setup(bot):
     bot.add_cog(Pokemon(bot))
-    bot.add_cog(Ping_Pokemon(bot))
+    bot.add_cog(PoketwoCommands(bot))
     bot.add_cog(Pokemon_Emojis(bot))

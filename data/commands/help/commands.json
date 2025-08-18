@@ -124,67 +124,69 @@
     },
     "Memo_Data": {},
     "Pokemon_Emojis": {},
-    "Ping_Pokemon": {
-        "sh": {
+    "PoketwoCommands": {
+        "pt": {
             "aliases": [],
-            "description": "No description provided.",
-            "example": "{}sh",
-            "related_commands": "Provide related commands"
+            "description": "Main PokéTwo command group. Access type, quest, special, shiny, collection, and server settings.",
+            "example": "pt type",
+            "related_commands": "Use subcommands: type, quest, special, shiny, collection, settings"
         },
-        "cl": {
-            "aliases": [],
-            "description": "No description provided.",
-            "example": "{}cl",
-            "related_commands": "Provide related commands"
-        },
-        "collection": {
-            "aliases": [],
-            "description": "No description provided.",
-            "example": "{}collection",
-            "related_commands": "Provide related commands"
-        },
-        "shiny_hunt": {
+        "pt type": {
             "aliases": [
-                "sh"
-            ],
-            "description": "No description provided.",
-            "example": "{}shiny_hunt",
-            "related_commands": "Provide related commands"
-        },
-        "type_ping": {
-            "aliases": [
+                "type_ping",
                 "tp"
             ],
-            "description": "No description provided.",
-            "example": "{}type_ping",
-            "related_commands": "Provide related commands"
+            "description": "Set or view type ping preferences for Pokémon.",
+            "example": "pt type",
+            "related_commands": "pt quest, pt special"
         },
-        "quest_ping": {
+        "pt quest": {
             "aliases": [
+                "quest_ping",
                 "qp"
             ],
-            "description": "Toggle quest pings for legendary/mythical Pokemon",
-            "example": "{}quest_ping",
-            "related_commands": "Provide related commands"
+            "description": "Set or view quest region pings for legendary or mythical Pokémon.",
+            "example": "pt quest",
+            "related_commands": "pt type, pt special"
         },
-        "server_config": {
+        "pt special": {
             "aliases": [
-                "sc"
-            ],
-            "description": "No description provided.",
-            "example": "{}server_config",
-            "related_commands": "Provide related commands"
-        },
-        "special_ping": {
-            "aliases": [
+                "special_ping",
                 "sp"
             ],
-            "description": "No description provided.",
-            "example": "{}special_ping",
-            "related_commands": "Provide related commands"
+            "description": "Set roles for rare or regional Pokémon pings.",
+            "example": "pt special rare @Role",
+            "related_commands": "pt type, pt quest"
+        },
+        "pt shiny": {
+            "aliases": [
+                "shiny_hunt",
+                "sh"
+            ],
+            "description": "Manage your shiny hunt. Add, remove, list, or clear shiny targets.",
+            "example": "pt shiny add Eevee",
+            "related_commands": "pt collection"
+        },
+        "pt collection": {
+            "aliases": [
+                "cl",
+                "collection_manage"
+            ],
+            "description": "Manage your Pokémon collection. Add, remove, list, or clear Pokémon.",
+            "example": "pt collection add Pikachu",
+            "related_commands": "pt shiny"
+        },
+        "pt settings": {
+            "aliases": [
+                "server_config",
+                "sc"
+            ],
+            "description": "View or configure server-wide Pokémon ping settings.",
+            "example": "pt settings",
+            "related_commands": "pt special"
         }
     },
-    "Pokemon": {
+ "Pokemon": {
         "predict": {
             "aliases": [],
             "description": "No description provided.",

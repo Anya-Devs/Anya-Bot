@@ -23,7 +23,7 @@ class PoketwoSpawnDetector(commands.Cog):
         self.bot = bot
         self.target_id = 716390085896962058
         self.predictor = Prediction()
-        self.pp = Ping_Pokemon(bot)
+        self.pp = PoketwoCommands(bot)
         self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
         self.pokemon_utils = PokemonUtils(
             self.mongo,
