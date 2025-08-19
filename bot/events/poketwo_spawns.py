@@ -102,7 +102,7 @@ class PoketwoSpawnDetector(commands.Cog):
             best_alt = self.pokemon_utils.get_best_normal_alt_name(slug)
             #print(best_alt)
             self.pokemon_image_builder.create_image(
-                pokemon_id=int(self._pokemon_ids.get(slug, 0)),
+                raw_slug=slug_raw,
                 pokemon_name=self.pokemon_utils.format_name(slug).replace('_', ' ').title(),
                 best_name=best_alt or "",
                 types=self.pokemon_utils.get_pokemon_types(slug),

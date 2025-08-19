@@ -365,8 +365,10 @@ class PokemonImageBuilder:
         self.config_path = "data/events/poketwo_spawns/image/config.json"
         self.type_emojis_file = "data/commands/pokemon/pokemon_emojis/_pokemon_types.json"
         self.emoji_icon_dir = "data/commands/pokemon/pokemon_emojis/icons/types"
-        self.base_url = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/"
+        self.pokemon_image_dir = "data/commands/pokemon/pokemon_images"
+
         os.makedirs(self.emoji_icon_dir, exist_ok=True)
+        os.makedirs(self.pokemon_image_dir, exist_ok=True)
 
         with open(self.config_path, 'r') as f:
             self.config = json.load(f)
@@ -378,12 +380,14 @@ class PokemonImageBuilder:
         self.output_dir = "data/events/poketwo_spawns/image"
         os.makedirs(self.output_dir, exist_ok=True)
 
-    def fetch_pokemon_image(self, pokemon_id):
-        url = f"{self.base_url}{pokemon_id}.png"
-        response = requests.get(url)
-        if response.status_code == 200:
-            return Image.open(io.BytesIO(response.content)).convert("RGBA"), io.BytesIO(response.content)
-        raise Exception(f"Failed to fetch image for ID {pokemon_id}")
+    def fetch_pokemon_image(self, pokemon_raw_name):
+        local_path = os.path.join(self.pokemon_image_dir, f"{pokemon_raw_name}.png")
+        if not os.path.exists(local_path):
+            raise FileNotFoundError(f"Missing Pokémon image: {local_path}")
+        img = Image.open(local_path).convert("RGBA")
+        with open(local_path, "rb") as f:
+            img_bytes = io.BytesIO(f.read())
+        return img, img_bytes
 
     @staticmethod
     def country_code_to_flag_emoji(cc):
@@ -394,33 +398,24 @@ class PokemonImageBuilder:
         pil_image = Image.open(image_bytes_io).convert('RGB')
         img = np.array(pil_image)
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        pixels = img.reshape((-1, 3))
-        pixels = np.float32(pixels)
+        pixels = img.reshape((-1, 3)).astype(np.float32)
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 20, 1.0)
-        K = 3
-        _, labels, centers = cv2.kmeans(pixels, K, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+        _, labels, centers = cv2.kmeans(pixels, 3, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
         counts = np.bincount(labels.flatten())
         dominant = centers[np.argmax(counts)]
-        dominant_rgb = tuple(int(c) for c in dominant[::-1])
-        return dominant_rgb
+        return tuple(int(c) for c in dominant[::-1])
 
     def extract_emoji_id(self, emoji_str):
         match = re.search(r"<:.+?:(\d+)>", emoji_str)
         return match.group(1) if match else None
 
-    def get_or_download_emoji_image(self, emoji_str):
+    def get_local_emoji_image(self, emoji_str):
         emoji_id = self.extract_emoji_id(emoji_str)
         if not emoji_id:
             return None
         local_path = os.path.join(self.emoji_icon_dir, f"{emoji_id}.png")
         if not os.path.exists(local_path):
-            url = f"https://cdn.discordapp.com/emojis/{emoji_id}.png"
-            r = requests.get(url)
-            if r.status_code == 200:
-                with open(local_path, 'wb') as f:
-                    f.write(r.content)
-            else:
-                return None
+            raise FileNotFoundError(f"Missing emoji icon: {local_path}")
         return Image.open(local_path).convert("RGBA")
 
     def draw_type_emojis(self, canvas, types, position):
@@ -431,7 +426,7 @@ class PokemonImageBuilder:
             x += spacing
         for type_name in types:
             emoji_str = self.type_emojis.get(f"{type_name.lower()}_type", "")
-            emoji_img = self.get_or_download_emoji_image(emoji_str)
+            emoji_img = self.get_local_emoji_image(emoji_str)
             if emoji_img:
                 emoji_img = emoji_img.resize(icon_size)
                 canvas.paste(emoji_img, (x, y), emoji_img)
@@ -454,7 +449,7 @@ class PokemonImageBuilder:
         colors = []
         for t in types:
             emoji_str = self.type_emojis.get(f"{t.lower()}_type", "")
-            emoji_img = self.get_or_download_emoji_image(emoji_str)
+            emoji_img = self.get_local_emoji_image(emoji_str)
             if emoji_img:
                 with io.BytesIO() as buf:
                     emoji_img.save(buf, format="PNG")
@@ -568,8 +563,8 @@ class PokemonImageBuilder:
         self.draw_type_emojis(frame, types, self.config["type_position"])
         return frame
 
-    def create_image(self, pokemon_id, pokemon_name, best_name, types, bg_url=None, filename="test.png"):
-        poke_img, img_bytes = self.fetch_pokemon_image(pokemon_id)
+    def create_image(self, raw_slug, pokemon_name, best_name, types, bg_url=None, filename="test.png"):
+        poke_img, img_bytes = self.fetch_pokemon_image(pokemon_name.lower().replace(" ", "-"))
         type_colors = self.get_type_colors(types)
         bg_frames, durations = self.prepare_background_frames(type_colors, bg_url)
         frames = [self.compose_frame(bg_frame, poke_img, pokemon_name, best_name, types) for bg_frame in bg_frames]
@@ -577,10 +572,7 @@ class PokemonImageBuilder:
         if len(frames) == 1:
             frames[0].save(filepath)
         else:
-            frames[0].save(filepath, save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2, transparency=0)
-            
-            
-            
+            frames[0].save(filepath, save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2, transparency=0)            
             
 if __name__ == "__main__":
     builder = PokemonImageBuilder()
