@@ -7,31 +7,28 @@ from imports.log_imports import logger
 from imports.discord_imports import *
 
 class Help(commands.Cog):
-    def __init__(self, bot): self.bot = bot
-
-    def _get_cog_command_mapping(self):
-        return {
-            cog_name: {cmd.name: " " for cmd in cog.get_commands() if not cmd.hidden}
-            for cog_name, cog in self.bot.cogs.items()
-            if isinstance(cog, commands.Cog) and any(not cmd.hidden for cmd in cog.get_commands())
-        }
+    def __init__(self, bot):
+        self.bot = bot
 
     @commands.command(hidden=True)
     async def help(self, ctx, command_name: str = None):
+        # Fetch bot avatar & primary color
         try:
-            bot_avatar_url = str(self.bot.user.avatar.with_size(128))
             async with aiohttp.ClientSession() as session:
-                async with session.get(bot_avatar_url) as resp:
-                    if resp.status != 200: return await ctx.reply("Failed to get bot avatar.")
+                async with session.get(str(self.bot.user.avatar.with_size(128))) as resp:
+                    if resp.status != 200:
+                        return await ctx.reply("Failed to get bot avatar.")
                     data = await resp.read()
             os.makedirs("data/images", exist_ok=True)
             path = "data/images/bot_icon.png"
-            with Image.open(BytesIO(data)) as avatar: avatar.save(path)
+            with Image.open(BytesIO(data)) as avatar:
+                avatar.save(path)
             color = primary_color(path)
         except Exception as e:
             logger.error(f"Error getting primary color: {e}")
             return await ctx.reply(embed=await error_custom_embed(self.bot, ctx, e, title="Primary Color"))
 
+        # Command-specific help
         if command_name:
             try:
                 sub = Sub_Helper(self.bot, ctx.prefix)
@@ -40,31 +37,40 @@ class Help(commands.Cog):
                 logger.error(f"Error generating help for command {command_name}: {e}")
                 return await ctx.reply(embed=await error_custom_embed(self.bot, ctx, e, title="Command Help"))
 
+        # Full HelpMenu
         try:
-            self.cog_commands = {
+            # Prepare cog commands (ignore hidden commands)
+            cog_commands = {
                 cog_name: [cmd for cmd in cog.get_commands() if not cmd.hidden]
                 for cog_name, cog in self.bot.cogs.items()
                 if isinstance(cog, commands.Cog)
             }
-            sub = Sub_Helper(self.bot, ctx.prefix)
-            sub.create_command_help_json()
+
+            # Generate help image
             img = ImageGenerator(ctx=ctx)
             img_path = "data/commands/help/set_image/image.png"
             img.save_image(file_path=img_path)
+
+            # Send embed with HelpMenu view
+            select_view = Select_Help(self.bot, ctx)
+            view = HelpMenu(self.bot, select_view, ctx, cog_commands, img_path, color)
+
+            embed = view.build_embed()
+            embed.set_image(url="attachment://image.png")
+
             with open(img_path, "rb") as f:
-                embed = discord.Embed(
-                    color=color,
-                    description=f"Use `{ctx.prefix}help <command>` for more info.\n\n- For support, visit the [support server](https://discord.gg/9QTMkjsteF)."
-                )
-                embed.set_image(url="attachment://image.png")
                 await ctx.send(
                     embed=embed,
                     file=discord.File(f, "image.png"),
-                    view=HelpMenu(self.bot, Select_Help(self.bot, ctx)),
+                    view=view,
                     reference=ctx.message,
-                    allowed_mentions=discord.AllowedMentions.none(),
+                    allowed_mentions=discord.AllowedMentions.none()
                 )
-            if os.path.exists(img_path): os.remove(img_path)
+
+            # Cleanup
+            if os.path.exists(img_path):
+                os.remove(img_path)
+
         except Exception as e:
             logger.error(f"Error sending HelpMenu: {e}")
             await ctx.reply(embed=await error_custom_embed(self.bot, ctx, e, title="Help Menu"))
