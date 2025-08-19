@@ -528,7 +528,7 @@ class PokemonImageBuilder:
             )
             x += width
 
-    def get_scaled_font(self, base_font, text, step=12, shrink=7):
+    def get_scaled_font(self, base_font, text, step=12, shrink=8):
         base_size = base_font.size
         shrink_steps = len(text) // step
         new_size = max(10, base_size - shrink_steps * shrink)
