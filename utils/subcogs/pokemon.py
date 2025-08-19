@@ -46,18 +46,15 @@ class PoketwoCommands(commands.Cog):
         self.success_emoji = "<:green:1261639410181476443>"
         self.error_emoji = "<:red:1261639413943762944>"
 
-        try:
-            self.mongo = MongoHelper(
-                AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"]
-            )
-        except:
-            self.mongo = None
+        try: self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
+        except: self.mongo = None
 
         try:
             self.pe = Pokemon_Emojis(bot)
             self.ph = PokemonNameHelper()
         except:
-            self.pe, self.ph = None, None
+            self.pe = None
+            self.ph = None
 
         self.data_manager = PokemonDataManager(
             mongo_client=self.mongo,
@@ -84,9 +81,6 @@ class PoketwoCommands(commands.Cog):
         self.flag_parser = AdvancedStringFlagParser()
         self.pokemon_types = self.load_pokemon_types()
 
-    # -------------------
-    # Data Loading
-    # -------------------
     def load_pokemon_types(self):
         types = set()
         try:
@@ -107,13 +101,9 @@ class PoketwoCommands(commands.Cog):
     async def get_server_config(self, guild_id: int) -> dict:
         if not self.mongo: return {}
         return await self.mongo.db["server_config"].find_one({"guild_id": guild_id}) or {}
-
-    # -------------------
-    # Help Wrapper
-    # -------------------
+    
     async def show_help(self, ctx, topic: str = None):
-        """Wrapper so both `.pt` and `.pt help` call the same logic."""
-        await self.pt_help(ctx, topic)
+     await self.pt_help(ctx, topic)
 
     # -------------------
     # Main Command Group
@@ -128,28 +118,30 @@ class PoketwoCommands(commands.Cog):
     async def pt_help(self, ctx, topic: str = None):
         """Show summarized PokéTwo help with delete button."""
         description = (
-            "**Collection (.pt cl)** – Add/remove/view Pokémon. Max 50. `.pt cl add eevee, pikachu`\n"
-            "**Shiny Hunt (.pt sh / .pt shiny)** – Start/cancel/view hunt. Max 1. `.pt sh add eevee`\n"
-            "**Type Ping (.pt tp)** – Subscribe to type alerts (fire, water, etc.)\n"
-            "**Quest Ping (.pt qt)** – Subscribe to region quests (Kanto, Alola, etc.)\n"
-            "**Special (.pt special)** – Set special roles (rare/regional Pokémon). Requires Manage Server\n"
-            "> Use commands here to manage your Pokémon collection, hunts, and pings"
-        )
+    "Collection (.pt cl) – Add, remove, or view Pokémon. Maximum 50 Pokémon per user. Example: `.pt cl add eevee, pikachu`\n\n"
+    "Shiny Hunt (.pt sh / .pt shiny) – Start, cancel, or view your shiny hunt. Only one hunt at a time. Example: `.pt sh add eevee`\n\n"
+    "Type Ping (.pt tp) – Subscribe to alerts for specific Pokémon types like fire, water, or grass.\n\n"
+    "Quest Ping (.pt qt) – Subscribe to notifications for region quests such as Kanto, Alola, or Galar.\n\n"
+    "Special (.pt special) – Assign special roles for rare or regional Pokémon. Requires Manage Server permission.\n\n"
+    "Use these commands to manage your Pokémon collection, shiny hunts, type pings, and quest notifications."
+)
 
         embed = discord.Embed(
-            title="How to Use PokéTwo Commands (.pt)",
+            title="How to Use (.pt)",
             description=description,
             color=self.embed_default_color
         )
 
         class DeleteButton(discord.ui.View):
-            def __init__(self):
-                super().__init__(timeout=None)
+         def __init__(self, ctx):
+          super().__init__(timeout=None)
+          self.ctx = ctx  # store ctx
 
-            @discord.ui.button(label="Delete", style=discord.ButtonStyle.red)
-            async def delete_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
-                if interaction.user.id == ctx.author.id:
-                    await interaction.message.delete()
+         @discord.ui.button(label="🗑️", style=discord.ButtonStyle.red)
+         async def delete_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
+          if interaction.user.id == self.ctx.author.id:
+            await interaction.message.delete()  # delete the embed
+            await self.ctx.message.delete() 
 
         await ctx.reply(embed=embed, view=DeleteButton(), mention_author=False)
 
@@ -228,8 +220,6 @@ class PoketwoCommands(commands.Cog):
         flags_dict = self.flag_parser.parse_flags_from_string(remaining)
         pokemon_names, _ = self.flag_parser.extract_pokemon_names_from_string(remaining, action)
         await self.collection_handler.handle_collection(ctx, self.collection_collection, action, pokemon=pokemon_names or None, flags_obj=flags_dict)
-
-
 
 
         
