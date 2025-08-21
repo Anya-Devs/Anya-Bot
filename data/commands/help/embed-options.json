@@ -29,14 +29,9 @@
     "description": "Gather the status of a member in the Discord server and stay informed to avoid looking silly.",
     "emoji": "<:help_info:1268971820988764272>"
   },
-  "mini_games": {
-    "title": "Minigame",
-    "description": "Engage in a fun and interactive minigame! Choose the type of minigame you'd like to play and compete for rewards and fun challenges.",
-    "emoji": "🎲"
-  },
   "fun": {
     "title": "Fun",
-    "description": "Great for showing emotion, affection, or just having fun with friends",
+    "description": "Great for activities to lighten the mood and enjoy time with friends",
     "emoji": "🎱"
   },
   "Cog2": {

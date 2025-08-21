@@ -58,7 +58,7 @@ class Fun(commands.Cog):
     def get_commands(self):
         return super().get_commands() + self._dynamic_commands
 
-    @commands.command(name="memo", hidden=True)
+    @commands.command(name="memo")
     @commands.cooldown(1, 15, commands.BucketType.user)
     async def play_emoji_game(self, ctx):
         emojis = ["😀","😊","😂","😍","😎","😢","😠","😱","😡","😐","🥳","😏","🙃","😇","😅","😜","😌","😋"]
