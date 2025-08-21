@@ -19,15 +19,95 @@ from imports.log_imports import logger
 
 
 
+class HelpMenu(discord.ui.View):
+    def __init__(self, bot, select_view, ctx, cog_commands, embed_image_path, embed_color):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.ctx = ctx
+        self.cog_commands = {cog_name: [cmd for cmd in cmds if not cmd.hidden]
+                             for cog_name, cmds in cog_commands.items()}
+        self.cog_commands = {k: v for k, v in self.cog_commands.items() if v}
+        self.page = 0
+        self.fields_per_page = 7
+        self.select_view = select_view
+        self.embed_image_path = embed_image_path
+        self.embed_color = embed_color
+
+        # Navigation buttons
+        self.prev_button = discord.ui.Button(
+            emoji="⬅️", style=discord.ButtonStyle.blurple, custom_id=f"prev_{ctx.author.id}")
+        self.next_button = discord.ui.Button(
+            emoji="➡️", style=discord.ButtonStyle.blurple, custom_id=f"next_{ctx.author.id}")
+        self.prev_button.callback = self.prev_page
+        self.next_button.callback = self.next_page
+
+        # Add items if select_view exists
+        if select_view:
+            self.add_item(select_view)
+        self.add_item(self.prev_button)
+        self.add_item(self.next_button)
+
+    async def interaction_check(self, interaction):
+        return interaction.user == self.ctx.author
+
+    def build_embed(self):
+        embed = discord.Embed(color=self.embed_color)
+        embed.set_image(url="attachment://image.png")
+        start = self.page * self.fields_per_page
+        end = start + self.fields_per_page
+        items = list(self.cog_commands.items())[start:end]
+        for cog_name, commands_list in items:
+            embed.add_field(
+                name=cog_name.replace("_", ""),
+                value=" ".join(f'`{cmd.name}`' for cmd in commands_list),
+                inline=False
+            )
+        total_pages = max(1, (len(self.cog_commands) - 1) // self.fields_per_page + 1)
+        embed.set_footer(text=f"Page {self.page + 1}/{total_pages} | Use {self.ctx.prefix}help <command> for more info.")
+        return embed
+
+    async def prev_page(self, interaction: discord.Interaction):
+        if self.page > 0:
+            self.page -= 1
+            await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    async def next_page(self, interaction: discord.Interaction):
+        max_page = max(0, (len(self.cog_commands) - 1) // self.fields_per_page)
+        if self.page < max_page:
+            self.page += 1
+            await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    async def show_overview(self, interaction: discord.Interaction):
+        try:
+            img = ImageGenerator(ctx=self.ctx)
+            img_path = "data/commands/help/set_image/image.png"
+            img.save_image(file_path=img_path)
+            file = discord.File(img_path, filename="image.png")
+        except Exception as e:
+            logger.error(f"Error regenerating overview image: {e}")
+            file = None
+
+        self.clear_items()
+        if self.select_view:
+            self.add_item(self.select_view)
+        self.add_item(self.prev_button)
+        self.add_item(self.next_button)
+
+        embed = self.build_embed()
+        if file:
+            embed.set_image(url="attachment://image.png")
+
+        await interaction.response.edit_message(embed=embed, attachments=[file] if file else [], view=self)
+
 class Select_Help(discord.ui.Select):
-    def __init__(self, bot, ctx):
-        self.bot, self.ctx = bot, ctx
+    def __init__(self, bot, ctx, help_view=None):
+        self.bot, self.ctx, self.help_view = bot, ctx, help_view
         self.primary_color = primary_color()
         self.placeholder_text = "Pick a module to explore commands…"
         self.image_path = "data/images/help_images/cog_image.png"
         self.thumbnail_file = "data/commands/help/thumbnails.json"
         self.module_to_cogs = self.map_modules_to_cogs()
-        options = self.build_options() or [discord.SelectOption(label="Opps... No module available.", value="none")]
+        options = self.build_options() or [discord.SelectOption(label="Oops... No module available.", value="none")]
         super().__init__(placeholder=self.placeholder_text, max_values=1, min_values=1, options=options)
 
     def map_modules_to_cogs(self):
@@ -43,17 +123,11 @@ class Select_Help(discord.ui.Select):
         for module, cogs in self.module_to_cogs.items():
             cog_name = cogs[0].qualified_name.lower() if cogs else "unknown"
             emoji = Help_Select_Embed_Mapping.emojis.get(cog_name)
-            if not emoji:  # skip modules without emoji
+            if not emoji:
                 continue
-
             label = module.replace("_", " ").replace(".py", "").title()
             label = f"{label} Commands" if "Help" not in label else label
-
-            opts.append(discord.SelectOption(
-                label=label,
-                value=module,
-                emoji=emoji
-            ))
+            opts.append(discord.SelectOption(label=label, value=module, emoji=emoji))
         return opts
 
     def build_fields_for_module(self, module):
@@ -68,48 +142,44 @@ class Select_Help(discord.ui.Select):
         return fields
 
     async def callback(self, interaction: discord.Interaction):
-        try:
-            module = self.values[0]
-            if module == "none":
-                await interaction.response.send_message("No modules available.", ephemeral=True)
-                return
+        module = self.values[0]
+        if module == "none":
+            await interaction.response.send_message("No modules available.", ephemeral=True)
+            return
 
-            embed = discord.Embed(description="", color=self.primary_color)
-            fields = self.build_fields_for_module(module)
-            if fields:
-                for name, value, inline in fields:
-                    embed.add_field(name=name, value=value or "No commands.", inline=inline)
-            else:
-                embed.description = "No visible commands found for this module."
+        embed = discord.Embed(description="", color=self.primary_color)
+        fields = self.build_fields_for_module(module)
+        if fields:
+            for name, value, inline in fields:
+                embed.add_field(name=name, value=value or "No commands.", inline=inline)
+        else:
+            embed.description = "No visible commands found for this module."
 
-            filename = module.split('.')[0]
-            thumbs = Help_Thumbnails(self.thumbnail_file)
-            url = thumbs.get_image_url(filename)
-            if url:
-                embed.set_thumbnail(url=url)
+        filename = module.split('.')[0]
+        thumbs = Help_Thumbnails(self.thumbnail_file)
+        url = thumbs.get_image_url(filename)
+        if url:
+            embed.set_thumbnail(url=url)
+        Options_ImageGenerator(filename).save_image(self.image_path)
+        file = discord.File(open(self.image_path, "rb"), filename="cog_image.png") if os.path.exists(self.image_path) else None
+        if file:
+            embed.set_image(url="attachment://cog_image.png")
 
-            Options_ImageGenerator(filename).save_image(self.image_path)
-            file = discord.File(open(self.image_path, "rb"), filename="cog_image.png") if os.path.exists(self.image_path) else None
-            if file:
-                embed.set_image(url="attachment://cog_image.png")
+        # Update view
+        self.help_view.clear_items()
+        overview_btn = discord.ui.Button(label="Overview", style=discord.ButtonStyle.green)
+        async def overview_callback(interaction_: discord.Interaction):
+            await self.help_view.show_overview(interaction_)
+        overview_btn.callback = overview_callback
 
-            await interaction.response.edit_message(embed=embed, attachments=[file] if file else None)
-        except Exception as e:
-            logger.error(f"Help menu callback error: {e}")
-            await interaction.response.send_message("Something went wrong while displaying the help menu.", ephemeral=True)
-
-
-
+        self.help_view.add_item(self)
+        self.help_view.add_item(overview_btn)
+        await interaction.response.edit_message(embed=embed, attachments=[file] if file else [], view=self.help_view)
 
 
-class HelpMenu(discord.ui.View):
-    def __init__(self, bot, select_view,*, timeout=None):
-        super().__init__(timeout=timeout)
-        self.bot = bot
-        self.primary_color = primary_color()
-        cog_commands = {}  
-        self.add_item(select_view)
-        
+
+
+
 class Options_ImageGenerator:
     def __init__(self, cog_name, image_width=800, image_height=800):
         config_path = "data/commands/help/option_image.json"
@@ -605,63 +675,3 @@ class Help_Select_Embed_Mapping:
             
             
             
-class HelpMenu(discord.ui.View):
-    def __init__(self, bot, select_view, ctx, cog_commands, embed_image_path, embed_color):
-        super().__init__(timeout=None)
-        self.bot = bot
-        self.ctx = ctx
-        self.cog_commands = {
-            cog_name: [cmd for cmd in cmds if not cmd.hidden]
-            for cog_name, cmds in cog_commands.items()
-        }
-        self.cog_commands = {k: v for k, v in self.cog_commands.items() if v}  
-        self.page = 0
-        self.fields_per_page = 7
-        self.select_view = select_view
-        self.embed_image_path = embed_image_path
-        self.embed_color = embed_color
-
-        # Add items
-        self.add_item(select_view)
-        self.prev_button = discord.ui.Button(
-            emoji="⬅️", style=discord.ButtonStyle.blurple, custom_id=f"prev_{ctx.author.id}"
-        )
-        self.next_button = discord.ui.Button(
-            emoji="➡️", style=discord.ButtonStyle.blurple, custom_id=f"next_{ctx.author.id}"
-        )
-        self.prev_button.callback = self.prev_page
-        self.next_button.callback = self.next_page
-        self.add_item(self.prev_button)
-        self.add_item(self.next_button)
-
-    async def interaction_check(self, interaction):
-        return interaction.user == self.ctx.author
-
-    def build_embed(self):
-        embed = discord.Embed(
-            color=self.embed_color
-        )
-        embed.set_image(url="attachment://image.png")  # consistent image
-        start = self.page * self.fields_per_page
-        end = start + self.fields_per_page
-        items = list(self.cog_commands.items())[start:end]
-        for cog_name, commands_list in items:
-            embed.add_field(
-                name=cog_name.replace("_", ""),
-                value=" ".join(f'`{cmd.name}`' for cmd in commands_list),
-                inline=False
-            )
-        total_pages = max(1, (len(self.cog_commands) - 1) // self.fields_per_page + 1)
-        embed.set_footer(text=f"Page {self.page + 1}/{total_pages} |Use {self.ctx.prefix}help <command> for more info.")
-        return embed
-
-    async def prev_page(self, interaction: discord.Interaction):
-        if self.page > 0:
-            self.page -= 1
-            await interaction.response.edit_message(embed=self.build_embed(), view=self)
-
-    async def next_page(self, interaction: discord.Interaction):
-        max_page = max(0, (len(self.cog_commands) - 1)//self.fields_per_page)
-        if self.page < max_page:
-            self.page += 1
-            await interaction.response.edit_message(embed=self.build_embed(), view=self)

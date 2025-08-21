@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: Flask
-Version: 3.1.1
+Version: 3.1.2
 Summary: A simple framework for building complex web applications.
 Maintainer-email: Pallets <contact@palletsprojects.com>
 Requires-Python: >=3.9
@@ -34,6 +34,8 @@ Project-URL: Donate, https://palletsprojects.com/donate
 Project-URL: Source, https://github.com/pallets/flask/
 Provides-Extra: async
 Provides-Extra: dotenv
+
+<div align="center"><img src="https://raw.githubusercontent.com/pallets/flask/refs/heads/stable/docs/_static/flask-name.svg" alt="" height="150"></div>
 
 # Flask
 

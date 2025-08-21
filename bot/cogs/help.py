@@ -51,9 +51,14 @@ class Help(commands.Cog):
             img_path = "data/commands/help/set_image/image.png"
             img.save_image(file_path=img_path)
 
-            # Send embed with HelpMenu view
-            select_view = Select_Help(self.bot, ctx)
-            view = HelpMenu(self.bot, select_view, ctx, cog_commands, img_path, color)
+            # Initialize view & select menu
+            view = HelpMenu(self.bot, None, ctx, cog_commands, img_path, color)
+            select_view = Select_Help(self.bot, ctx, help_view=view)
+            view.select_view = select_view
+            view.clear_items()
+            view.add_item(select_view)
+            view.add_item(view.prev_button)
+            view.add_item(view.next_button)
 
             embed = view.build_embed()
             embed.set_image(url="attachment://image.png")
@@ -66,10 +71,6 @@ class Help(commands.Cog):
                     reference=ctx.message,
                     allowed_mentions=discord.AllowedMentions.none()
                 )
-
-            # Cleanup
-            if os.path.exists(img_path):
-                os.remove(img_path)
 
         except Exception as e:
             logger.error(f"Error sending HelpMenu: {e}")
