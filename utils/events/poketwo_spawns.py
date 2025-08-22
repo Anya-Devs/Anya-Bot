@@ -1,12 +1,14 @@
-import os, io, re, csv, json, logging, requests, aiohttp
-from imports.discord_imports import *
+import os, io, re, json, csv, logging, requests, asyncio, uuid
+from pathlib import Path
+from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor
+import aiohttp, numpy as np, cv2
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter, ImageSequence
 from pilmoji import Pilmoji
-from pathlib import Path
-import numpy as np
-import cv2
-from functools import lru_cache
 from fuzzywuzzy import fuzz
+from imports.discord_imports import *
+from bot.token import use_test_bot as ut
+from utils.subcogs.pokemon import PoketwoCommands, MongoHelper
 
 
 
@@ -518,14 +520,7 @@ class PokemonImageBuilder:
         for part, is_flag in parts:
             width, _ = pilmoji.getsize(part, font=font)
             offset_y = y + flag_offset if is_flag else y
-            pilmoji.text(
-                (x, offset_y),
-                part,
-                font=font,
-                fill=fill,
-                stroke_fill=stroke_fill,
-                stroke_width=stroke_width
-            )
+            pilmoji.text((x, offset_y), part, font=font, fill=fill, stroke_fill=stroke_fill, stroke_width=stroke_width)
             x += width
 
     def get_scaled_font(self, base_font, text, step=12, shrink=8):
@@ -539,40 +534,37 @@ class PokemonImageBuilder:
         poke_img_resized = poke_img.resize(self.config["pokemon_image_size"])
         frame.paste(poke_img_resized, self.config["pokemon_image_position"], poke_img_resized)
         pilmoji = Pilmoji(frame)
-
         scaled_font = self.get_scaled_font(self.font_header, pokemon_name)
-
         self.draw_text_with_flag_offset(
-            pilmoji,
-            self.config["pokemon_name_position"],
-            pokemon_name,
-            scaled_font,
-            self.config["name_color"],
+            pilmoji, self.config["pokemon_name_position"], pokemon_name,
+            scaled_font, self.config["name_color"],
             stroke_fill=self.config.get("name_outline_color"),
             stroke_width=self.config.get("name_stroke_width", 0)
         )
         self.draw_text_with_flag_offset(
-            pilmoji,
-            self.config["alt_name_position"],
-            best_name,
-            self.font_base,
-            self.config["alt_color"],
+            pilmoji, self.config["alt_name_position"], best_name,
+            self.font_base, self.config["alt_color"],
             stroke_fill=self.config.get("alt_outline_color"),
             stroke_width=self.config.get("alt_stroke_width", 0)
         )
         self.draw_type_emojis(frame, types, self.config["type_position"])
         return frame
 
-    def create_image(self, raw_slug, pokemon_name, best_name, types, bg_url=None, filename="test.png"):
+    def create_image(self, raw_slug, pokemon_name, best_name, types, bg_url=None, output_path=None):
+        """Create Pokémon image; output_path can be UUID-based for concurrency."""
+        if output_path is None:
+            filename = f"{uuid.uuid4().hex}.png"
+            output_path = os.path.join(self.output_dir, filename)
         poke_img, img_bytes = self.fetch_pokemon_image(pokemon_name.lower().replace(" ", "-"))
         type_colors = self.get_type_colors(types)
         bg_frames, durations = self.prepare_background_frames(type_colors, bg_url)
         frames = [self.compose_frame(bg_frame, poke_img, pokemon_name, best_name, types) for bg_frame in bg_frames]
-        filepath = os.path.join(self.output_dir, filename)
         if len(frames) == 1:
-            frames[0].save(filepath)
+            frames[0].save(output_path)
         else:
-            frames[0].save(filepath, save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2, transparency=0)            
+            frames[0].save(output_path, save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2, transparency=0)
+        return output_path
+
             
 if __name__ == "__main__":
     builder = PokemonImageBuilder()
