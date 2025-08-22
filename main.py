@@ -1,5 +1,4 @@
 import asyncio; from data.setup import SetupManager; asyncio.run(SetupManager().run_setup())
-
 import os, sys, gc, asyncio, importlib, pkgutil, threading, signal
 from dotenv import load_dotenv
 import aiohttp, yarl, discord
@@ -23,11 +22,9 @@ def patch_discord_gateway(env_gateway="wss://gateway.discord.gg/"):
         async def get_bot_gateway(self, **_):
             data = await self.request(discord.http.Route("GET","/gateway/bot"))
             return data["shards"], f"{env_gateway}?encoding=json&v=10", data.get("session_start_limit", {})
-
     class CustomWebSocket(discord.gateway.DiscordWebSocket):
         DEFAULT_GATEWAY = yarl.URL(env_gateway)
         def is_ratelimited(self): return False
-
     discord.http.HTTPClient.get_gateway = CustomHTTP.get_gateway
     discord.http.HTTPClient.get_bot_gateway = CustomHTTP.get_bot_gateway
     discord.gateway.DiscordWebSocket.DEFAULT_GATEWAY = CustomWebSocket.DEFAULT_GATEWAY
@@ -44,17 +41,14 @@ class FlaskServer:
         self.app = Flask(__name__, static_folder="html")
         self.port = port
         self._setup_routes()
-
     def _setup_routes(self):
         @self.app.route("/")
         def index():
             p = os.path.join(self.app.static_folder, "index.html")
             return send_from_directory(self.app.static_folder, "index.html") if os.path.exists(p) else ("⚠️ index.html not found.", 404)
-
         @self.app.route("/html/<path:filename>")
         def serve_static(filename):
             return send_from_directory(self.app.static_folder, filename)
-
     def run(self):
         self.app.run(host="0.0.0.0", port=self.port, threaded=True)
 
@@ -75,11 +69,15 @@ class ClusteredBot(commands.AutoShardedBot):
         self.cog_dirs = ['bot.cogs', 'bot.events']
         self.console = Console()
         self.http_session: aiohttp.ClientSession | None = None
-
     async def setup_hook(self):
         await self._import_cogs()
         self.http_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
-
+        try:
+            shards = list(self.shards.keys())
+            shard_count = self.shard_count
+            logger.info(f"🧩 Shard Hunting: {len(shards)}/{shard_count} shards initialized.")
+        except Exception as e:
+            logger.warning(f"Shard hunting failed: {e}")
     async def on_ready(self):
         term = __import__('shutil').get_terminal_size().columns
         art_str = ""
@@ -94,12 +92,16 @@ class ClusteredBot(commands.AutoShardedBot):
         banner += f"🌐 Connected: {len(self.guilds)} servers | Users ~{sum(g.member_count or 0 for g in self.guilds)}".center(term)
         print(banner)
         await setup_persistent_views(self)
-
+    async def on_shard_ready(self, shard_id: int):
+        logger.info(f"✅ Shard {shard_id} is ready.")
+    async def on_shard_disconnect(self, shard_id: int):
+        logger.warning(f"⚠️ Shard {shard_id} disconnected. Reconnecting...")
+    async def on_shard_resumed(self, shard_id: int):
+        logger.info(f"🔄 Shard {shard_id} resumed.")
     async def close(self):
         if self.http_session and not self.http_session.closed:
             await self.http_session.close()
         await super().close()
-
     async def _import_cogs(self):
         tree = Tree("[bold cyan]◇ Loading Cogs[/bold cyan]")
         for dir_name in self.cog_dirs:
@@ -133,14 +135,12 @@ class BotRunner:
             logger.error("No token found.")
             return
         await bot.start(token, reconnect=True)
-
     @staticmethod
     def _install_signal_handlers(loop):
         def _graceful(*_): [t.cancel() for t in asyncio.all_tasks(loop)]
         for sig in (signal.SIGINT, signal.SIGTERM):
             try: loop.add_signal_handler(sig, _graceful)
             except NotImplementedError: signal.signal(sig, lambda *_: _graceful())
-
     @classmethod
     def main(cls):
         gc.collect()
