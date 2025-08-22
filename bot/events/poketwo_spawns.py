@@ -62,7 +62,7 @@ class PoketwoSpawnDetector(commands.Cog):
     async def process_spawn(self, message, image_url):
         """Split prediction and image creation with UUID filenames."""
         try:
-            # Predict Pokémon in thread
+
             slug_raw, conf = await asyncio.to_thread(self.predictor.predict, image_url)
             slug = self.pokemon_utils.get_base_pokemon_name(slug_raw)
             if slug not in self._pokemon_ids:
@@ -92,10 +92,9 @@ class PoketwoSpawnDetector(commands.Cog):
                 " ".join(special_roles), f"{conf_float[0]:.2f}%", dex, description, image_url, low_conf[0]
             )
 
-            # Generate unique file name with UUID
             unique_file = f"data/events/poketwo_spawns/image/{uuid.uuid4().hex}.png"
 
-            # Image creation in thread
+            # image creation in thread
             await asyncio.to_thread(
                 self.pokemon_image_builder.create_image,
                 raw_slug=slug_raw,
@@ -103,7 +102,7 @@ class PoketwoSpawnDetector(commands.Cog):
                 best_name=self.pokemon_utils.get_best_normal_alt_name(slug) or "",
                 types=self.pokemon_utils.get_pokemon_types(slug),
                 bg_url=None,
-                output_path=unique_file  # Pass the UUID file path
+                output_path=unique_file
             )
 
             file = discord.File(unique_file, filename="pokemon_spawn.png")
