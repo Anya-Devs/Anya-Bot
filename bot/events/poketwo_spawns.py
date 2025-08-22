@@ -10,6 +10,7 @@ from submodules.poketwo_autonamer.predict import Prediction
 from utils.subcogs.pokemon import PoketwoCommands, MongoHelper
 
 logger = logging.getLogger(__name__)
+
 _executor = ThreadPoolExecutor(max_workers=os.cpu_count() or 4)
 
 class PoketwoSpawnDetector(commands.Cog):
@@ -62,7 +63,9 @@ class PoketwoSpawnDetector(commands.Cog):
 
     async def process_spawn_tasks(self, message, image_url):
         try:
-            slug_raw, conf = await asyncio.to_thread(self.predictor.predict, image_url)
+            loop = asyncio.get_running_loop()
+            slug_raw, conf = await loop.run_in_executor(_executor, self.predictor.predict, image_url)
+            
             slug = self.pokemon_utils.get_base_pokemon_name(slug_raw)
             if slug not in self._pokemon_ids:
                 slug = self.pokemon_utils.find_full_name_for_slug(slug_raw).lower().replace("_","-")
@@ -98,14 +101,15 @@ class PoketwoSpawnDetector(commands.Cog):
 
             unique_filename = f"data/events/poketwo_spawns/image/{uuid.uuid4().hex}.png"
 
-            await asyncio.to_thread(
+            await loop.run_in_executor(
+                _executor,
                 self.pokemon_image_builder.create_image,
-                raw_slug=slug_raw,
-                pokemon_name=self.pokemon_utils.format_name(slug).replace("_"," ").title(),
-                best_name=self.pokemon_utils.get_best_normal_alt_name(slug) or "",
-                types=self.pokemon_utils.get_pokemon_types(slug),
-                bg_url=None,
-                save_path=unique_filename
+                slug_raw,
+                self.pokemon_utils.format_name(slug).replace("_"," ").title(),
+                self.pokemon_utils.get_best_normal_alt_name(slug) or "",
+                self.pokemon_utils.get_pokemon_types(slug),
+                None,
+                unique_filename
             )
 
             file = discord.File(unique_filename, filename="pokemon_spawn.png")
