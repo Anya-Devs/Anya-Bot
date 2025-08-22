@@ -2,7 +2,6 @@ import os, asyncio, logging
 from concurrent.futures import ThreadPoolExecutor
 from motor.motor_asyncio import AsyncIOMotorClient
 import numpy as np
-from aiocache import Cache  # <- Better async-native cache
 
 from imports.discord_imports import *
 from bot.token import use_test_bot as ut
@@ -12,9 +11,6 @@ from utils.subcogs.pokemon import PoketwoCommands, MongoHelper
 
 logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=os.cpu_count() or 4)
-
-# Configure aiocache in-memory
-cache = Cache(Cache.MEMORY, ttl=3600)  # cache expires in 1 hour
 
 class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot, worker_count=8):
@@ -59,18 +55,12 @@ class PoketwoSpawnDetector(commands.Cog):
     async def process_spawn_tasks(self, message, image_url):
         """Centralized processor function for spawn prediction and message handling."""
         try:
-            # Async cache check
-            cached = await cache.get(image_url)
-            if cached:
-                slug_raw, conf = cached
-            else:
-                slug_raw, conf = await asyncio.to_thread(self.predictor.predict, image_url)
-                await cache.set(image_url, (slug_raw, conf))
-
+            slug_raw, conf = await asyncio.to_thread(self.predictor.predict, image_url)
             slug = self.pokemon_utils.get_base_pokemon_name(slug_raw)
             if slug not in self._pokemon_ids:
                 slug = self.pokemon_utils.find_full_name_for_slug(slug_raw).lower().replace("_","-")
 
+            # Use NumPy for confidence handling
             conf_float = np.array([float(str(conf).strip().rstrip("%"))], dtype=np.float32)
             low_conf = conf_float < 30
 
