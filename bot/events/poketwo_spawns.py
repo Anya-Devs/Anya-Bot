@@ -1,4 +1,4 @@
-import os, asyncio, logging, uuid
+import os, asyncio, logging, uuid, tempfile
 from concurrent.futures import ThreadPoolExecutor
 from motor.motor_asyncio import AsyncIOMotorClient
 import numpy as np
@@ -60,9 +60,8 @@ class PoketwoSpawnDetector(commands.Cog):
                 self.queue.task_done()
 
     async def process_spawn(self, message, image_url):
-        """Split prediction and image creation with UUID filenames."""
+        """Generate spawn image as a temp file."""
         try:
-
             slug_raw, conf = await asyncio.to_thread(self.predictor.predict, image_url)
             slug = self.pokemon_utils.get_base_pokemon_name(slug_raw)
             if slug not in self._pokemon_ids:
@@ -92,9 +91,10 @@ class PoketwoSpawnDetector(commands.Cog):
                 " ".join(special_roles), f"{conf_float[0]:.2f}%", dex, description, image_url, low_conf[0]
             )
 
-            unique_file = f"data/events/poketwo_spawns/image/{uuid.uuid4().hex}.png"
+            # Use a temporary file
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
+                temp_path = tmp_file.name
 
-            # image creation in thread
             await asyncio.to_thread(
                 self.pokemon_image_builder.create_image,
                 raw_slug=slug_raw,
@@ -102,16 +102,18 @@ class PoketwoSpawnDetector(commands.Cog):
                 best_name=self.pokemon_utils.get_best_normal_alt_name(slug) or "",
                 types=self.pokemon_utils.get_pokemon_types(slug),
                 bg_url=None,
-                output_path=unique_file
+                output_path=temp_path
             )
 
-            file = discord.File(unique_file, filename="pokemon_spawn.png")
+            file = discord.File(temp_path, filename="pokemon_spawn.png")
             await message.channel.send(content=ping_msg, file=file, reference=message)
+
+            # Cleanup temp file
+            os.remove(temp_path)
 
         except Exception as e:
             logger.error(f"Error in process_spawn_tasks: {type(e).__name__}: {e}")
             await message.channel.send(f"{self.error_emoji} Failed to process spawn", reference=message)
-
 
     @commands.Cog.listener()
     async def on_message(self, message):
