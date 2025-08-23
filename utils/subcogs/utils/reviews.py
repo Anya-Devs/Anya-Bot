@@ -49,28 +49,48 @@ class ReviewUtils:
         )
 
 class Review_View(discord.ui.View):
-    def __init__(self, mode=None, m=None, ctx_message=None):
+    def __init__(self, mode=None, m=None, ctx_message=None, target=None):
         super().__init__(timeout=180)
         self.select = Review_Select()
         self.paginator = Review_Paginator()
         self.mode = mode
         self.modal = m
+        self.ctx_message = ctx_message
+        self.target=target
         if mode and m:
-            self.add_item(ReviewButton(mode, m))
+            self.add_item(ReviewButton(mode, m, ctx_message, target))
             self.add_item(CancelButton(ctx_message))
 
 
 
 class ReviewButton(discord.ui.Button):
-    def __init__(self, mode: str, modal=None):
+    def __init__(self, mode: str, modal_cls, ctx_message, target):
         super().__init__(
-            label="Add Review" if mode == 'add' else "Edit Review",
-            style=discord.ButtonStyle.green if mode == 'add' else discord.ButtonStyle.blurple
+            label="Add Review" if mode == "add" else "Edit Review",
+            style=discord.ButtonStyle.green if mode == "add" else discord.ButtonStyle.blurple
         )
-        self.modal = modal
+        self.mode = mode
+        self.modal_cls = modal_cls
+        self.ctx_message = ctx_message
+        self.target = target  
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(self.modal)
+        if self.ctx_message:
+            try:
+                await self.ctx_message.delete()
+            except:
+                pass  
+
+        target_member = self.target if self.target else interaction.user
+
+        modal = await self.modal_cls.create(
+            title=f"{self.mode.title()} Review",
+            target_member=target_member,
+            mongo=self.modal_cls.mongo,
+            is_edit=self.mode == "edit",
+            reviewer_id=interaction.user.id if self.mode == "edit" else None
+        )
+        await interaction.response.send_modal(modal)
 
 
 class CancelButton(discord.ui.Button):
@@ -198,13 +218,21 @@ class Review_Select:
         )
         emb.set_thumbnail(url=member.avatar.url)
 
-
         view = discord.ui.View()
-        view.add_item(ReviewUserSelect(reviews, member, mongo, ctx.guild))
+        # Split reviews into chunks of 5
+        chunk_size = 5
+        review_chunks = [reviews[i:i + chunk_size] for i in range(0, len(reviews), chunk_size)]
+
+        for i, chunk in enumerate(review_chunks):
+            select = ReviewUserSelect(chunk, member, mongo, ctx.guild)
+            total_parts = len(review_chunks)
+            select.placeholder = f"Review Options | Part {i + 1}"
+            view.add_item(select)
+
         if len(reviews) > 25:
             view.add_item(OtherReviewsButton(reviews, member, mongo))
-        return emb, view
 
+        return emb, view
 
 class OtherReviewsButton(discord.ui.Button):
     def __init__(self, reviews, member, mongo):
@@ -243,11 +271,18 @@ class VoteButton(discord.ui.Button):
         upvotes = sum(1 for v in votes.values() if v == "up")
         downvotes = sum(1 for v in votes.values() if v == "down")
 
+        # Auto-delete if more than 6 downvotes
+        if downvotes > 6:
+            await self.mongo.collection.delete_one({"_id": self.review_id})
+            await interaction.response.send_message("Review deleted due to excessive downvotes.", ephemeral=True)
+            return
+
         await self.mongo.collection.update_one(
             {"_id": self.review_id},
             {"$set": {"votes": votes, "upvotes": upvotes, "downvotes": downvotes}}
         )
 
+        # Refresh embed
         emb = discord.Embed(
             title=f"Vote Results for Review",
             description=review["review"],
@@ -271,7 +306,9 @@ class VoteButton(discord.ui.Button):
         view.add_item(btn_up)
         view.add_item(btn_down)
         await interaction.response.edit_message(embed=emb, view=view)
-
+        
+        
+        
 class Review_Paginator:
     async def start(self, ctx, reviews, member):
         pages = self._build_pages(member, reviews)
@@ -395,7 +432,6 @@ class Review_Utils:
         }
 
 
-
 class ReviewActions:
     def __init__(self, utils: ReviewUtils):
         self.utils = utils
@@ -413,21 +449,19 @@ class ReviewActions:
         }
 
     async def add_review(self, ctx, member, mongo: MongoManager):
-        # Enforce max 1 review per user per member
-        existing_reviews = await mongo.collection.find({
+        existing = await mongo.collection.find_one({
             "reviewer_id": str(ctx.author.id),
             "target_id": str(member.id)
-        }).to_list(None)
-
-        if existing_reviews:
+        })
+        if existing:
             await ctx.reply(
-                f"You already have a review for {member.mention}. You can edit it instead.",
+                f"You already have a review for {member.mention}. Use Edit instead.",
                 ephemeral=True
             )
             return
 
         modal = await ReviewModal.create("Add Review", member, mongo, is_edit=False)
-        view = Review_View(mode='add', m=modal, ctx_message=ctx.message)
+        view = Review_View(mode='add', m=modal, ctx_message=ctx.message, target=member)
         await ctx.reply(embed=self.embed_types["add"](member), view=view)
 
     async def edit_review(self, ctx, member, mongo: MongoManager):
@@ -440,7 +474,29 @@ class ReviewActions:
         )
         view = Review_View(mode='edit', m=modal, ctx_message=ctx.message)
         await ctx.reply(embed=self.embed_types["edit"](member), view=view)
-        
+
+    # ─── add remove_review method ───
+    async def remove_review(self, ctx, member, mongo: MongoManager):
+        existing = await mongo.collection.find_one({
+            "reviewer_id": str(ctx.author.id),
+            "target_id": str(member.id)
+        })
+        if not existing:
+            await ctx.reply(f"You have no review for {member.mention} to remove.", ephemeral=True)
+            return
+
+        await mongo.collection.delete_one({
+            "reviewer_id": str(ctx.author.id),
+            "target_id": str(member.id)
+        })
+
+        emb = discord.Embed(
+            title="Review Removed",
+            description=f"Your review for {member.mention} has been removed successfully.",
+            color=discord.Color.red()
+        )
+        await ctx.reply(embed=emb, ephemeral=True)
+           
         
 # ────────────────────────────────────────────────
 #  Modal for add/edit
@@ -485,30 +541,34 @@ class ReviewModal(ui.Modal):
         return cls(title, target_member, mongo, is_edit=is_edit, existing=existing)
 
     async def on_submit(self, interaction):
-        try:
-            stars = int(self.stars.value)
-            if stars < 1 or stars > 5:
-                raise ValueError
-        except ValueError:
-            await interaction.response.send_message("Stars must be 1-5.", ephemeral=True)
-            return
+     try:
+        stars = int(self.stars.value)
+        if stars < 1 or stars > 5:
+            raise ValueError
+     except ValueError:
+        await interaction.response.send_message("Stars must be 1-5.", ephemeral=True)
+        return
 
-        reviewer_id = str(interaction.user.id)
-        target_id = str(self.target_member.id)
+     reviewer_id = str(interaction.user.id)
+     target_id = str(self.target_member.id)
 
-        if self.is_edit:
-            await self.mongo.collection.update_one(
-                {"reviewer_id": reviewer_id, "target_id": target_id},
-                {"$set": {"stars": stars, "review": self.review.value}}
-            )
-            emb = ReviewUtils.get_edit_embed(self.target_member)
-        else:
-            await self.mongo.add_review(reviewer_id, target_id, stars, self.review.value)
-            emb = ReviewUtils.get_add_embed(self.target_member)
+     if self.is_edit:
+        await self.mongo.collection.update_one(
+            {"reviewer_id": reviewer_id, "target_id": target_id},
+            {"$set": {"stars": stars, "review": self.review.value}}
+        )
+        msg = f"Review has been updated for {self.target_member.mention}."
+     else:
+        await self.mongo.add_review(reviewer_id, target_id, stars, self.review.value)
+        msg = f"Review has been made for {self.target_member.mention}."
 
-        await interaction.response.send_message(embed=emb, ephemeral=True)
-        
-        
+     try:
+        if interaction.message:
+            await interaction.message.delete()
+     except:
+        pass
+
+     await interaction.response.send_message(msg, ephemeral=True)
         
         
         
