@@ -1,5 +1,6 @@
-import os, asyncio, logging, uuid, tempfile
+import os, asyncio, logging, uuid
 from concurrent.futures import ThreadPoolExecutor
+from io import BytesIO
 from motor.motor_asyncio import AsyncIOMotorClient
 import numpy as np
 from imports.discord_imports import *
@@ -9,70 +10,59 @@ from submodules.poketwo_autonamer.predict import Prediction
 from utils.subcogs.pokemon import PoketwoCommands, MongoHelper
 
 logger = logging.getLogger(__name__)
-_executor = ThreadPoolExecutor(max_workers=os.cpu_count() or 4)
-
+_thread_executor = ThreadPoolExecutor(max_workers=os.cpu_count() or 4)
 
 class PoketwoSpawnDetector(commands.Cog):
-    def __init__(self, bot, worker_count=8):
+    def __init__(self, bot, worker_count=None):
         self.bot = bot
         self.target_id = 716390085896962058
         self.predictor = Prediction()
         self.pp = PoketwoCommands(bot)
-        self.mongo = MongoHelper(
-            AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"]
-        )
+        self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
         self.pokemon_utils = PokemonUtils(
             self.mongo,
             type_emojis_file="data/commands/pokemon/pokemon_emojis/_pokemon_types.json",
             quest_emojis_file="data/commands/pokemon/pokemon_emojis/_pokemon_quest.json",
             description_file="data/commands/pokemon/pokemon_description.csv",
             id_file="data/commands/pokemon/pokemon_names.csv",
-            regional_forms={
-                "alola": "Alolan",
-                "galar": "Galarian",
-                "hisui": "Hisuian",
-                "paldea": "Paldean",
-                "unova": "Unovan",
-            },
-            lang_flags={"ja": "🇯🇵", "de": "🇩🇪", "fr": "🇫🇷", "en": "🇺🇸"},
-            bot=bot,
-            pp=self.pp,
+            regional_forms={"alola": "Alolan","galar": "Galarian","hisui": "Hisuian","paldea": "Paldean","unova": "Unovan"},
+            lang_flags={"ja": "🇯🇵","de": "🇩🇪","fr": "🇫🇷","en": "🇺🇸"},
+            bot=bot, pp=self.pp
         )
         self.pokemon_image_builder = PokemonImageBuilder()
         self._pokemon_ids = self.pokemon_utils.load_pokemon_ids()
         self.queue = asyncio.Queue()
-        self.worker_count = worker_count
+        self.worker_count = worker_count or min((os.cpu_count() or 4)*2, 32)
         self.success_emoji = "<:green:1261639410181476443>"
         self.error_emoji = "<:red:1261639413943762944>"
         self.cross_emoji = "❌"
-
-        for _ in range(worker_count):
+        for _ in range(self.worker_count):
             self.bot.loop.create_task(self._worker())
 
     async def _worker(self):
         while True:
             message, image_url = await self.queue.get()
-            try:
-                await self.process_spawn(message, image_url)
-            except Exception as e:
-                logger.error(f"Worker error: {type(e).__name__}: {e}")
-            finally:
-                self.queue.task_done()
+            try: await self.process_spawn(message, image_url)
+            except Exception as e: logger.error(f"Worker error: {type(e).__name__}: {e}")
+            finally: self.queue.task_done()
 
     async def process_spawn(self, message, image_url):
         try:
-            slug_raw, conf = await asyncio.to_thread(self.predictor.predict, image_url)
+            loop = asyncio.get_running_loop()
+            slug_raw, conf = await loop.run_in_executor(_thread_executor, self.predictor.predict, image_url)
             slug = self.pokemon_utils.get_base_pokemon_name(slug_raw)
             if slug not in self._pokemon_ids:
-                slug = self.pokemon_utils.find_full_name_for_slug(slug_raw).lower().replace("_", "-")
-
+                slug = self.pokemon_utils.find_full_name_for_slug(slug_raw).lower().replace("_","-")
             conf_float = np.array([float(str(conf).strip().rstrip("%"))], dtype=np.float32)
             low_conf = conf_float < 30
 
-            server_config = await self.pokemon_utils.get_server_config(message.guild.id)
-            shiny_pings, collect_pings = await self.pokemon_utils.get_ping_users(message.guild, slug)
-            type_pings = await self.pokemon_utils.get_type_ping_users(message.guild, slug)
-            quest_pings = await self.pokemon_utils.get_quest_ping_users(message.guild, slug)
+            server_config, shiny_collect, type_pings, quest_pings = await asyncio.gather(
+                self.pokemon_utils.get_server_config(message.guild.id),
+                self.pokemon_utils.get_ping_users(message.guild, slug),
+                self.pokemon_utils.get_type_ping_users(message.guild, slug),
+                self.pokemon_utils.get_quest_ping_users(message.guild, slug)
+            )
+            shiny_pings, collect_pings = shiny_collect
 
             rare, regional = self.pokemon_utils._special_names
             special_roles = []
@@ -82,31 +72,28 @@ class PoketwoSpawnDetector(commands.Cog):
                 special_roles += [f"<@&{server_config['regional_role']}>" for r in regional if r in slug]
 
             description, dex, _ = self.pokemon_utils.get_description(slug)
-            if not dex or dex == "???":
-                dex = self._pokemon_ids.get(slug, "???")
+            dex = dex if dex and dex != "???" else self._pokemon_ids.get(slug,"???")
 
             ping_msg, _ = await self.pokemon_utils.format_messages(
                 slug, type_pings, quest_pings, shiny_pings, collect_pings,
                 " ".join(special_roles), f"{conf_float[0]:.2f}%", dex, description, image_url, low_conf[0]
             )
 
-            # use a temporary file
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
-                temp_path = tmp_file.name
-
-            await asyncio.to_thread(
+            image_bytes = BytesIO()
+            await loop.run_in_executor(
+                _thread_executor,
                 self.pokemon_image_builder.create_image,
-                raw_slug=slug_raw,
-                pokemon_name=self.pokemon_utils.format_name(slug).replace("_", " ").title(),
-                best_name=self.pokemon_utils.get_best_normal_alt_name(slug) or "",
-                types=self.pokemon_utils.get_pokemon_types(slug),
-                bg_url=None,
-                output_path=temp_path
+                slug_raw,
+                self.pokemon_utils.format_name(slug).replace("_"," ").title(),
+                self.pokemon_utils.get_best_normal_alt_name(slug) or "",
+                self.pokemon_utils.get_pokemon_types(slug),
+                None,
+                image_bytes,
+                "PNG"
             )
-
-            file = discord.File(temp_path, filename="pokemon_spawn.png")
+            image_bytes.seek(0)
+            file = discord.File(fp=image_bytes, filename="pokemon_spawn.png")
             await message.channel.send(content=ping_msg, file=file, reference=message)
-            os.remove(temp_path)
 
         except Exception as e:
             logger.error(f"Error in process_spawn_tasks: {type(e).__name__}: {e}")
@@ -114,8 +101,7 @@ class PoketwoSpawnDetector(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.id != self.target_id or ut:
-            return
+        if message.author.id != self.target_id or ut: return
         for e in message.embeds:
             if e.title and "pokémon has appeared!" in e.title.lower() and e.image:
                 await self.queue.put((message, e.image.url))
@@ -126,18 +112,12 @@ class PoketwoSpawnDetector(commands.Cog):
             message = ctx.message
             if not image_url:
                 ref = message.reference
-                if ref:
-                    message = await ctx.channel.fetch_message(ref.message_id)
-                if message.attachments:
-                    image_url = message.attachments[0].url
-                elif message.embeds and message.embeds[0].image:
-                    image_url = message.embeds[0].image.url
-            if not image_url:
-                return await ctx.send(f"{self.cross_emoji} No image URL found.")
+                if ref: message = await ctx.channel.fetch_message(ref.message_id)
+                if message.attachments: image_url = message.attachments[0].url
+                elif message.embeds and message.embeds[0].image: image_url = message.embeds[0].image.url
+            if not image_url: return await ctx.send(f"{self.cross_emoji} No image URL found.")
             await self.process_spawn(message, image_url)
         except Exception as e:
             logger.error(f"Prediction error: {type(e).__name__}: {e}")
 
-
-def setup(bot):
-    bot.add_cog(PoketwoSpawnDetector(bot))
+def setup(bot): bot.add_cog(PoketwoSpawnDetector(bot))

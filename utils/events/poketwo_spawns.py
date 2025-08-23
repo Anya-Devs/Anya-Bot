@@ -368,9 +368,11 @@ class PokemonImageBuilder:
         self.type_emojis_file = "data/commands/pokemon/pokemon_emojis/_pokemon_types.json"
         self.emoji_icon_dir = "data/commands/pokemon/pokemon_emojis/icons/types"
         self.pokemon_image_dir = "data/commands/pokemon/pokemon_images"
+        self.output_dir = "data/events/poketwo_spawns/image"
 
         os.makedirs(self.emoji_icon_dir, exist_ok=True)
         os.makedirs(self.pokemon_image_dir, exist_ok=True)
+        os.makedirs(self.output_dir, exist_ok=True)
 
         with open(self.config_path, 'r') as f:
             self.config = json.load(f)
@@ -379,16 +381,15 @@ class PokemonImageBuilder:
 
         self.font_header = ImageFont.truetype(self.config["font_path_header"], self.config["font_size_header"])
         self.font_base = ImageFont.truetype(self.config["font_path_base"], self.config["font_size_base"])
-        self.output_dir = "data/events/poketwo_spawns/image"
-        os.makedirs(self.output_dir, exist_ok=True)
 
     def fetch_pokemon_image(self, pokemon_raw_name):
         local_path = os.path.join(self.pokemon_image_dir, f"{pokemon_raw_name}.png")
         if not os.path.exists(local_path):
             raise FileNotFoundError(f"Missing Pokémon image: {local_path}")
         img = Image.open(local_path).convert("RGBA")
-        with open(local_path, "rb") as f:
-            img_bytes = io.BytesIO(f.read())
+        img_bytes = io.BytesIO()
+        img.save(img_bytes, format="PNG")
+        img_bytes.seek(0)
         return img, img_bytes
 
     @staticmethod
@@ -426,8 +427,8 @@ class PokemonImageBuilder:
         icon_size = self.config["type_icon_size"]
         if len(types) == 1:
             x += spacing
-        for type_name in types:
-            emoji_str = self.type_emojis.get(f"{type_name.lower()}_type", "")
+        for t in types:
+            emoji_str = self.type_emojis.get(f"{t.lower()}_type", "")
             emoji_img = self.get_local_emoji_image(emoji_str)
             if emoji_img:
                 emoji_img = emoji_img.resize(icon_size)
@@ -475,7 +476,7 @@ class PokemonImageBuilder:
             return [canvas], [100]
         if bg_url:
             try:
-                response = requests.get(bg_url, timeout=5, allow_redirects=True)
+                response = requests.get(bg_url, timeout=5)
                 response.raise_for_status()
                 img_bytes = io.BytesIO(response.content)
                 bg_image = Image.open(img_bytes)
@@ -487,15 +488,10 @@ class PokemonImageBuilder:
                         frame = frame.filter(ImageFilter.GaussianBlur(radius=8))
                     frames.append(frame)
                     durations.append(frame.info.get('duration', 40))
-                if not frames:
-                    bg_image = bg_image.convert("RGBA")
-                    bg_image = self.resize_and_crop(bg_image, (width, height))
-                    if blur_enabled:
-                        bg_image = bg_image.filter(ImageFilter.GaussianBlur(radius=8))
-                    return [bg_image], [100]
-                return frames, durations
-            except (requests.RequestException, OSError) as e:
-                print(f"[BG ERROR] Using color fallback. {e}")
+                if frames:
+                    return frames, durations
+            except (requests.RequestException, OSError):
+                pass
         solid_color = self.blend_colors(bg_colors) if len(bg_colors) > 1 else bg_colors[0]
         canvas = Image.new("RGBA", (width, height), solid_color + (255,))
         if blur_enabled:
@@ -550,22 +546,30 @@ class PokemonImageBuilder:
         self.draw_type_emojis(frame, types, self.config["type_position"])
         return frame
 
-    def create_image(self, raw_slug, pokemon_name, best_name, types, bg_url=None, output_path=None):
-        """Create Pokémon image; output_path can be UUID-based for concurrency."""
-        if output_path is None:
-            filename = f"{uuid.uuid4().hex}.png"
-            output_path = os.path.join(self.output_dir, filename)
+    def create_image(self, raw_slug, pokemon_name, best_name, types, bg_url=None, output_path=None, format="PNG"):
+        """Create Pokémon image; output_path can be None to return BytesIO."""
         poke_img, img_bytes = self.fetch_pokemon_image(pokemon_name.lower().replace(" ", "-"))
         type_colors = self.get_type_colors(types)
         bg_frames, durations = self.prepare_background_frames(type_colors, bg_url)
         frames = [self.compose_frame(bg_frame, poke_img, pokemon_name, best_name, types) for bg_frame in bg_frames]
-        if len(frames) == 1:
-            frames[0].save(output_path)
-        else:
-            frames[0].save(output_path, save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2, transparency=0)
-        return output_path
 
-            
+        if output_path is None:
+            output_bytes = io.BytesIO()
+            if len(frames) == 1:
+                frames[0].save(output_bytes, format=format)
+            else:
+                frames[0].save(output_bytes, format=format, save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2, transparency=0)
+            output_bytes.seek(0)
+            return output_bytes
+        else:
+            if len(frames) == 1:
+                frames[0].save(output_path, format=format)
+            else:
+                frames[0].save(output_path, format=format, save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2, transparency=0)
+            return output_path
+        
+        
+        
 if __name__ == "__main__":
     builder = PokemonImageBuilder()
     builder.create_image(
