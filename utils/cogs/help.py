@@ -35,9 +35,9 @@ class HelpMenu(discord.ui.View):
 
         # Navigation buttons
         self.prev_button = discord.ui.Button(
-            emoji="⬅️", style=discord.ButtonStyle.blurple, custom_id=f"prev_{ctx.author.id}")
+            emoji="⬅️", style=discord.ButtonStyle.gray, custom_id=f"prev_{ctx.author.id}")
         self.next_button = discord.ui.Button(
-            emoji="➡️", style=discord.ButtonStyle.blurple, custom_id=f"next_{ctx.author.id}")
+            emoji="➡️", style=discord.ButtonStyle.gray, custom_id=f"next_{ctx.author.id}")
         self.prev_button.callback = self.prev_page
         self.next_button.callback = self.next_page
 

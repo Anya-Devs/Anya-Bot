@@ -10,26 +10,23 @@
             "bite",
             "lick",
             "slap"
-        ],
-        "\ud83d\udc94": [
-            "cry"
         ]
     },
     "phrases": {
         "self": {
             "pat": "I'll pat you. *pat pat*",
-            "cuddle": "{user} cuddles themselves",
-            "kiss": "{user} gives a kiss to themselves",
-            "hug": "I'll hug you. *Hugs you* [no_embed]",
-            "bite": "What did you taste like? [no_embed]",
-            "lick": "{user} licks themselves",
-            "slap": "{user} slaps themselves",
-            "cry": "{user} is crying",
-            "slowclap": "{user} gives a slow clap to themselves",
-            "wave": "{user} waves at themselves",
-            "smug": "{user} is looking smug ;)",
-            "dance": "{user} is dancing, nice moves!",
-            "happy": "{user} is happy! :)"
+            "cuddle": "Snuggles in for a cozy cuddle",
+            "kiss": "Blows a kiss into the air",
+            "hug": "Wrapping you in a warm hug! *hugs* [no_embed]",
+            "bite": "Gives a playful nibble",
+            "lick": "Licks around mischievously",
+            "slap": "Flails their hand in a playful slap",
+            "cry": "Sniffles and wipes tears away",
+            "slowclap": "Starts clapping slowly, building suspense",
+            "wave": "Waves cheerfully",
+            "smug": "Looks smug with a cheeky grin ⌓ ‿ ⌓ ʰᵉʰ⋅",
+            "dance": "Busts out some fun dance moves!",
+            "happy": "Smiles brightly, feeling happy!"
         },
         "other": {
             "pat": "{user} gives a gentle pat to {target}",
@@ -40,11 +37,11 @@
             "lick": "{user} licks {target}",
             "slap": "{user} slaps {target}",
             "cry": "{user} is crying",
-            "slowclap": "{user} gives a slow clap to {target}",
+            "slowclap": "{user} starts clapping slowly at {target}",
             "wave": "{user} waves at {target}",
             "smug": "{user} smugs at {target}",
             "dance": "{user} is dancing, nice moves!",
-            "happy": "{user} is happy! :)"
+            "happy": "{user} is happy!"
         },
         "everyone": {
             "pat": "{user} gives a gentle pat to the whole server",
@@ -55,11 +52,11 @@
             "lick": "{user} licks the whole server",
             "slap": "{user} slaps the whole server",
             "cry": "{user} is crying",
-            "slowclap": "{user} gives a slow clap to the whole server",
+            "slowclap": "{user} starts clapping slowly at everyone",
             "wave": "{user} waves at the whole server",
-            "smug": "{user} is looking smug ;)",
+            "smug": "{user} looks smug ;)",
             "dance": "{user} is dancing, nice moves!",
-            "happy": "{user} is happy! :)"
+            "happy": "{user} is happy!"
         }
     }
 }

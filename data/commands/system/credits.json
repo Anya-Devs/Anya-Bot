@@ -3,16 +3,16 @@
   "description": "This bot was developed by the following amazing contributors:",
   "developers": [
     {
-      "name": "<@776865099817418793>",
-      "role": "Contributed to `...predict` and was the inspiration for `...pokemon`"
+      "name": "<@776865099817418793> | pokearena",
+      "role": "Helped create the image prediction model for Pokétwo, inspired the `pokedex` command, and designed graphic elements for Anya-Bot help and quest features (when doing `quest` or  `help` you can see image elements made by them in the set embed image)."
     },
     {
-      "name": "<@1026388699203772477>",
-      "role": "Contributed to commands: `about`, `help`, and is the inspiration for  `vision`."
+      "name": "<@1026388699203772477> | alphast101",
+      "role": "Inspired key development of Anya-Bot (e.g., from imports.discord_imports import *), contributed to the `about` command, and inpsiration of the AI cog."
     },
     {
-      "name": "<@412759902394777634>",
-      "role": "Bot Tester: `quest`."
+      "name": "<@412759902394777634> | axytieas",
+      "role": "Bot tester for the `quest` feature."
     }
   ],
   "footer": {
