@@ -7,6 +7,15 @@ from imports.discord_imports import *
 from data.local.const import *
 
 
+
+pt_help_description = (
+            "Collection | {}pt cl\n- `{}pt cl add eevee, pikachu, vulpix (add pokemon | 50 max)`\n- `{}pt cl remove eevee, vulpix (remove pokemon)`\n- `{}pt cl (view collection)`\n- `{}pt cl clear (clear collection)`\n\n"
+            "Shiny Hunt | {}pt sh\n- `{}pt sh alolan vulpix (set shiny hunt)`\n- `{}pt sh remove (remove shiny hunt)`\n- `{}pt sh (view shiny hunt)`\n\n"
+            "Type Ping  | {}pt tp\n- Pokémon ping types like fire, water, or grass.\n\n"
+            "Quest Ping | {}pt qp\n- Pokémon ping region types like  Kanto, Alola, Galar, ect...\n\n"
+            "Special    | {}pt special\n- Assign special roles for rare or regional Pokémon. Requires Manage Server permission.\n\n"
+        )
+
 MAX_POKEMON, CHUNK_SIZE, RESULTS_PER_PAGE, MIN_SIMILARITY_RATIO  = 50, 15, 10, 0.65
 
 

@@ -11,9 +11,7 @@ from imports.discord_imports import *
 from data.local.const import *
 from bot.token import use_test_bot as ut
 from utils.subcogs.pokemon import *
-from utils.subcogs.utils.cls_ping_pokemon import PokemonDataManager, PokemonEmbedManager, PokemonCollectionHandler, AdvancedStringFlagParser, PokemonHelpEmbed, ServerConfigView, PokemonTypeSelect, PokemonRegionSelect
-
-
+from utils.subcogs.utils.cls_ping_pokemon import *
 
 
 
@@ -114,15 +112,9 @@ class PoketwoCommands(commands.Cog):
     @commands.cooldown(1, 5, commands.BucketType.user)
     @pt.command(name="help")
     async def pt_help(self, ctx, topic: str = None):
-        """Show summarized PokéTwo help with delete button."""
-        description = (
-            "Collection (.pt cl) – Add, remove, or view Pokémon. Maximum 50 Pokémon per user. Example: `.pt cl add eevee, pikachu`\n\n"
-            "Shiny Hunt (.pt sh / .pt shiny) – Start, cancel, or view your shiny hunt. Only one hunt at a time. Example: `.pt sh add eevee`\n\n"
-            "Type Ping (.pt tp) – Subscribe to alerts for specific Pokémon types like fire, water, or grass.\n\n"
-            "Quest Ping (.pt qt) – Subscribe to notifications for region quests such as Kanto, Alola, or Galar.\n\n"
-            "Special (.pt special) – Assign special roles for rare or regional Pokémon. Requires Manage Server permission.\n\n"
-            "Use these commands to manage your Pokémon collection, shiny hunts, type pings, and quest notifications."
-        )
+        
+        description = pt_help_description.format(*[ctx.prefix] * pt_help_description.count("{}"))
+
 
         embed = discord.Embed(
             title="How to Use (.pt)",
@@ -162,7 +154,7 @@ class PoketwoCommands(commands.Cog):
     # -------------------
     # Quest Ping
     # -------------------
-    @pt.command(name="qt")
+    @pt.command(name="qp")
     async def quest_ping(self, ctx):
         user_id = ctx.author.id
         try:
