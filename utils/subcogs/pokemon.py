@@ -234,8 +234,133 @@ class PoketwoCommands(commands.Cog):
         traceback.print_exc()
         await ctx.send(f"⚠️ Error setting starboard: {e}")
         
+    # -------------------
+    #  Special Ping (Legacy text command)
+    # # -------------------
+    @pt.command(name="special")
+    async def special_ping_legacy(self, ctx, ping_type: str = None, role: discord.Role = None):
+     guild_id = ctx.guild.id
+     config = await self.get_server_config(guild_id) or {}
+
+     if not ping_type:
+        rare_role = ctx.guild.get_role(config.get("rare_role"))
+        regional_role = ctx.guild.get_role(config.get("regional_role"))
+
+        embed = discord.Embed(
+            title="Pokétwo Special Ping Configuration",
+            description="Current rare and regional Pokémon ping roles.",
+            color=self.embed_default_color
+        )
+        embed.add_field(
+            name="Current Roles",
+            value=(
+                f"**Rare Pokémon:** {rare_role.mention if rare_role else 'Not set'}\n"
+                f"**Regional Pokémon:** {regional_role.mention if regional_role else 'Not set'}"
+            ),
+            inline=False
+        )
+        return await ctx.reply(embed=embed, mention_author=False)
+
+     if not ctx.author.guild_permissions.manage_guild:
+        return await ctx.reply(f"{self.error_emoji} You need **Manage Server** permission to change config.")
+
+     key = f"{ping_type.lower()}_role"
+     if ping_type.lower() not in {"rare","regional"}:
+        return await ctx.reply(f"{self.error_emoji} Invalid type. Use `rare` or `regional`.")
+
+     if role:
+        config[key] = role.id
+        msg = f"{self.success_emoji} {ping_type.title()} Pokémon role set to {role.mention}."
+     else:
+        config.pop(key, None)
+        msg = f"{self.success_emoji} {ping_type.title()} Pokémon role removed."
+
+     await self.mongo.db["server_config"].update_one(
+        {"guild_id": guild_id}, {"$set": config}, upsert=True
+     )
+     await ctx.reply(msg, mention_author=False)
         
-   
+        
+class PoketwoSpecialPing(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.mongo = MongoHelper(
+            AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"]
+        )
+
+        # Define app_commands group
+        self.poketwo_group = app_commands.Group(
+            name="poketwo", description="Pokétwo command group"
+        )
+        self.poketwo_group.add_command(self.specialping)
+
+    async def get_config(self, guild_id: int) -> dict:
+        """Fetch the server config from MongoDB."""
+        collection = self.mongo.get_collection("server_config")
+        return await collection.find_one({"guild_id": guild_id}) or {}
+
+    @app_commands.command(
+        name="specialping",
+        description="Set or view the role to ping for rare/regional Pokémon."
+    )
+    @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.describe(
+        role="Role to ping for special Pokémon (optional, leave empty to remove)."
+    )
+    async def specialping(
+        self,
+        interaction: discord.Interaction,
+        role: discord.Role | None = None
+    ):
+        try:
+            guild_id = interaction.guild.id
+            config = await self.get_config(guild_id)
+            message = "Current configuration from database:"
+
+            # Update role if provided
+            if role:
+                config["special_role"] = role.id
+                message = f"Special Pokémon role set to {role.mention}."
+            elif "special_role" in config:
+                config.pop("special_role")
+                message = "Special Pokémon role removed."
+
+            # Save config
+            collection = self.mongo.get_collection("server_config")
+            await collection.update_one({"guild_id": guild_id}, {"$set": config}, upsert=True)
+
+            # Get role object for display
+            special_role = interaction.guild.get_role(config.get("special_role"))
+
+            # Build embed
+            embed = discord.Embed(
+                title="Pokétwo Special Ping Role",
+                description=message,
+                color=discord.Color.green() if role else discord.Color.blurple()
+            )
+            embed.set_thumbnail(
+                url=interaction.guild.icon.url if interaction.guild.icon else interaction.user.display_avatar.url
+            )
+            embed.add_field(
+                name="Current Role",
+                value=f"{special_role.mention if special_role else '-'}",
+                inline=False
+            )
+
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        except app_commands.MissingPermissions:
+            await interaction.response.send_message(
+                "❌ You can't use this command. Manage Server permission required.",
+                ephemeral=True
+            )
+
+        except Exception as e:
+            print(f"❌ | SpecialPing Error | Guild ID: {interaction.guild.id} | {e}")
+            traceback.print_exc()
+            await interaction.response.send_message(
+                f"❌ An unexpected error occurred: {e}", ephemeral=True
+            )
 
         
 class Pokemon_Emojis(commands.Cog):
@@ -1143,7 +1268,7 @@ class CollectionViewUI(View):
         return interaction.user == self.ctx.author
 
 
-
+ 
 
 
 

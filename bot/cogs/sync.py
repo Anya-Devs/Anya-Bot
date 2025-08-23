@@ -1,8 +1,5 @@
 import traceback
-import asyncio
-from typing import Optional, Literal
-from discord.ext import commands
-import discord
+from imports.discord_imports import *
 
 class Sync(commands.Cog):
     def __init__(self, bot):
@@ -10,34 +7,71 @@ class Sync(commands.Cog):
 
     @commands.command(name='sync', hidden=True)
     @commands.is_owner()
-    async def sync(self, ctx: commands.Context, spec: Optional[Literal["~", "*", "^"]] = None) -> None:
+    async def sync(self, ctx: Context, spec: Optional[Literal["~", "*", "^"]] = None) -> None:
+        embed = discord.Embed(title="Command Sync Report", color=discord.Color.green())
         try:
-            status_msg = await ctx.send(embed=discord.Embed(
-                description="🔄 Starting global sync process...",
-                color=discord.Color.blue()
-            ))
+            print(f"[DEBUG] Sync command called by {ctx.author} in guild {ctx.guild}")
+            print(f"[DEBUG] Spec: {spec}")
 
-            # Always perform global sync regardless of 'spec'
-            try:
-                synced_commands = await self.bot.tree.sync()
-                total_synced_commands = len(synced_commands)
-                await status_msg.edit(embed=discord.Embed(
-                    description=f"✅ Global sync completed! Synced {total_synced_commands} commands globally.",
-                    color=discord.Color.green()
-                ))
-            except Exception as e:
-                await status_msg.edit(embed=discord.Embed(
-                    description=f"❌ Global sync failed: {e}",
-                    color=discord.Color.red()
-                ))
+            if spec == "^":
+                guilds = [ctx.guild]
+            else:
+                guilds = self.bot.guilds
+
+            total_synced_commands = 0
+            failed_guilds = []
+
+            for guild in guilds:
+                try:
+                    print(f"[DEBUG] Syncing commands for guild: {guild.name} (ID: {guild.id})")
+
+                    if spec == "~":
+                        synced_commands = await self.bot.tree.sync(guild=guild)
+                    elif spec == "*":
+                        await self.bot.tree.copy_global_to(guild=guild)
+                        synced_commands = await self.bot.tree.sync(guild=guild)
+                    else:
+                        synced_commands = await self.bot.tree.sync()
+
+                    synced_count = len(synced_commands)
+                    total_synced_commands += synced_count
+
+                    embed.add_field(
+                        name=f"{guild.name} ({guild.id})",
+                        value=f"✅ Synced {synced_count} commands.",
+                        inline=False
+                    )
+
+                except discord.HTTPException as e:
+                    error_message = f"❌ Error syncing: {e}"
+                    print(f"[ERROR] Guild {guild.id}: {e}")
+                    failed_guilds.append(guild)
+                    embed.add_field(
+                        name=f"{guild.name} ({guild.id})",
+                        value=error_message,
+                        inline=False
+                    )
+
+            embed.add_field(
+                name="Summary",
+                value=f"Total guilds attempted: {len(guilds)}\n"
+                      f"Total commands synced: {total_synced_commands}\n"
+                      f"Failed guilds: {', '.join(g.name for g in failed_guilds) if failed_guilds else 'None'}",
+                inline=False
+            )
+            await ctx.send(embed=embed)
 
         except Exception as e:
-            print(f"[ERROR] An error occurred: {e}")
+            error_message = f"An unexpected error occurred: {e}"
+            print(f"[ERROR] {error_message}")
             traceback.print_exc()
-            await ctx.send(embed=discord.Embed(description=f"An error occurred: {e}", color=discord.Color.red()))
+            embed.color = discord.Color.red()
+            embed.clear_fields()
+            embed.add_field(name="Error", value=error_message, inline=False)
+            await ctx.send(embed=embed)
 
     @sync.error
-    async def sync_error(self, ctx: commands.Context, error: commands.CommandError):
+    async def sync_error(self, ctx: Context, error: commands.CommandError):
         if isinstance(error, commands.MissingPermissions):
             await ctx.send("You don't have permission to use this command.")
         elif isinstance(error, commands.MissingRequiredArgument):

@@ -66,3 +66,4 @@ def setup(bot):
     bot.add_cog(Pokemon(bot))
     bot.add_cog(PoketwoCommands(bot))
     bot.add_cog(Pokemon_Emojis(bot))
+    bot.add_cog(PoketwoSpecialPing(bot))
