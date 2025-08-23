@@ -60,7 +60,6 @@ class PoketwoSpawnDetector(commands.Cog):
                 self.queue.task_done()
 
     async def process_spawn(self, message, image_url):
-        """Generate spawn image as a temp file."""
         try:
             slug_raw, conf = await asyncio.to_thread(self.predictor.predict, image_url)
             slug = self.pokemon_utils.get_base_pokemon_name(slug_raw)
@@ -91,7 +90,7 @@ class PoketwoSpawnDetector(commands.Cog):
                 " ".join(special_roles), f"{conf_float[0]:.2f}%", dex, description, image_url, low_conf[0]
             )
 
-            # Use a temporary file
+            # use a temporary file
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
                 temp_path = tmp_file.name
 
@@ -107,8 +106,6 @@ class PoketwoSpawnDetector(commands.Cog):
 
             file = discord.File(temp_path, filename="pokemon_spawn.png")
             await message.channel.send(content=ping_msg, file=file, reference=message)
-
-            # Cleanup temp file
             os.remove(temp_path)
 
         except Exception as e:
