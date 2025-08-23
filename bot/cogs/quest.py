@@ -63,14 +63,16 @@ class Quest(commands.Cog):
             logger.error(f"Error in setchannels command: {e}")
             await ctx.send("An error occurred while setting the channels.")
 
-    @commands.command(name="quest", aliases=["q"])
+    @commands.group(name="quest", aliases=["q"], invoke_without_command=True)
     async def quest(self, ctx, args: str = None):
+        """Main quest command."""
         logger.debug("Quest command invoked.")
 
         if args == "newbie":
             logger.debug("Starting newbie tutorial.")
             tutorial_mission = TutorialMission(self.bot)
             await tutorial_mission.wait_for_user_action(ctx)
+            return
 
         try:
             user_id = str(ctx.author.id)
@@ -87,55 +89,33 @@ class Quest(commands.Cog):
                 )
                 return
 
-            quests = await self.quest_data.find_quests_by_user_and_server(
-                user_id, guild_id
-            )
+            quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
 
             if quests:
                 view = Quest_View(self.bot, quests, ctx)
                 embeds = await view.generate_messages()
-                
+
                 image_generator = ImageGenerator(
                     ctx,
                     text="Here are the quests you need to complete. Each quest has a specific objective, progress, and reward. Click on the location link to navigate to the respective channel where the quest can be completed.",
-                )  
-                
+                )
+
                 img = image_generator.create_image()
-                
                 img_bytes = BytesIO()
                 img.save(img_bytes, format="PNG")
-                img_bytes.seek(
-                    0
-                )  
+                img_bytes.seek(0)
 
-                image_generator = ImageGenerator(
-                    ctx=ctx,
-                    text="Here are the quests you need to complete. Each quest has a specific objective, progress, and reward. Click on the location link to navigate to the respective channel where the quest can be completed.",
-                )
+                image_generator.save_image(file_path="data/images/generated_image.png")
+                file = discord.File("data/images/generated_image.png", filename="image.png")
 
-                image_generator.save_image(
-                    file_path="data/images/generated_image.png")
-                file = discord.File(
-                    "data/images/generated_image.png", filename="image.png"
-                )
-
-                
                 embeds.set_image(url=f"attachment://image.png")
 
-                
-                if embeds:
-                    if len(quests) > 3:
-                        
-                        await ctx.reply(
-                            embed=embeds, view=view, mention_author=False, file=file
-                        )
-                    else:
-                        
-                        await ctx.reply(embed=embeds, mention_author=False, file=file)
-
+                if len(quests) > 3:
+                    await ctx.reply(embed=embeds, view=view, mention_author=False, file=file)
+                else:
+                    await ctx.reply(embed=embeds, mention_author=False, file=file)
             else:
                 no_quest_message = "You have no quests."
-
                 await ctx.reply(
                     no_quest_message,
                     view=Quest_Button1(self.bot, ctx),
@@ -144,83 +124,65 @@ class Quest(commands.Cog):
 
         except Exception as e:
             error_message = "An error occurred while fetching quests."
-            print(error_message)
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
-            await ctx.send(f"{error_message}")
+            await ctx.send(error_message)
 
-    @commands.command(name="quest_roles")
+    @quest.command(name="roles")
     async def quest_roles(self, ctx, *role_mentions: discord.Role):
-        """Command for admins to set or list roles that a target can get randomly."""
-
-        
-        if not (
-            ctx.author.guild_permissions.manage_roles
-            or discord.utils.get(ctx.author.roles, name="Anya Manager")
-        ):
+        """Set or list roles that a target can get randomly."""
+        if not (ctx.author.guild_permissions.manage_roles or discord.utils.get(ctx.author.roles, name="Anya Manager")):
             embed = discord.Embed(
                 title="Permission Denied",
                 description="You need the `Manage Roles` permission or the `Anya Manager` role to use this command.",
                 color=discord.Color.red(),
                 timestamp=datetime.now(),
             )
-            embed.set_author(
-                name=ctx.author.display_name, icon_url=ctx.author.avatar.url
-            )
+            embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
             await ctx.reply(embed=embed, mention_author=False)
             return
 
         guild_id = str(ctx.guild.id)
 
-        
+        # If no roles mentioned, display current roles
         if not role_mentions:
             current_roles = await self.quest_data.get_roles_for_guild(guild_id)
             if current_roles:
-                roles_list = "\n".join(
-                    [f"<@&{role_id}>" for role_id in current_roles])
+                roles_list = "\n".join([f"<@&{role_id}>" for role_id in current_roles])
             else:
                 roles_list = (
                     "No roles have been set yet.\n\n"
                     "**Admins can set roles using the command below:**\n"
-                    "`...q_roles <@mention role1> <@mention role2> ... etc`"
+                    f"`{ctx.prefix}quest roles <@mention role1> <@mention role2> ... etc`"
                 )
 
             embed = discord.Embed(
-                title="",
                 description=f"```Grants the target user a random role from the list of available roles in the server.```\n**Current Set Roles:**\n{roles_list}",
-                color=primary_color(),
+                color=discord.Color.blue(),
                 timestamp=datetime.now(),
             )
-            embed.set_footer(
-                text="Needed Tool: Key Chain Sheep", icon_url=self.bot.user.avatar
-            )
-            embed.set_author(
-                name=ctx.guild.name,
-                icon_url=ctx.guild.icon.url if ctx.guild.icon else None,
-            )
+            embed.set_footer(text="Needed Tool: Key Chain Sheep", icon_url=self.bot.user.avatar.url)
+            embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
             await ctx.reply(embed=embed, mention_author=False)
             return
 
-        
+        # Store new roles
         role_ids = [str(role.id) for role in role_mentions]
         await self.quest_data.store_roles_for_guild(guild_id, role_ids)
 
-        
         embed = discord.Embed(
             title="Roles Set Successfully",
             description="Allows targets to get a random role.\n\nThe following roles have been set for this guild:",
             color=discord.Color.green(),
             timestamp=datetime.now(),
         )
-        embed.set_author(name=ctx.author.display_name,
-                         icon_url=ctx.author.avatar.url)
-
-        
-        roles_list = "\n".join([f"{role.mention}" for role in role_mentions])
+        embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
+        roles_list = "\n".join([role.mention for role in role_mentions])
         embed.add_field(name="Roles", value=roles_list, inline=False)
 
         await ctx.reply(embed=embed, mention_author=False)
-
+        
+        
     @commands.command(name="inventory", aliases=["inv"])
     async def inventory(self, ctx):
         try:

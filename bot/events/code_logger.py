@@ -1,6 +1,5 @@
 # ─── Imports ────────────────────────────────────────────────────────────────
 import os
-import sys
 import logging
 import traceback
 from datetime import datetime
@@ -16,7 +15,6 @@ def suppress_import_logs():
     for name in logging.root.manager.loggerDict:
         if name != 'root':
             logging.getLogger(name).setLevel(logging.WARNING)
-
 suppress_import_logs()
 
 # ─── Logging Format Setup ───────────────────────────────────────────────────
@@ -65,63 +63,65 @@ class Permission(commands.Cog):
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
+        embed = None
         try:
             if isinstance(error, commands.MissingPermissions):
-                await self.notify_missing_permissions(ctx, error)
+                missing = ', '.join(error.missing_perms)
+                embed = Embed(
+                    title="Missing Permissions",
+                    description=f"{ctx.author.mention}, you lack the following permissions:\n`{missing}`",
+                    color=0xFF0000
+                )
+                self.logger.info(f"User {ctx.author} missing permissions: {missing} in {ctx.guild.name}")
+
             elif isinstance(error, commands.BotMissingPermissions):
-                await self.notify_bot_missing_permissions(ctx, error)
+                missing = ', '.join(error.missing_perms)
+                invite = self.generate_invite_link(error.missing_perms)
+                embed = Embed(
+                    title="Bot Missing Permissions",
+                    description=f"I lack the following permissions:\n`{missing}`\n[Fix with invite]({invite})",
+                    color=0xFF0000
+                )
+                self.logger.warning(f"Bot missing permissions: {missing} in {ctx.guild.name}")
+
+            elif isinstance(error, commands.MissingRequiredArgument):
+                embed = Embed(
+                    title="Missing Required Argument",
+                    description=f"You must specify: `{ctx.prefix}{ctx.command} <{error.param.name}>`",
+                    color=0xFF0000
+                )
+
+            elif isinstance(error, commands.CommandOnCooldown):
+                try:
+                    await ctx.message.add_reaction("⏱️")
+                except Exception:
+                    pass
+
             elif isinstance(error, commands.CommandNotFound):
-                await self.suggest_command(ctx, error)
+                commands_list = [cmd.name for cmd in self.bot.commands]
+                matches = get_close_matches(ctx.invoked_with, commands_list, n=3, cutoff=0.5)
+                suggestion = f"Did you mean: `{', '.join(matches)}`?" if matches else "No similar commands found."
+                embed = Embed(
+                    description=f"Command `{ctx.invoked_with}` not found. {suggestion}"
+                )
+
             else:
                 raise error
+
         except Exception as e:
-            await self.notify_error(ctx, e)
+            await self.error_custom_embed(self.bot, ctx, e)
             tb = "".join(traceback.format_exception(type(e), e, e.__traceback__))
             self.logger.error(f"Exception in on_command_error:\n{tb}")
+            return
 
-    async def notify_missing_permissions(self, ctx, error):
-        missing = ', '.join(error.missing_perms)
-        await ctx.send(f"{ctx.author.mention}, you lack: {missing}")
-        self.logger.info(f"User {ctx.author} missing permissions: {missing} in {ctx.guild.name}")
-        perms = ctx.channel.permissions_for(ctx.author)
-        current = [perm for perm, val in perms if val]
-        await ctx.send(f"Your current permissions: {', '.join(current)}")
+        if embed:
+            await ctx.reply(embed=embed, mention_author=False)
 
-    async def notify_bot_missing_permissions(self, ctx, error):
-        missing = ', '.join(error.missing_perms)
-        invite = self.generate_invite_link(error.missing_perms)
-        await ctx.send(f"I lack: {missing}. [Fix with invite]({invite})")
-        self.logger.warning(f"Bot missing permissions: {missing} in {ctx.guild.name}")
-        perms = ctx.channel.permissions_for(ctx.guild.me)
-        current = [perm for perm, val in perms if val]
-        await ctx.send(f"My permissions: {', '.join(current)}")
-
-    async def notify_forbidden_error(self, ctx, error):
-        await ctx.send("Forbidden action. Check role/channel settings.")
-        self.logger.warning(f"Forbidden error in command {ctx.command}: {error}")
-        perms = ctx.channel.permissions_for(ctx.guild.me)
-        current = [perm for perm, val in perms if val]
-        await ctx.send(f"My permissions: {', '.join(current)}")
-
-    async def notify_error(self, ctx, error):
-     if isinstance(error, commands.MissingRequiredArgument) and error.param.name == "action":
-        return
-     await self.error_custom_embed(self.bot, ctx, error)
-     self.logger.error(f"Unexpected error in command {ctx.command}: {error}")
-     
     def generate_invite_link(self, missing_perms):
         permissions = discord.Permissions()
         for perm in missing_perms:
             setattr(permissions, perm, True)
         return discord.utils.oauth_url(self.bot.user.id, permissions=permissions)
-
-    async def suggest_command(self, ctx, error):
-        commands_list = [cmd.name for cmd in self.bot.commands]
-        matches = get_close_matches(ctx.invoked_with, commands_list, n=3, cutoff=0.5)
-        suggestion = f"Did you mean: `{', '.join(matches)}`?" if matches else "No similar commands found."
-        await ctx.reply(embed=discord.Embed(
-            description=f"Command `{ctx.invoked_with}` not found. {suggestion}"
-        ), mention_author=False)
 
 # ─── Cog Setup ──────────────────────────────────────────────────────────────
 def setup(bot):

@@ -14,6 +14,7 @@ pt_help_description = (
             "Type Ping  | {}pt tp\n- Pokémon ping types like fire, water, or grass.\n\n"
             "Quest Ping | {}pt qp\n- Pokémon ping region types like  Kanto, Alola, Galar, ect...\n\n"
             "Special    | {}pt special\n- Assign special roles for rare or regional Pokémon. Requires Manage Server permission.\n\n"
+            "Starboard  | {}pt starboard\n- Configure starboard settings. Requires Manage Channel permission.\n\n"
         )
 
 MAX_POKEMON, CHUNK_SIZE, RESULTS_PER_PAGE, MIN_SIMILARITY_RATIO  = 50, 15, 10, 0.65

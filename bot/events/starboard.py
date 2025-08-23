@@ -4,14 +4,17 @@ import csv
 from pathlib import Path
 from datetime import datetime
 import traceback
+from io import BytesIO
 
 from imports.discord_imports import *
-from utils.subcogs.pokemon import *
 from utils.events.starboard import *
-from bot.token import use_test_bot as ut
+from motor.motor_asyncio import AsyncIOMotorClient
+from utils.subcogs.utils.mongo import MongoHelper
 
 
 class StarboardConfig:
+    """Holds constants, patterns, and helpers unrelated to the bot instance."""
+
     patterns = {
         "shiny_indicator": r"These colors seem unusual\.{3} ✨",
         "congrats_message": re.compile(
@@ -22,8 +25,7 @@ class StarboardConfig:
             r"(?:" 
             r"(?::[a-z]+:|<:[a-z]+:\d+>)"
             r")?"
-            r"(?:\s*\([\d\.]+%\))?"
-            r"!?",
+            r"(?:\s*\([\d\.]+%\))?!?",
             re.IGNORECASE
         ),
         "spawn_message_title": r"pokémon has appeared",
@@ -39,8 +41,6 @@ class StarboardConfig:
     congrats_thumbnail = (
         "https://media.discordapp.net/attachments/1279353553110040596/"
         "1400548137139179720/eskXPvubXzzyyHtVnk99TPURB9aicET47kEpgAAAABJRU5ErkJggg.png"
-        "?ex=688d0998&is=688bb818&hm=92c59fe7fb495bc881bff57ab9e5ce67151be35683286e80"
-        "dec7fa7647dd5f06&=&format=webp&quality=lossless&width=457&height=457"
     )
 
     embed_layout = {
@@ -86,12 +86,11 @@ class StarboardConfig:
             cls.regional_names = set()
 
 
-class StarboardScanner(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-        self.config_db = MongoHelper(
-            AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"]
-        )
+class StarboardProcessor:
+    """All logic for processing messages and generating embeds."""
+
+    def __init__(self, db_helper):
+        self.config_db = db_helper
         StarboardConfig.load_special_names()
 
     def is_rare_name(self, name):
@@ -100,42 +99,17 @@ class StarboardScanner(commands.Cog):
     def is_regional_name(self, name):
         return name.lower() in StarboardConfig.regional_names
 
-    @commands.command(name="set_starboard")
-    @commands.check(has_manager_role_or_manage_channel)
-    async def set_starboard(self, ctx, channel: TextChannel):
-        try:
-            await self.config_db.set_starboard_channel(ctx.guild.id, channel.id)
-            await ctx.send(f"✅ Starboard channel set to {channel.mention}")
-        except Exception as e:
-            print(f"[ERROR] set_starboard: {e}")
-            traceback.print_exc()
-            await ctx.send(f"⚠️ Error setting starboard: {e}")
+    def determine_color(self, shiny, name):
+        if shiny:
+            return StarboardConfig.colors["shiny"]
+        if self.is_rare_name(name):
+            return StarboardConfig.colors["rare"]
+        if self.is_regional_name(name):
+            return StarboardConfig.colors["regional"]
+        return StarboardConfig.colors["default"]
 
-    @set_starboard.error
-    async def set_starboard_error(self, ctx, error):
-        if isinstance(error, CheckFailure):
-            await ctx.send(embed=Embed(
-                title="Permission Denied",
-                description="You need the **Anya Manager** role or **Manage Channels** permission.",
-                color=0xFF0000
-            ))
-        else:
-            print(f"[ERROR] set_starboard_error: {error}")
-            traceback.print_exc()
-            await ctx.send(f"Error: {str(error)}")
-
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        try:
-            if message.author.id in StarboardConfig.target_ids:
-                if message.channel.id not in StarboardConfig.ignore_channels:
-                    await self.process_message(message)
-                    
-        except Exception as e:
-            print(f"[ERROR] on_message: {e}")
-            traceback.print_exc()
-
-    async def process_message(self, message):
+    async def process_message(self, bot, message):
+        """Process message, generate starboard and congrats embeds."""
         try:
             shiny = bool(re.search(StarboardConfig.patterns["shiny_indicator"], message.content))
             sparkle_emoji = "✨"
@@ -159,24 +133,19 @@ class StarboardScanner(commands.Cog):
                         )
                         if user:
                             catcher_id = user.id
-
             if catcher_id is None:
                 return
 
             level = int(match.group(3)) if match else 0
             pokemon_name = match.group(4).strip() if match else "Unknown"
 
-            # Check if Pokémon is rare or regional by exact name match in CSV
             is_rare = self.is_rare_name(pokemon_name)
             is_regional = self.is_regional_name(pokemon_name)
-
-            # Only proceed if shiny, rare, or regional
             if not (shiny or is_rare or is_regional):
                 return
 
-            spawn_msg, spawn_color = await self.find_spawn_message(message)
-
-            catcher_user = await self.bot.fetch_user(catcher_id)
+            spawn_msg, spawn_color = await self.find_spawn_message(bot, message)
+            catcher_user = await bot.fetch_user(catcher_id)
             catcher_avatar_url = catcher_user.display_avatar.url if catcher_user else None
 
             spawn_image_url = None
@@ -186,9 +155,9 @@ class StarboardScanner(commands.Cog):
                 spawn_image_url = first_embed.image.url if first_embed.image else None
                 spawn_location_text = spawn_msg.jump_url or spawn_location_text
 
+            # Starboard embed
             starboard_cfg = StarboardConfig.embed_layout["starboard"]
             starboard_title = starboard_cfg["title_template"].format(pokemon_name=pokemon_name, sparkle_emoji=sparkle_emoji if shiny else "")
-
             starboard_embed = Embed(
                 title=starboard_title,
                 description=starboard_cfg["description_template"].format(
@@ -202,15 +171,16 @@ class StarboardScanner(commands.Cog):
             if spawn_image_url:
                 starboard_embed.set_image(url=spawn_image_url)
 
-            await self.send_to_starboard(starboard_embed, message.guild.id)
+            await self.send_to_starboard(bot, starboard_embed, message.guild.id)
 
+            # Congrats embed
             starboard_channel_id = await self.config_db.get_starboard_channel(message.guild.id) or 0
             congrats_cfg = StarboardConfig.embed_layout["congrats"]
             congrats_embed = Embed(
                 title=congrats_cfg["title"],
                 description=congrats_cfg["description_template"].format(
                     mention=f"<@{catcher_id}>",
-                    type_label="rare" if is_rare else "regional" if is_regional else "regional",
+                    type_label="rare" if is_rare else "regional",
                     shiny="Shiny " if shiny else "",
                     pokemon_name=pokemon_name,
                     starboard_channel_id=starboard_channel_id,
@@ -227,7 +197,7 @@ class StarboardScanner(commands.Cog):
             print(f"[ERROR] Exception in process_message: {e}")
             traceback.print_exc()
 
-    async def find_spawn_message(self, message):
+    async def find_spawn_message(self, bot, message):
         try:
             async for msg in message.channel.history(limit=50, before=message):
                 if msg.author.id in StarboardConfig.target_ids:
@@ -241,35 +211,13 @@ class StarboardScanner(commands.Cog):
             traceback.print_exc()
             return None, None
 
-    def determine_color(self, shiny, name):
-        if shiny:
-            return StarboardConfig.colors["shiny"]
-        if self.is_rare_name(name):
-            return StarboardConfig.colors["rare"]
-        if self.is_regional_name(name):
-            return StarboardConfig.colors["regional"]
-        return StarboardConfig.colors["default"]
-
-    async def get_user_display(self, guild, user_id):
-        try:
-            member = await guild.fetch_member(user_id)
-            return member.display_name
-        except:
-            try:
-                user = await self.bot.fetch_user(user_id)
-                return user.name
-            except Exception as e:
-                print(f"[ERROR] get_user_display: {e}")
-                traceback.print_exc()
-                return "Unknown User"
-
-    async def send_to_starboard(self, embed, guild_id):
+    async def send_to_starboard(self, bot, embed, guild_id):
         try:
             if not embed:
                 return
             channel_id = await self.config_db.get_starboard_channel(guild_id)
             if channel_id:
-                channel = self.bot.get_channel(channel_id)
+                channel = bot.get_channel(channel_id)
                 if channel:
                     await channel.send(embed=embed)
         except Exception as e:
@@ -277,5 +225,20 @@ class StarboardScanner(commands.Cog):
             traceback.print_exc()
 
 
+class StarboardCog(commands.Cog):
+    """Only Cog with bot instance and listener."""
+
+    def __init__(self, bot):
+        self.bot = bot
+        self.processor = StarboardProcessor(
+            MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
+        )
+
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if message.author.id in StarboardConfig.target_ids and message.channel.id not in StarboardConfig.ignore_channels:
+            await self.processor.process_message(self.bot, message)
+
+
 async def setup(bot):
-    await bot.add_cog(StarboardScanner(bot))
+    await bot.add_cog(StarboardCog(bot))

@@ -16,6 +16,7 @@ from art import text2art
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 load_dotenv(dotenv_path=os.path.join(".github", ".env"))
 
+
 def patch_discord_gateway(env_gateway="wss://gateway.discord.gg/"):
     class CustomHTTP(discord.http.HTTPClient):
         async def get_gateway(self, **_): return f"{env_gateway}?encoding=json&v=10"
@@ -35,6 +36,15 @@ patch_discord_gateway()
 class Config:
     PORT = int(os.environ.get("PORT", 8081))
     USE_PRESENCE = os.environ.get("USE_PRESENCE_INTENTS", "0").strip().lower() not in ("0", "false", "no")
+    COOLDOWN= [
+        'rate_limit_count', 1,
+        'per_seconds', 5,
+        'type', commands.BucketType.user
+    ]
+
+rate = Config.COOLDOWN[1]
+per = Config.COOLDOWN[3]
+bucket_type = Config.COOLDOWN[5]
 
 class FlaskServer:
     def __init__(self, port=Config.PORT):
@@ -69,6 +79,7 @@ class ClusteredBot(commands.AutoShardedBot):
         self.cog_dirs = ['bot.cogs', 'bot.events']
         self.console = Console()
         self.http_session: aiohttp.ClientSession | None = None
+
     async def setup_hook(self):
         await self._import_cogs()
         self.http_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
@@ -78,6 +89,7 @@ class ClusteredBot(commands.AutoShardedBot):
             logger.info(f"🧩 Shard Hunting: {len(shards)}/{shard_count} shards initialized.")
         except Exception as e:
             logger.warning(f"Shard hunting failed: {e}")
+
     async def on_ready(self):
         term = __import__('shutil').get_terminal_size().columns
         art_str = ""
@@ -92,16 +104,21 @@ class ClusteredBot(commands.AutoShardedBot):
         banner += f"🌐 Connected: {len(self.guilds)} servers | Users ~{sum(g.member_count or 0 for g in self.guilds)}".center(term)
         print(banner)
         await setup_persistent_views(self)
+
     async def on_shard_ready(self, shard_id: int):
         logger.info(f"✅ Shard {shard_id} is ready.")
+
     async def on_shard_disconnect(self, shard_id: int):
         logger.warning(f"⚠️ Shard {shard_id} disconnected. Reconnecting...")
+
     async def on_shard_resumed(self, shard_id: int):
         logger.info(f"🔄 Shard {shard_id} resumed.")
+
     async def close(self):
         if self.http_session and not self.http_session.closed:
             await self.http_session.close()
         await super().close()
+
     async def _import_cogs(self):
         tree = Tree("[bold cyan]◇ Loading Cogs[/bold cyan]")
         for dir_name in self.cog_dirs:
@@ -118,9 +135,14 @@ class ClusteredBot(commands.AutoShardedBot):
                     mod = importlib.import_module(f"{dir_name}.{mod_name}")
                     for obj in vars(mod).values():
                         if isinstance(obj, type) and issubclass(obj, commands.Cog) and obj is not commands.Cog and not self.get_cog(obj.__name__):
-                            await self.add_cog(obj(self))
+                            cog_instance = obj(self)
+                            await self.add_cog(cog_instance)
                             leaf.label = f"[green]□ {mod_name}.py[/green]"
                             leaf.add(f"[cyan]→[/cyan] [bold white]{obj.__name__}[/bold white]")
+
+                            # APPLY 1/5 USER COOLDOWN TO ALL COMMANDS IN THIS COG
+                            for cmd in cog_instance.get_commands():
+                                cmd._buckets = commands.CooldownMapping.from_cooldown(rate, per, commands.BucketType.user)
                 except Exception as e:
                     leaf.add(f"[red]Error: {type(e).__name__}: {e}[/red]")
                     logger.error(f"Error loading cog {mod_name}: {e}")
@@ -135,12 +157,14 @@ class BotRunner:
             logger.error("No token found.")
             return
         await bot.start(token, reconnect=True)
+
     @staticmethod
     def _install_signal_handlers(loop):
         def _graceful(*_): [t.cancel() for t in asyncio.all_tasks(loop)]
         for sig in (signal.SIGINT, signal.SIGTERM):
             try: loop.add_signal_handler(sig, _graceful)
             except NotImplementedError: signal.signal(sig, lambda *_: _graceful())
+
     @classmethod
     def main(cls):
         gc.collect()
