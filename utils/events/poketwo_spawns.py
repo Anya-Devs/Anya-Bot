@@ -1,4 +1,4 @@
-import os, io, re, json, csv, logging, requests, asyncio, uuid, time
+import os, io, re, json, csv, logging, requests, asyncio, uuid
 from pathlib import Path
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
@@ -6,8 +6,6 @@ import aiohttp, numpy as np, cv2
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter, ImageSequence
 from pilmoji import Pilmoji
 from fuzzywuzzy import fuzz
-from multiprocessing import Process, Queue
-from submodules.poketwo_autonamer.predict import Prediction
 from imports.discord_imports import *
 from bot.token import use_test_bot as ut
 from utils.subcogs.pokemon import PoketwoCommands, MongoHelper
@@ -363,46 +361,6 @@ class PokemonUtils:
      return slug_raw
 
 
-class PredictorWorker(Process):
-    def __init__(self, in_q: Queue, out_q: Queue):
-        super().__init__(daemon=True)
-        self.in_q = in_q
-        self.out_q = out_q
-
-    def run(self):
-        predictor = Prediction()
-        while True:
-            task = self.in_q.get()
-            if task is None:
-                break
-            task_id, image_url = task
-            try:
-                slug_raw, conf = predictor.predict(image_url)
-                self.out_q.put((task_id, ("ok", slug_raw, conf)))
-            except Exception as e:
-                self.out_q.put((task_id, ("err", f"{type(e).__name__}: {e}")))
-
-class TTLCache:
-    def __init__(self, ttl=30, maxsize=256):
-        self.ttl = ttl
-        self.maxsize = maxsize
-        self.store = {}
-
-    def get(self, key):
-        item = self.store.get(key)
-        if not item: return None
-        exp, val = item
-        if exp < time.time():
-            self.store.pop(key, None)
-            return None
-        return val
-
-    def set(self, key, value):
-        if len(self.store) >= self.maxsize:
-            self.store.pop(next(iter(self.store)))
-        self.store[key] = (time.time() + self.ttl, value)
-
-
 
 class PokemonImageBuilder:
     def __init__(self):
@@ -595,42 +553,19 @@ class PokemonImageBuilder:
         bg_frames, durations = self.prepare_background_frames(type_colors, bg_url)
         frames = [self.compose_frame(bg_frame, poke_img, pokemon_name, best_name, types) for bg_frame in bg_frames]
 
-        def _prepare_frame(frame, fmt):
-            if fmt.upper() == "JPEG" and frame.mode == "RGBA":
-                return frame.convert("RGB")
-            return frame
-
         if output_path is None:
             output_bytes = io.BytesIO()
             if len(frames) == 1:
-                _prepare_frame(frames[0], format).save(output_bytes, format=format)
+                frames[0].save(output_bytes, format=format)
             else:
-                converted = [_prepare_frame(f, format) for f in frames]
-                converted[0].save(
-                    output_bytes,
-                    format=format,
-                    save_all=True,
-                    append_images=converted[1:],
-                    duration=durations,
-                    loop=0,
-                    disposal=2,
-                )
+                frames[0].save(output_bytes, format=format, save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2, transparency=0)
             output_bytes.seek(0)
             return output_bytes
         else:
             if len(frames) == 1:
-                _prepare_frame(frames[0], format).save(output_path, format=format)
+                frames[0].save(output_path, format=format)
             else:
-                converted = [_prepare_frame(f, format) for f in frames]
-                converted[0].save(
-                    output_path,
-                    format=format,
-                    save_all=True,
-                    append_images=converted[1:],
-                    duration=durations,
-                    loop=0,
-                    disposal=2,
-                )
+                frames[0].save(output_path, format=format, save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2, transparency=0)
             return output_path
         
         
