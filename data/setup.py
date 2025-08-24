@@ -35,7 +35,7 @@ class SetupManager:
         self.pkg_groups = {
             "heavy": ["onnxruntime", "opencv-python-headless"],
             "medium": ["emoji==1.7.0", "python-Levenshtein"],
-            "common": ["pip", "setuptools", "wheel", "urllib3", "pipreqs", "Flask", 'rapidfuzz', 'aiocache']
+            "common": ["pip", "setuptools", "wheel", "urllib3", "pipreqs", "Flask", 'rapidfuzz', 'aiocache', 'aiokafka']
         }
 
     def log_time(self, key, start):
