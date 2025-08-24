@@ -2,31 +2,27 @@ import asyncio
 import datetime
 import re
 import time
-import os
-import json
 import traceback
 import aiohttp
+import os
 
+from motor.motor_asyncio import AsyncIOMotorClient
+from utils.events.pokethief import *
 from data.local.const import primary_color
 from bot.token import get_bot_token, use_test_bot as ut
 from imports.log_imports import *
 from imports.discord_imports import *
-
-# Ensure data directory exists
-os.makedirs("data/commands/pokethief", exist_ok=True)
-CONFIG_PATH = "data/commands/pokethief/shiny_ping_config.json"
+from utils.subcogs.utils.mongo import *
+from datetime import datetime, timedelta
 
 
-def load_ping_phrase() -> str:
-    if os.path.isfile(CONFIG_PATH):
-        with open(CONFIG_PATH, 'r') as f:
-            return json.load(f).get("shiny_ping_phrase", "**:sparkles: Shiny Hunt Pings:**")
-    return "**:sparkles: Shiny Hunt Pings:**"
+
+MONGO_URI = os.getenv("MONGO_URI")
+mongo_client = AsyncIOMotorClient(MONGO_URI)
+db = mongo_client["Commands"]["pokemon"]
 
 
-def save_ping_phrase(new_phrase: str):
-    with open(CONFIG_PATH, 'w') as f:
-        json.dump({"shiny_ping_phrase": new_phrase}, f, indent=4)
+
 
 
 class Anti_Thief(commands.Cog):
@@ -39,6 +35,8 @@ class Anti_Thief(commands.Cog):
         self.shiny_regex = re.compile(r"<@(\d+)>")
         self.shiny_hunters = []
         self.primary_color = primary_color()
+        self.mongo = MongoShHelper(db)
+        
 
     async def get_member(self, guild, user_id):
         if isinstance(guild, int):
@@ -70,6 +68,10 @@ class Anti_Thief(commands.Cog):
 
     async def is_shiny_hunter(self, user_id: int) -> bool:
         return any(h.id == user_id for h in self.shiny_hunters)
+    
+    async def is_shiny_protected_channel(self, guild_id: int, channel_id: int) -> bool:
+        protected_channels = await self.mongo.get_shiny_protected_channels(guild_id)
+        return channel_id in protected_channels
 
     @commands.command(name='set_phrase', hidden=True)
     async def set_ping_phrase(self, ctx, *, new_phrase: str):
@@ -81,34 +83,36 @@ class Anti_Thief(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if ut or self.IGNORE_CHANNEL_KEYWORD in message.channel.name.lower():
+        is_shiny_protected_channel = await self.is_shiny_protected_channel(message.guild.id, message.channel.id)
+        if self.IGNORE_CHANNEL_KEYWORD in message.channel.name.lower():
             return
         if message.author.id in self.BOT_IDS and message.guild:
-            self.shiny_hunters = await self.process_pings(message.guild, message.content)
-            if self.shiny_hunters:
+            if is_shiny_protected_channel:
+             self.shiny_hunters = await self.process_pings(message.guild, message.content)
+             if self.shiny_hunters:
                 await self.bot.get_cog('EventGate').send_shiny_hunt_embed(
                     message.channel, self.shiny_hunters, reference_message=message
                 )
 
-
 class EventGate(commands.Cog):
     DETECT_BOT_ID = 716390085896962058
-    LOGGER_CHANNEL_ID = 1278580578593148976
-    TIMEOUT_HOURS = 3
-    WAIT_TIME = 30  # seconds
+    WAIT_TIME = 30
+    OFFENSE_PHASES = [3, 6, 12, 24, 48]  # hours per offense phase
+    PENALTY_EXPIRY_DAYS = 14
 
-    def __init__(self, bot, anti_thief=None):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.primary_color = primary_color()
-        self.active_events = {}
-        self.handled_congrats = set()
-        self.shiny_ping_phrase = load_ping_phrase()
+        self.active_events: dict[int, float] = {}
+        self.handled_congrats: set[int] = set()
+        self.mongo_sh = MongoShHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
+        self.offenses_cache: dict[int, dict[int, list]] = {}  # guild_id -> user_id -> [(timestamp, duration)]
 
     @staticmethod
     def timestamp_gen(timestamp: float) -> str:
         return f"<t:{int(timestamp)}:R>"
 
-    async def send_shiny_hunt_embed(self, channel, shiny_hunters, reference_message=None):
+    async def send_shiny_hunt_embed(self, channel: TextChannel, shiny_hunters: list, reference_message=None):
         if channel.id in self.active_events:
             return
         wait_until = time.time() + self.WAIT_TIME
@@ -118,7 +122,7 @@ class EventGate(commands.Cog):
         try:
             msg = await channel.send(embed=embed, reference=reference_message)
         except Exception as e:
-            print(f"ERROR sending embed: {e}")
+            print(f"[EventGate] ERROR sending embed: {e}")
             msg = await channel.send(embed=embed)
         await self.start_countdown(msg, wait_until, reference_message)
 
@@ -126,7 +130,7 @@ class EventGate(commands.Cog):
         try:
             await asyncio.wait_for(
                 self.wait_for_congratulations(message, wait_until, reference_message),
-                timeout=self.WAIT_TIME,
+                timeout=self.WAIT_TIME
             )
         except asyncio.TimeoutError:
             await self.allow_all_to_catch(message)
@@ -141,7 +145,6 @@ class EventGate(commands.Cog):
                 and m.id not in self.handled_congrats
                 and re.match(r"Congratulations <@(\d+)>! You caught a Level \d+ .+", m.content)
             )
-
         try:
             congrats_msg = await self.bot.wait_for(
                 'message', check=check, timeout=max(0, wait_until - time.time())
@@ -151,64 +154,59 @@ class EventGate(commands.Cog):
         except asyncio.TimeoutError:
             await self.allow_all_to_catch(message)
         except Exception as e:
-            print(f"ERROR in wait_for_congratulations: {e}")
+            print(f"[EventGate] ERROR waiting for congratulations: {e}")
             traceback.print_exc()
 
     async def process_congratulations(self, congrats_message, original_message, reference_message):
         try:
-            self.shiny_ping_phrase = load_ping_phrase()
-            catch_channel = reference_message.channel
+            anti_thief: Anti_Thief = self.bot.get_cog('Anti_Thief')
+            shiny_hunters = await anti_thief.process_pings(reference_message.guild, reference_message.content)
 
             mentioned_user_id = re.search(r"<@(\d+)>", reference_message.content).group(1)
             who_caught_id = re.search(r"<@(\d+)>", congrats_message.content).group(1)
-
-            if who_caught_id not in congrats_message.content:
-                report_channel = "https://discord.com/channels/1278580577104040018/1307894465440256100"
-                await catch_channel.send(
-                    f"⚠️ Something weird is going on. Please submit the issue and screenshot to {report_channel}."
-                )
-                return
-
-            quest_user_ids = []
-            if self.shiny_ping_phrase in reference_message.content:
-                pattern = re.escape(self.shiny_ping_phrase) + r"\s*(.*)"
-                match = re.search(pattern, reference_message.content, re.DOTALL)
-                if match:
-                    quest_user_ids = re.findall(r"<@(\d+)>", match.group(1).strip())
+            quest_user_ids = [str(h.id) for h in shiny_hunters]
 
             if who_caught_id not in quest_user_ids:
-                is_hunter = await self.bot.get_cog('Anti_Thief').is_shiny_hunter(int(who_caught_id))
+                is_hunter = await anti_thief.is_shiny_hunter(int(who_caught_id))
                 if not is_hunter:
                     non_hunter = await self.bot.fetch_user(who_caught_id)
                     p_match = re.search(r"Level \d+ ((?:[A-Z][a-z]*\s*)+)", congrats_message.content)
                     pokemon_name = p_match.group(1).strip() if p_match else "Unknown Pokémon"
 
-                    await self.timeout_user(non_hunter, original_message)
+                    phase_hours, offense_number = await self.calculate_offense_phase(reference_message.guild.id, non_hunter.id)
+                    await self.timeout_user(non_hunter, reference_message.guild.id, phase_hours)
 
                     embed = Embed(
                         title="Shiny Thief Detected!",
-                        description=f"<:sigh:1328502167153410068> {non_hunter.mention} stole **{pokemon_name}**. They've been timed out for {self.TIMEOUT_HOURS} hours.",
+                        description=f"<:sigh:1328502167153410068> {non_hunter.mention} stole **{pokemon_name}**. "
+                                    f"Timed out for {phase_hours}h. Offense {offense_number}x.",
                         color=self.primary_color,
                     )
-                    await catch_channel.send(embed=embed)
+                    await reference_message.channel.send(embed=embed)
 
-                    logger_channel = self.bot.get_channel(self.LOGGER_CHANNEL_ID)
-                    log_embed = Embed(
-                        title="Shiny Theft",
-                        description=(
-                            f"**User:** {non_hunter.mention} (`{non_hunter.id}`)\n"
-                            f"**Pokémon:** {pokemon_name}\n"
-                            f"**Location:** [{catch_channel.name}]({original_message.jump_url})"
-                        ),
-                        color=self.primary_color,
-                    )
-                    if non_hunter.avatar:
-                        log_embed.set_thumbnail(url=non_hunter.avatar.url)
-                    log_embed.set_footer(icon_url=self.bot.user.avatar.url if self.bot.user.avatar else None, text='Anya Logger')
-                    await logger_channel.send(embed=log_embed)
+                    # Log embed
+                    logger_channel_id = await self.mongo_sh.get_shiny_log_channel(reference_message.guild.id)
+                    if logger_channel_id:
+                        logger_channel = self.bot.get_channel(logger_channel_id)
+                        if logger_channel:
+                            log_embed = Embed(
+                                title="Shiny Theft",
+                                description=(
+                                    f"**User:** {non_hunter.mention} (`{non_hunter.id}`)\n"
+                                    f"**Pokémon:** {pokemon_name}\n"
+                                    f"**Location:** [{reference_message.channel.name}]({original_message.jump_url})\n"
+                                    f"**Timeout Duration:** {phase_hours}h\n"
+                                    f"**Offense:** {offense_number}x"
+                                ),
+                                color=self.primary_color,
+                            )
+                            if non_hunter.avatar:
+                                log_embed.set_thumbnail(url=non_hunter.avatar.url)
+                            log_embed.set_footer(icon_url=self.bot.user.avatar.url if self.bot.user.avatar else None,
+                                                 text='Anya Logger')
+                            await logger_channel.send(embed=log_embed)
                     return
 
-            shiny_hunters = await self.bot.get_cog('Anti_Thief').process_pings(reference_message.guild.id, reference_message.content)
             shiny_hunter = next((h for h in shiny_hunters if str(h.id) == mentioned_user_id), None)
             if shiny_hunter:
                 embed = Embed(
@@ -217,58 +215,75 @@ class EventGate(commands.Cog):
                     color=self.primary_color,
                 )
                 embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1328500899953512569.webp?size=96&animated=true")
-                await catch_channel.send(embed=embed)
+                await reference_message.channel.send(embed=embed)
                 await self.delete_embed_on_catch(original_message)
             else:
-                await catch_channel.send("⚠️ No shiny hunter detected for the channel. Please double-check.")
+                await reference_message.channel.send("⚠️ No shiny hunter detected for the channel. Please double-check.")
         except Exception as e:
-            print(f"ERROR in process_congratulations: {e}")
+            print(f"[EventGate] ERROR processing congratulations: {e}")
             traceback.print_exc()
+
+    async def calculate_offense_phase(self, guild_id: int, user_id: int):
+        now = datetime.utcnow()
+        if guild_id not in self.offenses_cache:
+            self.offenses_cache[guild_id] = {}
+        if user_id not in self.offenses_cache[guild_id]:
+            self.offenses_cache[guild_id][user_id] = []
+
+        # Remove expired offenses
+        self.offenses_cache[guild_id][user_id] = [
+            (ts, dur) for ts, dur in self.offenses_cache[guild_id][user_id]
+            if ts + timedelta(days=self.PENALTY_EXPIRY_DAYS) > now
+        ]
+
+        offenses_count = len(self.offenses_cache[guild_id][user_id])
+        phase_hours = self.OFFENSE_PHASES[min(offenses_count, len(self.OFFENSE_PHASES)-1)]
+        self.offenses_cache[guild_id][user_id].append((now, phase_hours))
+
+        # Save cache to Mongo
+        mongo_safe_cache = {
+            str(uid): [(ts.isoformat(), dur) for ts, dur in users]
+            for uid, users in self.offenses_cache[guild_id].items()
+        }
+        await self.mongo_sh.db.update_one(
+            {"guild_id": guild_id},
+            {"$set": {"offenses_cache": mongo_safe_cache}},
+            upsert=True
+        )
+
+        return phase_hours, offenses_count + 1
 
     @staticmethod
     async def allow_all_to_catch(message):
-        embed = message.embeds[0]
-        embed.description = ":white_check_mark: Everyone may catch the Pokémon now! No restrictions."
-        await message.edit(embed=embed)
+        if message.embeds:
+            embed = message.embeds[0]
+            embed.description = ":white_check_mark: Everyone may catch the Pokémon now! No restrictions."
+            await message.edit(embed=embed)
 
-    async def timeout_user(self, user, message):
+    async def timeout_user(self, user, guild_id, hours: int):
         try:
             BOT_TOKEN = await get_bot_token()
-            guild_id = message.guild.id
-            user_id = user.id
-            timeout_end = datetime.datetime.utcnow() + datetime.timedelta(hours=self.TIMEOUT_HOURS)
-
-            headers = {
-                "Authorization": f"Bot {BOT_TOKEN}",
-                "Content-Type": "application/json",
-            }
-            payload = {
-                "communication_disabled_until": timeout_end.isoformat() + "Z",
-                "reason": "Shiny theft detected - user timed out for stealing a shiny."
-                }
-            
-            url = f"https://discord.com/api/v10/guilds/{guild_id}/members/{user_id}"
-
+            timeout_end = datetime.utcnow() + timedelta(hours=hours)
+            headers = {"Authorization": f"Bot {BOT_TOKEN}", "Content-Type": "application/json"}
+            payload = {"communication_disabled_until": timeout_end.isoformat() + "Z", "reason": "Shiny theft detected"}
+            url = f"https://discord.com/api/v10/guilds/{guild_id}/members/{user.id}"
             async with aiohttp.ClientSession() as session:
                 async with session.patch(url, json=payload, headers=headers) as resp:
-                    if resp.status == 204:
-                        return
-                        #print(f"INFO: Timed out {user.mention} for {self.TIMEOUT_HOURS} hours.")
-                    else:
+                    if resp.status != 204:
                         text = await resp.text()
-                        return
-                        #print(f"ERROR timing out {user.mention}: {resp.status} - {text}")
+                        print(f"[EventGate] ERROR timing out {user.mention}: {resp.status} - {text}")
         except Exception as e:
-            print(f"EXCEPTION timing out {user.mention}: {e}")
+            print(f"[EventGate] EXCEPTION timing out {user.mention}: {e}")
 
     @staticmethod
     async def delete_embed_on_catch(message):
         try:
             await message.delete()
         except Exception as e:
-            print(f"ERROR deleting embed: {e}")
-
-
+            print(f"[EventGate] ERROR deleting embed: {e}")
+            
+            
+            
 def setup(bot):
     bot.add_cog(Anti_Thief(bot))
     bot.add_cog(EventGate(bot))

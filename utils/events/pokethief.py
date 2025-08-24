@@ -5,6 +5,25 @@ from bot.token import get_bot_token
 
 logger = logging.getLogger(__name__)
 
+
+# Ensure data directory exists
+os.makedirs("data/commands/pokethief", exist_ok=True)
+CONFIG_PATH = "data/commands/pokethief/shiny_ping_config.json"
+
+
+def load_ping_phrase() -> str:
+    if os.path.isfile(CONFIG_PATH):
+        with open(CONFIG_PATH, 'r') as f:
+            return json.load(f).get("shiny_ping_phrase", "**:sparkles: Shiny Hunt Pings:**")
+    return "**:sparkles: Shiny Hunt Pings:**"
+
+
+def save_ping_phrase(new_phrase: str):
+    with open(CONFIG_PATH, 'w') as f:
+        json.dump({"shiny_ping_phrase": new_phrase}, f, indent=4)
+
+
+
 class PokemonThiefUtils:
     
 

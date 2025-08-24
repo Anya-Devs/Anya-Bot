@@ -16,7 +16,6 @@ from art import text2art
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 load_dotenv(dotenv_path=os.path.join(".github", ".env"))
 
-
 def patch_discord_gateway(env_gateway="wss://gateway.discord.gg/"):
     class CustomHTTP(discord.http.HTTPClient):
         async def get_gateway(self, **_): return f"{env_gateway}?encoding=json&v=10"
@@ -130,21 +129,30 @@ class ClusteredBot(commands.AutoShardedBot):
                 continue
             for _, mod_name, is_pkg in pkgutil.iter_modules(package.__path__):
                 if is_pkg: continue
-                leaf = branch.add(f"[yellow]{mod_name}.py[/yellow]")
+                leaf = branch.add(mod_name + ".py")  # default label, no color yet
                 try:
                     mod = importlib.import_module(f"{dir_name}.{mod_name}")
+                    cog_found = False
                     for obj in vars(mod).values():
                         if isinstance(obj, type) and issubclass(obj, commands.Cog) and obj is not commands.Cog and not self.get_cog(obj.__name__):
-                            cog_instance = obj(self)
-                            await self.add_cog(cog_instance)
-                            leaf.label = f"[green]□ {mod_name}.py[/green]"
-                            leaf.add(f"[cyan]→[/cyan] [bold white]{obj.__name__}[/bold white]")
+                            cog_found = True
+                            try:
+                                cog_instance = obj(self)
+                                await self.add_cog(cog_instance)
+                                leaf.label = f"[green]□ {mod_name}.py[/green]"
+                                leaf.add(f"[cyan]→[/cyan] [bold white]{obj.__name__}[/bold white]")
 
-                            # APPLY 1/5 USER COOLDOWN TO ALL COMMANDS IN THIS COG
-                            for cmd in cog_instance.get_commands():
-                                cmd._buckets = commands.CooldownMapping.from_cooldown(rate, per, commands.BucketType.user)
+                                # APPLY 1/5 USER COOLDOWN TO ALL COMMANDS IN THIS COG
+                                for cmd in cog_instance.get_commands():
+                                    cmd._buckets = commands.CooldownMapping.from_cooldown(rate, per, commands.BucketType.user)
+                            except Exception as e:
+                                leaf.label = f"[red]□ {mod_name}.py[/red]"
+                                leaf.add(f"[red]Instantiation Error: {type(e).__name__}: {e}[/red]")
+                    if not cog_found:
+                        leaf.label = f"[yellow]□ {mod_name}.py[/yellow]"  # only yellow if no Cog class
                 except Exception as e:
-                    leaf.add(f"[red]Error: {type(e).__name__}: {e}[/red]")
+                    leaf.label = f"[red]□ {mod_name}.py[/red]"
+                    leaf.add(f"[red]Import Error: {type(e).__name__}: {e}[/red]")
                     logger.error(f"Error loading cog {mod_name}: {e}")
         self.console.print(Align(tree, align='center', width=self.console.width))
 

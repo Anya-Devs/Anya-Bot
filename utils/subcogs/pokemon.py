@@ -10,6 +10,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from imports.discord_imports import *
 from data.local.const import *
 from bot.token import use_test_bot as ut
+from utils.subcogs.utils.mongo import *
 from utils.subcogs.pokemon import *
 from utils.subcogs.utils.cls_ping_pokemon import *
 from bot.events.starboard import StarboardProcessor
@@ -26,7 +27,7 @@ class PoketwoCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         
-        self.s =  StarboardProcessor(
+        self.s = StarboardProcessor(
             MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
         )
 
@@ -49,6 +50,7 @@ class PoketwoCommands(commands.Cog):
         self.error_emoji = "<:red:1261639413943762944>"
 
         try: 
+            self.mongo_sh = MongoShHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
             self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
         except: 
             self.mongo = None
@@ -121,9 +123,7 @@ class PoketwoCommands(commands.Cog):
     @commands.cooldown(1, 5, commands.BucketType.user)
     @pt.command(name="help")
     async def pt_help(self, ctx, topic: str = None):
-        
         description = pt_help_description.format(*[ctx.prefix] * pt_help_description.count("{}"))
-
 
         embed = discord.Embed(
             title="How to Use (.pt)",
@@ -226,59 +226,102 @@ class PoketwoCommands(commands.Cog):
     @pt.command(name="starboard", aliases=["sb"])
     @commands.check(lambda ctx: any(r.name == "Anya Manager" for r in ctx.author.roles) or ctx.author.guild_permissions.manage_channels)
     async def set_starboard(self, ctx, channel: TextChannel):
-     try:
-        await self.s.config_db.set_starboard_channel(ctx.guild.id, channel.id)
-        await ctx.reply(f"✅ Starboard channel set to {channel.mention}", mention_author=False)
-     except Exception as e:
-        print(f"[ERROR] set_starboard: {e}")
-        traceback.print_exc()
-        await ctx.send(f"⚠️ Error setting starboard: {e}")
-        
+        try:
+            await self.s.config_db.set_starboard_channel(ctx.guild.id, channel.id)
+            await ctx.reply(f"✅ Starboard channel set to {channel.mention}", mention_author=False)
+        except Exception as e:
+            print(f"[ERROR] set_starboard: {e}")
+            traceback.print_exc()
+            await ctx.send(f"⚠️ Error setting starboard: {e}")
+
     # -------------------
-    #  Special Ping (Legacy text command)
-    # # -------------------
+    # Special Ping (Legacy text command)
+    # -------------------
     @pt.command(name="special")
     async def special_ping_legacy(self, ctx, ping_type: str = None, role: discord.Role = None):
-     guild_id = ctx.guild.id
-     config = await self.get_server_config(guild_id) or {}
+        guild_id = ctx.guild.id
+        config = await self.get_server_config(guild_id) or {}
 
-     if not ping_type:
-        rare_role = ctx.guild.get_role(config.get("rare_role"))
-        regional_role = ctx.guild.get_role(config.get("regional_role"))
+        if not ping_type:
+            rare_role = ctx.guild.get_role(config.get("rare_role"))
+            regional_role = ctx.guild.get_role(config.get("regional_role"))
 
-        embed = discord.Embed(
-            title="Pokétwo Special Ping Configuration",
-            description="Current rare and regional Pokémon ping roles.",
-            color=self.embed_default_color
+            embed = discord.Embed(
+                title="Pokétwo Special Ping Configuration",
+                description="Current rare and regional Pokémon ping roles.",
+                color=self.embed_default_color
+            )
+            embed.add_field(
+                name="Current Roles",
+                value=(
+                    f"**Rare Pokémon:** {rare_role.mention if rare_role else 'Not set'}\n"
+                    f"**Regional Pokémon:** {regional_role.mention if regional_role else 'Not set'}"
+                ),
+                inline=False
+            )
+            return await ctx.reply(embed=embed, mention_author=False)
+
+        if not ctx.author.guild_permissions.manage_guild:
+            return await ctx.reply(f"{self.error_emoji} You need **Manage Server** permission to change config.")
+
+        key = f"{ping_type.lower()}_role"
+        if ping_type.lower() not in {"rare","regional"}:
+            return await ctx.reply(f"{self.error_emoji} Invalid type. Use `rare` or `regional`.")
+
+        if role:
+            config[key] = role.id
+            msg = f"{self.success_emoji} {ping_type.title()} Pokémon role set to {role.mention}."
+        else:
+            config.pop(key, None)
+            msg = f"{self.success_emoji} {ping_type.title()} Pokémon role removed."
+
+        await self.mongo.db["server_config"].update_one(
+            {"guild_id": guild_id}, {"$set": config}, upsert=True
         )
-        embed.add_field(
-            name="Current Roles",
-            value=(
-                f"**Rare Pokémon:** {rare_role.mention if rare_role else 'Not set'}\n"
-                f"**Regional Pokémon:** {regional_role.mention if regional_role else 'Not set'}"
-            ),
-            inline=False
-        )
-        return await ctx.reply(embed=embed, mention_author=False)
+        await ctx.reply(msg, mention_author=False)
+     
+    # -------------------
+    # Shiny Hunt Config
+    # -------------------
+    @pt.group(name="shinychannel", aliases=["sc"], invoke_without_command=True)
+    @commands.has_permissions(manage_guild=True)
+    async def shiny_channel(self, ctx, *channels: discord.TextChannel):
+        """Set or view protected shiny channels."""
+        guild_id = ctx.guild.id
+        if channels:
+            channel_ids = [ch.id for ch in channels]
+            await self.mongo_sh.set_shiny_channels(guild_id, channel_ids)
+            mentions = ", ".join(ch.mention for ch in channels)
+            await ctx.reply(f"✅ Shiny hunt protection enabled in: {mentions}", mention_author=False)
+        else:
+            current_channels = await self.mongo_sh.get_shiny_channels(guild_id)
+            mentions = ", ".join(f"<#{ch_id}>" for ch_id in current_channels) if current_channels else "None"
+            await ctx.reply(f"🔹 Current protected channels: {mentions}", mention_author=False)
 
-     if not ctx.author.guild_permissions.manage_guild:
-        return await ctx.reply(f"{self.error_emoji} You need **Manage Server** permission to change config.")
+    @shiny_channel.group(name="log", invoke_without_command=True)
+    @commands.has_permissions(manage_guild=True)
+    async def shiny_log(self, ctx, channel: discord.TextChannel = None):
+        """Set, remove, or view the shiny log channel."""
+        guild_id = ctx.guild.id
 
-     key = f"{ping_type.lower()}_role"
-     if ping_type.lower() not in {"rare","regional"}:
-        return await ctx.reply(f"{self.error_emoji} Invalid type. Use `rare` or `regional`.")
+        if channel:
+            await self.mongo_sh.set_shiny_log_channel(guild_id, channel.id)
+            await ctx.reply(f"✅ Shiny log channel set to {channel.mention}", mention_author=False)
+        else:
+            current = await self.mongo_sh.get_shiny_log_channel(guild_id)
+            if current:
+                await ctx.reply(f"🔹 Current shiny log channel: <#{current}>", mention_author=False)
+            else:
+                await ctx.reply("⚠ No shiny log channel set.", mention_author=False)
 
-     if role:
-        config[key] = role.id
-        msg = f"{self.success_emoji} {ping_type.title()} Pokémon role set to {role.mention}."
-     else:
-        config.pop(key, None)
-        msg = f"{self.success_emoji} {ping_type.title()} Pokémon role removed."
+    @shiny_log.command(name="remove")
+    @commands.has_permissions(manage_guild=True)
+    async def remove_log(self, ctx):
+        """Remove the shiny log channel."""
+        guild_id = ctx.guild.id
+        await self.mongo_sh.remove_shiny_log_channel(guild_id)
+        await ctx.reply("✅ Shiny log channel removed.", mention_author=False)
 
-     await self.mongo.db["server_config"].update_one(
-        {"guild_id": guild_id}, {"$set": config}, upsert=True
-     )
-     await ctx.reply(msg, mention_author=False)
         
         
 class PoketwoSpecialPing(commands.Cog):

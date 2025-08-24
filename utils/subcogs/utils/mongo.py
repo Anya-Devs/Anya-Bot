@@ -1,6 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 
-
 class MongoHelper:
     def __init__(self, db):
         self.db = db
@@ -34,7 +33,6 @@ class MongoHelper:
         await self.db[col].update_one({"user_id": uid}, {"$set": {"pokemon": []}})
         return True
 
-    # Starboard methods
     async def add_star(self, message_id, user_id, pokemon, level, shiny=False, rare=False, regional=False, timestamp=None, jump_url=None):
         doc = {
             "message_id": message_id,
@@ -59,9 +57,8 @@ class MongoHelper:
 
     async def list_stars_by_user(self, user_id):
         cursor = self.db["starboard"].find({"user_id": user_id})
-        return await cursor.to_list(length=None)  # fetch all
+        return await cursor.to_list(length=None)
 
-    # Starboard config methods
     async def set_starboard_channel(self, guild_id, channel_id):
         await self.db["starboard_config"].update_one(
             {"_id": str(guild_id)},
@@ -76,3 +73,36 @@ class MongoHelper:
             return int(doc["channel_id"])
         return None
 
+class MongoShHelper:
+    def __init__(self, db):
+        self.db = db
+
+    async def get_server_config(self, guild_id: int) -> dict:
+        return await self.db.find_one({"guild_id": guild_id}) or {}
+
+    async def set_shiny_channels(self, guild_id: int, channel_ids: list):
+        await self.db.update_one({"guild_id": guild_id}, {"$set": {"shiny_channels": channel_ids}}, upsert=True)
+
+    async def get_shiny_channels(self, guild_id: int) -> list:
+        cfg = await self.get_server_config(guild_id)
+        return cfg.get("shiny_channels", [])
+
+    async def get_shiny_protected_channels(self, guild_id: int) -> list:
+        return await self.get_shiny_channels(guild_id)
+
+    async def set_shiny_log_channel(self, guild_id: int, channel_id: int):
+        await self.db.update_one({"guild_id": guild_id}, {"$set": {"shiny_log_channel": channel_id}}, upsert=True)
+
+    async def remove_shiny_log_channel(self, guild_id: int):
+        await self.db.update_one({"guild_id": guild_id}, {"$unset": {"shiny_log_channel": ""}})
+
+    async def get_shiny_log_channel(self, guild_id: int):
+        cfg = await self.get_server_config(guild_id)
+        return cfg.get("shiny_log_channel")
+
+    async def set_shiny_ping_phrase(self, guild_id: int, phrase: str):
+        await self.db.update_one({"guild_id": guild_id}, {"$set": {"shiny_ping_phrase": phrase}}, upsert=True)
+
+    async def get_shiny_ping_phrase(self, guild_id: int) -> str:
+        cfg = await self.get_server_config(guild_id)
+        return cfg.get("shiny_ping_phrase", "**:sparkles: Shiny Hunt Pings:**")
