@@ -63,6 +63,10 @@ class PoketwoSpawnDetector(commands.Cog):
         self.producer = None
         self.consumer = None
 
+        # Lazy load to avoid blocking init
+        from utils.image_builder import PokemonImageBuilder
+        self.pokemon_image_builder = PokemonImageBuilder()
+
         for _ in range(self.worker_count):
             self.bot.loop.create_task(self._worker())
 
@@ -70,18 +74,14 @@ class PoketwoSpawnDetector(commands.Cog):
         self.redis = redis.from_url(REDIS_URL, decode_responses=True)
 
     async def _redis_get(self, key):
-        if not self.redis:
-            return None
-        return await self.redis.get(key)
+        return await self.redis.get(key) if self.redis else None
 
     async def _redis_set(self, key, value):
         if self.redis:
             await self.redis.set(key, value)
 
     async def _redis_hgetall(self, key):
-        if self.redis:
-            return await self.redis.hgetall(key)
-        return {}
+        return await self.redis.hgetall(key) if self.redis else {}
 
     async def _redis_hset(self, key, mapping):
         if self.redis:
@@ -118,34 +118,51 @@ class PoketwoSpawnDetector(commands.Cog):
     async def process_spawn(self, message, image_url):
         total_start = time.time()
         try:
-            pred_start = time.time()
+            # Prediction
             slug_raw, conf = await asyncio.to_thread(self.predictor.predict, image_url)
-            pred_elapsed = time.time() - pred_start
-            logger.info(f"[Prediction] {image_url} predicted in {pred_elapsed:.3f}s")
+            logger.info(f"[Prediction] {image_url} -> {slug_raw} ({conf})")
 
             slug = self.slug_map.get(slug_raw.lower(), slug_raw.lower())
             file_key = f"{self.image_cache_prefix}{slug}"
 
+            # Try Redis cache, else local file
             cached_image = await self._redis_get(file_key)
             file_path = cached_image or os.path.join(self.spawn_output_dir, f"{slug}.png")
 
+            # If missing, generate manually
             if not await aiofiles.ospath.exists(file_path):
-                return await message.channel.send(f"{self.cross_emoji} Spawn image not found for {slug}.", reference=message)
-
-            async with aiofiles.open(file_path, "rb") as f:
-                file_bytes = await f.read()
-            file = discord.File(fp=BytesIO(file_bytes), filename=f"{slug}.png")
-            await self._redis_set(file_key, file_path)
+                loop = asyncio.get_running_loop()
+                image_bytes = BytesIO()
+                await loop.run_in_executor(
+                    _thread_executor,
+                    self.pokemon_image_builder.create_image,
+                    slug_raw,
+                    self.pokemon_utils.format_name(slug).replace("_", " ").title(),
+                    self.pokemon_utils.get_best_normal_alt_name(slug) or "",
+                    self.pokemon_utils.get_pokemon_types(slug),
+                    None,
+                    image_bytes,
+                    "PNG"
+                )
+                image_bytes.seek(0)
+                file = discord.File(fp=image_bytes, filename=f"{slug}.png")
+            else:
+                async with aiofiles.open(file_path, "rb") as f:
+                    file_bytes = await f.read()
+                file = discord.File(fp=BytesIO(file_bytes), filename=f"{slug}.png")
+                await self._redis_set(file_key, file_path)
 
             conf_float = float(str(conf).strip().rstrip("%"))
             low_conf = conf_float < 30
 
+            # Server config cache
             config_key = f"{self.config_cache_prefix}{message.guild.id}"
             server_config = await self._redis_hgetall(config_key)
             if not server_config:
                 server_config = await self.pokemon_utils.get_server_config(message.guild.id)
                 await self._redis_hset(config_key, server_config)
 
+            # Special role pings
             rare, regional = self.pokemon_utils._special_names
             special_roles = []
             if server_config.get("rare_role"):
@@ -153,15 +170,17 @@ class PoketwoSpawnDetector(commands.Cog):
             if server_config.get("regional_role"):
                 special_roles += [f"<@&{server_config['regional_role']}>" for r in regional if r in slug]
 
+            # Dex/description caching
             desc_key = f"{self.desc_cache_prefix}{slug}"
             cached_desc = await self._redis_hgetall(desc_key)
             if cached_desc:
-                description, dex = cached_desc["description"], cached_desc["dex"]
+                description, dex = cached_desc.get("description"), cached_desc.get("dex")
             else:
                 description, dex, _ = self.pokemon_utils.get_description(slug)
                 dex = dex if dex and dex != "???" else self._pokemon_ids.get(slug, "???")
                 await self._redis_hset(desc_key, {"description": description, "dex": dex})
 
+            # Gather pings concurrently
             shiny_collect, type_pings, quest_pings = await asyncio.gather(
                 self.pokemon_utils.get_ping_users(message.guild, slug),
                 self.pokemon_utils.get_type_ping_users(message.guild, slug),
@@ -169,6 +188,7 @@ class PoketwoSpawnDetector(commands.Cog):
             )
             shiny_pings, collect_pings = shiny_collect
 
+            # Format final message
             ping_msg, _ = await self.pokemon_utils.format_messages(
                 slug, type_pings, quest_pings, shiny_pings, collect_pings,
                 " ".join(special_roles), f"{conf_float:.2f}%", dex, description, image_url, low_conf
