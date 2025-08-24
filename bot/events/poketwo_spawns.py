@@ -5,11 +5,10 @@ import time
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 
-import redis.asyncio as redis  
+import redis.asyncio as redis
 import aiofiles
 import aiofiles.ospath
 from imports.discord_imports import *
-from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from bot.token import use_test_bot as ut
@@ -23,9 +22,11 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 
 class PoketwoSpawnDetector(commands.Cog):
-    def __init__(self, bot, worker_count=None, kafka_bootstrap_servers="localhost:9092"):
+    def __init__(self, bot, worker_count=None):
         self.bot = bot
         self.target_id = 716390085896962058
+
+        # Predictor + utilities preloaded
         self.predictor = Prediction()
         self.pp = PoketwoCommands(bot)
         self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
@@ -48,25 +49,25 @@ class PoketwoSpawnDetector(commands.Cog):
         self.config_cache_prefix = "poketwo:server_config:"
         self.desc_cache_prefix = "poketwo:desc:"
 
+        # Load Pokemon IDs and slug mapping
         self._pokemon_ids = self.pokemon_utils.load_pokemon_ids()
         self.slug_map = {k.lower(): k for k in self._pokemon_ids.keys()}
+
+        # Preload spawn images
         self.spawn_output_dir = "data/events/poketwo_spawns/spawns"
         os.makedirs(self.spawn_output_dir, exist_ok=True)
+        self.file_cache = {slug: os.path.join(self.spawn_output_dir, f"{slug}.png")
+                           for slug in self._pokemon_ids if os.path.exists(os.path.join(self.spawn_output_dir, f"{slug}.png"))}
 
+        # Concurrency controls
         self.worker_count = worker_count or max((os.cpu_count() or 4) * 2, 50)
         self.queue = asyncio.Queue(maxsize=10000)
         self.semaphore = asyncio.Semaphore(self.worker_count)
         self.success_emoji = "<:green:1261639410181476443>"
         self.error_emoji = "<:red:1261639413943762944>"
         self.cross_emoji = "❌"
-        self.kafka_bootstrap_servers = kafka_bootstrap_servers
-        self.producer = None
-        self.consumer = None
 
-        # Lazy load to avoid blocking init
-        from utils.image_builder import PokemonImageBuilder
-        self.pokemon_image_builder = PokemonImageBuilder()
-
+        # Start worker tasks
         for _ in range(self.worker_count):
             self.bot.loop.create_task(self._worker())
 
@@ -74,35 +75,21 @@ class PoketwoSpawnDetector(commands.Cog):
         self.redis = redis.from_url(REDIS_URL, decode_responses=True)
 
     async def _redis_get(self, key):
-        return await self.redis.get(key) if self.redis else None
+        if self.redis:
+            return await self.redis.get(key)
 
     async def _redis_set(self, key, value):
         if self.redis:
             await self.redis.set(key, value)
 
     async def _redis_hgetall(self, key):
-        return await self.redis.hgetall(key) if self.redis else {}
+        if self.redis:
+            return await self.redis.hgetall(key)
+        return {}
 
     async def _redis_hset(self, key, mapping):
         if self.redis:
             await self.redis.hset(key, mapping)
-
-    async def setup_kafka(self):
-        self.producer = AIOKafkaProducer(bootstrap_servers=self.kafka_bootstrap_servers)
-        await self.producer.start()
-        self.consumer = AIOKafkaConsumer(
-            "poketwo_spawns",
-            bootstrap_servers=self.kafka_bootstrap_servers,
-            group_id="poketwo_group",
-            enable_auto_commit=False
-        )
-        await self.consumer.start()
-
-    async def close_kafka(self):
-        if self.consumer:
-            await self.consumer.stop()
-        if self.producer:
-            await self.producer.stop()
 
     async def _worker(self):
         while True:
@@ -118,42 +105,17 @@ class PoketwoSpawnDetector(commands.Cog):
     async def process_spawn(self, message, image_url):
         total_start = time.time()
         try:
-            # Prediction
+            # Prediction offloaded to thread
             slug_raw, conf = await asyncio.to_thread(self.predictor.predict, image_url)
-            logger.info(f"[Prediction] {image_url} -> {slug_raw} ({conf})")
-
             slug = self.slug_map.get(slug_raw.lower(), slug_raw.lower())
-            file_key = f"{self.image_cache_prefix}{slug}"
+            file_path = self.file_cache.get(slug)
+            if not file_path:
+                return await message.channel.send(f"{self.cross_emoji} Spawn image not found for {slug}.", reference=message)
 
-            # Try Redis cache, else local file
-            cached_image = await self._redis_get(file_key)
-            file_path = cached_image or os.path.join(self.spawn_output_dir, f"{slug}.png")
-
-            # If missing, generate manually
-            if not await aiofiles.ospath.exists(file_path):
-                loop = asyncio.get_running_loop()
-                image_bytes = BytesIO()
-                await loop.run_in_executor(
-                    _thread_executor,
-                    self.pokemon_image_builder.create_image,
-                    slug_raw,
-                    self.pokemon_utils.format_name(slug).replace("_", " ").title(),
-                    self.pokemon_utils.get_best_normal_alt_name(slug) or "",
-                    self.pokemon_utils.get_pokemon_types(slug),
-                    None,
-                    image_bytes,
-                    "PNG"
-                )
-                image_bytes.seek(0)
-                file = discord.File(fp=image_bytes, filename=f"{slug}.png")
-            else:
-                async with aiofiles.open(file_path, "rb") as f:
-                    file_bytes = await f.read()
-                file = discord.File(fp=BytesIO(file_bytes), filename=f"{slug}.png")
-                await self._redis_set(file_key, file_path)
-
-            conf_float = float(str(conf).strip().rstrip("%"))
-            low_conf = conf_float < 30
+            # Load file once
+            async with aiofiles.open(file_path, "rb") as f:
+                file_bytes = await f.read()
+            file = discord.File(fp=BytesIO(file_bytes), filename=f"{slug}.png")
 
             # Server config cache
             config_key = f"{self.config_cache_prefix}{message.guild.id}"
@@ -162,25 +124,17 @@ class PoketwoSpawnDetector(commands.Cog):
                 server_config = await self.pokemon_utils.get_server_config(message.guild.id)
                 await self._redis_hset(config_key, server_config)
 
-            # Special role pings
-            rare, regional = self.pokemon_utils._special_names
-            special_roles = []
-            if server_config.get("rare_role"):
-                special_roles += [f"<@&{server_config['rare_role']}>" for r in rare if r in slug]
-            if server_config.get("regional_role"):
-                special_roles += [f"<@&{server_config['regional_role']}>" for r in regional if r in slug]
-
-            # Dex/description caching
+            # Description cache
             desc_key = f"{self.desc_cache_prefix}{slug}"
             cached_desc = await self._redis_hgetall(desc_key)
             if cached_desc:
-                description, dex = cached_desc.get("description"), cached_desc.get("dex")
+                description, dex = cached_desc["description"], cached_desc["dex"]
             else:
                 description, dex, _ = self.pokemon_utils.get_description(slug)
                 dex = dex if dex and dex != "???" else self._pokemon_ids.get(slug, "???")
                 await self._redis_hset(desc_key, {"description": description, "dex": dex})
 
-            # Gather pings concurrently
+            # Gather all pings concurrently
             shiny_collect, type_pings, quest_pings = await asyncio.gather(
                 self.pokemon_utils.get_ping_users(message.guild, slug),
                 self.pokemon_utils.get_type_ping_users(message.guild, slug),
@@ -188,12 +142,21 @@ class PoketwoSpawnDetector(commands.Cog):
             )
             shiny_pings, collect_pings = shiny_collect
 
-            # Format final message
+            # Special roles
+            rare, regional = self.pokemon_utils._special_names
+            special_roles = []
+            if server_config.get("rare_role"):
+                special_roles += [f"<@&{server_config['rare_role']}>" for r in rare if r in slug]
+            if server_config.get("regional_role"):
+                special_roles += [f"<@&{server_config['regional_role']}>" for r in regional if r in slug]
+
+            conf_float = float(str(conf).strip().rstrip("%"))
+            low_conf = conf_float < 30
+
             ping_msg, _ = await self.pokemon_utils.format_messages(
                 slug, type_pings, quest_pings, shiny_pings, collect_pings,
                 " ".join(special_roles), f"{conf_float:.2f}%", dex, description, image_url, low_conf
             )
-
             await message.channel.send(content=ping_msg, file=file, reference=message)
             logger.info(f"Processed {slug} in {time.time() - total_start:.3f}s")
 
@@ -207,33 +170,12 @@ class PoketwoSpawnDetector(commands.Cog):
             return
         embed = next((e for e in message.embeds if e.title and "pokémon has appeared!" in e.title.lower() and e.image), None)
         if embed:
-            if self.producer:
-                await self.producer.send_and_wait("poketwo_spawns", value={"message_id": message.id, "image_url": embed.image.url})
-            else:
-                asyncio.create_task(self.queue.put((message, embed.image.url)))
-
-    @commands.command(name="ps", hidden=True)
-    async def predict_spawn(self, ctx, image_url=None):
-        try:
-            message = ctx.message
-            if not image_url:
-                ref = message.reference
-                if ref:
-                    message = await ctx.channel.fetch_message(ref.message_id)
-                if message.attachments:
-                    image_url = message.attachments[0].url
-                elif message.embeds and message.embeds[0].image:
-                    image_url = message.embeds[0].image.url
-            if not image_url:
-                return await ctx.send(f"{self.cross_emoji} No image URL found.")
-            await self.process_spawn(message, image_url)
-        except Exception as e:
-            logger.error(f"Prediction error: {type(e).__name__}: {e}")
+            asyncio.create_task(self.queue.put((message, embed.image.url)))
 
     @commands.command(name="generate_spawns", hidden=True)
     async def generate_all_spawn_images(self, ctx):
         missing = [slug for slug in self._pokemon_ids
-                   if not await aiofiles.ospath.exists(os.path.join(self.spawn_output_dir, f"{slug}.png"))]
+                   if slug not in self.file_cache]
         if not missing:
             await ctx.send("✅ All spawn images are preloaded!")
         else:
