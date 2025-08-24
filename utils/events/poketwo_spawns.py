@@ -33,6 +33,10 @@ class PokemonUtils:
         self._special_names = self._load_special_names_sync()
         self._pokemon_name_map = self._load_pokemon_names("data/commands/pokemon/pokemon_names.csv")
         self.flag_map = self.load_flag_map("data/commands/pokemon/flag_map.json")
+        self._pokemon_rows = self._load_pokemon_rows(description_file)
+        self._id_map = self._load_pokemon_ids_cached(id_file)
+        self._server_config_cache = {}
+        self._ping_cache = {}
 
     @staticmethod
     @lru_cache(maxsize=None)
@@ -56,47 +60,40 @@ class PokemonUtils:
             except Exception:
                 setattr(self, attr, {})
 
-    def load_quest_regions(self):
-        regions = set()
-        try:
-            with open(self.pokemon_description_file, 'r', encoding='utf-8') as f:
-                for row in csv.DictReader(f):
-                    if region := row.get('region', '').strip().lower():
-                        regions.add(region)
-        except FileNotFoundError:
-            pass
-        return regions
-
-    def load_pokemon_ids(self):
-        id_map = {}
-        try:
-            with open(self.pokemon_id_file, 'r', encoding='utf-8') as f:
-                for row in csv.DictReader(f):
-                    id_map[row['name'].lower()] = row['id']
-        except Exception as e:
-            logger.warning(f"Failed to load Pokémon IDs: {e}")
-        return id_map
-
     @staticmethod
-    def _load_pokemon_names(path) -> dict:
+    def _load_pokemon_rows(path):
         if not Path(path).exists():
             return {}
         with open(path, encoding="utf-8") as f:
-            return {row['name'].replace('-', '_'): row['id']
-                    for row in csv.DictReader(f) if 'name' in row and 'id' in row}
+            return {row["slug"].lower(): row for row in csv.DictReader(f)}
 
-    def get_base_pokemon_name(self, raw) -> str:
-        name_map, norm = self._pokemon_name_map, raw.replace('-', '_')
+    @staticmethod
+    def _load_pokemon_ids_cached(path):
+        if not Path(path).exists():
+            return {}
+        with open(path, encoding="utf-8") as f:
+            return {row["name"].lower(): row["id"] for row in csv.DictReader(f)}
+
+    @staticmethod
+    def _load_pokemon_names(path):
+        if not Path(path).exists():
+            return {}
+        with open(path, encoding="utf-8") as f:
+            return {row["name"].replace("-", "_"): row["id"]
+                    for row in csv.DictReader(f) if "name" in row and "id" in row}
+
+    def get_base_pokemon_name(self, raw):
+        name_map, norm = self._pokemon_name_map, raw.replace("-", "_")
         if norm in name_map:
-            return norm.replace('_', '-')
-        parts = norm.split('_')
+            return norm.replace("_", "-")
+        parts = norm.split("_")
         for i in range(len(parts)):
-            if (c := '_'.join(parts[i:])) in name_map:
-                return c.replace('_', '-')
+            if (c := "_".join(parts[i:])) in name_map:
+                return c.replace("_", "-")
         for p in reversed(parts):
             if p in name_map:
-                return p.replace('_', '-')
-        return norm.replace('_', '-')
+                return p.replace("_", "-")
+        return norm.replace("_", "-")
 
     @staticmethod
     @lru_cache(maxsize=None)
@@ -106,7 +103,7 @@ class PokemonUtils:
     def _load_special_names_sync(self):
         rare, regional = [], []
         try:
-            with open('data/commands/pokemon/pokemon_special_names.csv', encoding='utf-8') as f:
+            with open("data/commands/pokemon/pokemon_special_names.csv", encoding="utf-8") as f:
                 reader = csv.reader(f)
                 next(reader, None)
                 for row in reader:
@@ -118,179 +115,62 @@ class PokemonUtils:
             pass
         return rare, regional
 
-    
     def get_best_normal_alt_name(self, slug):
-     try:
-        p = re.compile(r"[A-Za-z0-9\- ']+")
-        s, v = set(), []
-        sl = slug.lower()
-        for lang, name in self.alt_names_map.get(sl, {}).items():
-            n = name.strip()
-            if (
-                n.lower() != sl
-                and n.lower() not in s
-                and p.fullmatch(n)
-                and len(n) < len(sl)
-            ):
-                s.add(n.lower())
-                v.append((self.flag_map.get(lang, ''), n))
-        if not v:
-            return None
-        m = min(len(n) for _, n in v)
-        f, n = min(
-            ((f, n) for f, n in v if len(n) == m),
-            key=lambda x: x[1].lower()
-        )
-        return f"{f} {n}" if f else n
-     except Exception as e:
-        logger.error(f"get_best_normal_alt_name('{slug}') failed: {e}")
-        return None
-
-    async def _get_image_color_cached(self, url):
-        if url in self._image_color_cache:
-            return self._image_color_cache[url]
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
-                    if response.status != 200:
-                        return 0xFFFFFF
-                    data = await response.read()
-            img_array = np.frombuffer(data, np.uint8)
-            img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-            if img is None:
-                return 0xFFFFFF
-            small_img = cv2.resize(img, (50, 50), interpolation=cv2.INTER_AREA)
-            small_img = cv2.cvtColor(small_img, cv2.COLOR_BGR2RGB)
-            pixels = small_img.reshape((-1, 3)).astype(np.float32)
-            criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-            _, labels, centers = cv2.kmeans(pixels, 1, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
-            dominant_color = centers[0].astype(int)
-            rgb = (dominant_color[0] << 16) + (dominant_color[1] << 8) + dominant_color[2]
-            self._image_color_cache[url] = rgb
-            return rgb
-        except Exception:
-            return 0xFFFFFF
-
-    
-    async def format_messages(self, slug, type_pings, quest_pings, shiny_pings, collection_pings,
-                              special_roles, pred_text, dex_number, description, image_url,
-                              low_confidence=True):
-        try:
-            formatted_name = self.format_name(slug.replace('_', ' ')).title()
-            if low_confidence:
-                unsure_msg = "Anya is unsure about this guess, but here is her best effort."
-                return f"{unsure_msg}\n**{formatted_name}**: {pred_text}", None
-            has_pings = any([type_pings, quest_pings, shiny_pings, collection_pings])
-            header_line = f"{'' if has_pings else ''}**{formatted_name}**: {pred_text}"
-            quote_lines = []
-            if special_roles:
-                quote_lines.append(special_roles)
-            if shiny_pings:
-                quote_lines.append(f"**Shinyhunt:**")
-                quote_lines.append(" ".join(shiny_pings))
-            if collection_pings:
-                quote_lines.append(f"**Collectors:**")
-                quote_lines.append("".join(collection_pings))
-            if quest_pings:
-                region_name = self.get_pokemon_region(slug) or "Region"
-                region_emoji = self._quest_emojis.get(region_name.lower(), "")
-                quote_lines.append(f"**{region_name} Ping:**")
-                quote_lines.append("".join(quest_pings))
-            if type_pings:
-                type_parts = [
-                    f"**{label}:**\n{''.join(users)}"
-                    for label, users in type_pings.items() if users
-                ]
-                if type_parts:
-                    quote_lines.append("\n".join(type_parts))
-            quoted_content = "\n".join(quote_lines)
-            blockquote = "\n".join("> " + line for line in quoted_content.splitlines())
-            message = f"{header_line}\n{blockquote}"
-            actual_types = self.get_pokemon_types(slug)
-            actual_region = self.get_pokemon_region(slug)
-            region_emoji = self._quest_emojis.get(actual_region.lower(), "") if actual_region else ""
-            emoji_types = [
-                f"{self._type_emojis.get(f'{t.lower()}_type','')} {t.title()}"
-                for t in actual_types if t
-            ]
-            alt_names_field = []
-            alt_names_list = self.alt_names_map.get(slug.lower(), {})
-            if isinstance(alt_names_list, dict):
-                alt_names_field.extend(name for name in alt_names_list.values())
-            thumb_url = (
-                f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{dex_number}.png"
-                if slug and slug.lower() not in ("", "???") else image_url
-            )
-            embed = None
-            return message, embed
+            p = re.compile(r"[A-Za-z0-9\- ']+")
+            s, v = set(), []
+            sl = slug.lower()
+            for lang, name in self.alt_names_map.get(sl, {}).items():
+                n = name.strip()
+                if n.lower() != sl and n.lower() not in s and p.fullmatch(n) and len(n) < len(sl):
+                    s.add(n.lower())
+                    v.append((self.flag_map.get(lang, ""), n))
+            if not v:
+                return None
+            m = min(len(n) for _, n in v)
+            f, n = min(((f, n) for f, n in v if len(n) == m), key=lambda x: x[1].lower())
+            return f"{f} {n}" if f else n
         except Exception as e:
-            logger.error(f"Error in format_messages: {type(e).__name__}: {e}")
-            fallback = f"**{slug}**\nFailed to format spawn info."
-            embed = discord.Embed(color=0xFF0000, description="An error occurred generating this embed.")
-            return fallback, embed
-
-    def format_name(self, name):
-        return name.replace('-',' ').title()
+            logger.error(f"get_best_normal_alt_name('{slug}') failed: {e}")
+            return None
 
     def get_pokemon_row(self, slug):
-        try:
-            with open(self.pokemon_description_file, 'r', encoding='utf-8') as f:
-                for row in csv.DictReader(f):
-                    if row.get("slug", "").lower() == slug.lower():
-                        return row
-        except FileNotFoundError:
-            pass
-        return None
+        return self._pokemon_rows.get(slug.lower())
 
     def get_description(self, slug):
         row = self.get_pokemon_row(slug)
         if row:
             return row.get("description", ""), row.get("dex_number", "???"), row
-        fallback_id = self.load_pokemon_ids().get(slug.lower(), "???")
-        return "", fallback_id, {}
+        return "", self._id_map.get(slug.lower(), "???"), {}
 
     def get_pokemon_types(self, slug):
         row = self.get_pokemon_row(slug)
         if not row:
             return []
-        types = []
-        if row.get("type.0"):
-            types.append(row["type.0"].strip().lower())
-        if row.get("type.1") and row["type.1"].strip():
-            types.append(row["type.1"].strip().lower())
-        return types
+        return [row.get("type.0", "").strip().lower(), row.get("type.1", "").strip().lower()] if row.get("type.0") else []
 
     def get_pokemon_region(self, slug):
         row = self.get_pokemon_row(slug)
-        if not row:
-            return ""
-        return row.get("region", "").capitalize()
+        return row.get("region", "").capitalize() if row else ""
 
     async def get_server_config(self, guild_id):
-        return await self.mongo.db["server_config"].find_one({"guild_id": guild_id}) or {}
+        if guild_id in self._server_config_cache:
+            return self._server_config_cache[guild_id]
+        cfg = await self.mongo.db["server_config"].find_one({"guild_id": guild_id}) or {}
+        self._server_config_cache[guild_id] = cfg
+        return cfg
 
     async def get_type_ping_users(self, guild, pokemon_name):
         try:
-            if not self._type_emojis:
-                self.load_emojis()
-            if not self.bot:
-                logger.warning("Bot instance not set in PokemonUtils; cannot fetch pokemon_types")
-                return {}
-            pokemon_types_data = await self.pp.data_manager.pokemon_types
-            pokemon_types = pokemon_types_data.get(pokemon_name.lower(), [])
-            if not pokemon_types:
-                pokemon_types = self.get_pokemon_types(pokemon_name)
+            pokemon_types = self.get_pokemon_types(pokemon_name)
             if not pokemon_types:
                 return {}
             type_pings = {}
             for ptype in pokemon_types:
                 ptype_lower = ptype.lower()
-                emoji = self._type_emojis.get(f"{ptype_lower}_type", "")
                 users = await self.mongo.db["type_ping_types"].find({"type": ptype_lower}).to_list(None)
                 mentions = {
-                    f"<@{user['user_id']}>"
-                    for user in users
-                    if user.get("user_id") and guild.get_member(user["user_id"])
+                    f"<@{u['user_id']}>" for u in users if u.get("user_id") and guild.get_member(u["user_id"])
                 }
                 if mentions:
                     label = f"{ptype.capitalize()} Type".strip()
@@ -302,8 +182,8 @@ class PokemonUtils:
 
     async def get_quest_ping_users(self, guild, pokemon_name):
         try:
-            with open(self.pokemon_description_file, 'r', encoding='utf-8') as f:
-                region = next((row['region'].lower() for row in csv.DictReader(f) if row.get("slug", "").lower() == pokemon_name.lower()), None)
+            row = self.get_pokemon_row(pokemon_name)
+            region = row.get("region", "").lower() if row else None
             if not region:
                 return []
             users = await self.mongo.db["quest_ping"].find({}).to_list(None)
@@ -313,54 +193,22 @@ class PokemonUtils:
             return []
 
     async def get_ping_users(self, guild, pokemon_name):
-        def fuzzy(t, n): return t == n or fuzz.ratio(t, n) > 85
         try:
             shiny = await self.mongo.db["shiny_hunt"].find({}).to_list(None)
             collect = await self.mongo.db["collection"].find({}).to_list(None)
-            shiny_mentions = [f"<@{u['user_id']}>" for u in shiny if any(fuzzy(pokemon_name.lower(), p.lower()) for p in u.get("pokemon", [])) and guild.get_member(u["user_id"])]
-            collect_mentions = [f"<@{u['user_id']}>" for u in collect if any(fuzzy(pokemon_name.lower(), p.lower()) for p in u.get("pokemon", [])) and guild.get_member(u["user_id"])]
+            shiny_mentions = [f"<@{u['user_id']}>" for u in shiny if pokemon_name.lower() in [p.lower() for p in u.get("pokemon", [])] and guild.get_member(u["user_id"])]
+            collect_mentions = [f"<@{u['user_id']}>" for u in collect if pokemon_name.lower() in [p.lower() for p in u.get("pokemon", [])] and guild.get_member(u["user_id"])]
             return shiny_mentions, collect_mentions
         except Exception as e:
             logger.warning(f"Error in get_ping_users: {e}")
             return [], []
 
-    async def get_image_color(self, url):
-        fallback = 0x3498db
-        try:
-            import aiohttp
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as resp:
-                    if resp.status != 200:
-                        return fallback
-                    data = await resp.read()
-            with io.BytesIO(data) as img_bytes:
-                img_bytes.seek(0)
-                arr = np.frombuffer(img_bytes.read(), np.uint8)
-                img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-                if img is None:
-                    return fallback
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                pixels = img.reshape((-1, 3))
-                pixels = np.float32(pixels)
-                criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 20, 1.0)
-                K = 3
-                _, labels, centers = cv2.kmeans(pixels, K, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
-                counts = np.bincount(labels.flatten())
-                dominant = centers[np.argmax(counts)]
-                r, g, b = map(int, dominant)
-                return (r << 16) + (g << 8) + b
-        except Exception as e:
-            logger.warning(f"Failed to get image color: {e}")
-            return fallback
-
-    def find_full_name_for_slug(self, slug_raw: str) -> str:
-     slug_lower = slug_raw.lower()
-     for name in self._pokemon_name_map.keys():
-        if slug_lower in name.lower():
-            return name
-     return slug_raw
-
-
+    def find_full_name_for_slug(self, slug_raw):
+        slug_lower = slug_raw.lower()
+        for name in self._pokemon_name_map.keys():
+            if slug_lower in name.lower():
+                return name
+        return slug_raw
 
 class PokemonImageBuilder:
     def __init__(self):
