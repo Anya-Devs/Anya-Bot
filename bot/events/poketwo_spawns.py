@@ -2,7 +2,7 @@ import os, asyncio, logging, uuid
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from motor.motor_asyncio import AsyncIOMotorClient
-import numpy as np
+import discord
 from imports.discord_imports import *
 from bot.token import use_test_bot as ut
 from utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils
@@ -32,7 +32,7 @@ class PoketwoSpawnDetector(commands.Cog):
         self.pokemon_image_builder = PokemonImageBuilder()
         self._pokemon_ids = self.pokemon_utils.load_pokemon_ids()
         self.queue = asyncio.Queue()
-        self.worker_count = worker_count or min((os.cpu_count() or 4)*2, 32)
+        self.worker_count = worker_count or min((os.cpu_count() or 4), 12)
         self.success_emoji = "<:green:1261639410181476443>"
         self.error_emoji = "<:red:1261639413943762944>"
         self.cross_emoji = "❌"
@@ -42,9 +42,12 @@ class PoketwoSpawnDetector(commands.Cog):
     async def _worker(self):
         while True:
             message, image_url = await self.queue.get()
-            try: await self.process_spawn(message, image_url)
-            except Exception as e: logger.error(f"Worker error: {type(e).__name__}: {e}")
-            finally: self.queue.task_done()
+            try:
+                await self.process_spawn(message, image_url)
+            except Exception as e:
+                logger.error(f"Worker error: {type(e).__name__}: {e}")
+            finally:
+                self.queue.task_done()
 
     async def process_spawn(self, message, image_url):
         try:
@@ -53,9 +56,8 @@ class PoketwoSpawnDetector(commands.Cog):
             slug = self.pokemon_utils.get_base_pokemon_name(slug_raw)
             if slug not in self._pokemon_ids:
                 slug = self.pokemon_utils.find_full_name_for_slug(slug_raw).lower().replace("_","-")
-            conf_float = np.array([float(str(conf).strip().rstrip("%"))], dtype=np.float32)
+            conf_float = float(str(conf).strip().rstrip("%"))
             low_conf = conf_float < 30
-
             server_config, shiny_collect, type_pings, quest_pings = await asyncio.gather(
                 self.pokemon_utils.get_server_config(message.guild.id),
                 self.pokemon_utils.get_ping_users(message.guild, slug),
@@ -63,22 +65,18 @@ class PoketwoSpawnDetector(commands.Cog):
                 self.pokemon_utils.get_quest_ping_users(message.guild, slug)
             )
             shiny_pings, collect_pings = shiny_collect
-
             rare, regional = self.pokemon_utils._special_names
             special_roles = []
             if server_config.get("rare_role"):
                 special_roles += [f"<@&{server_config['rare_role']}>" for r in rare if r in slug]
             if server_config.get("regional_role"):
                 special_roles += [f"<@&{server_config['regional_role']}>" for r in regional if r in slug]
-
             description, dex, _ = self.pokemon_utils.get_description(slug)
             dex = dex if dex and dex != "???" else self._pokemon_ids.get(slug,"???")
-
             ping_msg, _ = await self.pokemon_utils.format_messages(
                 slug, type_pings, quest_pings, shiny_pings, collect_pings,
-                " ".join(special_roles), f"{conf_float[0]:.2f}%", dex, description, image_url, low_conf[0]
+                " ".join(special_roles), f"{conf_float:.2f}%", dex, description, image_url, low_conf
             )
-
             image_bytes = BytesIO()
             await loop.run_in_executor(
                 _thread_executor,
@@ -94,17 +92,17 @@ class PoketwoSpawnDetector(commands.Cog):
             image_bytes.seek(0)
             file = discord.File(fp=image_bytes, filename="pokemon_spawn.png")
             await message.channel.send(content=ping_msg, file=file, reference=message)
-
         except Exception as e:
             logger.error(f"Error in process_spawn_tasks: {type(e).__name__}: {e}")
             await message.channel.send(f"{self.error_emoji} Failed to process spawn", reference=message)
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.id != self.target_id or ut: return
+        if message.author.id != self.target_id or ut:
+            return
         for e in message.embeds:
             if e.title and "pokémon has appeared!" in e.title.lower() and e.image:
-                await self.queue.put((message, e.image.url))
+                asyncio.create_task(self.queue.put((message, e.image.url)))
 
     @commands.command(name="ps", hidden=True)
     async def predict_spawn(self, ctx, image_url=None):
@@ -112,12 +110,17 @@ class PoketwoSpawnDetector(commands.Cog):
             message = ctx.message
             if not image_url:
                 ref = message.reference
-                if ref: message = await ctx.channel.fetch_message(ref.message_id)
-                if message.attachments: image_url = message.attachments[0].url
-                elif message.embeds and message.embeds[0].image: image_url = message.embeds[0].image.url
-            if not image_url: return await ctx.send(f"{self.cross_emoji} No image URL found.")
+                if ref:
+                    message = await ctx.channel.fetch_message(ref.message_id)
+                if message.attachments:
+                    image_url = message.attachments[0].url
+                elif message.embeds and message.embeds[0].image:
+                    image_url = message.embeds[0].image.url
+            if not image_url:
+                return await ctx.send(f"{self.cross_emoji} No image URL found.")
             await self.process_spawn(message, image_url)
         except Exception as e:
             logger.error(f"Prediction error: {type(e).__name__}: {e}")
 
-def setup(bot): bot.add_cog(PoketwoSpawnDetector(bot))
+def setup(bot):
+    bot.add_cog(PoketwoSpawnDetector(bot))
