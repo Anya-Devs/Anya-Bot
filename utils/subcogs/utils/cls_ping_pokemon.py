@@ -1512,7 +1512,7 @@ class PokemonTypeSelect(discord.ui.View):
                 item.disabled = True
             if self.message:
                 embed = await self._create_embed(status_message="View expired.")
-                await self.message.edit(embed=embed, view=self)
+                await self.message.edit(embed=None, view=self)
             self.stop()
         except Exception:
             print("Error in on_timeout:\n", traceback.format_exc())
@@ -1723,7 +1723,7 @@ class PokemonRegionSelect(discord.ui.View):
             item.disabled = True
         if self.message:
             embed = await self._create_embed(status_message="View expired.")
-            await self.message.edit(embed=embed, view=self)
+            await self.message.edit(embed=None, view=self)
         self.stop()
 
     async def _create_embed(self, ctx=None, status_message=None):
