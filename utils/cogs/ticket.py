@@ -574,14 +574,14 @@ class TicketSystem:
 
     async def ticket_command(self, ctx, action, param=None):
         if not self.has_manage_role_or_perms(ctx.author):
-            return await ctx.send(embed=discord.Embed(
+            return await ctx.reply(embed=discord.Embed(
                 title="⛔ Missing Permissions",
                 description=(
                     "```You need one of the following to use this command:```\n"
                     "• A role named `Anya Manager`\n• `Manage Server` or `Manage Channels` permission"
                 ),
                 color=discord.Color.red()
-            ).set_footer(text="Permission Check Failed"), delete_after=15)
+            ).set_footer(text="Permission Check Failed"), mention_author=False ,delete_after=15)
 
         try:
             if action == "create":

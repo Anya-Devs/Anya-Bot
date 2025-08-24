@@ -125,7 +125,7 @@ class System(commands.Cog):
 
     @commands.group(name="ticket", invoke_without_command=True)
     async def ticket(self, ctx):
-        embed = discord.Embed(color=discord.Color.blue())
+        embed = discord.Embed(color=primary_color())
         embed.add_field(
             name="Usage",
             value=(
@@ -136,8 +136,9 @@ class System(commands.Cog):
             ),
             inline=False
         )
+        
         embed.set_footer(text="Tip: Each subcommand has its own required inputs.")
-        await ctx.send(embed=embed, mention_author=False)
+        await ctx.reply(embed=embed, mention_author=False)
 
     # Subcommands
     @ticket.command(name="create")
