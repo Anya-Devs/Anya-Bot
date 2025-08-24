@@ -184,55 +184,75 @@ class Information(commands.Cog):
 
     @commands.command(name="roles")
     async def roles(self, ctx, mode: Optional[Literal["lookup", "members"]] = None, *, value: Optional[Union[discord.Member, str]] = None):
-     if mode == "lookup" and isinstance(value, str):
-        mf = 10
-        parts = value.rsplit(" ", 1)
-        rn = parts[0] if len(parts) == 2 and parts[1].isdigit() else value
-        mf = int(parts[1]) if len(parts) == 2 and parts[1].isdigit() else 10
-        role = discord.utils.find(lambda r: r.name.lower() == rn.lower(), ctx.guild.roles)
-        if not role:
-            return await ctx.reply(f"❌ Role '{rn}' not found.", mention_author=False)
-        roles = sorted((r for r in ctx.guild.roles if r.position < role.position), key=lambda r: r.position, reverse=True)[:mf]
-        if not roles:
-            return await ctx.reply(f"⚠️ No roles under `{role.name}`.", mention_author=False)
-        return await ctx.reply(
-            embed=discord.Embed(
+     try:
+        if mode == "lookup" and isinstance(value, str):
+            mf = 10
+            parts = value.rsplit(" ", 1)
+            rn = parts[0] if len(parts) == 2 and parts[1].isdigit() else value
+            mf = int(parts[1]) if len(parts) == 2 and parts[1].isdigit() else 10
+            role = discord.utils.find(lambda r: r.name.lower() == rn.lower(), ctx.guild.roles)
+            if not role:
+                return await ctx.reply(f"❌ Role '{rn}' not found.", mention_author=False)
+            roles = sorted((r for r in ctx.guild.roles if r.position < role.position), key=lambda r: r.position, reverse=True)[:mf]
+            if not roles:
+                return await ctx.reply(f"⚠️ No roles under `{role.name}`.", mention_author=False)
+            embed = discord.Embed(
                 title=f"Roles under: `{role.name}`",
                 description="\n".join(f"`<@&{r.id}>` — `{r.name}`" for r in roles),
                 color=primary_color(),
                 timestamp=datetime.now()
-            ),
-            mention_author=False
-        )
+            )
+            return await ctx.reply(embed=embed, mention_author=False)
 
-     if mode == "members":
+        if mode == "members":
+            embed = discord.Embed(
+                title=" ",
+                description=(
+                    "**What this does:**\n"
+                    "Displays a breakdown of a member's roles by permission type, channel access, and more.\n\n"
+                    "**How to use:**\n"
+                    "• Select one or more users from the menu.\n"
+                    "• Click the green ✅ Validate button to view their role breakdown.\n"
+                    "• Use the dropdown in the next message to explore each section."
+                ),
+                color=primary_color(),
+                timestamp=datetime.now()
+            )
+            embed.set_footer(text="Only roles the bot can see are shown.")
+            embed.set_thumbnail(url=ctx.bot.user.display_avatar.url)
+            return await ctx.reply(embed=embed, view=RoleLookupView(ctx.bot), mention_author=False)
+
+        m = value if isinstance(value, discord.Member) else ctx.author
+        roles = m.roles[1:]
+        if not roles:
+            embed = discord.Embed(
+                title=f"Roles for {m.display_name}",
+                description="⚠️ This user has no roles.",
+                color=primary_color(),
+                timestamp=datetime.now()
+            )
+            embed.set_footer(text="Found 0 roles")
+            return await ctx.reply(embed=embed, mention_author=False)
+
+        highest = roles[0]
+        managed = [r for r in roles if r.managed]
+        normal = [r for r in roles if not r.managed and r != highest]
+
         embed = discord.Embed(
-            title=" ",
-            description=(
-                "**What this does:**\n"
-                "Displays a breakdown of a member's roles by permission type, channel access, and more.\n\n"
-                "**How to use:**\n"
-                "• Select one or more users from the menu.\n"
-                "• Click the green ✅ Validate button to view their role breakdown.\n"
-                "• Use the dropdown in the next message to explore each section."
-            ),
+            title=f"Roles for {m.display_name}",
             color=primary_color(),
             timestamp=datetime.now()
         )
-        embed.set_footer(text="Only roles the bot can see are shown.")
-        embed.set_thumbnail(url=ctx.bot.user.display_avatar.url)
-        return await ctx.reply(embed=embed, view=RoleLookupView(ctx.bot), mention_author=False)
+        embed.add_field(name="⭐ Highest Role", value=f"<@&{highest.id}>", inline=False)
+        if managed:
+            embed.add_field(name="⚙️ Managed Roles", value=", ".join(f"<@&{r.id}>" for r in managed), inline=False)
+        if normal:
+            embed.add_field(name="📂 Other Roles", value=", ".join(f"<@&{r.id}>" for r in normal), inline=False)
+        embed.set_footer(text=f"Found {len(roles)} roles")
+        return await ctx.reply(embed=embed, mention_author=False)
 
-     m = value if isinstance(value, discord.Member) else ctx.author
-     await ctx.reply(
-        embed=discord.Embed(
-            title=f"Roles for {m.display_name}",
-            description=", ".join(f"<@&{r.id}>" for r in m.roles[1:]) or "None",
-            color=primary_color(),
-            timestamp=datetime.now()
-        ).set_footer(text=f"Found {len(m.roles)-1} roles"),
-        mention_author=False
-     )
+     except Exception as e:
+        await ctx.reply(f"⚠️ An error occurred: `{e}`", mention_author=False)
 
 
     @roles.error
