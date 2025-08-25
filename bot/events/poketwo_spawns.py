@@ -130,24 +130,37 @@ class PoketwoSpawnDetector(commands.Cog):
             image_path = os.path.join(self.spawn_output_dir, unique_filename)
 
             image_bytes = BytesIO()
-            await loop.run_in_executor(
-                _thread_executor,
-                self.pokemon_image_builder.create_image,
-                base_name,
-                self.pokemon_utils.format_name(raw_name).replace("_", " ").title(),
-                self.pokemon_utils.get_best_normal_alt_name(base_name) or "",
-                self.pokemon_utils.get_pokemon_types(base_name),
-                None,
-                image_bytes,
-                "PNG",
-            )
-            image_bytes.seek(0)
+            try:
+                await loop.run_in_executor(
+                    _thread_executor,
+                    self.pokemon_image_builder.create_image,
+                    raw_name,
+                    self.pokemon_utils.format_name(raw_name).replace("_", " ").title(),
+                    self.pokemon_utils.get_best_normal_alt_name(base_name) or "",
+                    self.pokemon_utils.get_pokemon_types(raw_name),
+                    None,
+                    image_bytes,
+                    "PNG",
+                )
+            except FileNotFoundError:
+                image_bytes = BytesIO()
+                await loop.run_in_executor(
+                    _thread_executor,
+                    self.pokemon_image_builder.create_image,
+                    base_name,
+                    self.pokemon_utils.format_name(base_name).replace("_", " ").title(),
+                    self.pokemon_utils.get_best_normal_alt_name(base_name) or "",
+                    self.pokemon_utils.get_pokemon_types(base_name),
+                    None,
+                    image_bytes,
+                    "PNG",
+                )
 
+            image_bytes.seek(0)
             with open(image_path, "wb") as f:
                 f.write(image_bytes.getbuffer())
 
             file = discord.File(fp=image_bytes, filename="pokemon_spawn.png")
-
             await message.channel.send(content=ping_msg, file=file, reference=message)
         except Exception as e:
             logger.error(f"Error in process_spawn_tasks: {type(e).__name__}: {e}")
