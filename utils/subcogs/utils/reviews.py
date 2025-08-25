@@ -141,66 +141,57 @@ class MongoManager:
 # ────────────────────────────────────────────────
 #  Select-menu + Paginator
 # ────────────────────────────────────────────────
+
 class ReviewUserSelect(discord.ui.Select):
     def __init__(self, reviews, member, mongo, guild):
-        options = []
         self.reviews = reviews
         self.member = member
         self.mongo = mongo
         self.guild = guild
 
-        for r in reviews:
-            reviewer = guild.get_member(int(r["reviewer_id"]))
-            if reviewer:
-                options.append(discord.SelectOption(
-                    label=reviewer.display_name,
-                    value=str(reviewer.id)
-                ))
+        options = [
+            discord.SelectOption(
+                label=guild.get_member(int(r["reviewer_id"])).display_name,
+                value=str(r["reviewer_id"])
+            )
+            for r in reviews
+            if guild.get_member(int(r["reviewer_id"]))
+        ]
+
+        # Ensure at least one option exists
+        if not options:
+            options = [discord.SelectOption(label="No reviewers available", value="none", default=True)]
 
         super().__init__(
             placeholder="Select a reviewer to see their review…",
-            min_values=1, max_values=1, options=options
+            min_values=1,
+            max_values=1,
+            options=options
         )
 
     async def callback(self, interaction: discord.Interaction):
-        selected_id = self.values[0]
-        reviewer = self.guild.get_member(int(selected_id))
-        review = next((r for r in self.reviews if r["reviewer_id"] == selected_id), None)
-
-        if not review:
-            await interaction.response.send_message(
-                f"{reviewer.mention} has not reviewed {self.member.display_name}.", ephemeral=True
-            )
+        if self.values[0] == "none":
+            await interaction.response.send_message("No reviews available.", ephemeral=True)
             return
 
-        star_txt = "⭐" * review["stars"]
-        emb = discord.Embed(
-            title=f"Review by {reviewer.display_name}",
-            description=f"{star_txt}\n\n{review['review']}",
-            color=primary_color()
-        )
-        emb.set_thumbnail(url=reviewer.display_avatar.url)
-        emb.set_footer(text=f"👍 {review['upvotes']} | 👎 {review['downvotes']}", icon_url=interaction.user.display_avatar.url)
+        reviewer_id = int(self.values[0])
+        review = next((r for r in self.reviews if int(r["reviewer_id"]) == reviewer_id), None)
 
-        view = discord.ui.View()
-        btn_up = VoteButton(review["_id"], True, self.mongo)
-        btn_down = VoteButton(review["_id"], False, self.mongo)
-
-        user_vote = review.get("votes", {}).get(str(interaction.user.id))
-        if user_vote == "up":
-            btn_up.style = discord.ButtonStyle.green
-        elif user_vote == "down":
-            btn_down.style = discord.ButtonStyle.red
-
-        view.add_item(btn_up)
-        view.add_item(btn_down)
-
-        await interaction.response.send_message(embed=emb, view=view, ephemeral=True)
-
+        if review:
+            embed = discord.Embed(
+                title=f"Review for {self.member.display_name}",
+                description=review.get("review_text", "No review text."),
+                color=discord.Color.blue()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        else:
+            await interaction.response.send_message("Review not found.", ephemeral=True)
 
 class Review_Select:
-    async def get_overview(self, ctx, member, mongo: MongoManager):
+    async def get_overview(self, ctx, member, mongo):
         reviews = await mongo.get_reviews_for_user(str(member.id))
+
+        # No reviews case
         if not reviews:
             emb = discord.Embed(
                 title=f"{member.display_name}'s Reviews",
@@ -210,6 +201,7 @@ class Review_Select:
             emb.set_thumbnail(url=member.avatar.url)
             return emb, None
 
+        # Average rating
         avg = await mongo.get_average_rating(str(member.id))
         emb = discord.Embed(
             title=f"{member.display_name}'s Reviews",
@@ -219,21 +211,20 @@ class Review_Select:
         emb.set_thumbnail(url=member.avatar.url)
 
         view = discord.ui.View()
-        # Split reviews into chunks of 5
         chunk_size = 5
         review_chunks = [reviews[i:i + chunk_size] for i in range(0, len(reviews), chunk_size)]
 
         for i, chunk in enumerate(review_chunks):
             select = ReviewUserSelect(chunk, member, mongo, ctx.guild)
-            total_parts = len(review_chunks)
             select.placeholder = f"Review Options | Part {i + 1}"
             view.add_item(select)
 
+        # Optional button for extra reviews if >25
         if len(reviews) > 25:
             view.add_item(OtherReviewsButton(reviews, member, mongo))
 
         return emb, view
-
+    
 class OtherReviewsButton(discord.ui.Button):
     def __init__(self, reviews, member, mongo):
         super().__init__(label="See All Reviews", style=discord.ButtonStyle.blurple)
