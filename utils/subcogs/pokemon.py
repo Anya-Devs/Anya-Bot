@@ -182,12 +182,20 @@ class PoketwoCommands(commands.Cog):
     # -------------------
     @pt.command(name="shiny", aliases=["sh"])
     async def shiny_hunt(self, ctx, action: str = None, *, pokemon: str = None):
+     try:
+        user_id = ctx.author.id
         prefix = ctx.prefix
+
         if action == "help":
             return await self.show_help(ctx, "shiny")
 
+        if action == "remove":
+            deleted = await self.mongo.db[self.shiny_collection].delete_many({"user_id": user_id})
+            msg = "✅ Your shiny hunt has been cleared." if deleted.deleted_count > 0 else "⚠ You don't have a shiny hunt to remove."
+            return await ctx.reply(embed=discord.Embed(description=msg, color=self.embed_default_color))
+
         if not action and not pokemon:
-            cur = await self.mongo.list(self.shiny_collection, ctx.author.id) if self.mongo else []
+            cur = await self.mongo.list(self.shiny_collection, user_id) if self.mongo else []
             if not cur:
                 return await ctx.reply(embed=discord.Embed(description="You don't have a shiny hunt set.", color=self.embed_default_color))
             name = cur[0]
@@ -197,10 +205,11 @@ class PoketwoCommands(commands.Cog):
 
         if action not in {"add","remove","list","clear"}:
             action, pokemon = "add", f"{action} {pokemon}".strip() if pokemon else action
-
         flags = self.flag_parser.parse_flags_from_string(pokemon or "")
         await self.collection_handler.handle_collection(ctx, self.shiny_collection, action, pokemon=pokemon, flags_obj=flags, max_one=True)
-
+     except Exception as e:
+        await ctx.reply(embed=discord.Embed(description=f"❌ Error: {e}", color=self.embed_default_color))
+        
     # -------------------
     # Collection
     # -------------------
