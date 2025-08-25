@@ -149,6 +149,7 @@ class ReviewUserSelect(discord.ui.Select):
         self.mongo = mongo
         self.guild = guild
 
+        # Only include reviewers who are in this guild
         options = [
             discord.SelectOption(
                 label=guild.get_member(int(r["reviewer_id"])).display_name,
@@ -158,7 +159,6 @@ class ReviewUserSelect(discord.ui.Select):
             if guild.get_member(int(r["reviewer_id"]))
         ]
 
-        # Ensure at least one option exists
         if not options:
             options = [discord.SelectOption(label="No reviewers available", value="none", default=True)]
 
@@ -180,32 +180,36 @@ class ReviewUserSelect(discord.ui.Select):
         if review:
             embed = discord.Embed(
                 title=f"Review for {self.member.display_name}",
-                description=review.get("review_text", "No review text."),
+                description=review.get("review", "No review text."),
                 color=discord.Color.blue()
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
         else:
             await interaction.response.send_message("Review not found.", ephemeral=True)
 
+
 class Review_Select:
     async def get_overview(self, ctx, member, mongo):
-        reviews = await mongo.get_reviews_for_user(str(member.id))
+        # Filter reviews by current guild only
+        all_reviews = await mongo.get_reviews_for_user(str(member.id))
+        reviews = [r for r in all_reviews if r.get("guild_id") == str(ctx.guild.id)]
 
-        # No reviews case
         if not reviews:
             emb = discord.Embed(
                 title=f"{member.display_name}'s Reviews",
-                description="No reviews yet.",
+                description="No reviews yet in this server.",
                 color=primary_color()
             )
             emb.set_thumbnail(url=member.avatar.url)
             return emb, None
 
-        # Average rating
-        avg = await mongo.get_average_rating(str(member.id))
+        avg = (
+            sum(r["stars"] for r in reviews) / len(reviews) if reviews else 0
+        )
+
         emb = discord.Embed(
             title=f"{member.display_name}'s Reviews",
-            description=f"⭐ **{avg:.2f}** average from **{len(reviews)}** review(s).",
+            description=f"⭐ **{avg:.2f}** average from **{len(reviews)}** review(s) in this server.",
             color=primary_color()
         )
         emb.set_thumbnail(url=member.avatar.url)
@@ -219,12 +223,12 @@ class Review_Select:
             select.placeholder = f"Review Options | Part {i + 1}"
             view.add_item(select)
 
-        # Optional button for extra reviews if >25
         if len(reviews) > 25:
             view.add_item(OtherReviewsButton(reviews, member, mongo))
 
         return emb, view
     
+      
 class OtherReviewsButton(discord.ui.Button):
     def __init__(self, reviews, member, mongo):
         super().__init__(label="See All Reviews", style=discord.ButtonStyle.blurple)
