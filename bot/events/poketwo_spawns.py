@@ -1,4 +1,4 @@
-import os, asyncio, logging
+import os, asyncio, logging, uuid
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -8,6 +8,7 @@ from bot.token import use_test_bot as ut
 from utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils
 from submodules.poketwo_autonamer.predict import Prediction
 from utils.subcogs.pokemon import PoketwoCommands, MongoHelper
+
 
 logger = logging.getLogger(__name__)
 _thread_executor = ThreadPoolExecutor(max_workers=os.cpu_count() or 4)
@@ -112,7 +113,7 @@ class PoketwoSpawnDetector(commands.Cog):
             dex = dex if dex and dex != "???" else self._pokemon_ids.get(base_name, "???")
 
             ping_msg, _ = await self.pokemon_utils.format_messages(
-                raw_name,  # use raw for formatted display
+                raw_name,
                 type_pings,
                 quest_pings,
                 shiny_pings,
@@ -125,24 +126,27 @@ class PoketwoSpawnDetector(commands.Cog):
                 low_conf[0],
             )
 
-            image_path = os.path.join(self.spawn_output_dir, f"{base_name}.png")
-            if os.path.exists(image_path):
-                file = discord.File(image_path, filename="pokemon_spawn.png")
-            else:
-                image_bytes = BytesIO()
-                await loop.run_in_executor(
-                    _thread_executor,
-                    self.pokemon_image_builder.create_image,
-                    base_name,  # image always uses base name
-                    self.pokemon_utils.format_name(raw_name).replace("_", " ").title(),
-                    self.pokemon_utils.get_best_normal_alt_name(base_name) or "",
-                    self.pokemon_utils.get_pokemon_types(base_name),
-                    None,
-                    image_bytes,
-                    "PNG",
-                )
-                image_bytes.seek(0)
-                file = discord.File(fp=image_bytes, filename="pokemon_spawn.png")
+            unique_filename = f"{base_name}_{uuid.uuid4().hex}.png"
+            image_path = os.path.join(self.spawn_output_dir, unique_filename)
+
+            image_bytes = BytesIO()
+            await loop.run_in_executor(
+                _thread_executor,
+                self.pokemon_image_builder.create_image,
+                base_name,
+                self.pokemon_utils.format_name(raw_name).replace("_", " ").title(),
+                self.pokemon_utils.get_best_normal_alt_name(base_name) or "",
+                self.pokemon_utils.get_pokemon_types(base_name),
+                None,
+                image_bytes,
+                "PNG",
+            )
+            image_bytes.seek(0)
+
+            with open(image_path, "wb") as f:
+                f.write(image_bytes.getbuffer())
+
+            file = discord.File(fp=image_bytes, filename="pokemon_spawn.png")
 
             await message.channel.send(content=ping_msg, file=file, reference=message)
         except Exception as e:
