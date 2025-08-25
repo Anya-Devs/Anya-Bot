@@ -11,8 +11,12 @@ class Fun(commands.Cog):
         self.fun_cmd = Fun_Commands()
         self._dynamic_commands = []
         self._path = 'data/commands/fun/action-response.json'
-        self.correct_emojis = {}
+        self.correct_emojis = {} 
         self._create_actions()
+        self.mongo_url = os.getenv("MONGO_URI")
+        self.client = AsyncIOMotorClient(self.mongo_url)
+        self.db = self.client["Commands"]
+        self.collection = self.db["qna"]
 
     @commands.command(name='8ball')
     async def eight_ball(self, ctx, *, question):
@@ -57,7 +61,9 @@ class Fun(commands.Cog):
 
     def get_commands(self):
         return super().get_commands() + self._dynamic_commands
-
+    
+    
+        
     @commands.command(name="memo")
     @commands.cooldown(1, 15, commands.BucketType.user)
     async def play_emoji_game(self, ctx):
@@ -86,5 +92,89 @@ class Fun(commands.Cog):
         except asyncio.TimeoutError:
             await msg.edit(embed=self.timeout_embed(), view=None)
 
+
+    @commands.command(name="qna")
+    @commands.has_permissions(manage_channels=True)
+    async def qna(self, ctx):
+        """Interactive Q&A channel setup"""
+        current_config = await self.collection.find_one({"guild_id": ctx.guild.id})
+        view = QnAConfigView(self.bot, ctx.guild, current_config, self.collection, ctx.author)
+
+        embed = discord.Embed(
+            title="📝 Q&A Setup",
+            description=(
+                "Welcome! Configure your Q&A channels using the dropdowns below.\n\n"
+                "**Steps:**\n"
+                "1️⃣ Select the Question channel.\n"
+                "2️⃣ Select the Answer channel.\n"
+                "3️⃣ Click Confirm to save your configuration.\n\n"
+                "You can always re-run this command to update channels."
+            ),
+            color=discord.Color.blue(),
+            timestamp=datetime.now()
+        )
+
+        view.message = await ctx.reply(embed=embed, view=view, mention_author=False)
+
+    # -----------------------------
+    # Listener for questions
+    # -----------------------------
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+     if message.author.bot or not message.guild:
+        return
+     try:
+        guild_config = await self.collection.find_one({"guild_id": message.guild.id})
+        if not guild_config or message.channel.id != guild_config.get("question_channel"):
+            return
+
+        await message.delete()  # Remove user's original message
+
+        q_channel = message.guild.get_channel(guild_config["question_channel"])
+        a_channel = message.guild.get_channel(guild_config["answer_channel"])
+        if not q_channel or not a_channel:
+            return
+
+        embed = discord.Embed(
+            title="❓ Question",
+            description=f"```{message.content}```",
+            color=primary_color(),
+            timestamp=datetime.now()
+        )
+        embed.set_thumbnail(url=message.author.display_avatar.url)
+        embed.set_footer(text=f"Asked by {message.author}")
+
+        # Attach the answer button
+        view = QnAAnswerButton(
+            bot=self.bot,
+            question_text=message.content,
+            asker=message.author,
+            answer_channel_id=a_channel.id,
+            message_id=None  # Will be set after sending
+        )
+        sent_msg = await q_channel.send(embed=embed, view=view)
+        view.message_id = sent_msg.id  # persist for button callbacks
+
+        # Store in Mongo
+        await self.collection.update_one(
+            {"guild_id": message.guild.id},
+            {"$push": {"questions": {
+                "message_id": sent_msg.id,
+                "channel_id": q_channel.id,
+                "question": message.content,
+                "asker_id": message.author.id,
+                "answer_message_id": None,  # placeholder for answer
+                "images": []  # placeholder if images are added later
+            }}},
+            upsert=True
+        )
+        print(f"MongoDB updated with new question: {sent_msg.id}")
+
+     except Exception as e:
+        print(f"on_message error: {e}")
+
+        
 async def setup(bot):
+    await setup_persistent_views_fun(bot)
     await bot.add_cog(Fun(bot))
+    

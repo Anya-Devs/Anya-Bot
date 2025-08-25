@@ -10,7 +10,7 @@ from imports.discord_imports import *
 from imports.log_imports import *
 from data.local.const import *
 from utils.cogs.quest import *
-
+ 
 
 class Fun_Commands:
     def __init__(self):
@@ -227,3 +227,358 @@ class MemoEmbeds:
         return discord.Embed(
             title="⏳ Time's Up!",description="You took too long. Streak reset to `0`.",color=discord.Color.red()
         ).set_footer(text="Try again next round!")
+
+
+
+class QnAAnswerButton(ui.View):
+    def __init__(self, bot, question_text, asker, answer_channel_id, message_id):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.question_text = question_text[:2000]
+        self.asker = asker
+        self.answer_channel_id = answer_channel_id
+        self.message_id = message_id
+
+    @ui.button(label="Answer", style=discord.ButtonStyle.primary, custom_id="qna_answer_btn")
+    async def answer(self, interaction: discord.Interaction, button: ui.Button):
+        if not self.asker:
+            await interaction.response.send_message(
+                "❌ Original asker could not be found.", ephemeral=True
+            )
+            return
+
+        answer_channel = interaction.guild.get_channel(self.answer_channel_id)
+        if not answer_channel:
+            await interaction.response.send_message(
+                "❌ Answer channel not found.", ephemeral=True
+            )
+            return
+
+        modal = QnAModal(
+            bot=self.bot,
+            question_text=self.question_text,
+            asker=self.asker,
+            answer_channel_id=self.answer_channel_id,
+            responder=interaction.user,
+            guild_id=interaction.guild.id,  # <-- pass guild ID here
+            question_message_id=self.message_id
+        )
+        await interaction.response.send_modal(modal)
+
+
+
+class QnAModal(ui.Modal, title="Answer Question"):
+    def __init__(self, bot, question_text, asker, answer_channel_id, responder, guild_id, question_message_id):
+        super().__init__()
+        self.bot = bot
+        self.question_text = question_text
+        self.asker = asker
+        self.answer_channel_id = answer_channel_id
+        self.responder = responder
+        self.guild_id = guild_id
+        self.question_message_id = question_message_id 
+
+        # Answer input
+        self.answer_input = ui.TextInput(
+            label=self.question_text,
+            style=discord.TextStyle.paragraph,
+            placeholder=f"Answer the question:\n{self.question_text}",
+            required=True
+        )
+        self.add_item(self.answer_input)
+
+        # Optional images input
+        self.images_input = ui.TextInput(
+            label="Image Links (optional)",
+            style=discord.TextStyle.short,
+            placeholder="Enter up to 4 links (separated by space or comma)",
+            required=False,
+            max_length=1000
+        )
+        self.add_item(self.images_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        channel = interaction.guild.get_channel(self.answer_channel_id)
+        if not channel:
+            await interaction.response.send_message("⚠️ Answer channel not found.", ephemeral=True)
+            return
+
+        embed = discord.Embed(
+            description=(
+                f"❓ **{self.asker.mention} Question:**\n```{self.question_text}```\n\n"
+                f"💬 **{self.responder.mention} Answer:**\n```{self.answer_input.value}```"
+            ),
+            color=primary_color(),
+            timestamp=datetime.now()
+        )
+        embed.set_thumbnail(url=self.responder.display_avatar.url)
+        embed.set_footer(text=f"Question by {self.asker.display_name} | Answered by {self.responder.display_name}")
+
+        # Parse image links
+        image_links = []
+        if self.images_input.value:
+            raw = self.images_input.value.replace(",", " ").split()
+            image_links = [link.strip() for link in raw if link.startswith("http")]
+            image_links = image_links[:4]
+
+        msg = await channel.send(embed=embed)
+        if image_links:
+            view = QnAImageButton(bot=self.bot, images=image_links, message_id=msg.id)
+            await msg.edit(view=view)
+
+        # Insert into MongoDB
+        mongo_url = os.getenv("MONGO_URI")
+        client = AsyncIOMotorClient(mongo_url)
+        collection = client["Commands"]["qna"]
+        await collection.update_one(
+            {"guild_id": self.guild_id, "questions.message_id": self.question_message_id},
+            {"$set": {
+                "questions.$.answer_message_id": msg.id,
+                "questions.$.images": image_links
+            }},
+            upsert=True
+        )
+
+        await interaction.response.send_message("✅ Your answer has been submitted!", ephemeral=True)
+
+        
+class QnAImageButton(ui.View):
+    def __init__(self, bot, images: list[str] | None, message_id):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.images = images or []
+        self.message_id = message_id
+
+        button = ui.Button(
+            label="📷 View Images",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"images_{message_id}"
+        )
+        button.callback = self.view_images
+        self.add_item(button)
+
+    async def view_images(self, interaction: discord.Interaction):
+        if not self.images:
+            await interaction.response.send_message("⚠️ No images available.", ephemeral=True)
+            return
+
+        embeds = [discord.Embed(color=discord.Color.blurple()).set_image(url=link)
+                  for link in self.images[:4]]
+
+        await interaction.response.send_message(embeds=embeds, ephemeral=True)
+
+
+# ----------------------------
+# Q & A Config
+# ----------------------------
+class QnAConfigView(ui.View):
+    def __init__(self, bot, guild, current_config, collection, author):
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.guild = guild
+        self.collection = collection
+        self.selected_question = None
+        self.selected_answer = None
+        self.current_config = current_config
+        self.message = None
+        self.author = author
+
+        # Dropdowns
+        self.add_item(TextChannelSelect("Select Question Channel", self.set_question_channel, self.author))
+        self.add_item(TextChannelSelect("Select Answer Channel", self.set_answer_channel, self.author))
+
+        # Confirm button
+        self.confirm_btn = ui.Button(label="Confirm Setup", style=discord.ButtonStyle.success, disabled=True)
+        self.confirm_btn.callback = self.confirm_setup
+        self.add_item(self.confirm_btn)
+
+    async def set_question_channel(self, channel):
+        self.selected_question = channel
+        await self.update_confirm_state()
+
+    async def set_answer_channel(self, channel):
+        self.selected_answer = channel
+        await self.update_confirm_state()
+
+    async def update_confirm_state(self):
+        self.confirm_btn.disabled = not (self.selected_question and self.selected_answer)
+        await self.refresh_embed()
+
+    async def refresh_embed(self):
+        if not self.message:
+            return
+        embed = discord.Embed(
+            title="📝 Q&A Configuration",
+            description="Use the dropdowns to select channels and press Confirm when ready.",
+            color=discord.Color.blue(),
+            timestamp=datetime.now()
+        )
+        if self.selected_question:
+            embed.add_field(name="Selected Question Channel", value=self.selected_question.mention, inline=True)
+        if self.selected_answer:
+            embed.add_field(name="Selected Answer Channel", value=self.selected_answer.mention, inline=True)
+        if self.current_config:
+            q = self.guild.get_channel(self.current_config.get("question_channel"))
+            a = self.guild.get_channel(self.current_config.get("answer_channel"))
+            embed.set_footer(text=f"Current config: Q: {q.name if q else 'None'} | A: {a.name if a else 'None'}")
+        else:
+            embed.set_footer(text="No current Q&A configuration")
+        await self.message.edit(embed=embed, view=self)
+
+    async def confirm_setup(self, interaction: discord.Interaction):
+        if interaction.user != self.author:
+            await interaction.response.send_message("❌ You cannot interact with this setup.", ephemeral=True)
+            return
+
+        await self.collection.update_one(
+            {"guild_id": self.guild.id},
+            {"$set": {"question_channel": self.selected_question.id, "answer_channel": self.selected_answer.id}},
+            upsert=True
+        )
+        self.current_config = {"question_channel": self.selected_question.id, "answer_channel": self.selected_answer.id}
+        await self.refresh_embed()
+        await interaction.response.send_message("✅ Q&A channels saved!", ephemeral=True)
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            await self.message.edit(view=self)
+
+
+class TextChannelSelect(ui.ChannelSelect):
+    def __init__(self, placeholder_text, callback_fn, author):
+        super().__init__(
+            placeholder=placeholder_text,
+            channel_types=[discord.ChannelType.text],
+            min_values=1,
+            max_values=1
+        )
+        self.callback_fn = callback_fn
+        self.author = author
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            if interaction.user != self.author:
+                await interaction.response.send_message(
+                    "❌ You cannot interact with this.", ephemeral=True
+                )
+                return
+
+            # ChannelSelect already returns a channel object
+            selected_channel = self.values[0]
+
+            await self.callback_fn(selected_channel)
+            await interaction.response.defer()
+        except Exception as e:
+            print(f"Error in TextChannelSelect callback: {e}")
+
+
+   
+# -----------------------------
+# Restore persistent views
+# -----------------------------
+async def setup_persistent_views_fun(bot):
+    mongo_url = os.getenv("MONGO_URI")
+    client = AsyncIOMotorClient(mongo_url)
+    collection = client["Commands"]["qna"]
+    guilds_cursor = collection.find({})
+
+    async for guild_data in guilds_cursor:
+        guild_id = guild_data.get("guild_id")
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            print(f"⚠️ Guild {guild_id} not found. Skipping...")
+            continue
+
+        question_channel_id = guild_data.get("question_channel")
+        answer_channel_id = guild_data.get("answer_channel")
+        question_channel = guild.get_channel(question_channel_id)
+        answer_channel = guild.get_channel(answer_channel_id)
+
+        questions = guild_data.get("questions", [])
+        for q in questions:
+            answer_message_id = q.get("answer_message_id")
+            if not answer_channel or not answer_message_id:
+                continue
+
+            try:
+                answer_msg = await answer_channel.fetch_message(answer_message_id)
+                asker = guild.get_member(q.get("asker_id"))
+
+                # --- Restore Answer Button ---
+                if asker:
+                    answer_view = QnAAnswerButton(
+                        bot=bot,
+                        question_text=q.get("question", "No question text")[:2000],
+                        asker=asker,
+                        answer_channel_id=answer_channel.id,
+                        message_id=answer_msg.id
+                    )
+                    bot.add_view(answer_view, message_id=answer_msg.id)
+
+                # --- Restore Image Button(s) ---
+                if q.get("images"):
+                    image_view = QnAImageButton(
+                        bot=bot,
+                        images=q.get("images", []),
+                        message_id=answer_msg.id
+                    )
+                    bot.add_view(image_view, message_id=answer_msg.id)
+
+            except discord.NotFound:
+                print(f"🗑️ Removing stale QnA entry: {answer_message_id}")
+                await collection.update_one(
+                    {"guild_id": guild.id},
+                    {"$pull": {"questions": {"answer_message_id": answer_message_id}}}
+                )
+            except Exception as e:
+                print(f"❌ Could not restore QnA answer/image buttons: {e}")  
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
