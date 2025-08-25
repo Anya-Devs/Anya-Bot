@@ -110,7 +110,7 @@ class MongoManager:
         self.db = self.client["Commands"]
         self.collection = self.db["reviews"]
 
-    async def add_review(self, reviewer_id, target_id, stars, review):
+    async def add_review(self, reviewer_id, target_id, stars, review, guild_id):
         doc = {
             "reviewer_id": reviewer_id,
             "target_id": target_id,
@@ -118,98 +118,111 @@ class MongoManager:
             "review": review,
             "upvotes": 0,
             "downvotes": 0,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.utcnow(),
+            "guild_id": guild_id
         }
         await self.collection.insert_one(doc)
 
-    async def get_reviews_for_user(self, target_id):
-        reviews = await self.collection.find({"target_id": target_id}).to_list(None)
-        reviews.sort(key=lambda r: r.get("upvotes", 0), reverse=True)
-        return reviews
+    async def get_reviews_for_user(self, target_id, guild_id):
+     reviews = await self.collection.find({
+        "target_id": target_id,
+        "guild_id": guild_id
+     }).to_list(None)
+     reviews.sort(key=lambda r: r.get("upvotes", 0), reverse=True)
+     return reviews
 
-    async def get_average_rating(self, target_id):
-        reviews = await self.get_reviews_for_user(target_id)
-        if not reviews:
-            return 0
-        return sum(r["stars"] for r in reviews) / len(reviews)
+    async def get_average_rating(self, target_id, guild_id):
+     reviews = await self.get_reviews_for_user(target_id, guild_id)
+     if not reviews:
+        return 0
+     return sum(r["stars"] for r in reviews) / len(reviews)
 
-    async def vote_review(self, review_id, up=True):
-        field = "upvotes" if up else "downvotes"
-        await self.collection.update_one({"_id": review_id}, {"$inc": {field: 1}})
-
+    async def vote_review(self, review_id, guild_id, up=True):
+     review = await self.collection.find_one({"_id": ObjectId(review_id), "guild_id": guild_id})
+     if not review:
+        return
+     field = "upvotes" if up else "downvotes"
+     await self.collection.update_one({"_id": ObjectId(review_id)}, {"$inc": {field: 1}})
 
 # ────────────────────────────────────────────────
 #  Select-menu + Paginator
 # ────────────────────────────────────────────────
-
 class ReviewUserSelect(discord.ui.Select):
     def __init__(self, reviews, member, mongo, guild):
+        options = []
         self.reviews = reviews
         self.member = member
         self.mongo = mongo
         self.guild = guild
 
-        # Only include reviewers who are in this guild
-        options = [
-            discord.SelectOption(
-                label=guild.get_member(int(r["reviewer_id"])).display_name,
-                value=str(r["reviewer_id"])
-            )
-            for r in reviews
-            if guild.get_member(int(r["reviewer_id"]))
-        ]
-
-        if not options:
-            options = [discord.SelectOption(label="No reviewers available", value="none", default=True)]
+        for r in reviews:
+            reviewer = guild.get_member(int(r["reviewer_id"]))
+            if reviewer:
+                options.append(discord.SelectOption(
+                    label=reviewer.display_name,
+                    value=str(r["_id"])  # use review id, not reviewer id
+                ))
 
         super().__init__(
             placeholder="Select a reviewer to see their review…",
-            min_values=1,
-            max_values=1,
-            options=options
+            min_values=1, max_values=1, options=options
         )
 
     async def callback(self, interaction: discord.Interaction):
-        if self.values[0] == "none":
-            await interaction.response.send_message("No reviews available.", ephemeral=True)
+        review_id = ObjectId(self.values[0])
+        review = await self.mongo.collection.find_one(
+            {"_id": review_id, "guild_id": str(interaction.guild.id)}
+        )
+        if not review:
+            await interaction.response.send_message("Review not found.", ephemeral=True)
             return
 
-        reviewer_id = int(self.values[0])
-        review = next((r for r in self.reviews if int(r["reviewer_id"]) == reviewer_id), None)
+        reviewer = self.guild.get_member(int(review["reviewer_id"]))
+        star_txt = "⭐" * review["stars"]
 
-        if review:
-            embed = discord.Embed(
-                title=f"Review for {self.member.display_name}",
-                description=review.get("review", "No review text."),
-                color=discord.Color.blue()
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-        else:
-            await interaction.response.send_message("Review not found.", ephemeral=True)
+        emb = discord.Embed(
+            title=f"Review by {reviewer.display_name}" if reviewer else "Review",
+            description=f"{star_txt}\n\n{review['review']}",
+            color=primary_color()
+        )
+        if reviewer:
+            emb.set_thumbnail(url=reviewer.display_avatar.url)
+        emb.set_footer(text=f"👍 {review.get('upvotes', 0)} | 👎 {review.get('downvotes', 0)}",
+                       icon_url=interaction.user.display_avatar.url)
+
+        # Vote buttons
+        view = discord.ui.View()
+        btn_up = VoteButton(review["_id"], True, self.mongo, str(interaction.guild.id))
+        btn_down = VoteButton(review["_id"], False, self.mongo, str(interaction.guild.id))
+
+        user_vote = review.get("votes", {}).get(str(interaction.user.id))
+        if user_vote == "up":
+            btn_up.style = discord.ButtonStyle.green
+        elif user_vote == "down":
+            btn_down.style = discord.ButtonStyle.red
+        view.add_item(btn_up)
+        view.add_item(btn_down)
+
+        await interaction.response.send_message(embed=emb, view=view, ephemeral=True)
+
 
 
 class Review_Select:
-    async def get_overview(self, ctx, member, mongo):
-        # Filter reviews by current guild only
-        all_reviews = await mongo.get_reviews_for_user(str(member.id))
-        reviews = [r for r in all_reviews if r.get("guild_id") == str(ctx.guild.id)]
-
+    async def get_overview(self, ctx, member, mongo: MongoManager):
+        reviews = await mongo.get_reviews_for_user(str(member.id), str(ctx.guild.id))
         if not reviews:
             emb = discord.Embed(
                 title=f"{member.display_name}'s Reviews",
-                description="No reviews yet in this server.",
+                description="No reviews yet.",
                 color=primary_color()
             )
             emb.set_thumbnail(url=member.avatar.url)
             return emb, None
 
-        avg = (
-            sum(r["stars"] for r in reviews) / len(reviews) if reviews else 0
-        )
-
+        avg = await mongo.get_average_rating(str(member.id), str(ctx.guild.id))
         emb = discord.Embed(
             title=f"{member.display_name}'s Reviews",
-            description=f"⭐ **{avg:.2f}** average from **{len(reviews)}** review(s) in this server.",
+            description=f"⭐ **{avg:.2f}** average from **{len(reviews)}** review(s).",
             color=primary_color()
         )
         emb.set_thumbnail(url=member.avatar.url)
@@ -224,17 +237,18 @@ class Review_Select:
             view.add_item(select)
 
         if len(reviews) > 25:
-            view.add_item(OtherReviewsButton(reviews, member, mongo))
+            view.add_item(OtherReviewsButton(reviews, member, mongo, str(ctx.guild.id)))
 
         return emb, view
-    
-      
+
+
 class OtherReviewsButton(discord.ui.Button):
-    def __init__(self, reviews, member, mongo):
+    def __init__(self, reviews, member, mongo, guild_id):
         super().__init__(label="See All Reviews", style=discord.ButtonStyle.blurple)
         self.reviews = reviews
         self.member = member
         self.mongo = mongo
+        self.guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
         view = Review_PaginatorView(self.reviews, self.member, interaction.user)
@@ -242,19 +256,26 @@ class OtherReviewsButton(discord.ui.Button):
 
 
 class VoteButton(discord.ui.Button):
-    def __init__(self, review_id, up: bool, mongo: MongoManager):
+    def __init__(self, review_id, up: bool, mongo: MongoManager, guild_id, user_id=None):
         super().__init__(emoji="👍" if up else "👎", style=discord.ButtonStyle.secondary)
         self.review_id = ObjectId(review_id)
         self.up = up
         self.mongo = mongo
+        self.guild_id = guild_id
+        self.user_id = str(user_id) if user_id else None
 
     async def callback(self, interaction: discord.Interaction):
         user_id = str(interaction.user.id)
-        review = await self.mongo.collection.find_one({"_id": self.review_id})
+        review = await self.mongo.collection.find_one(
+            {"_id": self.review_id, "guild_id": self.guild_id}
+        )
         if not review:
+            await interaction.response.send_message("Review not found.", ephemeral=True)
             return
 
         votes = review.get("votes", {})
+
+        # Toggle vote
         if user_id in votes:
             if (self.up and votes[user_id] == "up") or (not self.up and votes[user_id] == "down"):
                 del votes[user_id]
@@ -266,10 +287,12 @@ class VoteButton(discord.ui.Button):
         upvotes = sum(1 for v in votes.values() if v == "up")
         downvotes = sum(1 for v in votes.values() if v == "down")
 
-        # Auto-delete if more than 6 downvotes
+        # Auto-delete bad reviews
         if downvotes > 6:
             await self.mongo.collection.delete_one({"_id": self.review_id})
-            await interaction.response.send_message("Review deleted due to excessive downvotes.", ephemeral=True)
+            await interaction.response.edit_message(
+                content="Review deleted due to excessive downvotes.", embed=None, view=None
+            )
             return
 
         await self.mongo.collection.update_one(
@@ -277,33 +300,34 @@ class VoteButton(discord.ui.Button):
             {"$set": {"votes": votes, "upvotes": upvotes, "downvotes": downvotes}}
         )
 
-        # Refresh embed
+        reviewer = interaction.guild.get_member(int(review["reviewer_id"]))
+        star_txt = "⭐" * review["stars"]
+
         emb = discord.Embed(
-            title=f"Vote Results for Review",
-            description=review["review"],
+            title=f"Review by {reviewer.display_name}" if reviewer else "Review",
+            description=f"{star_txt}\n\n{review['review']}",
             color=primary_color()
         )
-        reviewer = interaction.guild.get_member(int(review["reviewer_id"]))
         if reviewer:
             emb.set_thumbnail(url=reviewer.display_avatar.url)
-        emb.set_footer(text=f"👍 {upvotes} | 👎 {downvotes}", icon_url=interaction.user.display_avatar.url)
+        emb.set_footer(text=f"👍 {upvotes} | 👎 {downvotes}",
+                       icon_url=interaction.user.display_avatar.url)
 
+        # Rebuild buttons
         view = discord.ui.View()
-        btn_up = VoteButton(self.review_id, True, self.mongo)
-        btn_down = VoteButton(self.review_id, False, self.mongo)
-
-        user_vote = votes.get(user_id)
-        if user_vote == "up":
+        btn_up = VoteButton(self.review_id, True, self.mongo, self.guild_id)
+        btn_down = VoteButton(self.review_id, False, self.mongo, self.guild_id)
+        if votes.get(user_id) == "up":
             btn_up.style = discord.ButtonStyle.green
-        elif user_vote == "down":
+        elif votes.get(user_id) == "down":
             btn_down.style = discord.ButtonStyle.red
-
         view.add_item(btn_up)
         view.add_item(btn_down)
+
         await interaction.response.edit_message(embed=emb, view=view)
         
         
-        
+             
 class Review_Paginator:
     async def start(self, ctx, reviews, member):
         pages = self._build_pages(member, reviews)
@@ -328,30 +352,45 @@ class Review_Paginator:
 
 
 class Review_PaginatorView(discord.ui.View):
-    def __init__(self, reviews, member, owner):
+    def __init__(self, reviews, member, owner, mongo, guild_id):
         super().__init__(timeout=60)
         self.reviews = reviews
         self.member = member
         self.owner = owner
-        self.pages = self._build_pages()
+        self.mongo = mongo
+        self.guild_id = guild_id
         self.current = 0
         self.message = None
 
-    def _build_pages(self):
-        pages = []
-        for rev in self.reviews:
-            emb = discord.Embed(
-                title=f"Review for {self.member.display_name}",
-                description=rev["review"],
-                color=primary_color()
-            ).set_footer(
-                text=f"👍 {rev['upvotes']} | 👎 {rev['downvotes']}"
-            )
-            pages.append(emb)
-        return pages
+    def build_page(self, review, user: discord.Member):
+        reviewer = user.guild.get_member(int(review["reviewer_id"]))
+        star_txt = "⭐" * review["stars"]
+
+        emb = discord.Embed(
+            title=f"Review by {reviewer.display_name}" if reviewer else "Review",
+            description=f"{star_txt}\n\n{review['review']}",
+            color=primary_color()
+        )
+        if reviewer:
+            emb.set_thumbnail(url=reviewer.display_avatar.url)
+        emb.set_footer(text=f"👍 {review.get('upvotes', 0)} | 👎 {review.get('downvotes', 0)}")
+
+        view = discord.ui.View()
+        btn_up = VoteButton(review["_id"], True, self.mongo, self.guild_id)
+        btn_down = VoteButton(review["_id"], False, self.mongo, self.guild_id)
+        user_vote = review.get("votes", {}).get(str(user.id))
+        if user_vote == "up":
+            btn_up.style = discord.ButtonStyle.green
+        elif user_vote == "down":
+            btn_down.style = discord.ButtonStyle.red
+        view.add_item(btn_up)
+        view.add_item(btn_down)
+
+        return emb, view
 
     async def start(self, interaction):
-        self.message = await interaction.response.send_message(embed=self.pages[0], view=self, ephemeral=True)
+        emb, view = self.build_page(self.reviews[0], interaction.user)
+        self.message = await interaction.response.send_message(embed=emb, view=view, ephemeral=True)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return interaction.user.id == self.owner.id
@@ -359,12 +398,14 @@ class Review_PaginatorView(discord.ui.View):
     @discord.ui.button(emoji="⬅️", style=discord.ButtonStyle.blurple)
     async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.current = max(self.current - 1, 0)
-        await interaction.response.edit_message(embed=self.pages[self.current])
+        emb, view = self.build_page(self.reviews[self.current], interaction.user)
+        await interaction.response.edit_message(embed=emb, view=view)
 
     @discord.ui.button(emoji="➡️", style=discord.ButtonStyle.blurple)
     async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current = min(self.current + 1, len(self.pages) - 1)
-        await interaction.response.edit_message(embed=self.pages[self.current])
+        self.current = min(self.current + 1, len(self.reviews) - 1)
+        emb, view = self.build_page(self.reviews[self.current], interaction.user)
+        await interaction.response.edit_message(embed=emb, view=view)
 
     async def on_timeout(self):
         for child in self.children:
@@ -505,7 +546,7 @@ class ReviewModal(ui.Modal):
 
         self.stars = ui.TextInput(
             label="Rating (1-5)",
-            style=TextStyle.short,  # single-line
+            style=TextStyle.short,
             placeholder="e.g. 4",
             default=str(existing.get("stars", "")) if existing else "",
             min_length=1,
@@ -514,7 +555,7 @@ class ReviewModal(ui.Modal):
 
         self.review = ui.TextInput(
             label="Review text",
-            style=TextStyle.paragraph,  # multi-line
+            style=TextStyle.paragraph,
             placeholder="Write your review here...",
             default=str(existing.get("review", "")) if existing else "",
             max_length=1500
@@ -536,35 +577,32 @@ class ReviewModal(ui.Modal):
         return cls(title, target_member, mongo, is_edit=is_edit, existing=existing)
 
     async def on_submit(self, interaction):
-     try:
-        stars = int(self.stars.value)
-        if stars < 1 or stars > 5:
-            raise ValueError
-     except ValueError:
-        await interaction.response.send_message("Stars must be 1-5.", ephemeral=True)
-        return
+        try:
+            stars = int(self.stars.value)
+            if stars < 1 or stars > 5:
+                raise ValueError
+        except ValueError:
+            await interaction.response.send_message("Stars must be 1-5.", ephemeral=True)
+            return
 
-     reviewer_id = str(interaction.user.id)
-     target_id = str(self.target_member.id)
+        reviewer_id = str(interaction.user.id)
+        target_id = str(self.target_member.id)
+        guild_id = str(interaction.guild.id)
 
-     if self.is_edit:
-        await self.mongo.collection.update_one(
-            {"reviewer_id": reviewer_id, "target_id": target_id},
-            {"$set": {"stars": stars, "review": self.review.value}}
-        )
-        msg = f"Review has been updated for {self.target_member.mention}."
-     else:
-        await self.mongo.add_review(reviewer_id, target_id, stars, self.review.value)
-        msg = f"Review has been made for {self.target_member.mention}."
+        if self.is_edit:
+            await self.mongo.collection.update_one(
+                {"reviewer_id": reviewer_id, "target_id": target_id, "guild_id": guild_id},
+                {"$set": {"stars": stars, "review": self.review.value}}
+            )
+            msg = f"Review has been updated for {self.target_member.mention}."
+        else:
+            await self.mongo.add_review(reviewer_id, target_id, stars, self.review.value, guild_id)
+            msg = f"Review has been made for {self.target_member.mention}."
 
-     try:
-        if interaction.message:
-            await interaction.message.delete()
-     except:
-        pass
+        try:
+            if interaction.message:
+                await interaction.message.delete()
+        except:
+            pass
 
-     await interaction.response.send_message(msg, ephemeral=True)
-        
-        
-        
-        
+        await interaction.response.send_message(msg, ephemeral=True)
