@@ -1,14 +1,14 @@
-import os, asyncio, logging, uuid
+import os, asyncio, logging
 from concurrent.futures import ThreadPoolExecutor
+import aiofiles
 from io import BytesIO
-from motor.motor_asyncio import AsyncIOMotorClient
 import numpy as np
+from motor.motor_asyncio import AsyncIOMotorClient
 from imports.discord_imports import *
 from bot.token import use_test_bot as ut
 from utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils
 from submodules.poketwo_autonamer.predict import Prediction
 from utils.subcogs.pokemon import PoketwoCommands, MongoHelper
-
 
 logger = logging.getLogger(__name__)
 _thread_executor = ThreadPoolExecutor(max_workers=os.cpu_count() or 4)
@@ -40,23 +40,26 @@ class PoketwoSpawnDetector(commands.Cog):
             pp=self.pp,
         )
         self.pokemon_image_builder = PokemonImageBuilder()
-        self.image_cache_prefix = "poketwo:images:"
-        self.config_cache_prefix = "poketwo:server_config:"
-        self.desc_cache_prefix = "poketwo:desc:"
-        self._pokemon_ids = self.pokemon_utils.load_pokemon_ids()
-        self.slug_map = {k.lower(): k for k in self._pokemon_ids.keys()}
         self.spawn_output_dir = "data/events/poketwo_spawns/spawns"
         os.makedirs(self.spawn_output_dir, exist_ok=True)
-        self.file_cache = {
-            slug: os.path.join(self.spawn_output_dir, f"{slug}.png")
-            for slug in self._pokemon_ids
-            if os.path.exists(os.path.join(self.spawn_output_dir, f"{slug}.png"))
-        }
+
+        # Preload all file paths into memory (dict lookup is O(1))
+        self._pokemon_ids = self.pokemon_utils.load_pokemon_ids()
+        self.file_cache = {}
+        for slug in self._pokemon_ids:
+            path = os.path.join(self.spawn_output_dir, f"{slug}.png")
+            if os.path.exists(path):
+                self.file_cache[slug] = path
+
+        # Cache predictions for repeated spawns
+        self.prediction_cache = {}
+
         self.queue = asyncio.Queue()
         self.worker_count = worker_count or min((os.cpu_count() or 4) * 2, 32)
         self.success_emoji = "<:green:1261639410181476443>"
         self.error_emoji = "<:red:1261639413943762944>"
         self.cross_emoji = "❌"
+
         for _ in range(self.worker_count):
             self.bot.loop.create_task(self._worker())
 
@@ -73,9 +76,15 @@ class PoketwoSpawnDetector(commands.Cog):
     async def process_spawn(self, message, image_url):
         try:
             loop = asyncio.get_running_loop()
-            raw_name, conf = await loop.run_in_executor(
-                _thread_executor, self.predictor.predict, image_url
-            )
+
+            # Prediction cache first
+            if image_url in self.prediction_cache:
+                raw_name, conf = self.prediction_cache[image_url]
+            else:
+                raw_name, conf = await loop.run_in_executor(
+                    _thread_executor, self.predictor.predict, image_url
+                )
+                self.prediction_cache[image_url] = (raw_name, conf)
 
             base_name = self.pokemon_utils.get_base_pokemon_name(raw_name)
             if base_name not in self._pokemon_ids:
@@ -126,24 +135,11 @@ class PoketwoSpawnDetector(commands.Cog):
                 low_conf[0],
             )
 
-            unique_filename = f"{base_name}_{uuid.uuid4().hex}.png"
-            image_path = os.path.join(self.spawn_output_dir, unique_filename)
+            # Deterministic file path
+            image_path = os.path.join(self.spawn_output_dir, f"{base_name}.png")
 
-            image_bytes = BytesIO()
-            try:
-                await loop.run_in_executor(
-                    _thread_executor,
-                    self.pokemon_image_builder.create_image,
-                    raw_name,
-                    self.pokemon_utils.format_name(raw_name).replace("_", " ").title(),
-                    self.pokemon_utils.get_best_normal_alt_name(base_name) or "",
-                    self.pokemon_utils.get_pokemon_types(raw_name),
-                    None,
-                    image_bytes,
-                    "PNG",
-                )
-            except FileNotFoundError:
-                image_bytes = BytesIO()
+            # Generate image only if missing
+            if base_name not in self.file_cache:
                 await loop.run_in_executor(
                     _thread_executor,
                     self.pokemon_image_builder.create_image,
@@ -152,16 +148,18 @@ class PoketwoSpawnDetector(commands.Cog):
                     self.pokemon_utils.get_best_normal_alt_name(base_name) or "",
                     self.pokemon_utils.get_pokemon_types(base_name),
                     None,
-                    image_bytes,
+                    image_path,
                     "PNG",
                 )
+                self.file_cache[base_name] = image_path
 
-            image_bytes.seek(0)
-            with open(image_path, "wb") as f:
-                f.write(image_bytes.getbuffer())
+            # Read file asynchronously with aiofiles
+            async with aiofiles.open(self.file_cache[base_name], "rb") as f:
+                img_bytes = await f.read()
 
-            file = discord.File(fp=image_bytes, filename="pokemon_spawn.png")
+            file = discord.File(fp=BytesIO(img_bytes), filename="pokemon_spawn.png")
             await message.channel.send(content=ping_msg, file=file, reference=message)
+
         except Exception as e:
             logger.error(f"Error in process_spawn_tasks: {type(e).__name__}: {e}")
             await message.channel.send(
@@ -175,8 +173,24 @@ class PoketwoSpawnDetector(commands.Cog):
             await ctx.send("✅ All spawn images are preloaded!")
         else:
             await ctx.send(
-                f"⚠️ Missing preloaded spawn images for {len(missing)} Pokémon: {', '.join(missing)}"
+                f"⚠️ Preloading {len(missing)} Pokémon images..."
             )
+            loop = asyncio.get_running_loop()
+            for slug in missing:
+                image_path = os.path.join(self.spawn_output_dir, f"{slug}.png")
+                await loop.run_in_executor(
+                    _thread_executor,
+                    self.pokemon_image_builder.create_image,
+                    slug,
+                    self.pokemon_utils.format_name(slug).replace("_", " ").title(),
+                    self.pokemon_utils.get_best_normal_alt_name(slug) or "",
+                    self.pokemon_utils.get_pokemon_types(slug),
+                    None,
+                    image_path,
+                    "PNG",
+                )
+                self.file_cache[slug] = image_path
+            await ctx.send("✅ All spawn images generated and cached!")
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -210,7 +224,7 @@ class PoketwoSpawnDetector(commands.Cog):
                         ref2 = await ctx.channel.fetch_message(ref.reference.message_id)
                         image_url = extract_image_from_message(ref2)
             if not image_url:
-                return await ctx.send(f"{self.cross_emoji} No image URL found in message, reference, or embed.")
+                return await ctx.send(f"{self.cross_emoji} No image URL found.")
             await self.process_spawn(message, image_url)
         except Exception as e:
             logger.error(f"Prediction error: {type(e).__name__}: {e}")
