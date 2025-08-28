@@ -244,29 +244,32 @@ class PoketwoSpawnDetector(commands.Cog):
 
     @commands.command(name="ps", hidden=True)
     async def predict_spawn(self, ctx, image_url=None):
-        def extract(msg: discord.Message):
-            if msg.attachments:
-                return msg.attachments[0].url
-            if msg.embeds:
-                e = msg.embeds[0]
-                if e.image and e.image.url:
-                    return e.image.url
-                if e.thumbnail and e.thumbnail.url:
-                    return e.thumbnail.url
-            return None
+        try:
+            def extract_image_from_message(msg: discord.Message):
+                if msg.attachments:
+                    return msg.attachments[0].url
+                if msg.embeds:
+                    embed = msg.embeds[0]
+                    if embed.image and embed.image.url:
+                        return embed.image.url
+                    if embed.thumbnail and embed.thumbnail.url:
+                        return embed.thumbnail.url
+                return None
 
-        msg = ctx.message
-        if not image_url:
-            image_url = extract(msg)
-            if not image_url and msg.reference:
-                ref = await ctx.channel.fetch_message(msg.reference.message_id)
-                image_url = extract(ref)
-                if not image_url and ref.reference:
-                    ref2 = await ctx.channel.fetch_message(ref.reference.message_id)
-                    image_url = extract(ref2)
-        if not image_url:
-            return await ctx.send(f"{self.cross_emoji} No image URL found.")
-        await self.process_spawn(msg, image_url)
-
+            message = ctx.message
+            if not image_url:
+                image_url = extract_image_from_message(message)
+                if not image_url and message.reference:
+                    ref = await ctx.channel.fetch_message(message.reference.message_id)
+                    image_url = extract_image_from_message(ref)
+                    if not image_url and ref.reference:
+                        ref2 = await ctx.channel.fetch_message(ref.reference.message_id)
+                        image_url = extract_image_from_message(ref2)
+            if not image_url:
+                return await ctx.send(f"{self.cross_emoji} No image URL found.")
+            await self.process_spawn(message, image_url)
+        except Exception as e:
+            logger.error(f"Prediction error: {type(e).__name__}: {e}")
+            await ctx.send(f"{self.error_emoji} Failed to process prediction.")
 def setup(bot):
     bot.add_cog(PoketwoSpawnDetector(bot))
