@@ -620,7 +620,7 @@ class PokemonSpawnView(View):
             types.append(f"{emoji} {t.capitalize()}")
         return "\n".join(types) if types else "N/A"
 
-    def make_bar(self, value, length=10):
+    def make_bar(self, value, length=5):
         filled = int((value / 255) * length)
         return "▰" * filled + "▱" * (length - filled)
 
