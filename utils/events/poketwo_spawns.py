@@ -714,7 +714,7 @@ class PokemonSpawnView(View):
     @discord.ui.button(label="How to Register for Spawns", style=discord.ButtonStyle.secondary, custom_id="signup_button", emoji='<:signup:1411058830732824757>')
     async def signup_button(self, interaction: discord.Interaction, button: Button):
         await interaction.response.send_message(
-            f"To sign up for spawns, simply run `{self.prefix} pt` in this server.\n"
+            f"To sign up for spawns, simply run `{self.prefix}pt` in this server.\n"
             "This will show a help embed explaining how to register for Pokémon.",
             ephemeral=True
         )
