@@ -66,7 +66,7 @@ class ClusteredBot(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         super().__init__(
-            command_prefix=prefix,
+            command_prefix=commands.when_mentioned_or(prefix),
             intents=intents,
             help_command=None,
             shard_ids=None,
