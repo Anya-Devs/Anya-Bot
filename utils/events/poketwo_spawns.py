@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter, ImageSeq
 from pilmoji import Pilmoji
 from fuzzywuzzy import fuzz
 from imports.discord_imports import *
-from bot.token import use_test_bot as ut
+from bot.token import use_test_bot as ut, prefix
 from utils.subcogs.pokemon import PoketwoCommands, MongoHelper
 
 
@@ -27,6 +27,8 @@ class PokemonUtils:
         self.pp = pp
         self._type_emojis = {}
         self._quest_emojis = {}
+        self._full_pokemon_data = {}  
+
         self.load_emojis()
         self.alt_names_map = self.load_alt_names("data/commands/pokemon/alt_names.csv")
         self._image_color_cache = {}
@@ -170,6 +172,28 @@ class PokemonUtils:
             return rgb
         except Exception:
             return 0xFFFFFF
+        
+    def load_full_pokemon_data(self):
+     """Load and cache all Pokémon data from the description CSV, unpacking every column."""
+     if self._full_pokemon_data:
+        return self._full_pokemon_data
+
+     data = {}
+     try:
+        with open(self.pokemon_description_file, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                slug = row.get("slug", "").lower()
+                if not slug:
+                    continue
+                # Keep all CSV values as-is
+                data[slug] = {key: value.strip() if isinstance(value, str) else value
+                              for key, value in row.items()}
+        self._full_pokemon_data = data
+     except FileNotFoundError:
+        logger.warning(f"Pokemon description file not found: {self.pokemon_description_file}")
+        self._full_pokemon_data = {}
+     return self._full_pokemon_data
 
     
     async def format_messages(self, slug, type_pings, quest_pings, shiny_pings, collection_pings,
@@ -567,9 +591,135 @@ class PokemonImageBuilder:
             else:
                 frames[0].save(output_path, format=format, save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2, transparency=0)
             return output_path
-        
-        
-        
+
+
+
+class PokemonSpawnView(View):
+    def __init__(self, slug, pokemon_data, pokemon_utils):
+        super().__init__(timeout=None)
+        self.slug = slug
+        self.prefix = prefix
+        self.pokemon_data = pokemon_data
+        self.pokemon_utils = pokemon_utils
+
+        # Load type emoji map
+        with open("data/commands/pokemon/pokemon_emojis/_pokemon_types.json", "r", encoding="utf-8") as f:
+            self.type_emojis = json.load(f)
+
+    # ===== Helpers =====
+    def get_pokemon_info(self):
+        return self.pokemon_data.get(self.slug)
+
+    def format_type_field(self, data):
+        types = []
+        for i in (0, 1):
+            t = data.get(f"type.{i}")
+            if not t:
+                continue
+            emoji = self.type_emojis.get(f"{t.lower()}_type", "")
+            types.append(f"{emoji} {t.capitalize()}")
+        return "\n".join(types) if types else "N/A"
+
+    def make_bar(self, value, length=10):
+        filled = int((value / 255) * length)
+        return "▰" * filled + "▱" * (length - filled)
+
+    def extract_color(self, file_path):
+        try:
+            img = cv2.imread(file_path)
+            img = cv2.resize(img, (50, 50))
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            pixels = img.reshape(-1, 3)
+            pixels_tuple = [tuple(p) for p in pixels]
+            counts = {}
+            for px in pixels_tuple:
+                counts[px] = counts.get(px, 0) + 1
+            dominant = max(counts, key=counts.get)
+            return discord.Color.from_rgb(*dominant)
+        except Exception:
+            return discord.Color.blurple()
+
+    # ===== Embed Formatting =====
+    def format_embed(self, data):
+        embed_title = f"#{data['dex_number']} — {data['slug'].capitalize()}"
+        file_path = f"data/commands/pokemon/pokemon_images/{self.slug}.png"
+
+        # Base Stats with bars
+        stats_block = "\n".join([
+            f"HP   {data['base.hp']:>3} {self.make_bar(int(data['base.hp']))}",
+            f"Atk  {data['base.atk']:>3} {self.make_bar(int(data['base.atk']))}",
+            f"Def  {data['base.def']:>3} {self.make_bar(int(data['base.def']))}",
+            f"SpA  {data['base.satk']:>3} {self.make_bar(int(data['base.satk']))}",
+            f"SpD  {data['base.sdef']:>3} {self.make_bar(int(data['base.sdef']))}",
+            f"Spe  {data['base.spd']:>3} {self.make_bar(int(data['base.spd']))}",
+        ])
+
+        # Alt names
+        seen = set()
+        alt_name_lines = []
+        for lang, flag in self.pokemon_utils.lang_flags.items():
+            col = f"name.{lang}"
+            if not data.get(col):
+                continue
+            name = data[col].strip()
+            if name.lower() in seen or name.lower() == data["slug"].lower():
+                continue
+            seen.add(name.lower())
+            alt_name_lines.append(f"{flag} {name}")
+        alt_names = "\n".join(alt_name_lines) if alt_name_lines else "N/A"
+
+        # Rarity
+        rarity = (
+            "Mythical" if data.get("mythical") == "True"
+            else "Legendary" if data.get("legendary") == "True"
+            else "Normal"
+        )
+
+        # Description (stats + alt names + description)
+        description = (
+            f"{data['description']}\n\n"
+            f"**Base Stats:**\n```{stats_block}```\n\n"
+            f"**Alternative Names:**\n```{alt_names}```"
+        )
+
+        embed = discord.Embed(
+            title=embed_title,
+            description=description,
+            color=self.extract_color(file_path)
+        )
+
+        # Fields
+        embed.add_field(name="Types", value=self.format_type_field(data), inline=True)
+        embed.add_field(name="Region", value=data['region'].capitalize(), inline=True)
+        embed.add_field(name="Rarity", value=rarity, inline=True)
+
+        embed.set_thumbnail(url=f"attachment://{self.slug}.png")
+        embed.set_footer(text=f"Height: {float(data['height']):.2f} m • Weight: {float(data['weight']):.2f} kg")
+        return embed
+
+    # ===== Buttons =====
+    @discord.ui.button(label="Pokédex", style=discord.ButtonStyle.danger, custom_id="dex_button", emoji="<:pokedex:1411058742241529877>")
+    async def dex_button(self, interaction: discord.Interaction, button: Button):
+        data = self.get_pokemon_info()
+        if not data:
+            return await interaction.response.send_message("❌ Pokémon data not found.", ephemeral=True)
+        embed = self.format_embed(data)
+        file_path = f"data/commands/pokemon/pokemon_images/{self.slug}.png"
+        await interaction.response.send_message(
+            embed=embed,
+            file=discord.File(file_path, filename=f"{self.slug}.png"),
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="How to Register for Spawns", style=discord.ButtonStyle.secondary, custom_id="signup_button", emoji='<:signup:1411058830732824757>')
+    async def signup_button(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.send_message(
+            f"To sign up for spawns, simply run `{self.prefix} pt` in this server.\n"
+            "This will show a help embed explaining how to register for Pokémon.",
+            ephemeral=True
+        )
+
+
 if __name__ == "__main__":
     builder = PokemonImageBuilder()
     builder.create_image(

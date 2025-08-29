@@ -13,6 +13,7 @@ from imports.discord_imports import *
 from utils.cogs.ticket import setup_persistent_views
 from utils.cogs.fun import setup_persistent_views_fun
 from art import text2art
+from bot.token import get_bot_token as ut 
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 load_dotenv(dotenv_path=os.path.join(".github", ".env"))
@@ -34,7 +35,7 @@ def patch_discord_gateway(env_gateway="wss://gateway.discord.gg/"):
 patch_discord_gateway()
 
 class Config:
-    PORT = int(os.environ.get("PORT", 8081))
+    PORT = int(os.environ.get("PORT", 8081 if not ut else 0))
     USE_PRESENCE = os.environ.get("USE_PRESENCE_INTENTS", "0").strip().lower() not in ("0", "false", "no")
     COOLDOWN= [
         'rate_limit_count', 1,

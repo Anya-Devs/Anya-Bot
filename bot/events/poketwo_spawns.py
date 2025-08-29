@@ -5,7 +5,7 @@ import aiofiles
 import numpy as np
 from bot.token import use_test_bot as ut
 from imports.discord_imports import *
-from utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils
+from utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils, PokemonSpawnView
 from submodules.poketwo_autonamer.predict import Prediction
 from utils.subcogs.pokemon import PoketwoCommands, MongoHelper
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -227,11 +227,17 @@ class PoketwoSpawnDetector(commands.Cog):
                         reference=message,
                     )
 
-            # Final send (reference = no spam)
+            # ===== Final send with buttons =====
+            view = PokemonSpawnView(
+                slug=base_name,
+                pokemon_data=self.pokemon_utils.load_full_pokemon_data(),
+                pokemon_utils=self.pokemon_utils
+            )
             await message.channel.send(
                 content=ping_msg,
-                file=discord.File(fp=BytesIO(img_bytes), filename="pokemon_spawn.png"),
+                file=discord.File(fp=BytesIO(img_bytes), filename=f"{base_name}.png"),
                 reference=message,
+                view=view
             )
 
         except Exception as e:
@@ -243,38 +249,51 @@ class PoketwoSpawnDetector(commands.Cog):
     # ===== Commands =====
     @commands.command(name="generate_spawns", hidden=True)
     async def generate_all_spawn_images(self, ctx):
-        missing = [slug for slug in self._pokemon_ids if slug not in self.file_cache]
-        if not missing:
-            return await ctx.send("✅ All spawn images preloaded!")
-        await ctx.send(f"⚠️ Preloading {len(missing)} Pokémon images...")
-        loop = asyncio.get_running_loop()
-        tasks = []
-        for slug in missing:
-            path = os.path.join(self.spawn_dir, f"{slug}.png")
-            tasks.append(loop.run_in_executor(
-                _thread_executor,
-                self.image_builder.create_image,
-                slug,
-                self.pokemon_utils.format_name(slug).replace("_", " ").title(),
-                self.alt_cache.get(slug, ""),
-                self.type_cache.get(slug, []),
-                None,
-                path,
-                "PNG",
-            ))
-            self.file_cache[slug] = path
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+     # Ensure spawn directory exists
+     os.makedirs(self.spawn_dir, exist_ok=True)
 
-        # Preload bytes
-        for slug in missing:
-            path = self.file_cache[slug]
-            try:
-                async with aiofiles.open(path, "rb") as f:
-                    self.img_bytes_cache[slug] = await f.read()
-            except:
-                continue
-        await ctx.send("✅ All spawn images generated and cached!")
+     # Determine missing or empty images
+     missing_or_empty = []
+     for slug in self._pokemon_ids:
+        path = os.path.join(self.spawn_dir, f"{slug}.png")
+        if not os.path.exists(path) or os.path.getsize(path) == 0:
+            missing_or_empty.append(slug)
+
+     if not missing_or_empty:
+        return await ctx.send("✅ All spawn images preloaded and valid!")
+
+     await ctx.send(f"⚠️ Preloading {len(missing_or_empty)} Pokémon images...")
+
+     loop = asyncio.get_running_loop()
+     tasks = []
+     for slug in missing_or_empty:
+        path = os.path.join(self.spawn_dir, f"{slug}.png")
+        tasks.append(loop.run_in_executor(
+            _thread_executor,
+            self.image_builder.create_image,
+            slug,
+            self.pokemon_utils.format_name(slug).replace("_", " ").title(),
+            self.alt_cache.get(slug, ""),
+            self.type_cache.get(slug, []),
+            None,
+            path,
+            "PNG",
+        ))
+        self.file_cache[slug] = path
+
+     if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+     # Preload bytes into memory
+     for slug in missing_or_empty:
+        path = self.file_cache[slug]
+        try:
+            async with aiofiles.open(path, "rb") as f:
+                self.img_bytes_cache[slug] = await f.read()
+        except:
+            continue
+
+     await ctx.send("✅ All spawn images generated, cached, and verified!")
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -313,6 +332,9 @@ class PoketwoSpawnDetector(commands.Cog):
         except Exception as e:
             logger.error(f"Prediction error: {type(e).__name__}: {e}")
             await ctx.send(f"{self.error_emoji} Failed to process prediction.")
+
+
+
 
 def setup(bot):
     bot.add_cog(PoketwoSpawnDetector(bot))
