@@ -210,55 +210,6 @@ class PoketwoCommands(commands.Cog):
             traceback.print_exc()
             await ctx.send(f"⚠️ Error setting starboard: {e}")
 
-    # -------------------
-    # Detect Forgotten .pt
-    # -------------------
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        if message.author.bot:
-            return
-
-        try:
-            content = message.content.strip().lower()
-
-            forgotten = {
-                "cl": "collection",
-                "col": "collection",
-                "sh": "shiny",
-                "shiny": "shiny",
-                "qp": "quest ping",
-                "tp": "type ping"
-            }
-
-            for key, sub in forgotten.items():
-                if content.startswith(f"{key} ") or content == key:
-                    print('testing')
-                    now = time.time()
-                    last = self.user_cooldowns.get(message.author.id, 0)
-                    if now - last < self.cooldown_seconds:
-                        return
-                    self.user_cooldowns[message.author.id] = now
-
-                    cmd = self.bot.get_command(f"pt {sub}")
-                    if cmd:
-                        embed = discord.Embed(
-                            title="⚠ Command detected outside `.pt`",
-                            description=(
-                                f"It looks like you tried to run `{key}` directly.\n"
-                                f"Did you mean: `{prefix}pt {sub}`?\n"
-                                f"Use `{prefix}pt help` for guidance."
-                            ),
-                            color=None
-                        )
-                        embed.set_footer(text=f"Message from: {message.author}", icon_url=message.author.display_avatar.url)
-                        embed.timestamp = message.created_at
-                        await message.channel.send(embed=embed)
-                    break
-        except Exception as e:
-            # fallback plain text if anything goes wrong
-            await message.channel.send(
-                f"Error handling your command reference: {e}"
-            )
         
 class PoketwoSpecialPing(commands.Cog):
     def __init__(self, bot):
