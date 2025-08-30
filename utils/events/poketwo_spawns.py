@@ -595,7 +595,7 @@ class PokemonImageBuilder:
 
 
 class PokemonSpawnView(View):
-    def __init__(self, slug, prefix, pokemon_data, pokemon_utils):
+    def __init__(self, slug, pokemon_data, pokemon_utils):
         super().__init__(timeout=None)
         self.slug = slug
         self.prefix = prefix
