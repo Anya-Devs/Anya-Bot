@@ -9,18 +9,9 @@ POKEMON_SPECIES_URL = "https://pokeapi.co/api/v2/pokemon-species/{}"
 POKEMON_API_URL = "https://pokeapi.co/api/v2/pokemon?limit=10000"
 OUTPUT_CSV = "data/commands/pokemon/pokemon_full_data.csv"
 
-LANG_CODES = [
-    "ja-Hrkt", "roomaji", "ja", "ko", "zh-Hant", "zh-Hans", "fr",
-    "de", "es", "it", "en", "pt-BR", "cs"
-]
-
-CSV_HEADER = [
+CSV_STATIC_HEADER = [
     "id","dex_number","region","slug","description","credit","enabled","catchable","abundance",
     "gender_rate","has_gender_differences"
-] + [f"name.{lang}" for lang in LANG_CODES] + [
-    "type.0","type.1","mythical","legendary","ultra_beast","event","height",
-    "weight","evo.to","evo.from","base.hp","base.atk","base.def","base.satk","base.sdef","base.spd",
-    "evo.mega","evo.mega_x","evo.mega_y","is_form","form_item"
 ]
 
 semaphore = asyncio.Semaphore(5)
@@ -78,12 +69,14 @@ async def fetch_pokemon_species(session, species_name):
         if entry["language"]["name"] == "en"
     )
 
-    # Names by language
-    name_map = {lang: "" for lang in LANG_CODES}
+    # Dynamically detect all available alt names
+    alt_languages = [entry["language"]["name"] for entry in species_data.get("names", [])]
+
+    # Build name map with fallback to species name
+    name_map = {lang: species_data["name"] for lang in alt_languages}
     for entry in species_data.get("names", []):
         lang = entry["language"]["name"]
-        if lang in name_map:
-            name_map[lang] = entry["name"]
+        name_map[lang] = entry["name"]
 
     rows = []
 
@@ -92,12 +85,13 @@ async def fetch_pokemon_species(session, species_name):
         pokemon_detail_url = variety["pokemon"]["url"]
         detail_data = await fetch_json(session, pokemon_detail_url) or {}
 
-        # Region detection
+        # Region
         region = get_region(species_data)
 
-        # Use variety name for slug to include forms like vulpix-alola
+        # Slug
         slug = var_name
 
+        # Types
         types = [t["type"]["name"] for t in detail_data.get("types", [])] + [""] * 2
         stats = {s["stat"]["name"]: s["base_stat"] for s in detail_data.get("stats", [])}
 
@@ -139,7 +133,7 @@ async def fetch_pokemon_species(session, species_name):
         row = [
             species_id, dex_number, region, slug, description, credit, 1, catchable, abundance,
             species_data.get("gender_rate", ""), species_data.get("has_gender_differences", "")
-        ] + [name_map[lang] for lang in LANG_CODES] + [
+        ] + [name_map[lang] for lang in alt_languages] + [
             types[0], types[1], is_mythical, is_legendary, ultra_beast_flag, event_flag,
             detail_data.get("height", ""), detail_data.get("weight", ""), evo_to, evo_from,
             stats.get("hp", ""), stats.get("attack", ""), stats.get("defense", ""),
@@ -148,7 +142,7 @@ async def fetch_pokemon_species(session, species_name):
         ]
 
         rows.append(row)
-    return rows
+    return rows, alt_languages
 
 async def main():
     async with aiohttp.ClientSession() as session:
@@ -156,12 +150,23 @@ async def main():
         pokemon_names = [p["name"] for p in data.get("results", [])]
 
         all_rows = []
+        all_languages = set()
         tasks = [fetch_pokemon_species(session, name) for name in pokemon_names]
 
         for coro in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Fetching Pokémon"):
             result = await coro
             if result:
-                all_rows.extend(result)
+                rows, langs = result
+                all_languages.update(langs)
+                all_rows.extend(rows)
+
+        # Build final CSV header
+        all_languages = sorted(list(all_languages))
+        CSV_HEADER = CSV_STATIC_HEADER + [f"name.{lang}" for lang in all_languages] + [
+            "type.0","type.1","mythical","legendary","ultra_beast","event","height",
+            "weight","evo.to","evo.from","base.hp","base.atk","base.def","base.satk","base.sdef","base.spd",
+            "evo.mega","evo.mega_x","evo.mega_y","is_form","form_item"
+        ]
 
     Path(os.path.dirname(OUTPUT_CSV)).mkdir(parents=True, exist_ok=True)
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:

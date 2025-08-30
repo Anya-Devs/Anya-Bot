@@ -595,14 +595,13 @@ class PokemonImageBuilder:
 
 
 class PokemonSpawnView(View):
-    def __init__(self, slug, pokemon_data, pokemon_utils):
+    def __init__(self, slug, prefix, pokemon_data, pokemon_utils):
         super().__init__(timeout=None)
         self.slug = slug
         self.prefix = prefix
         self.pokemon_data = pokemon_data
         self.pokemon_utils = pokemon_utils
 
-        # Load type emoji map
         with open("data/commands/pokemon/pokemon_emojis/_pokemon_types.json", "r", encoding="utf-8") as f:
             self.type_emojis = json.load(f)
 
@@ -620,22 +619,16 @@ class PokemonSpawnView(View):
             types.append(f"{emoji} {t.capitalize()}")
         return "\n".join(types) if types else "N/A"
 
-    def make_bar(self, value, length=5):
+    def make_bar(self, value, length=10):
         filled = int((value / 255) * length)
         return "▰" * filled + "▱" * (length - filled)
 
     def extract_color(self, file_path):
         try:
-            img = cv2.imread(file_path)
-            img = cv2.resize(img, (50, 50))
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            pixels = img.reshape(-1, 3)
-            pixels_tuple = [tuple(p) for p in pixels]
-            counts = {}
-            for px in pixels_tuple:
-                counts[px] = counts.get(px, 0) + 1
-            dominant = max(counts, key=counts.get)
-            return discord.Color.from_rgb(*dominant)
+            img = Image.open(file_path).convert("RGB")
+            # Resize to 1x1 to get average/dominant color
+            dominant_color = img.resize((1, 1)).getpixel((0, 0))
+            return discord.Color.from_rgb(*dominant_color)
         except Exception:
             return discord.Color.blurple()
 
@@ -644,7 +637,6 @@ class PokemonSpawnView(View):
         embed_title = f"#{data['dex_number']} — {data['slug'].capitalize()}"
         file_path = f"data/commands/pokemon/pokemon_images/{self.slug}.png"
 
-        # Base Stats with bars
         stats_block = "\n".join([
             f"HP   {data['base.hp']:>3} {self.make_bar(int(data['base.hp']))}",
             f"Atk  {data['base.atk']:>3} {self.make_bar(int(data['base.atk']))}",
@@ -675,7 +667,6 @@ class PokemonSpawnView(View):
             else "Normal"
         )
 
-        # Description (stats + alt names + description)
         description = (
             f"{data['description']}\n\n"
             f"**Base Stats:**\n```{stats_block}```\n\n"
@@ -687,18 +678,15 @@ class PokemonSpawnView(View):
             description=description,
             color=self.extract_color(file_path)
         )
-
-        # Fields
         embed.add_field(name="Types", value=self.format_type_field(data), inline=True)
         embed.add_field(name="Region", value=data['region'].capitalize(), inline=True)
         embed.add_field(name="Rarity", value=rarity, inline=True)
-
         embed.set_thumbnail(url=f"attachment://{self.slug}.png")
         embed.set_footer(text=f"Height: {float(data['height']):.2f} m • Weight: {float(data['weight']):.2f} kg")
         return embed
 
     # ===== Buttons =====
-    @discord.ui.button(label="Pokédex", style=discord.ButtonStyle.danger, custom_id="dex_button", emoji="<:pokedex:1411058742241529877>")
+    @discord.ui.button(label="Pokédex", style=discord.ButtonStyle.secondary, custom_id="dex_button", emoji="<:pokedex:1411058742241529877>")
     async def dex_button(self, interaction: discord.Interaction, button: Button):
         data = self.get_pokemon_info()
         if not data:
@@ -711,14 +699,13 @@ class PokemonSpawnView(View):
             ephemeral=True
         )
 
-    @discord.ui.button(label="Register Help", style=discord.ButtonStyle.secondary, custom_id="signup_button", emoji='<:signup:1411058830732824757>')
+    @discord.ui.button(label="How to Register for Spawns", style=discord.ButtonStyle.secondary, custom_id="signup_button", emoji='<:signup:1411058830732824757>')
     async def signup_button(self, interaction: discord.Interaction, button: Button):
         await interaction.response.send_message(
-            f"To sign up for spawns, simply run `{self.prefix}pt` in this server.\n\n"
-            "> This will show a help embed explaining how to register for Pokémon.",
+            f"To sign up for spawns, simply run `{self.prefix} pt` in this server.\n"
+            "This will show a help embed explaining how to register for Pokémon.",
             ephemeral=True
         )
-
 
 if __name__ == "__main__":
     builder = PokemonImageBuilder()
