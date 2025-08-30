@@ -30,7 +30,7 @@ REGION_MAP = {
 
 def get_region(species_data):
     gen_name = species_data.get("generation", {}).get("name", "")
-    return REGION_MAP.get(gen_name, "kanto")  # default kanto
+    return REGION_MAP.get(gen_name, "kanto")
 
 async def fetch_json(session, url):
     async with semaphore:
@@ -71,8 +71,6 @@ async def fetch_pokemon_species(session, species_name):
 
     # Dynamically detect all available alt names
     alt_languages = [entry["language"]["name"] for entry in species_data.get("names", [])]
-
-    # Build name map with fallback to species name
     name_map = {lang: species_data["name"] for lang in alt_languages}
     for entry in species_data.get("names", []):
         lang = entry["language"]["name"]
@@ -85,13 +83,8 @@ async def fetch_pokemon_species(session, species_name):
         pokemon_detail_url = variety["pokemon"]["url"]
         detail_data = await fetch_json(session, pokemon_detail_url) or {}
 
-        # Region
         region = get_region(species_data)
-
-        # Slug
         slug = var_name
-
-        # Types
         types = [t["type"]["name"] for t in detail_data.get("types", [])] + [""] * 2
         stats = {s["stat"]["name"]: s["base_stat"] for s in detail_data.get("stats", [])}
 
@@ -122,10 +115,17 @@ async def fetch_pokemon_species(session, species_name):
             elif "y" in var_name:
                 evo_mega_y = species_name
 
-        # Event / catchable / abundance placeholders
+        # Event / catchable / abundance with proper rarity
         event_flag = False
         catchable = 1
-        abundance = "common" if not is_legendary and not is_mythical else "rare"
+        if ultra_beast_flag:
+            abundance = "ultra beast"
+        elif is_mythical:
+            abundance = "mythical"
+        elif is_legendary:
+            abundance = "legendary"
+        else:
+            abundance = "common"  # can add "uncommon" logic if needed
 
         is_form = not variety.get("is_default", True)
         form_item = variety.get("form_name", "")

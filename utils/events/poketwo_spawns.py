@@ -593,13 +593,17 @@ class PokemonImageBuilder:
             return output_path
 
 
-
 class PokemonSpawnView(View):
-    def __init__(self, slug, pokemon_data, pokemon_utils):
+    DEFAULT_LANG_FLAGS = {"de":"🇩🇪","en":"🇬🇧","es":"🇪🇸","fr":"🇫🇷","it":"🇮🇹",
+                          "ja":"🇯🇵","ja-Hrkt":"🇯🇵","ko":"🇰🇷","roomaji":"🇯🇵",
+                          "zh-Hans":"🇨🇳","zh-Hant":"🇹🇼"}
+
+    CSV_PATH = "data/commands/pokemon/pokemon_full_data.csv"
+
+    def __init__(self, slug, pokemon_utils, pokemon_data=None):
         super().__init__(timeout=None)
         self.slug = slug
         self.prefix = prefix
-        self.pokemon_data = pokemon_data
         self.pokemon_utils = pokemon_utils
 
         with open("data/commands/pokemon/pokemon_emojis/_pokemon_types.json", "r", encoding="utf-8") as f:
@@ -607,14 +611,27 @@ class PokemonSpawnView(View):
 
     # ===== Helpers =====
     def get_pokemon_info(self):
-        return self.pokemon_data.get(self.slug)
+        try:
+            with open(self.CSV_PATH, newline="", encoding="utf-8") as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    if row.get("slug") == self.slug:
+                        # Convert numeric stats to int/float
+                        for stat in ["base.hp","base.atk","base.def","base.satk","base.sdef","base.spd",
+                                     "height","weight","gender_rate"]:
+                            if stat in row and row[stat]:
+                                try: row[stat] = float(row[stat]) if "." in row[stat] else int(row[stat])
+                                except: pass
+                        return row
+        except Exception as e:
+            print(f"[get_pokemon_info] CSV read error: {e}")
+        return None
 
     def format_type_field(self, data):
         types = []
         for i in (0, 1):
             t = data.get(f"type.{i}")
-            if not t:
-                continue
+            if not t: continue
             emoji = self.type_emojis.get(f"{t.lower()}_type", "")
             types.append(f"{emoji} {t.capitalize()}")
         return "\n".join(types) if types else "N/A"
@@ -626,86 +643,107 @@ class PokemonSpawnView(View):
     def extract_color(self, file_path):
         try:
             img = Image.open(file_path).convert("RGB")
-            # Resize to 1x1 to get average/dominant color
-            dominant_color = img.resize((1, 1)).getpixel((0, 0))
+            dominant_color = img.resize((1,1)).getpixel((0,0))
             return discord.Color.from_rgb(*dominant_color)
-        except Exception:
+        except Exception as e:
+            print(f"[extract_color] Error: {e}")
             return discord.Color.blurple()
+
+    # ===== Gender Helper =====
+    def format_gender(self, gender_rate):
+        if gender_rate == -1:
+            return "Genderless"
+        elif gender_rate == 0:
+            return "♂️ Male only"
+        else:
+            female_ratio = (8 - gender_rate) / 8
+            male_ratio = gender_rate / 8
+            male_percentage = int(female_ratio * 100)
+            female_percentage = int(male_ratio * 100)
+            if female_percentage == 100:
+                return "♀️ Female only"
+            elif male_percentage == 100:
+                return "♂️ Male only"
+            return f"♂ {male_percentage}% - ♀ {female_percentage}%"
 
     # ===== Embed Formatting =====
     def format_embed(self, data):
-        embed_title = f"#{data['dex_number']} — {data['slug'].capitalize()}"
-        file_path = f"data/commands/pokemon/pokemon_images/{self.slug}.png"
+        try:
+            embed_title = f"#{data['dex_number']} — {data['slug'].capitalize()}"
+            file_path = f"data/commands/pokemon/pokemon_images/{self.slug}.png"
 
-        stats_block = "\n".join([
-            f"HP   {data['base.hp']:>3} {self.make_bar(int(data['base.hp']))}",
-            f"Atk  {data['base.atk']:>3} {self.make_bar(int(data['base.atk']))}",
-            f"Def  {data['base.def']:>3} {self.make_bar(int(data['base.def']))}",
-            f"SpA  {data['base.satk']:>3} {self.make_bar(int(data['base.satk']))}",
-            f"SpD  {data['base.sdef']:>3} {self.make_bar(int(data['base.sdef']))}",
-            f"Spe  {data['base.spd']:>3} {self.make_bar(int(data['base.spd']))}",
-        ])
+            stats_block = "\n".join([
+                f"HP   {data['base.hp']:>3} {self.make_bar(int(data['base.hp']))}",
+                f"Atk  {data['base.atk']:>3} {self.make_bar(int(data['base.atk']))}",
+                f"Def  {data['base.def']:>3} {self.make_bar(int(data['base.def']))}",
+                f"SpA  {data['base.satk']:>3} {self.make_bar(int(data['base.satk']))}",
+                f"SpD  {data['base.sdef']:>3} {self.make_bar(int(data['base.sdef']))}",
+                f"Spe  {data['base.spd']:>3} {self.make_bar(int(data['base.spd']))}",
+            ])
 
-        # Alt names
-        seen = set()
-        alt_name_lines = []
-        for lang, flag in self.pokemon_utils.lang_flags.items():
-            col = f"name.{lang}"
-            if not data.get(col):
-                continue
-            name = data[col].strip()
-            if name.lower() in seen or name.lower() == data["slug"].lower():
-                continue
-            seen.add(name.lower())
-            alt_name_lines.append(f"{flag} {name}")
-        alt_names = "\n".join(alt_name_lines) if alt_name_lines else "N/A"
+            # ===== Alt names =====
+            alt_name_lines = []
+            alt_name_history = set()
+            for lang in ["de","en","es","fr","it","ja","ja-Hrkt","ko","roomaji","zh-Hans","zh-Hant"]:
+                name_col = f"name.{lang}"
+                if not data.get(name_col): continue
+                name = data[name_col].strip()
+                lower_name = name.lower()
+                if lower_name in alt_name_history or lower_name == data["slug"].lower(): continue
+                alt_name_history.add(lower_name)
+                flag = self.DEFAULT_LANG_FLAGS.get(lang, "🏴")
+                alt_name_lines.append(f"{flag} {name}")
+            alt_names = "\n".join(alt_name_lines) if alt_name_lines else "N/A"
 
-        # Rarity
-        rarity = (
-            "Mythical" if data.get("mythical") == "True"
-            else "Legendary" if data.get("legendary") == "True"
-            else "Normal"
-        )
+            rarity = ("Mythical" if data.get("mythical") == "True"
+                      else "Legendary" if data.get("legendary") == "True"
+                      else "Normal")
 
-        description = (
-            f"{data['description']}\n\n"
-            f"**Base Stats:**\n```{stats_block}```\n\n"
-            f"**Alternative Names:**\n```{alt_names}```"
-        )
+            gender_text = self.format_gender(data.get("gender_rate", -1))
 
-        embed = discord.Embed(
-            title=embed_title,
-            description=description,
-            color=self.extract_color(file_path)
-        )
-        embed.add_field(name="Types", value=self.format_type_field(data), inline=True)
-        embed.add_field(name="Region", value=data['region'].capitalize(), inline=True)
-        embed.add_field(name="Rarity", value=rarity, inline=True)
-        embed.set_thumbnail(url=f"attachment://{self.slug}.png")
-        embed.set_footer(text=f"Height: {float(data['height']):.2f} m • Weight: {float(data['weight']):.2f} kg")
-        return embed
+            description = (f"{data['description']}\n\n"
+                           f"**Base Stats:**\n```{stats_block}```\n\n"
+                           f"**Alternative Names:**\n```{alt_names}```")
+
+            embed = discord.Embed(title=embed_title, description=description,
+                                  color=self.extract_color(file_path))
+            
+            embed.add_field(name="Region", value=data['region'].capitalize(), inline=True)
+            embed.add_field(name="Types", value=self.format_type_field(data), inline=True)
+            embed.add_field(name="Rarity", value=rarity, inline=True)
+            embed.set_thumbnail(url=f"attachment://{self.slug}.png")
+            # Footer includes height, weight, and gender separated by tabs
+            embed.set_footer(icon_url='https://discords.com/_next/image?url=https%3A%2F%2Fcdn.discordapp.com%2Femojis%2F808909357240025099.png%3Fv%3D1&w=128&q=75',text=f"Height: {float(data['height']):.2f} m\nWeight: {float(data['weight']):.2f} kg\tGender: {gender_text}")
+            return embed
+        except Exception as e:
+            print(f"[format_embed] Error: {e}")
+            return discord.Embed(title="Error", description=str(e), color=discord.Color.red())
 
     # ===== Buttons =====
     @discord.ui.button(label="Pokédex", style=discord.ButtonStyle.secondary, custom_id="dex_button", emoji="<:pokedex:1411058742241529877>")
     async def dex_button(self, interaction: discord.Interaction, button: Button):
-        data = self.get_pokemon_info()
-        if not data:
-            return await interaction.response.send_message("❌ Pokémon data not found.", ephemeral=True)
-        embed = self.format_embed(data)
-        file_path = f"data/commands/pokemon/pokemon_images/{self.slug}.png"
-        await interaction.response.send_message(
-            embed=embed,
-            file=discord.File(file_path, filename=f"{self.slug}.png"),
-            ephemeral=True
-        )
+        try:
+            data = self.get_pokemon_info()
+            if not data: return await interaction.response.send_message("❌ Pokémon data not found.", ephemeral=True)
+            embed = self.format_embed(data)
+            file_path = f"data/commands/pokemon/pokemon_images/{self.slug}.png"
+            await interaction.response.send_message(embed=embed,
+                                                    file=discord.File(file_path, filename=f"{self.slug}.png"),
+                                                    ephemeral=True)
+        except Exception as e:
+            print(f"[dex_button] Exception: {e}")
+            await interaction.response.send_message(f"⚠️ Error occurred: {e}", ephemeral=True)
 
     @discord.ui.button(label="How to Register for Spawns", style=discord.ButtonStyle.secondary, custom_id="signup_button", emoji='<:signup:1411058830732824757>')
     async def signup_button(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_message(
-            f"To sign up for spawns, simply run `{self.prefix} pt` in this server.\n"
-            "This will show a help embed explaining how to register for Pokémon.",
-            ephemeral=True
-        )
+        try:
+            await interaction.response.send_message(
+                f"To sign up for spawns, run `{self.prefix} pt`.\nThis will show a help embed explaining registration.",
+                ephemeral=True
+            )
+        except Exception as e:
+            print(f"[signup_button] Exception: {e}")
+            await interaction.response.send_message(f"⚠️ Error occurred: {e}", ephemeral=True)
 
 if __name__ == "__main__":
     builder = PokemonImageBuilder()
