@@ -6,6 +6,7 @@ class Anime(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.api_url = "https://api.jikan.moe/v4/"
+        self.mangadex_url = "https://api.mangadex.org"
         self.red = discord.Color.red()
         self.ar = Anime_Recommendation(bot)
 
@@ -21,7 +22,8 @@ class Anime(commands.Cog):
         try:
             msg = await self.bot.wait_for("message", timeout=60, check=check)
             await message.delete()
-            if not msg.content.strip(): raise ValueError(f"{item.title()} name cannot be empty")
+            if not msg.content.strip():
+                raise ValueError(f"{item.title()} name cannot be empty")
             query = msg.content.strip()
             await msg.delete()
             return query
@@ -42,8 +44,12 @@ class Anime(commands.Cog):
                 await ctx.reply(f"No results found for '{query}'. Please try a different title.")
                 return
 
-            view = view_cls(data, 0, 0)
-            embed = await view.update_embed()
+            view = view_cls(data, ctx)
+            embed = discord.Embed(
+                title=f"Search Results for: {query}",
+                description="Select a manga from the dropdown below.",
+                color=discord.Color.blurple()
+            )
             await ctx.reply(embed=embed, view=view, mention_author=False)
 
         except aiohttp.ClientError as e:
@@ -55,25 +61,62 @@ class Anime(commands.Cog):
 
     @commands.command(name="anime")
     async def anime_search(self, ctx, *, query: Optional[str] = None):
-     if query and query.lower() == 'recommend':
-        d = await self.ar.fetch_random_anime()
-        m = await ctx.reply(embed=discord.Embed(description=f'{neko_lurk} Fetching anime...', color=primary_color()), mention_author=False)
-        return await self.ar.update_anime_embed(m, d)
-     query = query or await self.prompt_query(ctx, "anime")
-     if not query: return
-     await self.fetch_and_send(ctx, f"{self.api_url}anime?q={query}", query, AnimeView)
+        if query and query.lower() == 'recommend':
+            d = await self.ar.fetch_random_anime()
+            m = await ctx.reply(embed=discord.Embed(description=f'{neko_lurk} Fetching anime...', color=primary_color()), mention_author=False)
+            return await self.ar.update_anime_embed(m, d)
+        query = query or await self.prompt_query(ctx, "anime")
+        if not query: return
+        await self.fetch_and_send(ctx, f"{self.api_url}anime?q={query}", query, AnimeView)
 
     @commands.command(name="character")
     async def character_search(self, ctx, *, query=None):
         query = query or await self.prompt_query(ctx, "character")
         if not query: return
         await self.fetch_and_send(ctx, f"{self.api_url}characters?q={query}", query, CharacterView)
- 
-    @commands.command(name="manga")
+
+    @commands.group(name="manga")
+    async def manga_group(self, ctx):
+        if ctx.invoked_subcommand is None:
+            await ctx.send("Use a subcommand: `search` or `read`.")
+
+    @manga_group.command(name="search")
     async def manga_search(self, ctx, *, query=None):
         query = query or await self.prompt_query(ctx, "manga")
         if not query: return
         await self.fetch_and_send(ctx, f"{self.api_url}manga?q={query}", query, MangaView)
+
+    @manga_group.command(name="read")
+    async def manga_read(self, ctx, *, query=None):
+        # Prompt user if no query provided
+        query = query or await self.prompt_query(ctx, "manga")
+        if not query:
+            return await ctx.send("❌ No query provided.")
+
+        # Fetch search results from MangaDex
+        async with aiohttp.ClientSession() as session:
+            url = f"{self.mangadex_url}/manga?title={query}&limit=25"
+            async with session.get(url) as resp:
+                data = await resp.json()
+
+        if not data.get("data"):
+            return await ctx.send(f"❌ No manga found for `{query}`.")
+
+        # Launch the new unified session view
+        view = MangaSession(ctx, data)
+        await ctx.send(f"📚 Search results for `{query}`:", view=view)
+
+    async def prompt_query(self, ctx, subject: str):
+        await ctx.send(f"Enter the {subject} name to search:")
+        def check(m):
+            return m.author.id == ctx.author.id and m.channel == ctx.channel
+        try:
+            msg = await self.bot.wait_for("message", check=check, timeout=30)
+            return msg.content.strip()
+        except asyncio.TimeoutError:
+            await ctx.send("⏰ Timeout. Please try again.")
+            return None
+
 
 def setup(bot):
     bot.add_cog(Anime(bot))
