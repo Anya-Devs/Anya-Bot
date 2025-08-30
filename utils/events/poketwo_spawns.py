@@ -738,7 +738,7 @@ class PokemonSpawnView(View):
     async def signup_button(self, interaction: discord.Interaction, button: Button):
         try:
             await interaction.response.send_message(
-                f"To sign up for spawns, run `{self.prefix} pt`.\nThis will show a help embed explaining registration.",
+                f"- To sign up for spawns, run `{self.prefix}pt`.\n> This will show a help embed explaining registration.",
                 ephemeral=True
             )
         except Exception as e:
