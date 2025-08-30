@@ -18,30 +18,35 @@ from imports.discord_imports import *
 from imports.log_imports import logger
 
 
-
 class HelpMenu(discord.ui.View):
     def __init__(self, bot, select_view, ctx, cog_commands, embed_image_path, embed_color):
         super().__init__(timeout=None)
         self.bot = bot
         self.ctx = ctx
-        self.cog_commands = {cog_name: [cmd for cmd in cmds if not cmd.hidden]
-                             for cog_name, cmds in cog_commands.items()}
+
+        # Keep only visible commands, including groups
+        self.cog_commands = {
+            k: [cmd for cmd in v if not cmd.hidden] 
+            for k, v in cog_commands.items()
+        }
         self.cog_commands = {k: v for k, v in self.cog_commands.items() if v}
+
         self.page = 0
-        self.fields_per_page = 7
+        self.fields_per_page = 4
         self.select_view = select_view
         self.embed_image_path = embed_image_path
         self.embed_color = embed_color
 
         # Navigation buttons
         self.prev_button = discord.ui.Button(
-            emoji="⬅️", style=discord.ButtonStyle.gray, custom_id=f"prev_{ctx.author.id}")
+            emoji="⬅️", style=discord.ButtonStyle.gray, custom_id=f"prev_{ctx.author.id}"
+        )
         self.next_button = discord.ui.Button(
-            emoji="➡️", style=discord.ButtonStyle.gray, custom_id=f"next_{ctx.author.id}")
+            emoji="➡️", style=discord.ButtonStyle.gray, custom_id=f"next_{ctx.author.id}"
+        )
         self.prev_button.callback = self.prev_page
         self.next_button.callback = self.next_page
 
-        # Add items if select_view exists
         if select_view:
             self.add_item(select_view)
         self.add_item(self.prev_button)
@@ -53,17 +58,45 @@ class HelpMenu(discord.ui.View):
     def build_embed(self):
         embed = discord.Embed(color=self.embed_color)
         embed.set_image(url="attachment://image.png")
-        start = self.page * self.fields_per_page
-        end = start + self.fields_per_page
+
+        start, end = self.page * self.fields_per_page, (self.page + 1) * self.fields_per_page
         items = list(self.cog_commands.items())[start:end]
+
+        def chunked_commands(cmds, chunk_size=6):
+            return [cmds[i:i+chunk_size] for i in range(0, len(cmds), chunk_size)]
+
         for cog_name, commands_list in items:
-            embed.add_field(
-                name=cog_name.replace("_", ""),
-                value=" ".join(f'`{cmd.name}`' for cmd in commands_list),
-                inline=False
-            )
+            normal_cmds = []
+            group_cmds = []
+
+            for cmd in commands_list:
+                if isinstance(cmd, commands.Group):
+                    subs = [f"`{sub.name}`" for sub in cmd.commands if not sub.hidden]
+                    if subs:
+                        group_cmds.append(f"`{cmd.name}` → \t{' \t'.join(subs)}")
+                    else:
+                        group_cmds.append(f"`{cmd.name}`")
+                else:
+                    normal_cmds.append(f"`{cmd.name}`")
+
+            parts = []
+
+            # Normal commands inline
+            if normal_cmds:
+                parts.append(" ".join(normal_cmds))
+
+            # Group commands boxed with wrapping
+            if group_cmds:
+                lines = ["\t".join(line) for line in chunked_commands(group_cmds, 6)]
+                parts.append("\n".join(lines))
+
+            value = "\n".join(parts) if parts else "No commands."
+            embed.add_field(name=cog_name.replace("_", " "), value=value, inline=False)
+
         total_pages = max(1, (len(self.cog_commands) - 1) // self.fields_per_page + 1)
-        embed.set_footer(text=f"Page {self.page + 1}/{total_pages} | Use {self.ctx.prefix}help <command> for more info.")
+        embed.set_footer(
+            text=f"Page {self.page+1}/{total_pages} | Use {self.ctx.prefix}help <command> for details."
+        )
         return embed
 
     async def prev_page(self, interaction: discord.Interaction):
@@ -99,6 +132,10 @@ class HelpMenu(discord.ui.View):
 
         await interaction.response.edit_message(embed=embed, attachments=[file] if file else [], view=self)
 
+
+
+# ---------------- SELECT HELP ---------------- #
+
 class Select_Help(discord.ui.Select):
     def __init__(self, bot, ctx, help_view=None):
         self.bot, self.ctx, self.help_view = bot, ctx, help_view
@@ -107,7 +144,10 @@ class Select_Help(discord.ui.Select):
         self.image_path = "data/images/help_images/cog_image.png"
         self.thumbnail_file = "data/commands/help/thumbnails.json"
         self.module_to_cogs = self.map_modules_to_cogs()
-        options = self.build_options() or [discord.SelectOption(label="Oops... No module available.", value="none")]
+
+        options = self.build_options() or [
+            discord.SelectOption(label="Oops... No module available.", value="none")
+        ]
         super().__init__(placeholder=self.placeholder_text, max_values=1, min_values=1, options=options)
 
     def map_modules_to_cogs(self):
@@ -133,11 +173,23 @@ class Select_Help(discord.ui.Select):
     def build_fields_for_module(self, module):
         fields = []
         for cog in self.module_to_cogs.get(module, []):
-            visible_cmds = [cmd.name for cmd in cog.get_commands() if not cmd.hidden]
+            visible_cmds = [cmd for cmd in cog.get_commands() if not cmd.hidden]
             if not visible_cmds:
                 continue
+
+            parts = []
+            for cmd in visible_cmds:
+                if isinstance(cmd, commands.Group):
+                    subs = [f"`{sub.name}`" for sub in cmd.commands if not sub.hidden]
+                    if subs:
+                        parts.append(f"**{cmd.name}** → {' '.join(subs)}")
+                    else:
+                        parts.append(f"**{cmd.name}**")
+                else:
+                    parts.append(f"`{cmd.name}`")
+
+            commands_str = "\n".join(parts)
             inline = len(self.module_to_cogs[module]) == 1
-            commands_str = " ".join(f"`{cmd}`" for cmd in visible_cmds)
             fields.append((cog.__class__.__name__.replace("_", " "), commands_str, inline))
         return fields
 
@@ -160,22 +212,27 @@ class Select_Help(discord.ui.Select):
         url = thumbs.get_image_url(filename)
         if url:
             embed.set_thumbnail(url=url)
+
         Options_ImageGenerator(filename).save_image(self.image_path)
-        file = discord.File(open(self.image_path, "rb"), filename="cog_image.png") if os.path.exists(self.image_path) else None
+        file = (
+            discord.File(open(self.image_path, "rb"), filename="cog_image.png")
+            if os.path.exists(self.image_path)
+            else None
+        )
         if file:
             embed.set_image(url="attachment://cog_image.png")
 
         # Update view
         self.help_view.clear_items()
         overview_btn = discord.ui.Button(label="Overview", style=discord.ButtonStyle.green)
+
         async def overview_callback(interaction_: discord.Interaction):
             await self.help_view.show_overview(interaction_)
-        overview_btn.callback = overview_callback
 
+        overview_btn.callback = overview_callback
         self.help_view.add_item(self)
         self.help_view.add_item(overview_btn)
         await interaction.response.edit_message(embed=embed, attachments=[file] if file else [], view=self.help_view)
-
 
 
 
