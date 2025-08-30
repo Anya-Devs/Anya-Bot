@@ -398,6 +398,7 @@ class MangaReader:
         except aiohttp.ClientError as e: raise MangaAPIError(f"Network error: {str(e)}")
 
 
+
 class MangaSession(discord.ui.View):
     def __init__(self, ctx, manga_data: Dict[str, Any]):
         super().__init__(timeout=600)
@@ -447,7 +448,10 @@ class MangaSession(discord.ui.View):
 
     async def _on_manga_selected(self, interaction: Interaction):
         try:
-            await interaction.response.defer()
+            # 🔑 remove select menu immediately
+            self.clear_items()
+            await interaction.response.edit_message(view=self)
+
             idx = int(interaction.data["values"][0])
             self.current_manga = self.manga_list[idx]
 
@@ -468,12 +472,15 @@ class MangaSession(discord.ui.View):
                 return
 
             self.current_page_index = 0
+
+            # show reading buttons instead
             await self._setup_reading_interface(interaction)
+
         except Exception as e:
             await self._handle_error(interaction, f"Error selecting manga: {e} 😅")
 
     async def _setup_reading_interface(self, interaction: Interaction):
-        self.clear_items()
+        self.clear_items()  # ensure only buttons
         for cfg in self.button_config:
             label = cfg["label"].format(self.current_page_index+1, len(self.page_urls)) if "{}" in cfg["label"] else cfg["label"]
             btn = Button(label=label, style=cfg["style"], custom_id=cfg["custom_id"], disabled=cfg["disabled"], row=cfg["row"], emoji=cfg.get("emoji"))
@@ -564,7 +571,6 @@ class MangaSession(discord.ui.View):
             await self._handle_error(interaction, "No pages to display 😕")
             return
         try:
-            # Up to 4 images per page
             embeds = []
             for i in range(4):
                 idx = self.current_page_index + i
@@ -617,8 +623,6 @@ class MangaSession(discord.ui.View):
         if hasattr(self, "message"):
             await self.message.edit(embed=embed, view=None)
         self.stop()
-
-
 class PageJumpModal(discord.ui.Modal):
     
     def __init__(self, manga_session: MangaSession):
