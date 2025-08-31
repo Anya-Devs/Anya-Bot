@@ -733,18 +733,7 @@ class PokemonSpawnView(View):
         except Exception as e:
             print(f"[dex_button] Exception: {e}")
             await interaction.response.send_message(f"⚠️ Error occurred: {e}", ephemeral=True)
-
-    @discord.ui.button(label="How to Register", style=discord.ButtonStyle.secondary, custom_id="signup_button", emoji='❔')
-    async def signup_button(self, interaction: discord.Interaction, button: Button):
-        try:
-            await interaction.response.send_message(
-                f"- To sign up for spawns, run `{self.prefix}pt`.\n> This will show a help embed explaining registration.",
-                ephemeral=True
-            )
-        except Exception as e:
-            print(f"[signup_button] Exception: {e}")
-            await interaction.response.send_message(f"⚠️ Error occurred: {e}", ephemeral=True)
-
+            
 if __name__ == "__main__":
     builder = PokemonImageBuilder()
     builder.create_image(
