@@ -397,7 +397,46 @@ class MangaReader:
                     return [f"{base}/{MangaReader.CDN_QUALITY}/{hash_val}/{f}" for f in filenames]
         except aiohttp.ClientError as e: raise MangaAPIError(f"Network error: {str(e)}")
 
+    @staticmethod
+    async def fetch_manga_chapters(manga_id: str, language: str = "en") -> List[Dict[str, Any]]:
+        chapters = []
+        limit = 100
+        offset = 0
+        async with aiohttp.ClientSession() as session:
+            while True:
+                url = f"{MangaReader.BASE_URL}/chapter"
+                params = {
+                    "manga": manga_id,
+                    "translatedLanguage[]": language,
+                    "limit": limit,
+                    "offset": offset,
+                    "order[chapter]": "asc"
+                }
+                async with session.get(url, params=params) as resp:
+                    if resp.status != 200:
+                        raise MangaAPIError(f"API returned {resp.status}")
+                    data = await resp.json()
+                    chapters.extend(data.get("data", []))
+                    if offset + limit >= data.get("total", 0):
+                        break
+                    offset += limit
+        if not chapters:
+            raise MangaAPIError("No chapters found")
+        return chapters
 
+    @staticmethod
+    async def fetch_chapter_pages(chapter_id: str) -> List[str]:
+        async with aiohttp.ClientSession() as session:
+            url = f"{MangaReader.BASE_URL}/at-home/server/{chapter_id}"
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    raise MangaAPIError(f"CDN returned {resp.status}")
+                data = await resp.json()
+                base, chapter = data.get("baseUrl"), data.get("chapter", {})
+                hash_val, filenames = chapter.get("hash"), chapter.get(MangaReader.CDN_QUALITY, [])
+                if not all([base, hash_val, filenames]):
+                    raise MangaAPIError("Invalid chapter data")
+                return [f"{base}/{MangaReader.CDN_QUALITY}/{hash_val}/{f}" for f in filenames]
 
 class MangaSession(discord.ui.View):
     active_sessions: dict[int, "MangaSession"] = {}
@@ -411,17 +450,17 @@ class MangaSession(discord.ui.View):
         self.current_chapter: Optional[Dict[str, Any]] = None
         self.page_urls: list[str] = []
         self.current_page_index: int = 0
+        self.chapters_data: list[Dict[str, Any]] = []
+        self.chapter_page = 0
+        self.chapters_per_page = 25
         self.session_start_time = datetime.now()
         self.nsfw_warning_shown: bool = False
 
         self.button_config = [
-            {"label":"", "custom_id":"prev_page", "style":ButtonStyle.secondary, "row":0, "emoji":"⬅️", "disabled":False},
-            {"label":"{}/{}", "custom_id":"page_indicator", "style":ButtonStyle.primary, "row":0, "emoji":None, "disabled":True},
-            {"label":"", "custom_id":"next_page", "style":ButtonStyle.secondary, "row":0, "emoji":"➡️", "disabled":False},
-            {"label":"Jump to Page", "custom_id":"jump_page", "style":ButtonStyle.secondary, "row":1, "emoji":"🔢", "disabled":False},
-            {"label":"Chapter Info", "custom_id":"chapter_info", "style":ButtonStyle.secondary, "row":1, "emoji":"📋", "disabled":False},
-            {"label":"New Manga", "custom_id":"select_new", "style":ButtonStyle.success, "row":2, "emoji":None, "disabled":False},
-            {"label":"Stop Reading", "custom_id":"stop_session", "style":ButtonStyle.danger, "row":2, "emoji":"🛑", "disabled":False}
+            {"label": "", "custom_id": "prev_page", "style": ButtonStyle.secondary, "row": 0, "emoji": "⬅️", "disabled": False},
+            {"label": "{}/{}", "custom_id": "page_indicator", "style": ButtonStyle.primary, "row": 0, "emoji": None, "disabled": True},
+            {"label": "", "custom_id": "next_page", "style": ButtonStyle.secondary, "row": 0, "emoji": "➡️", "disabled": False},
+            {"label": "Other Options", "custom_id": "other_options", "style": ButtonStyle.secondary, "row": 1, "emoji": "⚙️", "disabled": False},
         ]
         self._setup_manga_selector()
 
@@ -475,7 +514,6 @@ class MangaSession(discord.ui.View):
         idx = int(interaction.data["values"][0])
         self.current_manga = self.manga_list[idx]
 
-        # NSFW detection
         content_rating = self.current_manga.get("attributes", {}).get("contentRating", "safe").lower()
         if content_rating != "safe" and not getattr(interaction.channel, "is_nsfw", lambda: False)():
             await interaction.response.send_message(
@@ -489,23 +527,75 @@ class MangaSession(discord.ui.View):
             return
 
         try:
-            chapters_data = await MangaReader.fetch_manga_chapters(self.current_manga["id"])
-            if not chapters_data.get("data"):
-                await self._handle_error(interaction, "No chapters available 😅 Just pick a different manga from the list.", ephemeral=True)
+            self.chapters_data = await MangaReader.fetch_manga_chapters(self.current_manga["id"])
+            if not self.chapters_data:
+                await self._handle_error(interaction, "No chapters available 😅 Just pick a different manga.", ephemeral=True)
                 return
+            await self._show_chapter_selector(interaction)
+        except Exception:
+            await self._handle_error(interaction, "Could not load this manga 😅 Please select another one.", ephemeral=True)
 
-            self.current_chapter = chapters_data["data"][0]
-            self.page_urls = await MangaReader.fetch_chapter_pages(self.current_chapter["id"])
-            if not self.page_urls:
-                await self._handle_error(interaction, "This chapter has no pages 😅 Please pick a different manga.", ephemeral=True)
-                return
+    async def _show_chapter_selector(self, interaction: Interaction):
+        self.clear_items()
+        start = self.chapter_page * self.chapters_per_page
+        end = start + self.chapters_per_page
+        options = []
+        for i in range(start, min(end, len(self.chapters_data))):
+            chap = self.chapters_data[i]
+            attrs = chap.get("attributes", {})
+            chap_num = attrs.get("chapter", "N/A")
+            chap_title = attrs.get("title") or "No Title"
 
-            self.current_page_index = 0
-            self.clear_items()
-            await self._setup_reading_interface(interaction)
+            tags_list = attrs.get("tags", [])
+            tags_str = ", ".join([
+                t.get("attributes", {}).get("name", {}).get("en") or
+                next(iter(t.get("attributes", {}).get("name", {}).values()), "Unknown") for t in tags_list
+            ])
+            label = f"Ch {chap_num}: {chap_title} [{tags_str}]" if tags_str else f"Ch {chap_num}: {chap_title}"
+            options.append(SelectOption(label=label[:100], value=str(i)))
 
-        except Exception as e:
-            await self._handle_error(interaction, f"Could not load this manga 😅 Please select another one.", ephemeral=True)
+        select = discord.ui.Select(
+            placeholder=f"📚 Select Chapter {start+1}-{min(end, len(self.chapters_data))}",
+            options=options,
+            min_values=1,
+            max_values=1
+        )
+        select.callback = self._on_chapter_selected
+        self.add_item(select)
+
+        if start > 0:
+            prev_btn = Button(label="⬅️ Prev Chapters", custom_id="prev_chapter_page", style=ButtonStyle.secondary)
+            prev_btn.callback = self._handle_chapter_navigation
+            self.add_item(prev_btn)
+        if end < len(self.chapters_data):
+            next_btn = Button(label="➡️ Next Chapters", custom_id="next_chapter_page", style=ButtonStyle.secondary)
+            next_btn.callback = self._handle_chapter_navigation
+            self.add_item(next_btn)
+
+        embed = Embed(
+            title=f"📚 {self._get_manga_title()} Chapters",
+            description=f"Select a chapter to start reading ({start+1}-{min(end,len(self.chapters_data))})",
+            color=discord.Color.green()
+        )
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def _on_chapter_selected(self, interaction: Interaction):
+        idx = int(interaction.data["values"][0])
+        self.current_chapter = self.chapters_data[idx]
+        self.page_urls = await MangaReader.fetch_chapter_pages(self.current_chapter["id"])
+        if not self.page_urls:
+            await self._handle_error(interaction, "This chapter has no pages 😅 Please pick a different chapter.", ephemeral=True)
+            return
+        self.current_page_index = 0
+        self.clear_items()
+        await self._setup_reading_interface(interaction)
+
+    async def _handle_chapter_navigation(self, interaction: Interaction):
+        if interaction.data["custom_id"] == "prev_chapter_page":
+            self.chapter_page = max(self.chapter_page-1, 0)
+        else:
+            self.chapter_page += 1
+        await self._show_chapter_selector(interaction)
 
     async def _setup_reading_interface(self, interaction: Interaction):
         for cfg in self.button_config:
@@ -523,6 +613,31 @@ class MangaSession(discord.ui.View):
         elif cid == "chapter_info": await self._show_chapter_info(interaction)
         elif cid == "select_new": await self._restart_manga_selection(interaction)
         elif cid == "stop_session": await self._stop_session(interaction)
+        elif cid == "other_options": await self._show_other_options(interaction)
+        elif cid == "select_chapter": await self._show_chapter_selector(interaction)
+        elif cid == "next_chapter":
+            idx = self.chapters_data.index(self.current_chapter) + 1
+            if idx < len(self.chapters_data):
+                self.current_chapter = self.chapters_data[idx]
+                self.page_urls = await MangaReader.fetch_chapter_pages(self.current_chapter["id"])
+                self.current_page_index = 0
+                self.clear_items()
+                await self._setup_reading_interface(interaction)
+
+    async def _show_other_options(self, interaction: Interaction):
+        view = discord.ui.View()
+        buttons = [
+            {"label":"Jump to Page", "custom_id":"jump_page", "style":ButtonStyle.secondary, "emoji":"🔢"},
+            {"label":"Chapter Info", "custom_id":"chapter_info", "style":ButtonStyle.secondary, "emoji":"📋"},
+            {"label":"Select Chapter", "custom_id":"select_chapter", "style":ButtonStyle.primary, "emoji":"📖"},
+            {"label":"New Manga", "custom_id":"select_new", "style":ButtonStyle.success, "emoji":None},
+            {"label":"Stop Reading", "custom_id":"stop_session", "style":ButtonStyle.danger, "emoji":"🛑"},
+        ]
+        for b in buttons:
+            btn = Button(label=b["label"], style=b["style"], custom_id=b["custom_id"], emoji=b.get("emoji"))
+            btn.callback = self._handle_button_interaction
+            view.add_item(btn)
+        await interaction.response.send_message("⚙️ Other Options:", view=view, ephemeral=True)
 
     async def _navigate_page(self, interaction: Interaction, direction: int):
         new_index = self.current_page_index + direction
@@ -530,10 +645,25 @@ class MangaSession(discord.ui.View):
             self.current_page_index = new_index
             await self._update_reading_display(interaction)
         else:
-            await interaction.response.send_message(
-                embed=Embed(title="⚠️ Page Navigation", description="You're at the edge 😅 Just click the other direction.", color=discord.Color.orange()),
-                ephemeral=True
-            )
+            if direction > 0 and self._has_next_chapter():
+                view = discord.ui.View()
+                next_btn = Button(label="Go to Next Chapter", custom_id="next_chapter", style=ButtonStyle.success)
+                next_btn.callback = self._handle_button_interaction
+                view.add_item(next_btn)
+                await interaction.response.send_message(
+                    "📖 You've reached the end of this chapter. Go to the next chapter?", view=view, ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    embed=Embed(title="⚠️ Page Navigation", description="You're at the edge 😅", color=discord.Color.orange()),
+                    ephemeral=True
+                )
+
+    def _has_next_chapter(self) -> bool:
+        if not self.current_chapter or not self.chapters_data:
+            return False
+        idx = self.chapters_data.index(self.current_chapter)
+        return idx + 1 < len(self.chapters_data)
 
     async def _handle_page_jump(self, interaction: Interaction):
         modal = PageJumpModal(self)
@@ -543,14 +673,18 @@ class MangaSession(discord.ui.View):
         if not self.current_chapter:
             await interaction.response.send_message("❌ No chapter info available 😅 Please select a different manga.", ephemeral=True)
             return
-
         chapter_attrs = self.current_chapter.get("attributes", {})
         chapter_num = chapter_attrs.get("chapter", "Unknown")
         chapter_title = chapter_attrs.get("title", "No title")
         pages_count = len(self.page_urls)
         progress = ((self.current_page_index+1)/pages_count)*100
         progress_bar = "█"*(int(progress)//10)+"░"*(10-int(progress)//10)
-
+        tags_list = chapter_attrs.get("tags", [])
+        tags_str = ", ".join([
+            t.get("attributes", {}).get("name", {}).get("en") or
+            next(iter(t.get("attributes", {}).get("name", {}).values()), "Unknown") for t in tags_list
+        ])
+        if not tags_str: tags_str = "No tags"
         embed = Embed(title="📋 Chapter Information", color=discord.Color.blue())
         embed.add_field(name="📖 Manga", value=self._get_manga_title(), inline=False)
         embed.add_field(name="📄 Chapter", value=f"Chapter {chapter_num}", inline=True)
@@ -558,6 +692,7 @@ class MangaSession(discord.ui.View):
         embed.add_field(name="📊 Pages", value=f"{pages_count}", inline=True)
         embed.add_field(name="🎯 Current Page", value=f"{self.current_page_index+1}/{pages_count}", inline=True)
         embed.add_field(name="📈 Progress", value=f"{progress_bar} {progress:.1f}%", inline=False)
+        embed.add_field(name="🏷️ Tags", value=tags_str, inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def _restart_manga_selection(self, interaction: Interaction):
@@ -576,17 +711,14 @@ class MangaSession(discord.ui.View):
         hours, remainder = divmod(int(duration.total_seconds()), 3600)
         minutes, seconds = divmod(remainder, 60)
         duration_str = f"{hours}h {minutes}m {seconds}s"
-
         embed = Embed(title="👋 Reading Session Ended", description="Thanks for reading! 😊", color=discord.Color.red())
         if self.current_manga:
             embed.add_field(name="📖 Last Read", value=self._get_manga_title(), inline=False)
         embed.add_field(name="⏱️ Session Duration", value=duration_str, inline=True)
         embed.set_footer(text="Use the manga command again to start a new session!")
         await interaction.response.edit_message(embed=embed, view=None)
-
         if self.author_id in MangaSession.active_sessions:
             del MangaSession.active_sessions[self.author_id]
-
         self.stop()
 
     async def _update_reading_display(self, interaction: Interaction):
@@ -602,7 +734,6 @@ class MangaSession(discord.ui.View):
                 embed = Embed(title=f"{self._get_manga_title()}", url="https://rajtech.me", color=primary_color())
                 embed.set_image(url=self.page_urls[idx])
                 embeds.append(embed)
-
             self._update_button_states()
             if interaction.response.is_done():
                 await interaction.followup.send(embeds=embeds, ephemeral=False, view=self)
@@ -615,7 +746,7 @@ class MangaSession(discord.ui.View):
         for item in self.children:
             if hasattr(item, 'custom_id'):
                 if item.custom_id == "page_indicator":
-                    item.label = f"📄 Page {self.current_page_index+1}/{len(self.page_urls)}"
+                    item.label = f"{self.current_page_index+1}/{len(self.page_urls)}"
                 elif item.custom_id == "prev_page":
                     item.disabled = self.current_page_index == 0
                 elif item.custom_id == "next_page":
@@ -644,8 +775,6 @@ class MangaSession(discord.ui.View):
         if self.author_id in MangaSession.active_sessions:
             del MangaSession.active_sessions[self.author_id]
         self.stop()
-
-
 
 class PageJumpModal(discord.ui.Modal):
     
