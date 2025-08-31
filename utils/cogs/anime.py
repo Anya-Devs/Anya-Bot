@@ -551,6 +551,8 @@ class MangaSession(discord.ui.View):
                 t.get("attributes", {}).get("name", {}).get("en") or
                 next(iter(t.get("attributes", {}).get("name", {}).values()), "Unknown") for t in tags_list
             ])
+            chap_num = chap_num or 0
+            chap_title = "" if (chap_title or "").strip().lower() == "no title" else chap_titl
             label = f"Ch {chap_num}" + (f": {chap_title}" if chap_title else "") + (f" [{tags_str}]" if chap_title and tags_str else "")
             options.append(SelectOption(label=label[:100], value=str(i)))
 
