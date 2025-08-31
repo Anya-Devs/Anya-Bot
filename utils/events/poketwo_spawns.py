@@ -701,19 +701,18 @@ class PokemonSpawnView(View):
 
             gender_text = self.format_gender(data.get("gender_rate", -1))
 
-            description = (f"{data['description']}\n\n"
-                           f"**Base Stats:**\n```{stats_block}```\n\n"
-                           f"**Alternative Names:**\n```{alt_names}```")
-
+            description = (f"{data['description']}")
             embed = discord.Embed(title=embed_title, description=description,
                                   color=self.extract_color(file_path))
-            
             embed.add_field(name="Region", value=data['region'].capitalize(), inline=True)
             embed.add_field(name="Types", value=self.format_type_field(data), inline=True)
-            embed.add_field(name="Rarity", value=rarity, inline=True)
+            embed.add_field(name="Alternative Names", value=f"{alt_names}", inline=True)
+            embed.add_field(name="Base Stats", value=f"```{stats_block}```", inline=False)
+           
             embed.set_thumbnail(url=f"attachment://{self.slug}.png")
             # Footer includes height, weight, and gender separated by tabs
-            embed.set_footer(icon_url='https://discords.com/_next/image?url=https%3A%2F%2Fcdn.discordapp.com%2Femojis%2F808909357240025099.png%3Fv%3D1&w=128&q=75',text=f"Height: {float(data['height']):.2f} m\nWeight: {float(data['weight']):.2f} kg\tGender: {gender_text}")
+            embed.set_footer(icon_url='https://discords.com/_next/image?url=https%3A%2F%2Fcdn.discordapp.com%2Femojis%2F808909357240025099.png%3Fv%3D1&w=128&q=75', text=f"Height: {float(data['height']):.2f} m\nWeight: {float(data['weight']):.2f} kg\tGender: {gender_text}" + (f"\nRarity: {rarity}" if rarity != 'Normal' else ""))
+
             return embed
         except Exception as e:
             print(f"[format_embed] Error: {e}")
