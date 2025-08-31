@@ -625,20 +625,23 @@ class MangaSession(discord.ui.View):
                 await self._setup_reading_interface(interaction)
 
     async def _show_other_options(self, interaction: Interaction):
-        view = discord.ui.View()
-        buttons = [
-            {"label":"Jump to Page", "custom_id":"jump_page", "style":ButtonStyle.secondary, "emoji":"🔢"},
-            {"label":"Chapter Info", "custom_id":"chapter_info", "style":ButtonStyle.secondary, "emoji":"📋"},
-            {"label":"Select Chapter", "custom_id":"select_chapter", "style":ButtonStyle.primary, "emoji":"📖"},
-            {"label":"New Manga", "custom_id":"select_new", "style":ButtonStyle.success, "emoji":None},
-            {"label":"Stop Reading", "custom_id":"stop_session", "style":ButtonStyle.danger, "emoji":"🛑"},
-        ]
-        for b in buttons:
-            btn = Button(label=b["label"], style=b["style"], custom_id=b["custom_id"], emoji=b.get("emoji"))
-            btn.callback = self._handle_button_interaction
-            view.add_item(btn)
-        await interaction.response.send_message("⚙️ Other Options:", view=view, ephemeral=True)
+     self.clear_items()  # temporarily clear buttons
+     view = discord.ui.View(timeout=None)
+     buttons = [
+        {"label":"Jump to Page", "custom_id":"jump_page", "style":ButtonStyle.secondary, "emoji":"🔢"},
+        {"label":"Chapter Info", "custom_id":"chapter_info", "style":ButtonStyle.secondary, "emoji":"📋"},
+        {"label":"Select Chapter", "custom_id":"select_chapter", "style":ButtonStyle.primary, "emoji":"📖"},
+        {"label":"New Manga", "custom_id":"select_new", "style":ButtonStyle.success, "emoji":None},
+        {"label":"Stop Reading", "custom_id":"stop_session", "style":ButtonStyle.danger, "emoji":"🛑"},
+     ]
+     for b in buttons:
+        btn = Button(label=b["label"], style=b["style"], custom_id=b["custom_id"], emoji=b.get("emoji"))
+        btn.callback = self._handle_button_interaction
+        view.add_item(btn)
 
+     embed = Embed(title="⚙️ Other Options", description="Select an option below:", color=primary_color())
+     await interaction.response.edit_message(embed=embed, view=view)
+    
     async def _navigate_page(self, interaction: Interaction, direction: int):
         new_index = self.current_page_index + direction
         if 0 <= new_index < len(self.page_urls):
