@@ -400,8 +400,11 @@ class MangaReader:
 
 
 class MangaSession(discord.ui.View):
+    # Track active sessions per user
+    active_sessions: dict[int, "MangaSession"] = {}
+
     def __init__(self, ctx, manga_data: Dict[str, Any]):
-        super().__init__(timeout=600)
+        super().__init__(timeout=None)
         self.ctx = ctx
         self.manga_list = manga_data.get("data", [])[:25]
         self.author_id = ctx.author.id
@@ -410,6 +413,8 @@ class MangaSession(discord.ui.View):
         self.page_urls: list[str] = []
         self.current_page_index: int = 0
         self.session_start_time = datetime.now()
+        self.nsfw_warning_shown: bool = False
+
         self.button_config = [
             {"label":"Previous", "custom_id":"prev_page", "style":ButtonStyle.secondary, "row":0, "emoji":"⬅️", "disabled":False},
             {"label":"Page {}/{}", "custom_id":"page_indicator", "style":ButtonStyle.secondary, "row":0, "emoji":None, "disabled":True},
@@ -420,6 +425,28 @@ class MangaSession(discord.ui.View):
             {"label":"Stop Reading", "custom_id":"stop_session", "style":ButtonStyle.danger, "row":2, "emoji":"🛑", "disabled":False}
         ]
         self._setup_manga_selector()
+
+    @classmethod
+    async def create(cls, ctx, manga_data: Dict[str, Any]) -> "MangaSession":
+        """Async factory to stop previous session before creating a new one."""
+        existing = cls.active_sessions.get(ctx.author.id)
+        if existing:
+            try:
+                if hasattr(existing, "message"):
+                    embed = discord.Embed(
+                        title="👋 Previous Reading Session Ended",
+                        description="A new session was started, ending the old one automatically.",
+                        color=discord.Color.red()
+                    )
+                    await existing.message.edit(embed=embed, view=None)
+            except Exception:
+                pass
+            existing.stop()
+            del cls.active_sessions[ctx.author.id]
+
+        session = cls(ctx, manga_data)
+        cls.active_sessions[ctx.author.id] = session
+        return session
 
     def _setup_manga_selector(self):
         if not self.manga_list:
@@ -448,17 +475,29 @@ class MangaSession(discord.ui.View):
 
     async def _on_manga_selected(self, interaction: Interaction):
         try:
-            # 🔑 remove select menu immediately
             self.clear_items()
             await interaction.response.edit_message(view=self)
 
             idx = int(interaction.data["values"][0])
             self.current_manga = self.manga_list[idx]
 
+            # NSFW detection
+            content_rating = self.current_manga.get("attributes", {}).get("contentRating", "safe").lower()
+            if content_rating != "safe" and not getattr(interaction.channel, "is_nsfw", lambda: False)():
+                await interaction.followup.send(
+                    embed=Embed(
+                        title="⚠️ NSFW Content Warning",
+                        description="This manga may contain NSFW material. Please use this command in a NSFW channel.",
+                        color=discord.Color.orange()
+                    ),
+                    ephemeral=True
+                )
+                self.nsfw_warning_shown = True
+
             chapters_data = await MangaReader.fetch_manga_chapters(self.current_manga["id"])
             if not chapters_data.get("data"):
                 self.page_urls = []
-                await self._handle_error(interaction, "No chapters available for this manga 😕")
+                await self._handle_error(interaction, "No chapters available for this manga 😕 Please pick a different option.")
                 return
 
             self.current_chapter = chapters_data["data"][0]
@@ -468,19 +507,17 @@ class MangaSession(discord.ui.View):
                 self.page_urls = []
 
             if not self.page_urls:
-                await self._handle_error(interaction, "No pages available for this chapter 😕")
+                await self._handle_error(interaction, "No pages available for this chapter 😕 Please pick a different option.")
                 return
 
             self.current_page_index = 0
-
-            # show reading buttons instead
             await self._setup_reading_interface(interaction)
 
         except Exception as e:
-            await self._handle_error(interaction, f"Error selecting manga: {e} 😅")
+            await self._handle_error(interaction, f"Error selecting manga: {e} 😅 Please pick a different option.")
 
     async def _setup_reading_interface(self, interaction: Interaction):
-        self.clear_items()  # ensure only buttons
+        self.clear_items()
         for cfg in self.button_config:
             label = cfg["label"].format(self.current_page_index+1, len(self.page_urls)) if "{}" in cfg["label"] else cfg["label"]
             btn = Button(label=label, style=cfg["style"], custom_id=cfg["custom_id"], disabled=cfg["disabled"], row=cfg["row"], emoji=cfg.get("emoji"))
@@ -564,11 +601,15 @@ class MangaSession(discord.ui.View):
         embed.add_field(name="⏱️ Session Duration", value=duration_str, inline=True)
         embed.set_footer(text="Use the manga command again to start new session!")
         await interaction.response.edit_message(embed=embed, view=None)
+
+        if self.author_id in MangaSession.active_sessions:
+            del MangaSession.active_sessions[self.author_id]
+
         self.stop()
 
     async def _update_reading_display(self, interaction: Interaction):
         if not self.page_urls:
-            await self._handle_error(interaction, "No pages to display 😕")
+            await self._handle_error(interaction, "No pages to display 😕 Please pick a different option.")
             return
         try:
             embeds = []
@@ -588,7 +629,7 @@ class MangaSession(discord.ui.View):
                 await interaction.response.edit_message(embeds=embeds, view=self)
 
         except Exception as e:
-            await self._handle_error(interaction, f"Failed to update reading display: {e} 😅")
+            await self._handle_error(interaction, f"Failed to update reading display: {e} 😅 Please pick a different option.")
 
     def _update_button_states(self):
         for item in self.children:
@@ -622,7 +663,16 @@ class MangaSession(discord.ui.View):
         embed = Embed(title="⏰ Session Timed Out", description="The reading session expired due to inactivity 😕", color=discord.Color.orange())
         if hasattr(self, "message"):
             await self.message.edit(embed=embed, view=None)
+
+        if self.author_id in MangaSession.active_sessions:
+            del MangaSession.active_sessions[self.author_id]
+
         self.stop()
+
+
+
+
+
 class PageJumpModal(discord.ui.Modal):
     
     def __init__(self, manga_session: MangaSession):
