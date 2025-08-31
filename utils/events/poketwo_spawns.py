@@ -706,7 +706,7 @@ class PokemonSpawnView(View):
                                   color=self.extract_color(file_path))
             embed.add_field(name="Region", value=data['region'].capitalize(), inline=True)
             embed.add_field(name="Types", value=self.format_type_field(data), inline=True)
-            embed.add_field(name="Alternative Names", value=f"{alt_names}", inline=True)
+            embed.add_field(name="Names", value=f"{alt_names}", inline=True)
             embed.add_field(name="Base Stats", value=f"```{stats_block}```", inline=False)
            
             embed.set_thumbnail(url=f"attachment://{self.slug}.png")

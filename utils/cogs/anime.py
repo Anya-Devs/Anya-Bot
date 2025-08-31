@@ -551,7 +551,7 @@ class MangaSession(discord.ui.View):
                 t.get("attributes", {}).get("name", {}).get("en") or
                 next(iter(t.get("attributes", {}).get("name", {}).values()), "Unknown") for t in tags_list
             ])
-            label = f"Ch {chap_num}: {chap_title} [{tags_str}]" if tags_str else f"Ch {chap_num}: {chap_title}"
+            label = f"Ch {chap_num}" + (f": {chap_title}" if chap_title else "") + (f" [{tags_str}]" if chap_title and tags_str else "")
             options.append(SelectOption(label=label[:100], value=str(i)))
 
         select = discord.ui.Select(
@@ -575,7 +575,7 @@ class MangaSession(discord.ui.View):
         embed = Embed(
             title=f"📚 {self._get_manga_title()} Chapters",
             description=f"Select a chapter to start reading ({start+1}-{min(end,len(self.chapters_data))})",
-            color=discord.Color.green()
+            color=primary_color()
         )
         await interaction.response.edit_message(embed=embed, view=self)
 
@@ -702,7 +702,7 @@ class MangaSession(discord.ui.View):
         self.current_page_index = 0
         self.clear_items()
         self._setup_manga_selector()
-        embed = Embed(title="📚 Manga Selection", description="Choose a manga from the dropdown 😄", color=discord.Color.green())
+        embed = Embed(title="📚 Manga Selection", description="Choose a manga from the dropdown", color=primary_color)
         embed.set_footer(text=f"Session started by {self.ctx.author.display_name}")
         await interaction.response.edit_message(embed=embed, view=self)
 
@@ -776,6 +776,8 @@ class MangaSession(discord.ui.View):
             del MangaSession.active_sessions[self.author_id]
         self.stop()
 
+
+ 
 class PageJumpModal(discord.ui.Modal):
     
     def __init__(self, manga_session: MangaSession):

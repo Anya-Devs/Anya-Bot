@@ -48,7 +48,7 @@ class Anime(commands.Cog):
             embed = discord.Embed(
                 title=f"Search Results for: {query}",
                 description="Select a manga from the dropdown below.",
-                color=discord.Color.blurple()
+                color=primary_color()
             )
             await ctx.reply(embed=embed, view=view, mention_author=False)
 
@@ -104,7 +104,12 @@ class Anime(commands.Cog):
 
         # Launch the new unified session view
         view = MangaSession(ctx, data)
-        await ctx.send(f"📚 Search results for `{query}`:", view=view)
+        embed = discord.Embed(
+         title=f"📚 Search results for `{query}`",
+         description="Select a manga from the dropdown below.",
+         color=primary_color()
+        )
+        await ctx.reply(embed=embed, view=view, mention_author=False)
 
     async def prompt_query(self, ctx, subject: str):
         await ctx.send(f"Enter the {subject} name to search:")
