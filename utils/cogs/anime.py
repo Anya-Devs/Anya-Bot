@@ -599,7 +599,7 @@ class MangaSession(discord.ui.View):
                 idx = self.current_page_index + i
                 if idx >= len(self.page_urls):
                     break
-                embed = Embed(title=f"{self._get_manga_title()}", url="https://rajtech.me", color=discord.Color.green())
+                embed = Embed(title=f"{self._get_manga_title()}", url="https://rajtech.me", color=primary_color())
                 embed.set_image(url=self.page_urls[idx])
                 embeds.append(embed)
 
