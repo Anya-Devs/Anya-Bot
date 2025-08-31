@@ -416,12 +416,12 @@ class MangaSession(discord.ui.View):
 
         self.button_config = [
             {"label":"", "custom_id":"prev_page", "style":ButtonStyle.secondary, "row":0, "emoji":"⬅️", "disabled":False},
-            {"label":"Page {}/{}", "custom_id":"page_indicator", "style":ButtonStyle.secondary, "row":0, "emoji":None, "disabled":True},
+            {"label":"{}/{}", "custom_id":"page_indicator", "style":ButtonStyle.primary, "row":0, "emoji":None, "disabled":True},
             {"label":"", "custom_id":"next_page", "style":ButtonStyle.secondary, "row":0, "emoji":"➡️", "disabled":False},
-            {"label":"", "custom_id":"jump_page", "style":ButtonStyle.secondary, "row":1, "emoji":"🔢", "disabled":False},
-            {"label":"", "custom_id":"chapter_info", "style":ButtonStyle.secondary, "row":1, "emoji":"ℹ️", "disabled":False},
+            {"label":"Jump to Page", "custom_id":"jump_page", "style":ButtonStyle.secondary, "row":1, "emoji":"🔢", "disabled":False},
+            {"label":"Chapter Info", "custom_id":"chapter_info", "style":ButtonStyle.secondary, "row":1, "emoji":"📋", "disabled":False},
             {"label":"New Manga", "custom_id":"select_new", "style":ButtonStyle.success, "row":2, "emoji":None, "disabled":False},
-            {"label":"", "custom_id":"stop_session", "style":ButtonStyle.danger, "row":2, "emoji":"🛑", "disabled":False}
+            {"label":"Stop Reading", "custom_id":"stop_session", "style":ButtonStyle.danger, "row":2, "emoji":"🛑", "disabled":False}
         ]
         self._setup_manga_selector()
 
