@@ -455,7 +455,9 @@ class MangaSession(View):
         self.chapters_per_page = 25
         self.session_start_time = datetime.now()
         self.nsfw_warning_shown: bool = False
-        self._previous_state: Optional[dict] = None  # NEW: store previous state
+
+        # ✅ NEW: state stack for proper Go Back functionality
+        self._state_stack: list[dict] = []
 
         self.button_config = [
             {"label": "", "custom_id": "prev_page", "style": ButtonStyle.secondary, "row": 0, "emoji": "⬅️", "disabled": False},
@@ -464,7 +466,10 @@ class MangaSession(View):
             {"label": "Other Options", "custom_id": "other_options", "style": ButtonStyle.secondary, "row": 1, "emoji": "⚙️", "disabled": False},
         ]
 
-        self._setup_manga_selector()
+        try:
+            self._setup_manga_selector()
+        except Exception as e:
+            print(f"[ERROR] Setup manga selector: {e}")
 
     @classmethod
     async def create(cls, ctx, manga_data: Dict[str, Any]) -> "MangaSession":
@@ -478,8 +483,8 @@ class MangaSession(View):
                         color=discord.Color.red()
                     )
                     await existing.message.edit(embed=embed, view=None)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[WARN] Could not close old session: {e}")
             existing.stop()
             del cls.active_sessions[ctx.author.id]
 
@@ -490,144 +495,218 @@ class MangaSession(View):
     def _setup_manga_selector(self):
         if not self.manga_list:
             return
-        options = [
-            SelectOption(
-                label=f"{i+1}. {m.get('attributes', {}).get('title', {}).get('en') or next(iter(m.get('attributes', {}).get('title', {}).values()), 'Unknown')}"[:100],
-                value=str(i),
-                description=(m.get("attributes", {}).get("description", {}).get("en") or "No description")[:100],
-                emoji="📖"
-            )
-            for i, m in enumerate(self.manga_list)
-        ]
-        select = discord.ui.Select(placeholder="📚 Choose a manga...", options=options, min_values=1, max_values=1)
-        select.callback = self._on_manga_selected
-        self.add_item(select)
+        options = []
+        for i, m in enumerate(self.manga_list):
+            try:
+                attrs = m.get("attributes", {}) or {}
+                title_dict = attrs.get("title") or {}
+                title = title_dict.get("en") or next(iter(title_dict.values()), "Unknown")
+                description_dict = attrs.get("description") or {}
+                description = description_dict.get("en") or "No description"
+                content_rating = (attrs.get("contentRating") or "safe").lower()
+                is_nsfw = content_rating != "safe"
+                emoji = "🔞" if is_nsfw else "📖"
+                options.append(
+                    SelectOption(
+                        label=f"{i+1}. {title}"[:100],
+                        value=str(i),
+                        description=description[:100],
+                        emoji=emoji
+                    )
+                )
+            except Exception as e:
+                print(f"[WARN] Skipping manga {i}: {e}")
+                continue
 
-        # NEW: Go Back button if previous state exists
-        if self._previous_state:
-            go_back_btn = Button(label="⬅️ Go Back", custom_id="go_back", style=ButtonStyle.secondary)
-            go_back_btn.callback = self._go_back_to_previous
-            self.add_item(go_back_btn)
+        if not options:
+            return
+
+        try:
+            select = discord.ui.Select(
+                placeholder="📚 Choose a manga...",
+                options=options,
+                min_values=1,
+                max_values=1
+            )
+            select.callback = self._on_manga_selected
+            self.add_item(select)
+
+            if self._state_stack:
+                go_back_btn = Button(label="⬅️ Go Back", custom_id="go_back", style=ButtonStyle.secondary)
+                go_back_btn.callback = self._go_back_to_previous
+                self.add_item(go_back_btn)
+        except Exception as e:
+            print(f"[ERROR] Setting up selector: {e}")
 
     async def interaction_check(self, interaction: Interaction) -> bool:
         if interaction.user.id != self.author_id:
-            await interaction.response.send_message(
-                embed=Embed(title="❌ Access Denied", description="You can't use these buttons 😅", color=discord.Color.red()),
-                ephemeral=True
-            )
+            try:
+                await interaction.response.send_message(
+                    embed=Embed(
+                        title="❌ Access Denied",
+                        description="You can't use these buttons 😅",
+                        color=discord.Color.red()
+                    ),
+                    ephemeral=True
+                )
+            except Exception as e:
+                print(f"[WARN] Failed to deny interaction: {e}")
             return False
         return True
 
     async def _on_manga_selected(self, interaction: Interaction):
-        idx = int(interaction.data["values"][0])
-        # SAVE previous state before changing manga
-        self._previous_state = {
-            "current_manga": self.current_manga,
-            "current_chapter": self.current_chapter,
-            "page_urls": self.page_urls.copy(),
-            "current_page_index": self.current_page_index,
-            "chapters_data": self.chapters_data.copy(),
-            "chapter_page": self.chapter_page
-        }
-
-        self.current_manga = self.manga_list[idx]
-        content_rating = self.current_manga.get("attributes", {}).get("contentRating", "safe").lower()
-        if content_rating != "safe" and not getattr(interaction.channel, "is_nsfw", lambda: False)():
-            await interaction.response.send_message(
-                embed=Embed(
-                    title="⚠️ NSFW Content Warning",
-                    description="This manga contains NSFW content. Please use a NSFW channel.",
-                    color=discord.Color.orange()
-                ),
-                ephemeral=True
-            )
-            return
-
         try:
-            self.chapters_data = await MangaReader.fetch_manga_chapters(self.current_manga["id"])
-            if not self.chapters_data:
-                await self._handle_error(interaction, "No chapters available 😅 Just pick a different manga.", ephemeral=True)
+            idx = int(interaction.data["values"][0])
+            self._state_stack.append({
+                "current_manga": self.current_manga,
+                "current_chapter": self.current_chapter,
+                "page_urls": self.page_urls.copy(),
+                "current_page_index": self.current_page_index,
+                "chapters_data": self.chapters_data.copy(),
+                "chapter_page": self.chapter_page
+            })
+
+            self.current_manga = self.manga_list[idx]
+            content_rating = self.current_manga.get("attributes", {}).get("contentRating", "safe").lower()
+            if content_rating != "safe" and not getattr(interaction.channel, "is_nsfw", lambda: False)():
+                await interaction.response.send_message(
+                    embed=Embed(
+                        title="⚠️ NSFW Content Warning",
+                        description="This manga contains NSFW content. Please use a NSFW channel.",
+                        color=discord.Color.orange()
+                    ),
+                    ephemeral=True
+                )
                 return
-            await self._show_chapter_selector(interaction)
-        except Exception:
-            await self._handle_error(interaction, "Could not load this manga 😅 Please select another one.", ephemeral=True)
+
+            try:
+                self.chapters_data = await MangaReader.fetch_manga_chapters(self.current_manga["id"])
+                if not self.chapters_data:
+                    await self._handle_error(interaction, "No chapters available 😅 Just pick a different manga.")
+                    return
+                await self._show_chapter_selector(interaction)
+            except Exception as e:
+                await self._handle_error(interaction, f"Could not load this manga 😅 ({e})")
+        except Exception as e:
+            print(f"[ERROR] Manga selection failed: {e}")
 
     async def _show_chapter_selector(self, interaction: Interaction):
-        self.clear_items()
-        start = self.chapter_page * self.chapters_per_page
-        end = start + self.chapters_per_page
-        options = []
-        for i in range(start, min(end, len(self.chapters_data))):
-            chap = self.chapters_data[i]
-            attrs = chap.get("attributes", {})
-            chap_num = attrs.get("chapter") or 0
-            chap_title = attrs.get("title") or ""
-            chap_title = "" if chap_title.strip().lower() == "no title" else chap_title
-            tags_list = attrs.get("tags", [])
-            tags_str = ", ".join([
-                t.get("attributes", {}).get("name", {}).get("en") or next(iter(t.get("attributes", {}).get("name", {}).values()), "Unknown")
-                for t in tags_list
-            ])
-            label = f"Ch {chap_num}" + (f": {chap_title}" if chap_title else "") + (f" [{tags_str}]" if chap_title and tags_str else "")
-            options.append(SelectOption(label=label[:100], value=str(i)))
+        try:
+            self.clear_items()
+            start = self.chapter_page * self.chapters_per_page
+            end = start + self.chapters_per_page
+            options = []
+            for i in range(start, min(end, len(self.chapters_data))):
+                try:
+                    chap = self.chapters_data[i]
+                    attrs = chap.get("attributes", {})
+                    chap_num = attrs.get("chapter") or 0
+                    chap_title = attrs.get("title") or ""
+                    chap_title = "" if chap_title.strip().lower() == "no title" else chap_title
+                    tags_list = attrs.get("tags", [])
+                    tags_str = ", ".join([
+                        t.get("attributes", {}).get("name", {}).get("en")
+                        or next(iter(t.get("attributes", {}).get("name", {}).values()), "Unknown")
+                        for t in tags_list
+                    ])
+                    label = f"Ch {chap_num}" + (f": {chap_title}" if chap_title else "") + (f" [{tags_str}]" if chap_title and tags_str else "")
+                    options.append(SelectOption(label=label[:100], value=str(i)))
+                except Exception as e:
+                    print(f"[WARN] Chapter option error: {e}")
+                    continue
 
-        select = discord.ui.Select(
-            placeholder=f"📚 Select Chapter {start+1}-{min(end, len(self.chapters_data))}",
-            options=options,
-            min_values=1,
-            max_values=1
-        )
-        select.callback = self._on_chapter_selected
-        self.add_item(select)
+            select = discord.ui.Select(
+                placeholder=f"📚 Select Chapter {start+1}-{min(end, len(self.chapters_data))}",
+                options=options,
+                min_values=1,
+                max_values=1
+            )
+            select.callback = self._on_chapter_selected
+            self.add_item(select)
 
-        if start > 0:
-            prev_btn = Button(label="⬅️ Prev Chapters", custom_id="prev_chapter_page", style=ButtonStyle.secondary)
-            prev_btn.callback = self._handle_chapter_navigation
-            self.add_item(prev_btn)
-        if end < len(self.chapters_data):
-            next_btn = Button(label="➡️ Next Chapters", custom_id="next_chapter_page", style=ButtonStyle.secondary)
-            next_btn.callback = self._handle_chapter_navigation
-            self.add_item(next_btn)
+            if start > 0:
+                prev_btn = Button(label="⬅️ Prev Chapters", custom_id="prev_chapter_page", style=ButtonStyle.secondary)
+                prev_btn.callback = self._handle_chapter_navigation
+                self.add_item(prev_btn)
+            if end < len(self.chapters_data):
+                next_btn = Button(label="➡️ Next Chapters", custom_id="next_chapter_page", style=ButtonStyle.secondary)
+                next_btn.callback = self._handle_chapter_navigation
+                self.add_item(next_btn)
 
-        # NEW: Go Back button if previous state exists
-        if self._previous_state:
-            go_back_btn = Button(label="⬅️ Go Back", custom_id="go_back", style=ButtonStyle.secondary)
-            go_back_btn.callback = self._go_back_to_previous
-            self.add_item(go_back_btn)
+            if self._state_stack:
+                go_back_btn = Button(label="⬅️ Go Back", custom_id="go_back", style=ButtonStyle.secondary)
+                go_back_btn.callback = self._go_back_to_previous
+                self.add_item(go_back_btn)
 
-        embed = Embed(
-            title=f"📚 {self._get_manga_title()} Chapters",
-            description=f"Select a chapter to start reading ({start+1}-{min(end,len(self.chapters_data))})",
-            color=primary_color()
-        )
-        await interaction.response.edit_message(embed=embed, view=self)
+            embed = Embed(
+                title=f"📚 {self._get_manga_title()} Chapters",
+                description=f"Select a chapter to start reading ({start+1}-{min(end,len(self.chapters_data))})",
+                color=primary_color()
+            )
+            await interaction.response.edit_message(embed=embed, view=self)
+        except Exception as e:
+            await self._handle_error(interaction, f"Failed to load chapter selector 😅 ({e})")
 
     async def _on_chapter_selected(self, interaction: Interaction):
-        idx = int(interaction.data["values"][0])
-        # SAVE previous state before reading chapter
-        self._previous_state = {
-            "current_manga": self.current_manga,
-            "current_chapter": None,
-            "page_urls": [],
-            "current_page_index": 0,
-            "chapters_data": self.chapters_data.copy(),
-            "chapter_page": self.chapter_page
-        }
-        self.current_chapter = self.chapters_data[idx]
-        self.page_urls = await MangaReader.fetch_chapter_pages(self.current_chapter["id"])
-        if not self.page_urls:
-            await self._handle_error(interaction, "This chapter has no pages 😅 Please pick a different chapter.", ephemeral=True)
-            return
-        self.current_page_index = 0
-        self.clear_items()
-        await self._setup_reading_interface(interaction)
+        try:
+            idx = int(interaction.data["values"][0])
+            self._state_stack.append({
+                "current_manga": self.current_manga,
+                "current_chapter": None,
+                "page_urls": [],
+                "current_page_index": 0,
+                "chapters_data": self.chapters_data.copy(),
+                "chapter_page": self.chapter_page
+            })
+
+            self.current_chapter = self.chapters_data[idx]
+            self.page_urls = await MangaReader.fetch_chapter_pages(self.current_chapter["id"])
+            if not self.page_urls:
+                await self._handle_error(interaction, "This chapter has no pages 😅 Please pick another one.")
+                return
+            self.current_page_index = 0
+            self.clear_items()
+            await self._setup_reading_interface(interaction)
+        except Exception as e:
+            await self._handle_error(interaction, f"Failed to open chapter 😅 ({e})")
+
+    async def _go_back_to_previous(self, interaction: Interaction):
+        try:
+            if not self._state_stack:
+                await interaction.response.send_message("❌ No previous session found.", ephemeral=True)
+                return
+
+            state = self._state_stack.pop()
+            self.current_manga = state.get("current_manga")
+            self.current_chapter = state.get("current_chapter")
+            self.page_urls = state.get("page_urls", [])
+            self.current_page_index = state.get("current_page_index", 0)
+            self.chapters_data = state.get("chapters_data", [])
+            self.chapter_page = state.get("chapter_page", 0)
+
+            self.clear_items()
+            if self.current_chapter and self.page_urls:
+                await self._setup_reading_interface(interaction)
+            elif self.current_manga:
+                await self._show_chapter_selector(interaction)
+            else:
+                self._setup_manga_selector()
+                embed = Embed(
+                    title="📚 Manga Selection",
+                    description="Choose a manga from the dropdown",
+                    color=primary_color()
+                )
+                embed.set_footer(text=f"Session started by {self.ctx.author.display_name}")
+                await interaction.response.edit_message(embed=embed, view=self)
+        except Exception as e:
+            await self._handle_error(interaction, f"Go back failed 😅 ({e})")
 
     async def _handle_chapter_navigation(self, interaction: Interaction):
         if interaction.data["custom_id"] == "prev_chapter_page":
             self.chapter_page = max(self.chapter_page - 1, 0)
         else:
             self.chapter_page += 1
-        await self._show_chapter_selector(interaction)
+        await self._show_chapter_selector(interaction) 
 
     async def _setup_reading_interface(self, interaction: Interaction):
         self.clear_items()
@@ -659,39 +738,14 @@ class MangaSession(View):
         elif cid == "go_back":
             await self._go_back_to_previous(interaction)
 
-    # --- NEW: Go Back implementation ---
-    async def _go_back_to_previous(self, interaction: Interaction):
-        if not self._previous_state:
-            await interaction.response.send_message("❌ No previous session found.", ephemeral=True)
-            return
-        state = self._previous_state
-        self.current_manga = state.get("current_manga")
-        self.current_chapter = state.get("current_chapter")
-        self.page_urls = state.get("page_urls", [])
-        self.current_page_index = state.get("current_page_index", 0)
-        self.chapters_data = state.get("chapters_data", [])
-        self.chapter_page = state.get("chapter_page", 0)
-        self._previous_state = None  # clear previous state
-
-        self.clear_items()
-        if self.current_chapter and self.page_urls:
-            await self._setup_reading_interface(interaction)
-        elif self.current_manga:
-            await self._show_chapter_selector(interaction)
-        else:
-            self._setup_manga_selector()
-            embed = Embed(title="📚 Manga Selection", description="Choose a manga from the dropdown", color=primary_color())
-            embed.set_footer(text=f"Session started by {self.ctx.author.display_name}")
-            await interaction.response.edit_message(embed=embed, view=self)
-
     async def _show_other_options(self, interaction: Interaction):
         self.clear_items()
         for bcfg in [
-            {"label":"Jump to Page","custom_id":"jump_page","style":ButtonStyle.secondary,"emoji":"🔢"},
-            {"label":"Chapter Info","custom_id":"chapter_info","style":ButtonStyle.secondary,"emoji":"📋"},
-            {"label":"Select Chapter","custom_id":"select_chapter","style":ButtonStyle.primary,"emoji":"📖"},
-            {"label":"New Manga","custom_id":"select_new","style":ButtonStyle.success,"emoji":None},
-            {"label":"Stop Reading","custom_id":"stop_session","style":ButtonStyle.danger,"emoji":"🛑"},
+           #{"label":"Jump to Page","custom_id":"jump_page","style":ButtonStyle.secondary,"emoji":"🔢"},
+           # {"label":"Chapter Info","custom_id":"chapter_info","style":ButtonStyle.secondary,"emoji":"📋"},
+            {"label":"Select Chapter","custom_id":"select_chapter","style":ButtonStyle.gray,"emoji":"📖"},
+            {"label":"New Manga","custom_id":"select_new","style":ButtonStyle.gray,"emoji":"🆕"},
+            {"label":"Stop Reading","custom_id":"stop_session","style":ButtonStyle.gray,"emoji":"🛑"},
         ]:
             btn = Button(label=bcfg["label"], style=bcfg["style"], custom_id=bcfg["custom_id"], emoji=bcfg.get("emoji"))
             btn.callback = self._handle_button_interaction
@@ -782,26 +836,34 @@ class MangaSession(View):
         self.stop()
 
     async def _update_reading_display(self, interaction: Interaction):
+     try:
         if not self.page_urls:
-            await self._handle_error(interaction, "No pages to display 😅 Please select a different manga.", ephemeral=True)
-            return
-        try:
-            embeds = []
-            for i in range(4):
-                idx = self.current_page_index + i
-                if idx >= len(self.page_urls):
-                    break
-                embed = Embed(title=f"{self._get_manga_title()}", url="https://rajtech.me", color=primary_color())
-                embed.set_image(url=self.page_urls[idx])
-                embeds.append(embed)
-            self._update_button_states()
-            if interaction.response.is_done():
-                await interaction.followup.send(embeds=embeds, ephemeral=False, view=self)
-            else:
-                await interaction.response.edit_message(embeds=embeds, view=self)
-        except Exception:
-            await self._handle_error(interaction, "Failed to display pages 😅 Please pick another manga.", ephemeral=True)
+            return await self._handle_error(interaction, "No pages to display 😅 Please select a different manga.")
 
+        attrs = (self.current_chapter or {}).get("attributes", {}) or {}
+        chap_num, chap_title = attrs.get("chapter", "?"), attrs.get("title") or ""
+        if chap_title.strip().lower() == "no title": chap_title = ""
+
+        embeds = []
+        for i in range(4):
+            idx = self.current_page_index + i
+            if idx >= len(self.page_urls): break
+            e = Embed(
+                title=self._get_manga_title(),
+                description=f"Chapter {chap_num}" + (f": {chap_title}" if chap_title else ""),
+                url="https://rajtech.me",
+                color=primary_color()
+            )
+            e.set_image(url=self.page_urls[idx])
+            embeds.append(e)
+
+        self._update_button_states()
+        if interaction.response.is_done():
+            await interaction.followup.send(embeds=embeds, view=self)
+        else:
+            await interaction.response.edit_message(embeds=embeds, view=self)
+     except Exception as e:
+        await self._handle_error(interaction, f"Failed to display pages 😅 ({e})")
     def _update_button_states(self):
         for item in self.children:
             if hasattr(item, 'custom_id'):

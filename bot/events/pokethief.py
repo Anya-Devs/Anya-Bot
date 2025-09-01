@@ -98,15 +98,15 @@ class EventGate(commands.Cog):
     DETECT_BOT_ID = 716390085896962058
     WAIT_TIME = 30
     OFFENSE_PHASES = [3, 6, 12, 24, 48]  # hours per offense phase
-    PENALTY_EXPIRY_DAYS = 21  # changed to 21 days for auto-clear
+    PENALTY_EXPIRY_DAYS = 14
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.primary_color = primary_color()
         self.active_events: dict[int, float] = {}
         self.handled_congrats: set[int] = set()
-        self.s = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Events"]["pokemon"])
-
+        self.mongo_sh = MongoShHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
+        self.offenses_cache: dict[int, dict[int, list]] = {}  # guild_id -> user_id -> [(timestamp, duration)]
 
     @staticmethod
     def timestamp_gen(timestamp: float) -> str:
@@ -173,9 +173,7 @@ class EventGate(commands.Cog):
                     p_match = re.search(r"Level \d+ ((?:[A-Z][a-z]*\s*)+)", congrats_message.content)
                     pokemon_name = p_match.group(1).strip() if p_match else "Unknown Pokémon"
 
-                    phase_hours, offense_number = await self.calculate_offense_phase(
-                        reference_message.guild.id, non_hunter.id
-                    )
+                    phase_hours, offense_number = await self.calculate_offense_phase(reference_message.guild.id, non_hunter.id)
                     await self.timeout_user(non_hunter, reference_message.guild.id, phase_hours)
 
                     embed = Embed(
@@ -187,7 +185,7 @@ class EventGate(commands.Cog):
                     await reference_message.channel.send(embed=embed)
 
                     # Log embed
-                    logger_channel_id = await self.s.mongo.get_shiny_log_channel(reference_message.guild.id)
+                    logger_channel_id = await self.mongo_sh.get_shiny_log_channel(reference_message.guild.id)
                     if logger_channel_id:
                         logger_channel = self.bot.get_channel(logger_channel_id)
                         if logger_channel:
@@ -204,10 +202,8 @@ class EventGate(commands.Cog):
                             )
                             if non_hunter.avatar:
                                 log_embed.set_thumbnail(url=non_hunter.avatar.url)
-                            log_embed.set_footer(
-                                icon_url=self.bot.user.avatar.url if self.bot.user.avatar else None,
-                                text='Anya Logger'
-                            )
+                            log_embed.set_footer(icon_url=self.bot.user.avatar.url if self.bot.user.avatar else None,
+                                                 text='Anya Logger')
                             await logger_channel.send(embed=log_embed)
                     return
 
@@ -229,34 +225,29 @@ class EventGate(commands.Cog):
 
     async def calculate_offense_phase(self, guild_id: int, user_id: int):
         now = datetime.utcnow()
-
-        # Fetch existing record
-        record = await self.s.mongo.db.find_one({"guild_id": guild_id, "user_id": user_id})
-        if not record:
-            record = {"guild_id": guild_id, "user_id": user_id, "offenses": []}
+        if guild_id not in self.offenses_cache:
+            self.offenses_cache[guild_id] = {}
+        if user_id not in self.offenses_cache[guild_id]:
+            self.offenses_cache[guild_id][user_id] = []
 
         # Remove expired offenses
-        valid_offenses = [
-            o for o in record["offenses"]
-            if datetime.fromisoformat(o["timestamp"]) + timedelta(days=self.PENALTY_EXPIRY_DAYS) > now
+        self.offenses_cache[guild_id][user_id] = [
+            (ts, dur) for ts, dur in self.offenses_cache[guild_id][user_id]
+            if ts + timedelta(days=self.PENALTY_EXPIRY_DAYS) > now
         ]
 
-        # If none left, clear user from DB
-        if not valid_offenses:
-            await self.s.mongo.db.delete_one({"guild_id": guild_id, "user_id": user_id})
-            offenses_count = 0
-        else:
-            offenses_count = len(valid_offenses)
+        offenses_count = len(self.offenses_cache[guild_id][user_id])
+        phase_hours = self.OFFENSE_PHASES[min(offenses_count, len(self.OFFENSE_PHASES)-1)]
+        self.offenses_cache[guild_id][user_id].append((now, phase_hours))
 
-        phase_hours = self.OFFENSE_PHASES[min(offenses_count, len(self.OFFENSE_PHASES) - 1)]
-
-        # Add new offense
-        valid_offenses.append({"timestamp": now.isoformat(), "duration": phase_hours})
-
-        # Save back to Mongo
-        await self.s.mongo.db.update_one(
-            {"guild_id": guild_id, "user_id": user_id},
-            {"$set": {"offenses": valid_offenses}},
+        # Save cache to Mongo
+        mongo_safe_cache = {
+            str(uid): [(ts.isoformat(), dur) for ts, dur in users]
+            for uid, users in self.offenses_cache[guild_id].items()
+        }
+        await self.mongo_sh.db.update_one(
+            {"guild_id": guild_id},
+            {"$set": {"offenses_cache": mongo_safe_cache}},
             upsert=True
         )
 
@@ -290,7 +281,7 @@ class EventGate(commands.Cog):
             await message.delete()
         except Exception as e:
             print(f"[EventGate] ERROR deleting embed: {e}")
-           
+            
             
             
 def setup(bot):
