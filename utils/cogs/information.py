@@ -295,7 +295,7 @@ class Information_Embed:
                     f"🌐 Global:\n- Servers: {len(bot.guilds)}\n- Members: {total_users}\n\n"
                     f"❤️ Internal:\n- **CPU**: {cpu}\n- **RAM**: {ram}\n\n"
                     f":clock: Creation:\n- **Developer**: {owner}\n- **When?**: {created}\n\n"
-                    "-# [Support server](https://discord.gg/5p5b7A7WRH)\n"
+                    "-# [Support server](https://discord.gg/vFwPn74mfJ)\n"
                     "-# [Invite bot](https://discord.com/oauth2/authorize?client_id=1234247716243112100&permissions=27482422508608&scope=bot)\n"
                 ),
                 timestamp=datetime.now(), color=primary_color()
