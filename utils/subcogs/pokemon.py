@@ -40,7 +40,7 @@ class PoketwoCommands(commands.Cog):
 
         # Files & Managers
         self.pokemon_names_file = "data/commands/pokemon/pokemon_names.csv"
-        self.pokemon_types_file = "data/commands/pokemon/pokemon_types.csv"
+        self.pokemon_types_file = "data/commands/commands/pokemon/pokemon_types.csv"
         self.pokemon_rarity_file = "data/commands/pokemon/pokemon_rarity.csv"
         self.embed_default_color = primary_color()
         self.RESULTS_PER_PAGE = 10
@@ -118,19 +118,13 @@ class PoketwoCommands(commands.Cog):
     @commands.group(name="pt", invoke_without_command=True)
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def pt(self, ctx):
-        """Main .pt command. Shows help if no subcommand is provided."""
         await self.show_help(ctx)
 
     @commands.cooldown(1, 5, commands.BucketType.user)
     @pt.command(name="help")
     async def pt_help(self, ctx, topic: str = None):
         description = pt_help_description.format(*[ctx.prefix] * pt_help_description.count("{}"))
-
-        embed = discord.Embed(
-            title="How to Use (.pt)",
-            description=description,
-            color=self.embed_default_color
-        )
+        embed = discord.Embed(title="How to Use (.pt)", description=description, color=self.embed_default_color)
 
         class DeleteButton(discord.ui.View):
             def __init__(self, ctx):
@@ -144,6 +138,32 @@ class PoketwoCommands(commands.Cog):
                     await self.ctx.message.delete()
 
         await ctx.reply(embed=embed, view=DeleteButton(ctx), mention_author=False)
+
+    # -------------------
+    # Hidden non-group aliases
+    # -------------------
+    @commands.command(name="tp", hidden=True)
+    async def hidden_type_ping(self, ctx): await self.type_ping(ctx)
+
+    @commands.command(name="qp", hidden=True)
+    async def hidden_quest_ping(self, ctx): await self.quest_ping(ctx)
+
+    @commands.command(name="shiny", aliases=["sh"], hidden=True)
+    async def hidden_shiny_hunt(self, ctx, action: str = None, *, pokemon: str = None):
+        await self.shiny_hunt(ctx, action, pokemon=pokemon)
+
+    @commands.command(name="collection", aliases=["cl","col"], hidden=True)
+    async def hidden_collection_manage(self, ctx, *, args: str = "list"):
+        await self.collection_manage(ctx, args=args)
+
+    @commands.command(name="starboard", aliases=["sb"], hidden=True)
+    async def hidden_starboard(self, ctx, channel: TextChannel):
+        await self.set_starboard(ctx, channel)
+
+    @commands.command(name="special", hidden=True)
+    async def hidden_special_ping(self, ctx, ping_type: str = None, role: discord.Role = None):
+        await self.special_ping_legacy(ctx, ping_type, role)
+
 
     # -------------------
     # Type Ping
