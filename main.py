@@ -1,4 +1,4 @@
-import asyncio; from data.setup import SetupManager; asyncio.run(SetupManager().run_setup())
+#import asyncio; from data.setup import SetupManager; asyncio.run(SetupManager().run_setup())
 import os, sys, gc, asyncio, importlib, pkgutil, threading, signal
 from dotenv import load_dotenv
 import aiohttp, yarl, discord
