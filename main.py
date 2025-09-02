@@ -1,5 +1,5 @@
 import asyncio; from data.setup import SetupManager; asyncio.run(SetupManager().run_setup())
-import os, sys, gc, asyncio, importlib, pkgutil, threading, signal
+import os, sys, gc, asyncio, importlib, pkgutil, threading, signal, traceback
 from dotenv import load_dotenv
 import aiohttp, yarl, discord
 from flask import Flask, send_from_directory
@@ -105,7 +105,6 @@ class ClusteredBot(commands.AutoShardedBot):
         banner += f"🌐 Connected: {len(self.guilds)} servers | Users ~{sum(g.member_count or 0 for g in self.guilds)}".center(term)
         print(banner)
         await setup_persistent_views_fun(self)
-
         await setup_persistent_views(self)
 
     async def on_shard_ready(self, shard_id: int):
@@ -130,34 +129,38 @@ class ClusteredBot(commands.AutoShardedBot):
                 package = importlib.import_module(dir_name)
             except ModuleNotFoundError as e:
                 branch.add(f"[red]Could not import {dir_name}: {e}[/red]")
+                logger.error(f"Failed to import package {dir_name}", exc_info=True)
                 continue
+
             for _, mod_name, is_pkg in pkgutil.iter_modules(package.__path__):
-                if is_pkg: continue
-                leaf = branch.add(mod_name + ".py")  # default label, no color yet
+                if is_pkg: 
+                    continue
+                leaf = branch.add(mod_name + ".py")
                 try:
                     mod = importlib.import_module(f"{dir_name}.{mod_name}")
                     cog_found = False
                     for obj in vars(mod).values():
-                        if isinstance(obj, type) and issubclass(obj, commands.Cog) and obj is not commands.Cog and not self.get_cog(obj.__name__):
+                        if (isinstance(obj, type) and issubclass(obj, commands.Cog) 
+                                and obj is not commands.Cog and not self.get_cog(obj.__name__)):
                             cog_found = True
                             try:
                                 cog_instance = obj(self)
                                 await self.add_cog(cog_instance)
                                 leaf.label = f"[green]□ {mod_name}.py[/green]"
                                 leaf.add(f"[cyan]→[/cyan] [bold white]{obj.__name__}[/bold white]")
-
-                                # APPLY 1/5 USER COOLDOWN TO ALL COMMANDS IN THIS COG
                                 for cmd in cog_instance.get_commands():
                                     cmd._buckets = commands.CooldownMapping.from_cooldown(rate, per, commands.BucketType.user)
                             except Exception as e:
                                 leaf.label = f"[red]□ {mod_name}.py[/red]"
                                 leaf.add(f"[red]Instantiation Error: {type(e).__name__}: {e}[/red]")
+                                logger.error(f"Error instantiating cog {mod_name}.{obj.__name__}", exc_info=True)
                     if not cog_found:
-                        leaf.label = f"[yellow]□ {mod_name}.py[/yellow]"  # only yellow if no Cog class
+                        leaf.label = f"[yellow]□ {mod_name}.py[/yellow]"
                 except Exception as e:
                     leaf.label = f"[red]□ {mod_name}.py[/red]"
                     leaf.add(f"[red]Import Error: {type(e).__name__}: {e}[/red]")
-                    logger.error(f"Error loading cog {mod_name}: {e}")
+                    logger.error(f"Error importing cog {dir_name}.{mod_name}", exc_info=True)
+
         self.console.print(Align(tree, align='center', width=self.console.width))
 
 class BotRunner:

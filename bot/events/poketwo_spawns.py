@@ -7,7 +7,8 @@ from bot.token import use_test_bot as ut
 from imports.discord_imports import *
 from utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils, PokemonSpawnView
 from submodules.poketwo_autonamer.predict import Prediction
-from utils.subcogs.pokemon import PoketwoCommands, MongoHelper
+from utils.subcogs.pokemon import MongoHelper
+from bot.cogs.pokemon import PoketwoCommands
 from motor.motor_asyncio import AsyncIOMotorClient
 
 logger = logging.getLogger(__name__)

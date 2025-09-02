@@ -359,7 +359,7 @@ class PokemonEmbedManager:
                 description="No Pokémon found matching your criteria.",
                 color=self.embed_default_color
             )
-            embed.set_footer(text=f"Use {ctx.prefix} pt {ctx.invoked_with} help for more information")
+            embed.set_footer(text=f"Use {ctx.prefix}pt {ctx.invoked_with} help for more information")
             return [embed]
         
         embeds = []
@@ -404,7 +404,7 @@ class PokemonEmbedManager:
                 inline=True
             )
             
-            embed.set_footer(text=f"Use {ctx.prefix} pt {ctx.invoked_with} help for more information")
+            embed.set_footer(text=f"Use {ctx.prefix}pt {ctx.invoked_with} help for more information")
             embeds.append(embed)
         
         return embeds

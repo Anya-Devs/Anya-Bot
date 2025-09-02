@@ -5,7 +5,12 @@ from PIL import Image
 from imports.log_imports import *
 from imports.discord_imports import *
 from utils.cogs.pokemon import *
-from utils.subcogs.pokemon import PoketwoCommands, Pokemon_Emojis
+from utils.subcogs.pokemon import *
+from utils.subcogs.utils.mongo import *
+from utils.cogs.poketwo_commands import *
+from bot.events.starboard import StarboardProcessor
+
+
 from data.local.const import error_custom_embed as err_embed, primary_color as p_color
 
 class Pokemon(commands.Cog):
@@ -61,6 +66,348 @@ class Pokemon(commands.Cog):
             with open(self.poke_json, "w") as f: json.dump(cache, f, indent=2)
         except json.JSONDecodeError:
             await ctx.send(f"Failed to parse JSON for `{pid}`.")
+
+
+
+
+
+
+
+
+
+
+class PoketwoCommands(commands.Cog):
+    """PokéTwo-like commands with .pt command group."""
+
+    def __init__(self, bot):
+        self.bot = bot
+        
+        self.s = StarboardProcessor(
+            MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
+        )
+
+        # Collections
+        self.shiny_collection = "shiny_hunt"
+        self.collection_collection = "collection"
+        self.type_collection = "type_ping"
+        self.quest_collection = "quest_ping"
+
+        # Files & Managers
+        self.pokemon_names_file = "data/commands/pokemon/pokemon_names.csv"
+        self.pokemon_types_file = "data/commands/commands/pokemon/pokemon_types.csv"
+        self.pokemon_rarity_file = "data/commands/pokemon/pokemon_rarity.csv"
+        self.embed_default_color = primary_color()
+        self.RESULTS_PER_PAGE = 10
+        self.MAX_POKEMON = 50
+
+        # Emojis
+        self.success_emoji = "<:green:1261639410181476443>"
+        self.error_emoji = "<:red:1261639413943762944>"
+
+        try: 
+            self.mongo_sh = MongoShHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
+            self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
+        except: 
+            self.mongo = None
+
+        try:
+            self.pe = Pokemon_Emojis(bot)
+            self.ph = PokemonNameHelper()
+        except:
+            self.pe = None
+            self.ph = None
+
+        self.data_manager = PokemonDataManager(
+            mongo_client=self.mongo,
+            pokemon_names_csv=self.pokemon_names_file,
+            pokemon_types_csv=self.pokemon_types_file,
+            pokemon_rarity_csv=self.pokemon_rarity_file
+        )
+
+        self.embed_manager = PokemonEmbedManager(
+            embed_default_color=self.embed_default_color,
+            icons={"success": "<:check:1399603549100441723>", "error": "<:x_:1399603637105463386>"},
+            results_per_page=self.RESULTS_PER_PAGE,
+            chunk_size=15
+        )
+
+        self.collection_handler = PokemonCollectionHandler(
+            data_manager=self.data_manager,
+            embed_manager=self.embed_manager,
+            pokemon_emojis=self.pe,
+            pokemon_subcogs=self.ph,
+            max_pokemon=self.MAX_POKEMON
+        )
+
+        self.flag_parser = AdvancedStringFlagParser()
+        self.pokemon_types = self.load_pokemon_types()
+
+    def load_pokemon_types(self):
+        types = set()
+        try:
+            with open(self.pokemon_types_file, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row.get("types"):
+                        for p in row["types"].strip('"').split(','):
+                            types.add(p.strip().lower())
+        except FileNotFoundError:
+            types = {"normal","fire","water","electric","grass","ice","fighting","poison","ground","flying",
+                     "psychic","bug","rock","ghost","dragon","dark","steel","fairy"}
+        return sorted(types)
+
+    def load_quest_regions(self):
+        return {"kanto","johto","hoenn","sinnoh","unova","kalos","alola","galar","hisui","paldea"}
+
+    async def get_server_config(self, guild_id: int) -> dict:
+        if not self.mongo: return {}
+        return await self.mongo.db["server_config"].find_one({"guild_id": guild_id}) or {}
+    
+    async def show_help(self, ctx, topic: str = None):
+        await self.pt_help(ctx, topic)
+
+    # -------------------
+    # Main Command Group
+    # -------------------
+    @commands.group(name="pt", invoke_without_command=True)
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    async def pt(self, ctx):
+        await self.show_help(ctx)
+
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    @pt.command(name="help")
+    async def pt_help(self, ctx, topic: str = None):
+        description = pt_help_description.format(*[ctx.prefix] * pt_help_description.count("{}"))
+        embed = discord.Embed(title="How to Use (.pt)", description=description, color=self.embed_default_color)
+
+        class DeleteButton(discord.ui.View):
+            def __init__(self, ctx):
+                super().__init__(timeout=None)
+                self.ctx = ctx
+
+            @discord.ui.button(label="🗑️", style=discord.ButtonStyle.red)
+            async def delete_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
+                if interaction.user.id == self.ctx.author.id:
+                    await interaction.message.delete()
+                    await self.ctx.message.delete()
+
+        await ctx.reply(embed=embed, view=DeleteButton(ctx), mention_author=False)
+
+    # -------------------
+    # Hidden non-group aliases
+    # -------------------
+    @commands.command(name="tp", hidden=True)
+    async def hidden_type_ping(self, ctx): await self.type_ping(ctx)
+
+    @commands.command(name="qp", hidden=True)
+    async def hidden_quest_ping(self, ctx): await self.quest_ping(ctx)
+
+    @commands.command(name="shiny", aliases=["sh"], hidden=True)
+    async def hidden_shiny_hunt(self, ctx, action: str = None, *, pokemon: str = None):
+        await self.shiny_hunt(ctx, action, pokemon=pokemon)
+
+    @commands.command(name="collection", aliases=["cl","col"], hidden=True)
+    async def hidden_collection_manage(self, ctx, *, args: str = "list"):
+        await self.collection_manage(ctx, args=args)
+
+    @commands.command(name="starboard", aliases=["sb"], hidden=True)
+    async def hidden_starboard(self, ctx, channel: TextChannel):
+        await self.set_starboard(ctx, channel)
+
+    @commands.command(name="special", hidden=True)
+    async def hidden_special_ping(self, ctx, ping_type: str = None, role: discord.Role = None):
+        await self.special_ping_legacy(ctx, ping_type, role)
+
+
+    # -------------------
+    # Type Ping
+    # -------------------
+    @pt.command(name="tp")
+    async def type_ping(self, ctx):
+        user_id = ctx.author.id
+        try:
+            current_types_data = await self.mongo.db["type_ping_types"].find({"user_id": user_id}).to_list(None)
+            current_types = [entry["type"] for entry in current_types_data]
+        except: current_types = []
+
+        view = PokemonTypeSelect(self.bot, user_id, "type_ping", self.mongo, self.pokemon_types, current_types)
+        await view.refresh_view()
+        embed = await view._create_embed(ctx=ctx)
+        await ctx.reply(embed=embed, view=view, mention_author=False)
+
+    # -------------------
+    # Quest Ping
+    # -------------------
+    @pt.command(name="qp")
+    async def quest_ping(self, ctx):
+        user_id = ctx.author.id
+        try:
+            current_regions_data = await self.mongo.db[self.quest_collection].find_one({"user_id": user_id})
+            current_regions = current_regions_data.get("regions", []) if current_regions_data else []
+        except: current_regions = []
+
+        available_regions = sorted(list(self.load_quest_regions()))
+        view = PokemonRegionSelect(self.bot, user_id, self.quest_collection, self.mongo, available_regions, current_regions)
+        await view.refresh_view()
+        embed = await view._create_embed(ctx=ctx)
+        await ctx.reply(embed=embed, view=view, mention_author=False)
+
+    # -------------------
+    # Shiny Hunt
+    # -------------------
+    @pt.command(name="shiny", aliases=["sh"])
+    async def shiny_hunt(self, ctx, action: str = None, *, pokemon: str = None):
+     try:
+        user_id = ctx.author.id
+        prefix = ctx.prefix
+
+        if action == "help":
+            return await self.show_help(ctx, "shiny")
+
+        if action == "remove":
+            deleted = await self.mongo.db[self.shiny_collection].delete_many({"user_id": user_id})
+            msg = "✅ Your shiny hunt has been cleared." if deleted.deleted_count > 0 else "⚠ You don't have a shiny hunt to remove."
+            return await ctx.reply(embed=discord.Embed(description=msg, color=self.embed_default_color))
+
+        if not action and not pokemon:
+            cur = await self.mongo.list(self.shiny_collection, user_id) if self.mongo else []
+            if not cur:
+                return await ctx.reply(embed=discord.Embed(description="You don't have a shiny hunt set.", color=self.embed_default_color))
+            name = cur[0]
+            emoji = self.pe.get_emoji_for_pokemon(Pokemon_Subcogs.pokemon_name_to_id(name)) if self.pe else ""
+            disp = self.data_manager.display_name_with_region(name)
+            return await ctx.reply(embed=discord.Embed(description=f"You are shiny hunting: **{emoji} {disp}**", color=self.embed_default_color))
+
+        if action not in {"add","remove","list","clear"}:
+            action, pokemon = "add", f"{action} {pokemon}".strip() if pokemon else action
+        flags = self.flag_parser.parse_flags_from_string(pokemon or "")
+        await self.collection_handler.handle_collection(ctx, self.shiny_collection, action, pokemon=pokemon, flags_obj=flags, max_one=True)
+     except Exception as e:
+        await ctx.reply(embed=discord.Embed(description=f"❌ Error: {e}", color=self.embed_default_color))
+        
+    # -------------------
+    # Collection
+    # -------------------
+    @pt.command(name="collection", aliases=["cl","col"])
+    async def collection_manage(self, ctx, *, args: str = "list"):
+        action = "list"
+        remaining = args
+        args_lower = args.lower().strip()
+        if args_lower.startswith(('add ','remove ','delete ','clear','help')):
+            parts = args.split(' ',1)
+            action = parts[0].lower()
+            if action == "delete": action = "remove"
+            remaining = parts[1] if len(parts)>1 else ""
+        if action == "help":
+            return await self.show_help(ctx, "collection")
+        flags_dict = self.flag_parser.parse_flags_from_string(remaining)
+        pokemon_names, _ = self.flag_parser.extract_pokemon_names_from_string(remaining, action)
+        await self.collection_handler.handle_collection(ctx, self.collection_collection, action, pokemon=pokemon_names or None, flags_obj=flags_dict)
+        
+    # -------------------
+    # Star Board
+    # -------------------
+    @pt.command(name="starboard", aliases=["sb"])
+    @commands.check(lambda ctx: any(r.name == "Anya Manager" for r in ctx.author.roles) or ctx.author.guild_permissions.manage_channels)
+    async def set_starboard(self, ctx, channel: TextChannel):
+        try:
+            await self.s.config_db.set_starboard_channel(ctx.guild.id, channel.id)
+            await ctx.reply(f"✅ Starboard channel set to {channel.mention}", mention_author=False)
+        except Exception as e:
+            print(f"[ERROR] set_starboard: {e}")
+            traceback.print_exc()
+            await ctx.send(f"⚠️ Error setting starboard: {e}")
+
+    # -------------------
+    # Special Ping (Legacy text command)
+    # -------------------
+    @pt.command(name="special")
+    async def special_ping_legacy(self, ctx, ping_type: str = None, role: discord.Role = None):
+        guild_id = ctx.guild.id
+        config = await self.get_server_config(guild_id) or {}
+
+        if not ping_type:
+            rare_role = ctx.guild.get_role(config.get("rare_role"))
+            regional_role = ctx.guild.get_role(config.get("regional_role"))
+
+            embed = discord.Embed(
+                title="Pokétwo Special Ping Configuration",
+                description="Current rare and regional Pokémon ping roles.",
+                color=self.embed_default_color
+            )
+            embed.add_field(
+                name="Current Roles",
+                value=(
+                    f"**Rare Pokémon:** {rare_role.mention if rare_role else 'Not set'}\n"
+                    f"**Regional Pokémon:** {regional_role.mention if regional_role else 'Not set'}"
+                ),
+                inline=False
+            )
+            return await ctx.reply(embed=embed, mention_author=False)
+
+        if not ctx.author.guild_permissions.manage_guild:
+            return await ctx.reply(f"{self.error_emoji} You need **Manage Server** permission to change config.")
+
+        key = f"{ping_type.lower()}_role"
+        if ping_type.lower() not in {"rare","regional"}:
+            return await ctx.reply(f"{self.error_emoji} Invalid type. Use `rare` or `regional`.")
+
+        if role:
+            config[key] = role.id
+            msg = f"{self.success_emoji} {ping_type.title()} Pokémon role set to {role.mention}."
+        else:
+            config.pop(key, None)
+            msg = f"{self.success_emoji} {ping_type.title()} Pokémon role removed."
+
+        await self.mongo.db["server_config"].update_one(
+            {"guild_id": guild_id}, {"$set": config}, upsert=True
+        )
+        await ctx.reply(msg, mention_author=False)
+     
+    # -------------------
+    # Shiny Hunt Config
+    # -------------------
+    @pt.group(name="shinychannel", aliases=["sc"], invoke_without_command=True)
+    @commands.has_permissions(manage_guild=True)
+    async def shiny_channel(self, ctx, *channels: discord.TextChannel):
+        """Set or view protected shiny channels."""
+        guild_id = ctx.guild.id
+        if channels:
+            channel_ids = [ch.id for ch in channels]
+            await self.mongo_sh.set_shiny_channels(guild_id, channel_ids)
+            mentions = ", ".join(ch.mention for ch in channels)
+            await ctx.reply(f"✅ Shiny hunt protection enabled in: {mentions}", mention_author=False)
+        else:
+            current_channels = await self.mongo_sh.get_shiny_channels(guild_id)
+            mentions = ", ".join(f"<#{ch_id}>" for ch_id in current_channels) if current_channels else "None"
+            await ctx.reply(f"🔹 Current protected channels: {mentions}", mention_author=False)
+
+    @shiny_channel.group(name="log", invoke_without_command=True)
+    @commands.has_permissions(manage_guild=True)
+    async def shiny_log(self, ctx, channel: discord.TextChannel = None):
+        """Set, remove, or view the shiny log channel."""
+        guild_id = ctx.guild.id
+
+        if channel:
+            await self.mongo_sh.set_shiny_log_channel(guild_id, channel.id)
+            await ctx.reply(f"✅ Shiny log channel set to {channel.mention}", mention_author=False)
+        else:
+            current = await self.mongo_sh.get_shiny_log_channel(guild_id)
+            if current:
+                await ctx.reply(f"🔹 Current shiny log channel: <#{current}>", mention_author=False)
+            else:
+                await ctx.reply("⚠ No shiny log channel set.", mention_author=False)
+
+    @shiny_log.command(name="remove")
+    @commands.has_permissions(manage_guild=True)
+    async def remove_log(self, ctx):
+        """Remove the shiny log channel."""
+        guild_id = ctx.guild.id
+        await self.mongo_sh.remove_shiny_log_channel(guild_id)
+        await ctx.reply("✅ Shiny log channel removed.", mention_author=False)
+
+     
+
 
 def setup(bot):
     bot.add_cog(Pokemon(bot))
