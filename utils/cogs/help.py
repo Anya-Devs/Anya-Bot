@@ -188,7 +188,7 @@ class Select_Help(discord.ui.Select):
                 else:
                     parts.append(f"`{cmd.name}`")
 
-            commands_str = "\n".join(parts)
+            commands_str = "\t".join(parts)
             inline = len(self.module_to_cogs[module]) == 1
             fields.append((cog.__class__.__name__.replace("_", " "), commands_str, inline))
         return fields
