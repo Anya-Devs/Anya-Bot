@@ -11,10 +11,10 @@ class Anime(commands.Cog):
         self.ar = Anime_Recommendation(bot)
 
     async def prompt_query(self, ctx, item):
-        prompt = f"{ctx.author.display_name.title()}, can you try entering the `name` of the {item} you're looking for?"
+        prompt = f"{ctx.author.display_name.title()}, enter the `name` of the {item} you're looking for."
         embed = discord.Embed(description=prompt)
         if item == "anime":
-            embed.set_footer(text=f"Try {ctx.prefix}{ctx.command.name} recommend to find a random anime")
+            embed.set_footer(text=f"Try {ctx.prefix}anime recommend for a random anime")
         message = await ctx.reply(embed=embed, mention_author=False)
 
         def check(m): return m.author == ctx.author and m.channel == ctx.channel
@@ -28,53 +28,74 @@ class Anime(commands.Cog):
             await msg.delete()
             return query
         except asyncio.TimeoutError:
-            await message.edit(embed=discord.Embed(description=f"Time's Up! You didn't provide a {item} title for me to look up.", color=self.red))
+            await message.edit(embed=discord.Embed(description=f"Time's Up! No {item} title provided.", color=self.red))
         except ValueError as e:
             await message.edit(embed=discord.Embed(description=f"Error: {e}", color=self.red))
         return None
 
     async def fetch_and_send(self, ctx, url, query, view_cls):
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as r:
-                    r.raise_for_status()
-                    data = await r.json()
+     try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as r:
+                r.raise_for_status()
+                data = await r.json()
 
-            if not data["data"]:
-                await ctx.reply(f"No results found for '{query}'. Please try a different title.")
-                return
+        if not data.get("data"):
+            await ctx.reply(f"No results found for '{query}'.")
+            return
 
-            view = view_cls(data, ctx)
+        # Instantiate view depending on type
+        if view_cls == CharacterView:
+            view = view_cls(character_data=data)
+            embed = await view.update_embed()
+            await ctx.reply(embed=embed, view=view, mention_author=False)
+        elif view_cls == AnimeView:
+            view = view_cls(anime_data=data)
+            embed = await view.update_embed()
+            await ctx.reply(embed=embed, view=view, mention_author=False)
+        elif view_cls == MangaView:
+            view = view_cls(manga_data=data)
+            embed = await view.update_embed()
+            await ctx.reply(embed=embed, view=view, mention_author=False)
+        else:
+            # Fallback for unknown views
             embed = discord.Embed(
                 title=f"Search Results for: {query}",
-                description="Select a manga from the dropdown below.",
-                color=primary_color()
+                color=primary_color(),
+                description="No interactive view available."
             )
-            await ctx.reply(embed=embed, view=view, mention_author=False)
+            await ctx.reply(embed=embed)
 
-        except aiohttp.ClientError as e:
-            logging.error(f"HTTP error: {e}")
-            await ctx.send(f"An HTTP error occurred: {e}")
-        except Exception as e:
-            logging.error(f"Unexpected error: {e}")
-            await ctx.send(f"An unexpected error occurred: {e}")
+     except aiohttp.ClientError as e:
+        logging.error(f"HTTP error: {e}")
+        await ctx.send(f"HTTP error occurred: {e}")
+     except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        await ctx.send(f"Unexpected error occurred: {e}")
 
-    @commands.command(name="anime")
+    @commands.group(name="anime", invoke_without_command=True)
+    async def anime_group(self, ctx):
+        await ctx.send("Use a subcommand: `search`, `recommend`, or `character`.")
+
+    @anime_group.command(name="search")
     async def anime_search(self, ctx, *, query: Optional[str] = None):
-        if query and query.lower() == 'recommend':
-            d = await self.ar.fetch_random_anime()
-            m = await ctx.reply(embed=discord.Embed(description=f'{neko_lurk} Fetching anime...', color=primary_color()), mention_author=False)
-            return await self.ar.update_anime_embed(m, d)
         query = query or await self.prompt_query(ctx, "anime")
         if not query: return
         await self.fetch_and_send(ctx, f"{self.api_url}anime?q={query}", query, AnimeView)
 
-    @commands.command(name="character")
-    async def character_search(self, ctx, *, query=None):
+    @anime_group.command(name="recommend")
+    async def anime_recommend(self, ctx):
+        d = await self.ar.fetch_random_anime()
+        m = await ctx.reply(embed=discord.Embed(description=f'{neko_lurk} Fetching anime...', color=primary_color()), mention_author=False)
+        await self.ar.update_anime_embed(m, d)
+
+    @anime_group.command(name="character")
+    async def anime_character(self, ctx, *, query=None):
         query = query or await self.prompt_query(ctx, "character")
         if not query: return
         await self.fetch_and_send(ctx, f"{self.api_url}characters?q={query}", query, CharacterView)
 
+    # Manga commands
     @commands.group(name="manga")
     async def manga_group(self, ctx):
         if ctx.invoked_subcommand is None:
@@ -88,12 +109,10 @@ class Anime(commands.Cog):
 
     @manga_group.command(name="read")
     async def manga_read(self, ctx, *, query=None):
-        # Prompt user if no query provided
         query = query or await self.prompt_query(ctx, "manga")
         if not query:
             return await ctx.send("❌ No query provided.")
 
-        # Fetch search results from MangaDex
         async with aiohttp.ClientSession() as session:
             url = f"{self.mangadex_url}/manga?title={query}&limit=25"
             async with session.get(url) as resp:
@@ -102,25 +121,13 @@ class Anime(commands.Cog):
         if not data.get("data"):
             return await ctx.send(f"❌ No manga found for `{query}`.")
 
-        # Launch the new unified session view
         view = MangaSession(ctx, data)
         embed = discord.Embed(
-         title=f"📚 Search results for `{query}`",
-         description="Select a manga from the dropdown below.",
-         color=primary_color()
+            title=f"📚 Search results for `{query}`",
+            description="Select a manga from the dropdown below.",
+            color=primary_color()
         )
         await ctx.reply(embed=embed, view=view, mention_author=False)
-
-    async def prompt_query(self, ctx, subject: str):
-        await ctx.send(f"Enter the {subject} name to search:")
-        def check(m):
-            return m.author.id == ctx.author.id and m.channel == ctx.channel
-        try:
-            msg = await self.bot.wait_for("message", check=check, timeout=30)
-            return msg.content.strip()
-        except asyncio.TimeoutError:
-            await ctx.send("⏰ Timeout. Please try again.")
-            return None
 
 
 def setup(bot):

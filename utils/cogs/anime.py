@@ -155,53 +155,70 @@ class Character_Btn(discord.ui.Button):
         embed = await view.update_embed()
         await interaction.response.edit_message(embed=embed, view=view)
 
+class CharacterButton(ui.Button):
+    def __init__(self, label: str, style: discord.ButtonStyle, action: str):
+        super().__init__(label=label, style=style, custom_id=action)
+        self.action = action
 
-class CharacterView(discord.ui.View):
-    def __init__(self, character_data, current_index, current_page):
+    async def callback(self, interaction: discord.Interaction):
+        view: CharacterView = self.view
+        if self.action == "previous" and view.current_page > 0:
+            view.current_page -= 1
+        elif self.action == "next" and view.current_page < view.max_pages:
+            view.current_page += 1
+
+        view.current_index = view.current_page
+        view.update_navigation_buttons()
+        embed = await view.update_embed()
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
+class CharacterView(ui.View):
+    def __init__(self, character_data):
         super().__init__(timeout=None)
-        self.character_data = character_data
-        self.current_index = current_index
-        self.current_page = current_page
-        self.max_pages = len(character_data["data"]) - 1
-        self.update_buttons()
+        # Sort by popularity descending
+        self.original_data = sorted(
+            character_data["data"], key=lambda x: x.get("favorites", 0), reverse=True
+        )
+        self.filtered_data = self.original_data.copy()
+        self.current_index = 0
+        self.current_page = 0
+        self.items_per_page = 1
+        self.max_pages = max(len(self.filtered_data) - 1, 0)
 
-    def update_buttons(self):
-        self.clear_items()
+        self.update_navigation_buttons()
+
+    def update_navigation_buttons(self):
+        # Remove all buttons first
+        for item in list(self.children):
+            self.remove_item(item)
+
+        # Add previous button if not on first page
         if self.current_page > 0:
-            self.add_item(
-                Character_Btn(
-                    "Previous",
-                    discord.ButtonStyle.primary,
-                    "previous",
-                    self.character_data,
-                    self.current_index,
-                    self.current_page,
-                    self.max_pages,
-                    emoji=left_button_emoji
-                )
-            )
+            self.add_item(CharacterButton("Previous", discord.ButtonStyle.primary, "previous"))
+
+        # Add next button if not on last page
         if self.current_page < self.max_pages:
-            self.add_item(
-                Character_Btn(
-                    "Next",
-                    discord.ButtonStyle.primary,
-                    "next",
-                    self.character_data,
-                    self.current_index,
-                    self.current_page,
-                    self.max_pages,
-                    emoji=right_button_emoji
-                )
-            )
+            self.add_item(CharacterButton("Next", discord.ButtonStyle.primary, "next"))
 
     async def update_embed(self):
-        character = self.character_data["data"][self.current_index]
+        if not self.filtered_data:
+            return discord.Embed(
+                title="No characters found.",
+                color=discord.Color.red()
+            )
+
+        character = self.filtered_data[self.current_index]
         embed = discord.Embed(
             title=character["name"],
-            url=character["url"]
+            url=character.get("url"),
+            description=character.get(
+                "about", "> <:anya_angy:1268976144548630608> Description not available"
+            ),
+            color=primary_color()
         )
 
-        image_url = character["images"]["jpg"].get("image_url")
+        image_url = character.get("images", {}).get("jpg", {}).get("image_url")
         if image_url:
             embed.set_image(url=image_url)
 
@@ -209,20 +226,16 @@ class CharacterView(discord.ui.View):
             name="__Details__",
             value=(
                 f"**Nicknames:** `{', '.join(character.get('nicknames', []) or ['N/A'])}`\n"
-                f"**Favorites:** `{character.get('favorites', 'N/A')}`\n"
+                f"**Favorites:** `{character.get('favorites', 'N/A')}`"
             ),
             inline=False,
         )
-        embed.description = character.get(
-            "about", "> <:anya_angy:1268976144548630608> Description not available"
-        )
+
         embed.set_footer(
-            text=f"ID: {character.get('mal_id', 'N/A')}\t\t\tPage {self.current_page + 1}/{self.max_pages + 1}"
+            text=f"ID: {character.get('mal_id', 'N/A')} | Page {self.current_page + 1}/{self.max_pages + 1}"
         )
-
         return embed
-
-
+    
 class Manga_Btn(discord.ui.Button):
     def __init__(self, label, style, action, emoji=None):
         super().__init__(label=label, style=style, emoji=emoji)
