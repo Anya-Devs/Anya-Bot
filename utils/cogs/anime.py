@@ -15,57 +15,149 @@ right_button_emoji  = "<:point_right:1351851206103928948>"
 
 
 class Anime_Btn(discord.ui.Button):
-    def __init__(self, label, style, custom_id, emoji, view_ref):
+    def __init__(
+        self,
+        label,
+        style,
+        custom_id,
+        emoji,
+        anime_data,
+        current_index,
+        current_page,
+        max_pages,
+    ):
         super().__init__(label=label, style=style, custom_id=custom_id, emoji=emoji)
-        self.view_ref = view_ref  # Pass the parent view
+        self.anime_data = anime_data
+        self.current_index = current_index
+        self.current_page = current_page
+        self.max_pages = max_pages
 
     async def callback(self, interaction: discord.Interaction):
-        view = self.view_ref
-        if self.custom_id == "previous":
-            view.current_index = max(0, view.current_index - 1)
-        elif self.custom_id == "next":
-            view.current_index = min(view.max_pages, view.current_index + 1)
-        view.current_page = view.current_index  # sync page
+        if self.custom_id == "previous" and self.current_page > 0:
+            self.current_page -= 1
+        elif self.custom_id == "next" and self.current_page < self.max_pages:
+            self.current_page += 1
 
-        view.update_buttons()
+        # Sync index with page
+        self.current_index = self.current_page
+
+        # Rebuild view with updated state
+        view = AnimeView(self.anime_data, self.current_index, self.current_page)
         embed = await view.update_embed()
         await interaction.response.edit_message(embed=embed, view=view)
 
+class Anime_Btn(discord.ui.Button):
+    def __init__(
+        self,
+        label,
+        style,
+        custom_id,
+        emoji,
+        anime_data,
+        current_index,
+        current_page,
+        max_pages,
+    ):
+        super().__init__(label=label, style=style, custom_id=custom_id, emoji=emoji)
+        self.anime_data = anime_data
+        self.current_index = current_index
+        self.current_page = current_page
+        self.max_pages = max_pages
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.custom_id == "previous" and self.current_page > 0:
+            self.current_page -= 1
+        elif self.custom_id == "next" and self.current_page < self.max_pages:
+            self.current_page += 1
+
+        # Sync index with page
+        self.current_index = self.current_page
+
+        # Rebuild view with updated state
+        view = AnimeView(self.anime_data, self.current_index, self.current_page)
+        embed = await view.update_embed()
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
 class AnimeView(discord.ui.View):
-    def __init__(self, anime_data):
+    def __init__(self, anime_data, current_index=0, current_page=0):
         super().__init__(timeout=None)
         self.anime_data = anime_data
-        self.current_index = 0
+        self.current_index = current_index
+        self.current_page = current_page
         self.max_pages = len(anime_data["data"]) - 1
         self.update_buttons()
 
     def update_buttons(self):
         self.clear_items()
-        if self.current_index > 0:
-            self.add_item(Anime_Btn("Previous", discord.ButtonStyle.gray, "previous", right_button_emoji, self))
-        if self.current_index < self.max_pages:
-            self.add_item(Anime_Btn("Next", discord.ButtonStyle.gray, "next", left_button_emoji, self))
 
+        # Show "Previous" if not on first page
+        if self.current_page > 0:
+            self.add_item(
+                Anime_Btn(
+                    "Previous",
+                    discord.ButtonStyle.gray,
+                    "previous",
+                    left_button_emoji,
+                    self.anime_data,
+                    self.current_index,
+                    self.current_page,
+                    self.max_pages,
+                )
+            )
+
+        # Show "Next" if not on last page
+        if self.current_page < self.max_pages:
+            self.add_item(
+                Anime_Btn(
+                    "Next",
+                    discord.ButtonStyle.gray,
+                    "next",
+                    right_button_emoji,
+                    self.anime_data,
+                    self.current_index,
+                    self.current_page,
+                    self.max_pages,
+                )
+            )
+
+            
     async def update_embed(self):
         anime = self.anime_data["data"][self.current_index]
         embed = discord.Embed(title=anime["title"])
+
         image_url = self.get_image_url(anime["images"])
         if image_url:
             embed.set_image(url=image_url)
+
         embed.add_field(
-            name="Info",
-            value=f"**Episodes:** `{anime['episodes']}`\n**Status:** `{anime['status']}`\n**Genres:** `{', '.join(genre['name'] for genre in anime['genres'])}`",
-            inline=False
+            name=" ",
+            value=f"**Episodes:** `{anime['episodes']}`\n"
+                  f"**Status:** `{anime['status']}`\n"
+                  f"**Genres:** `{', '.join(genre['name'] for genre in anime['genres'])}`\n"
+                  f"{'**Trailer:** ' + '``' + anime['trailer']['url'] + '``' if anime['trailer']['url'] else ''}\n"
+                  f"```py\nScore: {anime['score']:>3} (out of 10)\n"
+                  f"{'▰' * int(anime['score'] * 10 / 10)}{'▱' * (10 - int(anime['score'] * 10 / 10))}```",
+            inline=False,
         )
-        embed.set_footer(text=f"Page {self.current_index + 1}/{self.max_pages + 1}")
+        embed.description = anime.get(
+            "synopsis", "> <:anya_angy:1268976144548630608> Synopsis not available"
+        )
+        embed.set_footer(text=f"Page {self.current_page + 1}/{self.max_pages + 1}")
+
         return embed
 
     @staticmethod
     def get_image_url(images):
-        for fmt in ("jpg", "webp"):
-            for size in ("large", "medium", "small"):
-                url = images.get(fmt, {}).get(f"{size}_image_url")
-                if url: return url
+        size_order = ["large", "medium", "small"]
+        for size in size_order:
+            image_url = images.get("jpg", {}).get(f"{size}_image_url")
+            if image_url:
+                return image_url
+        for size in size_order:
+            image_url = images.get("webp", {}).get(f"{size}_image_url")
+            if image_url:
+                return image_url
         return None
 
 
