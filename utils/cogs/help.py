@@ -62,9 +62,6 @@ class HelpMenu(discord.ui.View):
         start, end = self.page * self.fields_per_page, (self.page + 1) * self.fields_per_page
         items = list(self.cog_commands.items())[start:end]
 
-        def chunked_commands(cmds, chunk_size=6):
-            return [cmds[i:i+chunk_size] for i in range(0, len(cmds), chunk_size)]
-
         for cog_name, commands_list in items:
             normal_cmds = []
             group_cmds = []
@@ -73,7 +70,7 @@ class HelpMenu(discord.ui.View):
                 if isinstance(cmd, commands.Group):
                     subs = [f"`{sub.name}`" for sub in cmd.commands if not sub.hidden]
                     if subs:
-                        group_cmds.append(f"`{cmd.name}` → \t{' \t'.join(subs)}")
+                        group_cmds.append(f"`{cmd.name}` → " + " ".join(subs))
                     else:
                         group_cmds.append(f"`{cmd.name}`")
                 else:
@@ -85,10 +82,9 @@ class HelpMenu(discord.ui.View):
             if normal_cmds:
                 parts.append(" ".join(normal_cmds))
 
-            # Group commands boxed with wrapping
+            # Group commands stacked with newlines
             if group_cmds:
-                lines = ["\t".join(line) for line in chunked_commands(group_cmds, 6)]
-                parts.append("\n".join(lines))
+                parts.append("\n".join(group_cmds))
 
             value = "\n".join(parts) if parts else "No commands."
             embed.add_field(name=cog_name.replace("_", " "), value=value, inline=False)
@@ -177,18 +173,27 @@ class Select_Help(discord.ui.Select):
             if not visible_cmds:
                 continue
 
-            parts = []
+            single_cmds = []
+            group_cmds = []
+
             for cmd in visible_cmds:
                 if isinstance(cmd, commands.Group):
-                    subs = [f"`{sub.name}`" for sub in cmd.commands if not sub.hidden]
+                    subs = [sub.name for sub in cmd.commands if not sub.hidden]
                     if subs:
-                        parts.append(f"**{cmd.name}** → {' '.join(subs)}")
+                        group_cmds.append(f"`{cmd.name}` → `{' '.join(subs)}`")
                     else:
-                        parts.append(f"**{cmd.name}**")
+                        group_cmds.append(f"`{cmd.name}`")
                 else:
-                    parts.append(f"`{cmd.name}`")
+                    single_cmds.append(f"`{cmd.name}`")
 
-            commands_str = "\t".join(parts)
+            commands_str = ""
+            if single_cmds:
+                commands_str += " ".join(single_cmds)
+            if group_cmds:
+                if commands_str:
+                    commands_str += "\n"
+                commands_str += "\n".join(group_cmds)
+
             inline = len(self.module_to_cogs[module]) == 1
             fields.append((cog.__class__.__name__.replace("_", " "), commands_str, inline))
         return fields
@@ -222,7 +227,6 @@ class Select_Help(discord.ui.Select):
         if file:
             embed.set_image(url="attachment://cog_image.png")
 
-        # Update view
         self.help_view.clear_items()
         overview_btn = discord.ui.Button(label="Overview", style=discord.ButtonStyle.green)
 
@@ -233,8 +237,6 @@ class Select_Help(discord.ui.Select):
         self.help_view.add_item(self)
         self.help_view.add_item(overview_btn)
         await interaction.response.edit_message(embed=embed, attachments=[file] if file else [], view=self.help_view)
-
-
 
 
 class Options_ImageGenerator:
