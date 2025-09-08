@@ -341,6 +341,7 @@ class QnAModal(ui.Modal, title="Answer Question"):
 
         await interaction.response.send_message("✅ Your answer has been submitted!", ephemeral=True)
 
+
         
 class QnAImageButton(ui.View):
     def __init__(self, bot, images: list[str] | None, message_id):
@@ -475,6 +476,20 @@ class TextChannelSelect(ui.ChannelSelect):
 
 
    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # -----------------------------
 # Restore persistent views
 # -----------------------------
@@ -556,29 +571,170 @@ async def setup_persistent_views_fun(bot):
                 
                 
                 
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
+
+class RiddleAnswerModal(ui.Modal, title="Answer the Riddle"):
+    def __init__(self, bot, riddle_text, answer_channel_id, responder, guild_id, message_id, mongo_url):
+        super().__init__()
+        self.bot = bot
+        self.riddle_text = riddle_text
+        self.answer_channel_id = answer_channel_id
+        self.responder = responder
+        self.guild_id = guild_id
+        self.message_id = message_id
+        self.mongo_url = mongo_url
+
+        self.answer_input = ui.TextInput(
+            label=riddle_text[:100],
+            style=TextStyle.paragraph,
+            placeholder=f"Answer the riddle:\n{riddle_text}",
+            required=True
+        )
+        self.add_item(self.answer_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            channel = interaction.guild.get_channel(self.answer_channel_id)
+            if not channel:
+                await interaction.response.send_message(
+                    "⚠️ Riddle answers channel not found.", ephemeral=True
+                )
+                return
+
+            embed = Embed(
+                description=f"🧩 **{self.responder.mention} answered:**\n```{self.answer_input.value}```",
+                color=primary_color(),
+                timestamp=datetime.now()
+            )
+            embed.set_footer(text=f"Submitted by {self.responder.display_name}")
+
+            try:
+                await channel.send(embed=embed)
+            except Exception as e:
+                print(f"Error sending embed: {e}")
+
+            try:
+                client = AsyncIOMotorClient(self.mongo_url)
+                collection = client["Commands"]["riddles"]
+                await collection.update_one(
+                    {"guild_id": self.guild_id, "riddles.message_id": self.message_id},
+                    {"$push": {"riddles.$.answers": {"user_id": self.responder.id, "answer": self.answer_input.value}}},
+                    upsert=True
+                )
+            except Exception as e:
+                print(f"Error updating MongoDB: {e}")
+
+            await interaction.response.send_message(
+                "✅ Your answer has been submitted!", ephemeral=True
+            )
+        except Exception as e:
+            print(f"RiddleAnswerModal on_submit error: {e}")
+            await interaction.response.send_message("❌ Something went wrong.", ephemeral=True)
+
+
+class RiddleAnswerButton(ui.View):
+    def __init__(self, bot, riddle_text, answer_channel_id, message_id, mongo_url):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.riddle_text = riddle_text
+        self.answer_channel_id = answer_channel_id
+        self.message_id = message_id
+        self.mongo_url = mongo_url
+
+    @ui.button(label="Answer Riddle", style=discord.ButtonStyle.primary)
+    async def answer(self, interaction: discord.Interaction, button: ui.Button):
+        try:
+            modal = RiddleAnswerModal(
+                bot=self.bot,
+                riddle_text=self.riddle_text,
+                answer_channel_id=self.answer_channel_id,
+                responder=interaction.user,
+                guild_id=interaction.guild.id,
+                message_id=self.message_id,
+                mongo_url=self.mongo_url
+            )
+            await interaction.response.send_modal(modal)
+        except Exception as e:
+            print(f"RiddleAnswerButton error: {e}")
+            await interaction.response.send_message("❌ Could not open the riddle modal.", ephemeral=True)
+
+
+class RiddlePostModal(ui.Modal, title="Post a Riddle"):
+    def __init__(self, bot, guild_id, mongo_url):
+        super().__init__()
+        self.bot = bot
+        self.guild_id = guild_id
+        self.mongo_url = mongo_url
+        self.riddle_input = ui.TextInput(
+            label="Your Riddle",
+            style=TextStyle.paragraph,
+            placeholder="Type the riddle here...",
+            required=True
+        )
+        self.add_item(self.riddle_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            client = AsyncIOMotorClient(self.mongo_url)
+            collection = client["Commands"]["riddles"]
+            data = await collection.find_one({"guild_id": self.guild_id})
+            if not data or "answer_channel_id" not in data:
+                await interaction.response.send_message(
+                    "❌ Riddle answers channel not set. Use `riddle setup` first.",
+                    ephemeral=True
+                )
+                return
+
+            answer_channel_id = data["answer_channel_id"]
+            riddle_text = self.riddle_input.value
+
+            channel = interaction.channel
+            embed = Embed(
+                title="🧩 New Riddle!",
+                description=f"{riddle_text}\n\nAll answers will be posted in <#{answer_channel_id}>.",
+                color=primary_color(),
+                timestamp=datetime.now()
+            )
+
+            try:
+                msg = await channel.send(
+                    embed=embed, view=RiddleAnswerButton(self.bot, riddle_text, answer_channel_id, interaction.id, self.mongo_url)
+                )
+            except Exception as e:
+                print(f"Error sending riddle embed: {e}")
+
+            try:
+                await collection.update_one(
+                    {"guild_id": self.guild_id},
+                    {"$push": {"riddles": {"message_id": interaction.id, "riddle_text": riddle_text, "answers": []}}},
+                    upsert=True
+                )
+            except Exception as e:
+                print(f"Error saving riddle to MongoDB: {e}")
+
+            await interaction.response.send_message("✅ Riddle posted!", ephemeral=True)
+
+            try:
+                await interaction.message.delete()
+            except Exception as e:
+                print(f"Error deleting modal message: {e}")
+
+        except Exception as e:
+            print(f"RiddlePostModal on_submit error: {e}")
+            await interaction.response.send_message("❌ Something went wrong.", ephemeral=True)
+
+
+class PostRiddleButton(ui.View):
+    def __init__(self, bot, guild_id, mongo_url):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.guild_id = guild_id
+        self.mongo_url = mongo_url
+
+    @ui.button(label="Post a Riddle", style=discord.ButtonStyle.primary)
+    async def post_riddle(self, interaction: discord.Interaction, button: ui.Button):
+        try:
+            modal = RiddlePostModal(self.bot, self.guild_id, self.mongo_url)
+            await interaction.response.send_modal(modal)
+        except Exception as e:
+            print(f"PostRiddleButton error: {e}")
+            await interaction.response.send_message("❌ Could not open the riddle posting modal.", ephemeral=True)
