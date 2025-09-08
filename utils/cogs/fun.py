@@ -595,10 +595,9 @@ class RiddleAnswerModal(ui.Modal, title="Answer the Riddle"):
         try:
             channel = interaction.guild.get_channel(self.answer_channel_id)
             if not channel:
-                await interaction.response.send_message(
+                return await interaction.response.send_message(
                     "⚠️ Riddle answers channel not found.", ephemeral=True
                 )
-                return
 
             embed = Embed(
                 description=f"🧩 **{self.responder.mention} answered:**\n```{self.answer_input.value}```",
@@ -623,12 +622,11 @@ class RiddleAnswerModal(ui.Modal, title="Answer the Riddle"):
             except Exception as e:
                 print(f"Error updating MongoDB: {e}")
 
-            await interaction.response.send_message(
-                "✅ Your answer has been submitted!", ephemeral=True
-            )
+            await interaction.response.send_message("✅ Your answer has been submitted!", ephemeral=True)
         except Exception as e:
             print(f"RiddleAnswerModal on_submit error: {e}")
-            await interaction.response.send_message("❌ Something went wrong.", ephemeral=True)
+            if not interaction.response.is_done():
+                await interaction.response.send_message("❌ Something went wrong.", ephemeral=True)
 
 
 class RiddleAnswerButton(ui.View):
@@ -640,7 +638,7 @@ class RiddleAnswerButton(ui.View):
         self.message_id = message_id
         self.mongo_url = mongo_url
 
-    @ui.button(label="Answer Riddle", style=discord.ButtonStyle.primary)
+    @ui.button(label="Answer Riddle", style=ButtonStyle.primary)
     async def answer(self, interaction: discord.Interaction, button: ui.Button):
         try:
             modal = RiddleAnswerModal(
@@ -655,8 +653,8 @@ class RiddleAnswerButton(ui.View):
             await interaction.response.send_modal(modal)
         except Exception as e:
             print(f"RiddleAnswerButton error: {e}")
-            await interaction.response.send_message("❌ Could not open the riddle modal.", ephemeral=True)
-
+            if not interaction.response.is_done():
+                await interaction.response.send_message("❌ Could not open the riddle modal.", ephemeral=True)
 
 class RiddlePostModal(ui.Modal, title="Post a Riddle"):
     def __init__(self, bot, guild_id, mongo_url):
