@@ -584,10 +584,22 @@ class RiddleAnswerModal(ui.Modal, title="Answer the Riddle"):
         self.message_id = message_id
         self.mongo_url = mongo_url
 
-        self.answer_input = ui.TextInput(
-            label=riddle_text[:100],
+        # Riddle field (read-only, for long riddles)
+        self.riddle_display = ui.TextInput(
+            label="Riddle",
             style=TextStyle.paragraph,
-            placeholder=f"Answer the riddle:\n{riddle_text}",
+            default=riddle_text,  # full text
+            required=False,
+            max_length=2000  # Discord's modal limit
+        )
+        self.riddle_display.disabled = True
+        self.add_item(self.riddle_display)
+
+        # Answer field
+        self.answer_input = ui.TextInput(
+            label="Your Answer",
+            style=TextStyle.paragraph,
+            placeholder="Type your answer here...",
             required=True
         )
         self.add_item(self.answer_input)
@@ -628,8 +640,6 @@ class RiddleAnswerModal(ui.Modal, title="Answer the Riddle"):
             print(f"RiddleAnswerModal on_submit error: {e}")
             if not interaction.response.is_done():
                 await interaction.response.send_message("❌ Something went wrong.", ephemeral=True)
-
-
 class RiddleAnswerButton(ui.View):
     def __init__(self, bot, riddle_text, answer_channel_id, message_id, mongo_url):
         super().__init__(timeout=None)
