@@ -572,6 +572,7 @@ async def setup_persistent_views_fun(bot):
                 
                 
 
+
 class RiddleAnswerModal(ui.Modal, title="Answer the Riddle"):
     def __init__(self, bot, riddle_text, answer_channel_id, responder, guild_id, message_id, mongo_url):
         super().__init__()
@@ -638,6 +639,12 @@ class RiddleAnswerButton(ui.View):
         self.message_id = message_id
         self.mongo_url = mongo_url
 
+    def copy(self):
+        """Create a fresh view so button works again."""
+        return RiddleAnswerButton(
+            self.bot, self.riddle_text, self.answer_channel_id, self.message_id, self.mongo_url
+        )
+
     @ui.button(label="Answer Riddle", style=ButtonStyle.primary)
     async def answer(self, interaction: discord.Interaction, button: ui.Button):
         try:
@@ -651,10 +658,13 @@ class RiddleAnswerButton(ui.View):
                 mongo_url=self.mongo_url
             )
             await interaction.response.send_modal(modal)
+            # Re-attach fresh copy so the button can be used again
+            await interaction.message.edit(view=self.copy())
         except Exception as e:
             print(f"RiddleAnswerButton error: {e}")
             if not interaction.response.is_done():
                 await interaction.response.send_message("❌ Could not open the riddle modal.", ephemeral=True)
+
 
 class RiddlePostModal(ui.Modal, title="Post a Riddle"):
     def __init__(self, bot, guild_id, mongo_url):
@@ -662,6 +672,7 @@ class RiddlePostModal(ui.Modal, title="Post a Riddle"):
         self.bot = bot
         self.guild_id = guild_id
         self.mongo_url = mongo_url
+
         self.riddle_input = ui.TextInput(
             label="Your Riddle",
             style=TextStyle.paragraph,
@@ -695,7 +706,10 @@ class RiddlePostModal(ui.Modal, title="Post a Riddle"):
 
             try:
                 msg = await channel.send(
-                    embed=embed, view=RiddleAnswerButton(self.bot, riddle_text, answer_channel_id, interaction.id, self.mongo_url)
+                    embed=embed,
+                    view=RiddleAnswerButton(
+                        self.bot, riddle_text, answer_channel_id, interaction.id, self.mongo_url
+                    )
                 )
             except Exception as e:
                 print(f"Error sending riddle embed: {e}")
@@ -718,7 +732,8 @@ class RiddlePostModal(ui.Modal, title="Post a Riddle"):
 
         except Exception as e:
             print(f"RiddlePostModal on_submit error: {e}")
-            await interaction.response.send_message("❌ Something went wrong.", ephemeral=True)
+            if not interaction.response.is_done():
+                await interaction.response.send_message("❌ Something went wrong.", ephemeral=True)
 
 
 class PostRiddleButton(ui.View):
