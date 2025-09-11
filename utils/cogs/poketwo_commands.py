@@ -620,7 +620,7 @@ class PokemonCollectionHandler:
                         init = exists; key="other"
                     content = "\n".join(init[:self.embed_manager.results_per_page])
                     embed = Embed(
-                        description = f"{label_map[key] if key != 'success' else ''}\n\n{content[:3900]}", # potato
+                        description = f"{content[:3900]}", # potato | {label_map[key] if key != 'success' else ''}\n\n
                         color=self.embed_manager.embed_default_color
                     )
                     if not max_one:
