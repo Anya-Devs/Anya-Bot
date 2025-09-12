@@ -37,8 +37,7 @@ class BoundedPriorityQueue:
         self._heap = []
         self._counter = itertools.count()
         self._cond = asyncio.Condition()
-    def qsize(self):
-        return len(self._heap)
+    def qsize(self): return len(self._heap)
     async def put(self, item, priority: int):
         async with self._cond:
             if len(self._heap) < self.maxsize:
@@ -59,10 +58,8 @@ class BoundedPriorityQueue:
         if len(self._heap) < self.maxsize:
             heapq.heappush(self._heap, (priority, next(self._counter), item))
             try:
-                loop = asyncio.get_running_loop()
-                loop.call_soon_threadsafe(self._notify)
-            except RuntimeError:
-                pass
+                asyncio.get_running_loop().call_soon_threadsafe(self._notify)
+            except RuntimeError: pass
             return True
         worst_priority, worst_idx = max((t[0], i) for i, t in enumerate(self._heap))
         if priority < worst_priority:
@@ -72,28 +69,22 @@ class BoundedPriorityQueue:
                 heapq.heapify(self._heap)
             heapq.heappush(self._heap, (priority, next(self._counter), item))
             try:
-                loop = asyncio.get_running_loop()
-                loop.call_soon_threadsafe(self._notify)
-            except RuntimeError:
-                pass
+                asyncio.get_running_loop().call_soon_threadsafe(self._notify)
+            except RuntimeError: pass
             return True
         return False
     def _notify(self):
         async def _n():
             async with self._cond:
                 self._cond.notify_all()
-        try:
-            asyncio.create_task(_n())
-        except RuntimeError:
-            pass
+        try: asyncio.create_task(_n())
+        except RuntimeError: pass
     async def get(self):
         async with self._cond:
-            while not self._heap:
-                await self._cond.wait()
+            while not self._heap: await self._cond.wait()
             priority, _, item = heapq.heappop(self._heap)
             return priority, item
-    def empty(self):
-        return not self._heap
+    def empty(self): return not self._heap
 
 class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot, worker_count=None):
@@ -141,17 +132,14 @@ class PoketwoSpawnDetector(commands.Cog):
         self._load_index()
         for slug in self._pokemon_ids:
             p = os.path.join(self.spawn_dir, f"{slug}.png")
-            if os.path.exists(p):
-                self.file_cache[slug] = p
+            if os.path.exists(p): self.file_cache[slug] = p
 
         loop = asyncio.get_event_loop()
         loop.create_task(self._prepare_metadata())
         loop.create_task(self._ensure_predictor(warm=True))
-        for _ in range(self.worker_count):
-            loop.create_task(self._worker())
+        for _ in range(self.worker_count): loop.create_task(self._worker())
         loop.create_task(self._periodic_persist())
         loop.create_task(self._predictor_idle_cleaner())
-
         self._full_pokemon_data = None
 
     def _load_index(self):
@@ -160,47 +148,31 @@ class PoketwoSpawnDetector(commands.Cog):
                 with open(self.index_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self.file_cache.update(data.get("file_cache", {}))
-            else:
-                self._persist_index_blocking()
-        except Exception as e:
-            logger.debug("Index load failed: %s", e)
+            else: self._persist_index_blocking()
+        except Exception as e: logger.debug("Index load failed: %s", e)
 
     def _persist_index_blocking(self):
         try:
             tmp = self.index_path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump({"file_cache": self.file_cache}, f)
+            with open(tmp, "w", encoding="utf-8") as f: json.dump({"file_cache": self.file_cache}, f)
             os.replace(tmp, self.index_path)
-        except Exception as e:
-            logger.debug("Index persist failed: %s", e)
+        except Exception as e: logger.debug("Index persist failed: %s", e)
 
     async def _periodic_persist(self):
         while True:
             await asyncio.sleep(30)
-            try:
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(THREAD_EXECUTOR, self._persist_index_blocking)
-            except Exception as e:
-                logger.debug("Periodic persist error: %s", e)
+            try: await asyncio.get_running_loop().run_in_executor(THREAD_EXECUTOR, self._persist_index_blocking)
+            except Exception as e: logger.debug("Periodic persist error: %s", e)
 
     async def _ensure_predictor(self, warm=False):
         async with self._predictor_lock:
             if not self.predictor:
-                loop = asyncio.get_running_loop()
-                try:
-                    self.predictor = await loop.run_in_executor(THREAD_EXECUTOR, Prediction)
-                except Exception as e:
-                    logger.error("Predictor init fail: %s", e)
-                    self.predictor = None
-                    return None
+                try: self.predictor = await asyncio.get_running_loop().run_in_executor(THREAD_EXECUTOR, Prediction)
+                except Exception as e: logger.error("Predictor init fail: %s", e); self.predictor = None; return None
             self.predictor_last_used = asyncio.get_running_loop().time()
             if warm:
-                try:
-                    await asyncio.get_running_loop().run_in_executor(
-                        THREAD_EXECUTOR, getattr(self.predictor, "warm", lambda: None)
-                    )
-                except Exception:
-                    pass
+                try: await asyncio.get_running_loop().run_in_executor(THREAD_EXECUTOR, getattr(self.predictor, "warm", lambda: None))
+                except Exception: pass
             return self.predictor
 
     async def _predictor_idle_cleaner(self):
@@ -208,10 +180,8 @@ class PoketwoSpawnDetector(commands.Cog):
             await asyncio.sleep(60)
             try:
                 if self.predictor and (asyncio.get_running_loop().time() - self.predictor_last_used) > 300:
-                    self.predictor = None
-                    gc.collect()
-            except Exception:
-                pass
+                    self.predictor = None; self._clear_memory_caches(); gc.collect()
+            except Exception: pass
 
     async def _prepare_metadata(self):
         for slug in list(self._pokemon_ids):
@@ -223,196 +193,182 @@ class PoketwoSpawnDetector(commands.Cog):
                 self.type_cache[slug] = await loop.run_in_executor(THREAD_EXECUTOR, self.pokemon_utils.get_pokemon_types, slug)
                 self.alt_cache[slug] = await loop.run_in_executor(THREAD_EXECUTOR, self.pokemon_utils.get_best_normal_alt_name, slug) or ""
                 await asyncio.sleep(0)
-            except Exception:
-                continue
+            except Exception: continue
 
     async def _worker(self):
         while True:
             try:
                 priority, (message, image_url) = await self.queue.get()
                 await self._process_spawn_safe(message, image_url)
-            except MemoryError:
-                self._clear_memory_caches(); gc.collect()
-            except Exception as e:
-                logger.exception("Worker top-level error: %s", e)
+            except MemoryError: self._clear_memory_caches(); gc.collect()
+            except Exception as e: logger.exception("Worker top-level error: %s", e)
+    async def process_spawn(self, message, image_url):
+     loop = asyncio.get_running_loop()
+
+     # --- Get prediction ---
+     pred = self.pred_cache.get(image_url)
+     if not pred:
+        predictor = await self._ensure_predictor()
+        if predictor:
+            raw_name, conf = await loop.run_in_executor(THREAD_EXECUTOR, predictor.predict, image_url)
+        else:
+            try:
+                raw_name, conf = await loop.run_in_executor(THREAD_EXECUTOR, Prediction().predict, image_url)
+            except Exception:
+                raw_name, conf = "unknown", "0"
+        self.pred_cache[image_url] = (raw_name, conf)
+     else:
+        raw_name, conf = pred
+
+     # --- Resolve base name ---
+     base_name = self.base_cache.get(raw_name)
+     if not base_name:
+        base_name = await loop.run_in_executor(THREAD_EXECUTOR, self.pokemon_utils.get_base_pokemon_name, raw_name)
+        self.base_cache[raw_name] = base_name
+
+     # --- Confidence as float ---
+     try:
+        conf_float = float(str(conf).strip().rstrip("%") or 0)
+     except Exception:
+        conf_float = 0.0
+
+     # --- Server configuration & pings ---
+     guild_obj = getattr(message, "guild", None)
+     server_cfg = None
+     if guild_obj and isinstance(guild_obj, discord.Guild):
+        sid = guild_obj.id
+        server_cfg = self.server_cache.get(sid)
+        if not server_cfg:
+            try: server_cfg = await self.pokemon_utils.get_server_config(guild_obj)
+            except Exception: server_cfg = {}
+            self.server_cache[sid] = server_cfg
+
+     ping_tasks = [
+        asyncio.create_task(self.pokemon_utils.get_ping_users(guild_obj, base_name)),
+        asyncio.create_task(self.pokemon_utils.get_type_ping_users(guild_obj, base_name)),
+        asyncio.create_task(self.pokemon_utils.get_quest_ping_users(guild_obj, base_name)),
+     ]
+     shiny_collect, type_pings, quest_pings = await asyncio.gather(*ping_tasks)
+     shiny_pings, collect_pings = shiny_collect
+
+     # --- Description / dex info ---
+     desc, dex = self.desc_cache.get(base_name, ("","???"))
+     dex = self._pokemon_ids.get(base_name, dex)
+
+     # --- Format ping message ---
+     ping_msg, _ = await self.pokemon_utils.format_messages(
+        raw_name, type_pings, quest_pings, shiny_pings, collect_pings,
+        "", f"{conf_float:.2f}%", dex, desc, image_url, conf_float < 30
+     )
+
+     # --- Generate spawn image ---
+     path = self.file_cache.get(base_name)
+     if not path or not os.path.exists(path):
+        path = os.path.join(self.spawn_dir, f"{base_name}.png")
+        try:
+            await loop.run_in_executor(
+                CPU_EXECUTOR,
+                self.image_builder.create_image,
+                base_name,
+                self.pokemon_utils.format_name(base_name).title(),
+                self.alt_cache.get(base_name, ""),
+                self.type_cache.get(base_name, []),
+                None,
+                path,
+                "PNG"
+            )
+            self.file_cache[base_name] = path
+        except Exception:
+            logger.exception("Image create failed for %s", base_name)
+
+     # --- Load image bytes ---
+     img_bytes = self.img_bytes_cache.get(base_name)
+     if img_bytes is None:
+        try:
+            async with aiofiles.open(path, "rb") as f:
+                img_bytes = await f.read()
+                self.img_bytes_cache[base_name] = img_bytes
+        except Exception:
+            logger.exception("Failed to read image bytes for %s", base_name)
+            img_bytes = b""
+
+     # --- Load full pokemon data if needed ---
+     if not self._full_pokemon_data:
+        try:
+            self._full_pokemon_data = await loop.run_in_executor(THREAD_EXECUTOR, self.pokemon_utils.load_full_pokemon_data)
+        except Exception:
+            self._full_pokemon_data = {}
+
+     # --- Send Discord message ---
+     view = PokemonSpawnView(slug=base_name, pokemon_data=self._full_pokemon_data or {}, pokemon_utils=self.pokemon_utils)
+     try:
+        await message.channel.send(
+            content=ping_msg,
+            file=discord.File(fp=BytesIO(img_bytes), filename=f"{base_name}.png"),
+            reference=message,
+            view=view
+        )
+     except Exception:
+        try: await message.channel.send(content=ping_msg, reference=message)
+        except Exception: logger.exception("Failed to send ping for %s", base_name)
 
     async def _process_spawn_safe(self, message, image_url):
         self.metrics["processed"] += 1
-        try:
-            await self.process_spawn(message, image_url)
+        try: await self.process_spawn(message, image_url)
         except Exception as e:
             logger.exception("Spawn processing error: %s", e)
-            try:
-                await message.channel.send(f"{self.error_emoji} Failed to process spawn", reference=message)
-            except Exception:
-                pass
-
-    async def process_spawn(self, message, image_url):
-        loop = asyncio.get_event_loop()
-        pred = self.pred_cache.get(image_url)
-        if not pred:
-            predictor = await self._ensure_predictor()
-            if not predictor:
-                try:
-                    raw_name, conf = await loop.run_in_executor(THREAD_EXECUTOR, Prediction().predict, image_url)
-                except Exception:
-                    raw_name, conf = ("unknown", "0")
-            else:
-                raw_name, conf = await loop.run_in_executor(THREAD_EXECUTOR, predictor.predict, image_url)
-            self.pred_cache[image_url] = (raw_name, conf)
-        else:
-            raw_name, conf = pred
-
-        base_name = self.base_cache.get(raw_name)
-        if not base_name:
-            base_name = await loop.run_in_executor(THREAD_EXECUTOR, self.pokemon_utils.get_base_pokemon_name, raw_name)
-            self.base_cache[raw_name] = base_name
-
-        try:
-            conf_float = float(str(conf).strip().rstrip("%") or 0)
-        except Exception:
-            conf_float = 0.0
-
-        guild_obj = getattr(message, "guild", None)
-        server_cfg = None
-        if guild_obj and isinstance(guild_obj, discord.Guild):
-            sid = guild_obj.id
-            server_cfg = self.server_cache.get(sid)
-            if not server_cfg:
-                try:
-                    server_cfg = await self.pokemon_utils.get_server_config(guild_obj)
-                except Exception:
-                    server_cfg = {}
-                self.server_cache[sid] = server_cfg
-
-        # Fix: always pass the actual Guild object, not an int
-        ping_tasks = [
-            asyncio.create_task(self.pokemon_utils.get_ping_users(guild_obj, base_name)),
-            asyncio.create_task(self.pokemon_utils.get_type_ping_users(guild_obj, base_name)),
-            asyncio.create_task(self.pokemon_utils.get_quest_ping_users(guild_obj, base_name)),
-        ]
-        shiny_collect, type_pings, quest_pings = await asyncio.gather(*ping_tasks)
-        shiny_pings, collect_pings = shiny_collect
-
-        desc, dex = self.desc_cache.get(base_name, ("","???"))
-        dex = self._pokemon_ids.get(base_name, dex)
-
-        ping_msg, _ = await self.pokemon_utils.format_messages(
-            raw_name, type_pings, quest_pings, shiny_pings, collect_pings,
-            "", f"{conf_float:.2f}%", dex, desc, image_url, conf_float < 30
-        )
-
-        path = self.file_cache.get(base_name)
-        if not path or not os.path.exists(path):
-            path = os.path.join(self.spawn_dir, f"{base_name}.png")
-            try:
-                await loop.run_in_executor(
-                    CPU_EXECUTOR,
-                    self.image_builder.create_image,
-                    base_name,
-                    self.pokemon_utils.format_name(base_name).title(),
-                    self.alt_cache.get(base_name, ""),
-                    self.type_cache.get(base_name, []),
-                    None,
-                    path,
-                    "PNG"
-                )
-                self.file_cache[base_name] = path
-            except Exception:
-                logger.exception("Image create failed for %s", base_name)
-
-        img_bytes = self.img_bytes_cache.get(base_name)
-        if img_bytes is None:
-            try:
-                async with aiofiles.open(path, "rb") as f:
-                    img_bytes = await f.read()
-                    self.img_bytes_cache[base_name] = img_bytes
-            except Exception:
-                logger.exception("Failed to read image bytes for %s", base_name)
-                img_bytes = b""
-
-        if not self._full_pokemon_data:
-            try:
-                self._full_pokemon_data = await loop.run_in_executor(THREAD_EXECUTOR, self.pokemon_utils.load_full_pokemon_data)
-            except Exception:
-                self._full_pokemon_data = {}
-
-        view = PokemonSpawnView(slug=base_name, pokemon_data=self._full_pokemon_data or {}, pokemon_utils=self.pokemon_utils)
-
-        try:
-            await message.channel.send(content=ping_msg, file=discord.File(fp=BytesIO(img_bytes), filename=f"{base_name}.png"), reference=message, view=view)
-        except Exception:
-            try:
-                await message.channel.send(content=ping_msg, reference=message)
-            except Exception:
-                logger.exception("Failed to send ping for %s", base_name)
+            try: await message.channel.send(f"{self.error_emoji} Failed to process spawn", reference=message)
+            except Exception: pass
 
     def _clear_memory_caches(self):
-        try:
-            self.pred_cache.clear()
-            self.img_bytes_cache.clear()
-            gc.collect()
-        except Exception:
-            pass
+        try: self.pred_cache.clear(); self.img_bytes_cache.clear(); gc.collect()
+        except Exception: pass
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.id != self.target_id or ut:
-            return
-        for e in message.embeds:
-            try:
-                if e.title and "pokémon has appeared!" in e.title.lower() and e.image:
-                    self.metrics["received"] += 1
-                    added = self.queue.put_nowait((message, e.image.url), priority=1)
-                    if not added:
-                        self.metrics["dropped"] += 1
-                        logger.debug("Dropped spawn (queue full, low priority)")
-            except Exception:
-                continue
+     if message.author.id != self.target_id or ut:
+        return
+     for e in message.embeds:
+        try:
+            if e.title and "pokémon has appeared!" in e.title.lower() and e.image:
+                self.metrics["received"] += 1
+                added = self.queue.put_nowait((message, e.image.url), priority=0)
+                if not added:
+                    self.metrics["dropped"] += 1
+        except Exception:
+            continue
 
     @commands.command(name="generate_spawns", hidden=True)
     async def generate_all_spawn_images(self, ctx):
         missing = [s for s in self._pokemon_ids if not os.path.exists(os.path.join(self.spawn_dir, f"{s}.png"))]
-        if not missing:
-            return await ctx.send("✅ All spawn images ready!")
+        if not missing: return await ctx.send("✅ All spawn images ready!")
         await ctx.send(f"⚠️ Generating {len(missing)} images...")
-        loop = asyncio.get_event_loop()
-        tasks = []
-        for slug in missing:
-            path = os.path.join(self.spawn_dir, f"{slug}.png")
-            tasks.append(loop.run_in_executor(
-                CPU_EXECUTOR,
-                self.image_builder.create_image,
-                slug,
-                self.pokemon_utils.format_name(slug).title(),
-                self.alt_cache.get(slug, ""),
-                self.type_cache.get(slug, []),
-                None,
-                path,
-                "PNG"
-            ))
+        tasks = [asyncio.get_running_loop().run_in_executor(
+            CPU_EXECUTOR,
+            self.image_builder.create_image,
+            slug,
+            self.pokemon_utils.format_name(slug).title(),
+            self.alt_cache.get(slug, ""),
+            self.type_cache.get(slug, []),
+            None,
+            os.path.join(self.spawn_dir, f"{slug}.png"),
+            "PNG"
+        ) for slug in missing]
         try:
             await asyncio.gather(*tasks)
-            for slug in missing:
-                p = os.path.join(self.spawn_dir, f"{slug}.png")
-                if os.path.exists(p):
-                    self.file_cache[slug] = p
+            for slug in missing: self.file_cache[slug] = os.path.join(self.spawn_dir, f"{slug}.png")
             await ctx.send("✅ Done!")
-        except Exception as e:
-            logger.exception("Batch generate failed: %s", e)
-            await ctx.send(f"{self.error_emoji} Generation failed.")
+        except Exception as e: logger.exception("Batch generate failed: %s", e); await ctx.send(f"{self.error_emoji} Generation failed.")
 
     @commands.command(name="ps", hidden=True)
     async def predict_spawn(self, ctx, image_url=None):
         try:
             def extract_image(msg):
-                if msg.attachments:
-                    return msg.attachments[0].url
+                if msg.attachments: return msg.attachments[0].url
                 if msg.embeds:
                     e = msg.embeds[0]
                     return getattr(e.image or e.thumbnail, "url", None)
                 return None
-
             msg = ctx.message
             if not image_url:
                 image_url = extract_image(msg)
@@ -422,19 +378,12 @@ class PoketwoSpawnDetector(commands.Cog):
                     if not image_url and ref.reference:
                         ref2 = await ctx.channel.fetch_message(ref.reference.message_id)
                         image_url = extract_image(ref2)
-            if not image_url:
-                return await ctx.send(f"{self.cross_emoji} No image URL found.")
-
-            accepted = self.queue.put_nowait((msg, image_url), priority=0)
+            if not image_url: return await ctx.send(f"{self.cross_emoji} No image URL found.")
+            accepted = self.queue.put_nowait((msg, image_url), priority=1)
             if not accepted:
-                put_ok = await self.queue.put((msg, image_url), priority=0)
-                if not put_ok:
-                    self.metrics["dropped"] += 1
-                    return await ctx.send(f"{self.error_emoji} Queue is full; try again shortly.")
-            #await ctx.send(f"{self.success_emoji} Queued for prediction.")
-        except Exception as e:
-            logger.exception("Prediction error: %s", e)
-            await ctx.send(f"{self.error_emoji} Failed to queue prediction.")
+                put_ok = await self.queue.put((msg, image_url), priority=1)
+                if not put_ok: self.metrics["dropped"] += 1; return await ctx.send(f"{self.error_emoji} Queue full; try again.")
+        except Exception as e: logger.exception("Prediction error: %s", e); await ctx.send(f"{self.error_emoji} Failed to queue prediction.")
 
 def setup(bot):
     bot.add_cog(PoketwoSpawnDetector(bot))
