@@ -1,5 +1,5 @@
 import os, asyncio, logging
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from io import BytesIO
 import aiofiles
 import numpy as np
@@ -12,7 +12,10 @@ from bot.cogs.pokemon import PoketwoCommands
 from motor.motor_asyncio import AsyncIOMotorClient
 
 logger = logging.getLogger(__name__)
-_thread_executor = ThreadPoolExecutor(max_workers=os.cpu_count() or 4)
+
+# Executors
+CPU_EXECUTOR = ProcessPoolExecutor(max_workers=os.cpu_count() or 4)   # safe for image builder
+THREAD_EXECUTOR = ThreadPoolExecutor(max_workers=(os.cpu_count() or 4) * 2)  # safe for predictor + IO
 
 class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot, worker_count=None):
@@ -44,6 +47,7 @@ class PoketwoSpawnDetector(commands.Cog):
         self.spawn_dir = "data/events/poketwo_spawns/spawns"
         os.makedirs(self.spawn_dir, exist_ok=True)
 
+        # caches
         self._pokemon_ids = self.pokemon_utils.load_pokemon_ids()
         self.file_cache, self.img_bytes_cache = {}, {}
         self.pred_cache, self.base_cache = {}, {}
@@ -82,7 +86,6 @@ class PoketwoSpawnDetector(commands.Cog):
 
         for slug in self._pokemon_ids:
             self.base_cache[slug] = self.pokemon_utils.get_base_pokemon_name(slug)
-
             desc, dex = "", self._pokemon_ids.get(slug, "???")
             desc_data = self.pokemon_utils.get_description(slug)
             if desc_data:
@@ -95,7 +98,7 @@ class PoketwoSpawnDetector(commands.Cog):
             path = os.path.join(self.spawn_dir, f"{slug}.png")
             if slug not in self.file_cache:
                 tasks.append(loop.run_in_executor(
-                    _thread_executor,
+                    CPU_EXECUTOR,  # safe: no ONNX session
                     self.image_builder.create_image,
                     slug,
                     self.pokemon_utils.format_name(slug).replace("_", " ").title(),
@@ -110,12 +113,17 @@ class PoketwoSpawnDetector(commands.Cog):
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-        for slug, path in self.file_cache.items():
+        # parallel load bytes
+        async def load_bytes(slug, path):
             try:
                 async with aiofiles.open(path, "rb") as f:
                     self.img_bytes_cache[slug] = await f.read()
             except:
-                continue
+                pass
+
+        await asyncio.gather(*[
+            load_bytes(slug, path) for slug, path in self.file_cache.items()
+        ])
 
         logger.info("Preloaded all Pokémon data: images, bytes, descriptions, types, alt names.")
 
@@ -123,10 +131,14 @@ class PoketwoSpawnDetector(commands.Cog):
         try:
             loop = asyncio.get_running_loop()
 
-            raw_name, conf = self.pred_cache.get(image_url) or await loop.run_in_executor(
-                _thread_executor, self.predictor.predict, image_url
-            )
-            self.pred_cache[image_url] = (raw_name, conf)
+            if image_url in self.pred_cache:
+                raw_name, conf = self.pred_cache[image_url]
+            else:
+                # ✅ FIX: keep ONNX inside threadpool, not processpool
+                raw_name, conf = await loop.run_in_executor(
+                    THREAD_EXECUTOR, lambda: self.predictor.predict(image_url)
+                )
+                self.pred_cache[image_url] = (raw_name, conf)
 
             base_name = self.base_cache.get(raw_name)
             if not base_name:
@@ -143,8 +155,9 @@ class PoketwoSpawnDetector(commands.Cog):
             low_conf = conf_float < 30
 
             sid = message.guild.id
-            server_config = self.server_cache.get(sid) or await self.pokemon_utils.get_server_config(sid)
-            self.server_cache[sid] = server_config
+            if sid not in self.server_cache:
+                self.server_cache[sid] = await self.pokemon_utils.get_server_config(sid)
+            server_config = self.server_cache[sid]
 
             shiny_collect, type_pings, quest_pings = await asyncio.gather(
                 self.pokemon_utils.get_ping_users(message.guild, base_name),
@@ -157,13 +170,9 @@ class PoketwoSpawnDetector(commands.Cog):
             rare, regional = self.pokemon_utils._special_names
             special_roles = []
             if server_config.get("rare_role"):
-                special_roles += [
-                    f"<@&{server_config['rare_role']}>" for r in rare if r in base_name
-                ]
+                special_roles += [f"<@&{server_config['rare_role']}>" for r in rare if r in base_name]
             if server_config.get("regional_role"):
-                special_roles += [
-                    f"<@&{server_config['regional_role']}>" for r in regional if r in base_name
-                ]
+                special_roles += [f"<@&{server_config['regional_role']}>" for r in regional if r in base_name]
 
             desc, dex = self.desc_cache.get(base_name, ("", "???"))
             dex = self._pokemon_ids.get(base_name, dex)
@@ -187,7 +196,7 @@ class PoketwoSpawnDetector(commands.Cog):
                 path = os.path.join(self.spawn_dir, f"{base_name}.png")
                 if base_name not in self.file_cache:
                     await loop.run_in_executor(
-                        _thread_executor,
+                        CPU_EXECUTOR,
                         self.image_builder.create_image,
                         base_name,
                         self.pokemon_utils.format_name(base_name).replace("_", " ").title(),
@@ -230,11 +239,11 @@ class PoketwoSpawnDetector(commands.Cog):
     @commands.command(name="generate_spawns", hidden=True)
     async def generate_all_spawn_images(self, ctx):
         os.makedirs(self.spawn_dir, exist_ok=True)
-        missing_or_empty = []
-        for slug in self._pokemon_ids:
-            path = os.path.join(self.spawn_dir, f"{slug}.png")
-            if not os.path.exists(path) or os.path.getsize(path) == 0:
-                missing_or_empty.append(slug)
+        missing_or_empty = [
+            slug for slug in self._pokemon_ids
+            if not os.path.exists(os.path.join(self.spawn_dir, f"{slug}.png"))
+            or os.path.getsize(os.path.join(self.spawn_dir, f"{slug}.png")) == 0
+        ]
 
         if not missing_or_empty:
             return await ctx.send("✅ All spawn images preloaded and valid!")
@@ -246,7 +255,7 @@ class PoketwoSpawnDetector(commands.Cog):
         for slug in missing_or_empty:
             path = os.path.join(self.spawn_dir, f"{slug}.png")
             tasks.append(loop.run_in_executor(
-                _thread_executor,
+                CPU_EXECUTOR,
                 self.image_builder.create_image,
                 slug,
                 self.pokemon_utils.format_name(slug).replace("_", " ").title(),
@@ -261,14 +270,14 @@ class PoketwoSpawnDetector(commands.Cog):
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-        for slug in missing_or_empty:
-            path = self.file_cache[slug]
+        async def load_bytes(slug, path):
             try:
                 async with aiofiles.open(path, "rb") as f:
                     self.img_bytes_cache[slug] = await f.read()
             except:
-                continue
+                pass
 
+        await asyncio.gather(*[load_bytes(slug, self.file_cache[slug]) for slug in missing_or_empty])
         await ctx.send("✅ All spawn images generated, cached, and verified!")
 
     @commands.Cog.listener()
