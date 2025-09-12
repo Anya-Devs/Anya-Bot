@@ -1391,7 +1391,7 @@ class PokemonTypeSelect(discord.ui.View):
                     title="⚙️ Type Ping",
                     description="### 😴 AFK Mode is Currently Active\n"
                                "Your type ping notifications are **paused**. Toggle AFK mode below to reactivate them and restore your saved preferences.",
-                    color=prima  # Soft red
+                    color=0xFF6B6B  # Soft red
                 )
                 embed.add_field(
                     name="💡 What happens in AFK mode?",
@@ -1533,8 +1533,7 @@ class PokemonTypeSelect(discord.ui.View):
 
                 embed = discord.Embed(
                     title="Type Ping Settings",
-                    description="### 😴 AFK Mode is Currently Active\n"
-                               f"Your **{len(current_data)} type(s)** have been saved and notifications are paused.",
+                    description="### 😴 AFK Mode is Currently Active",
                     color=0xFF6B6B
                 )
                 embed.add_field(
