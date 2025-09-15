@@ -1,123 +1,104 @@
 {
-    "Spy Tools": [
-        {
-            "name": "Chimera",
-            "emoji": "<:chimera:1317338025470070866>",
-            "description": "Hold it close for unexpected protection. If in inventory, it will grant one-time protection against the effects of other users.",
-            "materials": [
-                {"material": "Cotton", "quantity": 5},
-                {"material": "Fabric", "quantity": 5},
-                {"material": "Thread", "quantity": 10}
-            ]
-        },
-        {
-            "name": "Spy Briefcase",
-            "emoji": "<:spy_briefcase:1317341084833284157>",
-            "description": "This briefcase allows you to discreetly siphon off 30% of another member's points.",
-            "materials": [
-                {"material": "Metal", "quantity": 3},
-                {"material": "Leather", "quantity": 5},
-                {"material": "Wire", "quantity": 5}
-            ]
-        },
-        {
-            "name": "Key Chain Sheep",
-            "emoji": "<:keychain_sheep:1318415294758129692>",
-            "description": "Allows the targeted member to be assigned a random role from the server.\n- Setup using: `...q_roles <@mention role1> <@mention role2>...`",
-            "materials": [
-                {"material": "Fabric", "quantity": 5},
-                {"material": "Thread", "quantity": 6},
-                {"material": "Cotton", "quantity": 10},
-                {"material": "Chain", "quantity": 5}
-            ]
-        },
-        {
-            "name": "Mute Muffler",
-            "emoji": "🔇",
-            "description": "This muffler silences the target user, preventing them from sending messages in all channels for 30 minutes.",
-            "materials": [
-                {"material": "Solder", "quantity": 6},
-                {"material": "Soundproofing Material", "quantity": 4},
-                {"material": "Battery", "quantity": 3}
-            ]
-        },
-        {
-            "name": "Motion Alarm",
-            "emoji": "<:motion_sensor:1317345108869513227>",
-            "description": "This single-use alarm triggers a 20-minute timeout for a targeted user if they send any emoji. (Fetching last 10 messages in the channel)",
-            "materials": [
-                {"material": "Plastic", "quantity": 8},
-                {"material": "Chip", "quantity": 4},
-                {"material": "Solder", "quantity": 6},
-                {"material": "CPU", "quantity": 1}
-            ]
-        }
-    ],
-    "Materials": [
-        {
-            "name": "Leather",
-            "emoji": "<:leather:1317346727929319475>",
-            "price": 15
-        },
-        {
-            "name": "Cotton",
-            "emoji": "<:cotton:1318417195512103044>",
-            "price": 15
-        },
-        {
-            "name": "Chain",
-            "emoji": "<:chain:1318417784019091506>",
-            "price": 15
-        },
-        {
-            "name": "Metal",
-            "emoji": "<:metal:1318666800350892142>",
-            "price": 15
-        },
-        {
-            "name": "Fabric",
-            "emoji": "<:fabric:1318668051335348294>",
-            "price": 15
-        },
-        {
-            "name": "CPU",
-            "emoji": "<:cpu:1318667759667646504>",
-            "price": 90
-        },
-        {
-            "name": "Wire",
-            "emoji": "<:wireless:1333780912797913099>",
-            "price": 5
-        },
-        {
-            "name": "Thread",
-            "emoji": "<:thread:1318668493960511520>",
-            "price": 15
-        },
-        {
-            "name": "Soundproofing Material",
-            "emoji": "🎧",
-            "price": 30
-        },
-        {
-            "name": "Battery",
-            "emoji": "🔋",
-            "price": 30
-        },
-        {
-            "name": "Plastic",
-            "emoji": "🧴",
-            "price": 20
-        },
-        {
-            "name": "Chip",
-            "emoji": "💽",
-            "price": 10
-        },
-        {
-            "name": "Solder",
-            "emoji": "⚒️",
-            "price": 25
-        }
-    ]
+  "SpyTools": [
+    {
+      "name": "Chimera",
+      "emoji": "<:chimera:1317338025470070866>",
+      "description": "Hold it close for unexpected protection. Grants one-time protection against effects from other users.",
+      "materials": [
+        {"material": "Cotton", "quantity": 5},
+        {"material": "Fabric", "quantity": 5},
+        {"material": "Thread", "quantity": 10}
+      ]
+    },
+    {
+      "name": "Spy Briefcase",
+      "emoji": "<:spy_briefcase:1317341084833284157>",
+      "description": "Discreetly siphon 30% of another member's points.",
+      "materials": [
+        {"material": "Metal", "quantity": 3},
+        {"material": "Leather", "quantity": 5},
+        {"material": "Wire", "quantity": 5}
+      ]
+    },
+    {
+      "name": "Key Chain Sheep",
+      "emoji": "<:keychain_sheep:1318415294758129692>",
+      "description": "Assigns a random role to the targeted member. Setup: `...q_roles <@mention role1> <@mention role2>...`",
+      "materials": [
+        {"material": "Fabric", "quantity": 5},
+        {"material": "Thread", "quantity": 6},
+        {"material": "Cotton", "quantity": 10},
+        {"material": "Chain", "quantity": 5}
+      ]
+    },
+    {
+      "name": "Mute Muffler",
+      "emoji": "🔇",
+      "description": "Silences the target user for 30 minutes.",
+      "materials": [
+        {"material": "Solder", "quantity": 6},
+        {"material": "Soundproofing Material", "quantity": 4},
+        {"material": "Battery", "quantity": 3}
+      ]
+    },
+    {
+      "name": "Motion Alarm",
+      "emoji": "<:motion_sensor:1317345108869513227>",
+      "description": "Single-use alarm triggers a 20-minute timeout if the target sends any emoji (checks last 10 messages).",
+      "materials": [
+        {"material": "Plastic", "quantity": 8},
+        {"material": "Chip", "quantity": 4},
+        {"material": "Solder", "quantity": 6},
+        {"material": "CPU", "quantity": 1}
+      ]
+    }
+  ],
+  "Materials": [
+    {"name": "Leather", "emoji": "<:leather:1317346727929319475>", "price": 15},
+    {"name": "Cotton", "emoji": "<:cotton:1318417195512103044>", "price": 15},
+    {"name": "Chain", "emoji": "<:chain:1318417784019091506>", "price": 15},
+    {"name": "Metal", "emoji": "<:metal:1318666800350892142>", "price": 15},
+    {"name": "Fabric", "emoji": "<:fabric:1318668051335348294>", "price": 15},
+    {"name": "CPU", "emoji": "<:cpu:1318667759667646504>", "price": 90},
+    {"name": "Wire", "emoji": "<:wireless:1333780912797913099>", "price": 5},
+    {"name": "Thread", "emoji": "<:thread:1318668493960511520>", "price": 15},
+    {"name": "Soundproofing Material", "emoji": "🎧", "price": 30},
+    {"name": "Battery", "emoji": "🔋", "price": 30},
+    {"name": "Plastic", "emoji": "🧴", "price": 20},
+    {"name": "Chip", "emoji": "💽", "price": 10},
+    {"name": "Solder", "emoji": "⚒️", "price": 25}
+  ],
+  "ProfileCustomization": {
+    "ForgerFamily": {
+      "Backgrounds": [
+        {"name": "Anya_Forger", "description": "Vibrant background featuring Anya with her chimera plush.", "character": "Anya Forger", "image_path": "/assets/profiles/backgrounds/anya_forger.png", "points": 12000},
+        {"name": "Loid_Forger", "description": "Sleek spy-themed background with Loid's suit and hat.", "character": "Loid Forger", "image_path": "/assets/profiles/backgrounds/loid_forger.png", "points": 15000},
+        {"name": "Yor_Forger", "description": "Stylish background with Yor's assassin outfit and red roses.", "character": "Yor Forger", "image_path": "/assets/profiles/backgrounds/yor_forger.png", "points": 15000},
+        {"name": "Bond_Forger", "description": "Warm background with Bond in a park setting.", "character": "Bond Forger", "image_path": "/assets/profiles/backgrounds/bond_forger.png", "points": 11000}
+      ],
+      "Fonts": [
+        {"name": "Anya_Handwriting", "description": "Playful handwritten font inspired by Anya's notes.", "character": "Anya Forger", "image_path": "/assets/profiles/fonts/anya_handwriting.ttf", "points": 10000}
+      ],
+      "Items": [
+        {"name": "Chimera_Badge", "description": "Badge of Anya's favorite chimera plush.", "character": "Anya Forger", "image_path": "/assets/profiles/items/chimera_plush.png", "points": 11000},
+        {"name": "Thorn_Pin", "description": "Pin inspired by Yor's assassin weapon.", "character": "Yor Forger", "image_path": "/assets/profiles/items/thorn_pin.png", "points": 13000},
+        {"name": "Bond_Collar", "description": "Profile add-on featuring Bond's collar.", "character": "Bond Forger", "image_path": "/assets/profiles/items/bond_collar.png", "points": 11000}
+      ]
+    },
+    "WISE": {
+      "Backgrounds": [
+        {"name": "Franky_Franklin", "description": "Gadget-filled background inspired by Franky.", "character": "Franky Franklin", "image_path": "/assets/profiles/backgrounds/franky_franklin.png", "points": 13000},
+        {"name": "Sylvia_Sherwood", "description": "Command center background for Sylvia.", "character": "Sylvia Sherwood", "image_path": "/assets/profiles/backgrounds/sylvia_sherwood.png", "points": 14000},
+        {"name": "Fiona_Frost", "description": "Cool icy background reflecting Fiona's Nightfall persona.", "character": "Fiona Frost", "image_path": "/assets/profiles/backgrounds/fiona_frost.png", "points": 13500}
+      ],
+      "Fonts": [
+        {"name": "WISE_Code", "description": "Spy-code-inspired font tied to Loid's missions.", "character": "Loid Forger", "image_path": "/assets/profiles/fonts/wise_code.ttf", "points": 12000},
+        {"name": "Handler_Directive", "description": "Bold font inspired by Sylvia's WISE commands.", "character": "Sylvia Sherwood", "image_path": "/assets/profiles/fonts/handler_directive.ttf", "points": 11500}
+      ],
+      "Items": [
+        {"name": "Gadget_Wristwatch", "description": "Spy gadget wristwatch inspired by Franky.", "character": "Franky Franklin", "image_path": "/assets/profiles/items/gadget_wristwatch.png", "points": 12000},
+        {"name": "Nightfall_Badge", "description": "Badge representing Fiona's codename Nightfall.", "character": "Fiona Frost", "image_path": "/assets/profiles/items/nightfall_badge.png", "points": 12500}
+      ]
+    }
+  }
 }
