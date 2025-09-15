@@ -592,10 +592,13 @@ class PokemonImageBuilder:
             return output_path
 
 
+
 class PokemonSpawnView(View):
-    DEFAULT_LANG_FLAGS = {"de":"🇩🇪","en":"🇬🇧","es":"🇪🇸","fr":"🇫🇷","it":"🇮🇹",
-                          "ja":"🇯🇵","ja-Hrkt":"🇯🇵","ko":"🇰🇷","roomaji":"🇯🇵",
-                          "zh-Hans":"🇨🇳","zh-Hant":"🇹🇼"}
+    DEFAULT_LANG_FLAGS = {
+        "de":"🇩🇪","en":"🇬🇧","es":"🇪🇸","fr":"🇫🇷","it":"🇮🇹",
+        "ja":"🇯🇵","ja-Hrkt":"🇯🇵","ko":"🇰🇷","roomaji":"🇯🇵",
+        "zh-Hans":"🇨🇳","zh-Hant":"🇹🇼"
+    }
 
     CSV_PATH = "data/commands/pokemon/pokemon_full_data.csv"
 
@@ -608,6 +611,15 @@ class PokemonSpawnView(View):
         with open("data/commands/pokemon/pokemon_emojis/_pokemon_types.json", "r", encoding="utf-8") as f:
             self.type_emojis = json.load(f)
 
+        # Only add the Pokédex button if Pokémon data exists
+        if self.get_pokemon_info():
+            self.add_item(discord.ui.Button(
+                label="Pokédex",
+                style=discord.ButtonStyle.secondary,
+                emoji="<:pokedex:1411058742241529877>",
+                custom_id="dex_button"
+            ))
+
     # ===== Helpers =====
     def get_pokemon_info(self):
         try:
@@ -615,7 +627,6 @@ class PokemonSpawnView(View):
                 reader = csv.DictReader(csvfile)
                 for row in reader:
                     if row.get("slug") == self.slug:
-                        # Convert numeric stats to int/float
                         for stat in ["base.hp","base.atk","base.def","base.satk","base.sdef","base.spd",
                                      "height","weight","gender_rate"]:
                             if stat in row and row[stat]:
@@ -699,38 +710,118 @@ class PokemonSpawnView(View):
                       else "Normal")
 
             gender_text = self.format_gender(data.get("gender_rate", -1))
-
             description = (f"{data['description']}")
+
             embed = discord.Embed(title=embed_title, description=description,
                                   color=self.extract_color(file_path))
             embed.add_field(name="Region", value=data['region'].capitalize(), inline=True)
             embed.add_field(name="Types", value=self.format_type_field(data), inline=True)
             embed.add_field(name="Names", value=f"{alt_names}", inline=True)
             embed.add_field(name="Base Stats", value=f"```{stats_block}```", inline=False)
-           
+
             embed.set_image(url=f"attachment://{self.slug}.png")
-            # Footer includes height, weight, and gender separated by tabs
-            embed.set_footer(icon_url='https://discords.com/_next/image?url=https%3A%2F%2Fcdn.discordapp.com%2Femojis%2F808909357240025099.png%3Fv%3D1&w=128&q=75', text=f"Height: {float(data['height']):.2f} m\nWeight: {float(data['weight']):.2f} kg\tGender: {gender_text}" + (f"\nRarity: {rarity}" if rarity != 'Normal' else ""))
+            embed.set_footer(
+                icon_url='https://discords.com/_next/image?url=https%3A%2F%2Fcdn.discordapp.com%2Femojis%2F808909357240025099.png%3Fv%3D1&w=128&q=75',
+                text=f"Height: {float(data['height']):.2f} m\nWeight: {float(data['weight']):.2f} kg\tGender: {gender_text}" +
+                     (f"\nRarity: {rarity}" if rarity != 'Normal' else "")
+            )
 
             return embed
         except Exception as e:
             print(f"[format_embed] Error: {e}")
             return discord.Embed(title="Error", description=str(e), color=discord.Color.red())
 
-    # ===== Buttons =====
-    @discord.ui.button(label="Pokédex", style=discord.ButtonStyle.secondary, custom_id="dex_button", emoji="<:pokedex:1411058742241529877>")
-    async def dex_button(self, interaction: discord.Interaction, button: Button):
-        try:
+    # ===== Handle dynamic button interaction =====
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.data.get("custom_id") == "dex_button":
             data = self.get_pokemon_info()
-            if not data: return await interaction.response.send_message("❌ Pokémon data not found.", ephemeral=True)
+            if not data:
+                await interaction.response.send_message("❌ Pokémon data not found.", ephemeral=True)
+                return False
             embed = self.format_embed(data)
             file_path = f"data/commands/pokemon/pokemon_images/{self.slug}.png"
-            await interaction.response.send_message(embed=embed,
-                                                    file=discord.File(file_path, filename=f"{self.slug}.png"),
-                                                    ephemeral=True)
-        except Exception as e:
-            print(f"[dex_button] Exception: {e}")
-            await interaction.response.send_message(f"⚠️ Error occurred: {e}", ephemeral=True)
+            await interaction.response.send_message(
+                embed=embed,
+                file=discord.File(file_path, filename=f"{self.slug}.png"),
+                ephemeral=True
+            )
+            return False
+        return True
+
+
+
+
+
+
+
+
+
+
+# Cache fallbacks
+try:
+    from cachetools import LRUCache, TTLCache
+except Exception:
+    from collections import OrderedDict
+    import time
+
+    class LRUCache:
+        def __init__(self, maxsize=1024):
+            self.maxsize = maxsize
+            self._od = OrderedDict()
+
+        def get(self, k, default=None):
+            if k in self._od:
+                self._od.move_to_end(k)
+                return self._od[k]
+            return default
+
+        def __setitem__(self, k, v):
+            self._od[k] = v
+            self._od.move_to_end(k)
+            if len(self._od) > self.maxsize:
+                self._od.popitem(last=False)
+
+        def __contains__(self, k):
+            return k in self._od
+
+        def clear(self):
+            self._od.clear()
+
+    class TTLCache:
+        def __init__(self, maxsize=1024, ttl=600):
+            self.maxsize = maxsize
+            self.ttl = ttl
+            self._data = {}
+            self._order = OrderedDict()
+
+        def get(self, k, default=None):
+            item = self._data.get(k)
+            if not item:
+                return default
+
+            val, exp = item
+            if exp and exp < time.time():
+                self._data.pop(k, None)
+                self._order.pop(k, None)
+                return default
+
+            self._order.move_to_end(k, last=True)
+            return val
+
+        def __setitem__(self, k, v):
+            exp = time.time() + self.ttl if self.ttl else None
+            self._data[k] = (v, exp)
+            self._order[k] = None
+
+            if len(self._data) > self.maxsize:
+                old = next(iter(self._order))
+                self._order.pop(old, None)
+                self._data.pop(old, None)
+
+
+
+
+         
             
 if __name__ == "__main__":
     builder = PokemonImageBuilder()
