@@ -187,7 +187,7 @@ class Quest_View(View):
         embed.set_image(url=f"attachment://image.png")
 
         return embed
-
+ 
 
 class Quest_Select(Select):
     def __init__(self, bot, quests, ctx, max_pages):
@@ -2036,12 +2036,391 @@ class Quest_Data(commands.Cog):
         except PyMongoError as e:
             logger.error(f"Error occurred while initializing balance: {e}")
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class InventoryView(discord.ui.View):
+    def __init__(self, quest_data, guild_id, user_id, author):
+        super().__init__(timeout=300)
+        self.quest_data = quest_data
+        self.guild_id = guild_id
+        self.user_id = user_id
+        self.author = author
+        self.message = None
+
+    async def start(self, ctx):
+        try:
+            # Create main inventory embed
+            embed = discord.Embed(
+                title=f"{self.author.display_name}'s Inventory",
+                description="```ansi\n\u001b[35mSelect a category to view your items\u001b[0m```",
+                color=primary_color(),
+                timestamp=datetime.now(),
+            )
+            embed.set_thumbnail(url=self.author.avatar.url)
+            embed.set_footer(text="Inventory")
+
+            # Add category selector
+            category_select = InventoryCategorySelect(
+                self.quest_data, self.guild_id, self.user_id, self.author, self
+            )
+            self.add_item(category_select)
+
+            self.message = await ctx.reply(embed=embed, view=self, mention_author=False)
+        except Exception as e:
+            await self.handle_error(ctx, e)
+
+    @staticmethod
+    async def handle_error(interaction, exception):
+        traceback_msg = "".join(
+            traceback.format_exception(
+                type(exception), exception, exception.__traceback__
+            )
+        )
+        error_message = f"An error occurred: {exception}\n\n```{traceback_msg}```"
+        print(traceback_msg)
+        if hasattr(interaction, 'response'):
+            await interaction.response.send_message(error_message, ephemeral=True)
+        else:
+            await interaction.reply(error_message, mention_author=False)
+
+
+class InventoryCategorySelect(discord.ui.Select):
+    def __init__(self, quest_data, guild_id, user_id, author, parent_view):
+        options = [
+            discord.SelectOption(
+                emoji="🕵️",
+                label="Spy Tools",
+                description="Tools for espionage and tactical operations",
+                value="spy_tools"
+            ),
+            discord.SelectOption(
+                emoji="🎨",
+                label="Profile Customization",
+                description="Backgrounds, fonts, and decorative items",
+                value="profile_customization"
+            ),
+            discord.SelectOption(
+                emoji="💎",
+                label="Collectables",
+                description="Rare items and collectible treasures",
+                value="collectables"
+            ),
+            discord.SelectOption(
+                emoji="🎰",
+                label="Gacha Games",
+                description="Random item draws and loot boxes",
+                value="gacha_games"
+            ),
+            discord.SelectOption(
+                emoji="⚙️",
+                label="Server Utils",
+                description="Server management and utility tools",
+                value="server_utils"
+            ),
+            discord.SelectOption(
+                emoji="🐾",
+                label="Pokemon Spawns",
+                description="Pokemon decorations and spawn items",
+                value="pokemon_spawns"
+            )
+        ]
+        super().__init__(placeholder="📦 Select an inventory category", options=options)
+        self.quest_data = quest_data
+        self.guild_id = guild_id
+        self.user_id = user_id
+        self.author = author
+        self.parent_view = parent_view
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            # Check if user owns this interaction
+            if int(self.user_id) != int(interaction.user.id):
+                await interaction.response.send_message(
+                    "This is not your inventory interface.", ephemeral=True
+                )
+                return
+
+            category = self.values[0]
+            
+            if category == "spy_tools":
+                await self.show_spy_tools(interaction)
+            elif category == "profile_customization":
+                await self.show_profile_customization(interaction)
+            elif category == "collectables":
+                await self.show_collectables(interaction)
+            elif category == "gacha_games":
+                await self.show_gacha_games(interaction)
+            elif category == "server_utils":
+                await self.show_server_utils(interaction)
+            elif category == "pokemon_spawns":
+                await self.show_pokemon_spawns(interaction)
+
+        except Exception as e:
+            traceback.print_exc()
+            await interaction.response.send_message(
+                f"An error occurred: {e}", ephemeral=True
+            )
+
+    async def show_spy_tools(self, interaction: discord.Interaction):
+        try:
+            # Get spy tools from inventory
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_collection = db["Servers"]
+
+            user_data = await server_collection.find_one(
+                {"guild_id": self.guild_id, f"members.{self.user_id}": {"$exists": True}},
+                {f"members.{self.user_id}.inventory.tool"},
+            )
+
+            tools = (
+                user_data.get("members", {})
+                .get(self.user_id, {})
+                .get("inventory", {})
+                .get("tool", {})
+            )
+
+            if not tools:
+                embed = discord.Embed(
+                    title="🕵️ Spy Tools Inventory",
+                    description="You don't have any spy tools yet. Visit the shop to get some!",
+                    color=primary_color(),
+                    timestamp=datetime.now(),
+                )
+            else:
+                embed = discord.Embed(
+                    title="🕵️ Spy Tools Inventory",
+                    description="Your collection of spy tools",
+                    color=primary_color(),
+                    timestamp=datetime.now(),
+                )
+
+                for tool_name in tools.keys():
+                    try:
+                        # Get tool ID
+                        un_tool_id = await self.quest_data.get_existing_tool_id(
+                            self.guild_id, self.user_id, tool_name
+                        )
+
+                        if not un_tool_id:
+                            un_tool_id = await self.quest_data.create_un_tool_id(
+                                self.guild_id, self.user_id, tool_name
+                            )
+
+                        # Get quantity
+                        quantity = await self.quest_data.get_quantity(
+                            self.guild_id, self.user_id, tool_name
+                        )
+
+                        # Get emoji
+                        emoji = self.get_tool_emoji(tool_name) or "🔧"
+
+                        embed.add_field(
+                            name=f"{tool_name.title()}",
+                            value=f"`{un_tool_id}` : \t{emoji}\t`x{quantity}`",
+                            inline=False,
+                        )
+                    except Exception as e:
+                        logger.error(f"Error processing tool {tool_name}: {e}")
+
+            embed.set_thumbnail(url=self.author.avatar.url)
+            embed.set_footer(text="Spy Tools Inventory")
+            
+            # Update the main message instead of sending ephemeral
+            await interaction.response.edit_message(embed=embed, view=self.parent_view)
+
+        except Exception as e:
+            traceback.print_exc()
+            await interaction.response.send_message(
+                f"An error occurred while fetching spy tools: {e}", ephemeral=True
+            )
+
+    async def show_profile_customization(self, interaction: discord.Interaction):
+        try:
+            # Get profile customization items from inventory
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_collection = db["Servers"]
+
+            user_data = await server_collection.find_one(
+                {"guild_id": self.guild_id, f"members.{self.user_id}": {"$exists": True}},
+                {f"members.{self.user_id}.inventory"},
+            )
+
+            inventory = (
+                user_data.get("members", {})
+                .get(self.user_id, {})
+                .get("inventory", {})
+            )
+
+            # Look for profile customization items (backgrounds, fonts, items)
+            profile_items = {}
+            for category in ["backgrounds", "fonts", "items"]:
+                if category in inventory:
+                    profile_items[category] = inventory[category]
+
+            if not profile_items:
+                embed = discord.Embed(
+                    title="🎨 Profile Customization Inventory",
+                    description="You don't have any profile customization items yet. Visit the shop to get some!",
+                    color=primary_color(),
+                    timestamp=datetime.now(),
+                )
+            else:
+                embed = discord.Embed(
+                    title="🎨 Profile Customization Inventory",
+                    description="Your collection of profile customization items",
+                    color=primary_color(),
+                    timestamp=datetime.now(),
+                )
+
+                for category, items in profile_items.items():
+                    if items:
+                        items_list = []
+                        for item_name, quantity in items.items():
+                            emoji = "🖼️" if category == "backgrounds" else "🔤" if category == "fonts" else "🎯"
+                            items_list.append(f"{emoji} {item_name.title()} `x{quantity}`")
+                        
+                        embed.add_field(
+                            name=f"{category.title()}",
+                            value="\n".join(items_list[:5]) + ("\n..." if len(items_list) > 5 else ""),
+                            inline=False,
+                        )
+
+            embed.set_thumbnail(url=self.author.avatar.url)
+            embed.set_footer(text="Profile Customization Inventory")
+            
+            # Update the main message instead of sending ephemeral
+            await interaction.response.edit_message(embed=embed, view=self.parent_view)
+
+        except Exception as e:
+            traceback.print_exc()
+            await interaction.response.send_message(
+                f"An error occurred while fetching profile items: {e}", ephemeral=True
+            )
+
+    async def show_collectables(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="💎 Collectables Inventory",
+            description="Coming soon! Your collectible treasures will be displayed here.",
+            color=primary_color(),
+            timestamp=datetime.now(),
+        )
+        embed.set_thumbnail(url=self.author.avatar.url)
+        embed.set_footer(text="Collectables Inventory")
+        
+        # Update the main message instead of sending ephemeral
+        await interaction.response.edit_message(embed=embed, view=self.parent_view)
+
+    async def show_gacha_games(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="🎰 Gacha Games Inventory",
+            description="Coming soon! Your gacha items and loot will be displayed here.",
+            color=primary_color(),
+            timestamp=datetime.now(),
+        )
+        embed.set_thumbnail(url=self.author.avatar.url)
+        embed.set_footer(text="Gacha Games Inventory")
+        
+        # Update the main message instead of sending ephemeral
+        await interaction.response.edit_message(embed=embed, view=self.parent_view)
+
+    async def show_server_utils(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="⚙️ Server Utils Inventory",
+            description="Coming soon! Your server management tools will be displayed here.",
+            color=primary_color(),
+            timestamp=datetime.now(),
+        )
+        embed.set_thumbnail(url=self.author.avatar.url)
+        embed.set_footer(text="Server Utils Inventory")
+        
+        # Update the main message instead of sending ephemeral
+        await interaction.response.edit_message(embed=embed, view=self.parent_view)
+
+    async def show_pokemon_spawns(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="🐾 Pokemon Spawns Inventory",
+            description="Coming soon! Your Pokemon items and decorations will be displayed here.",
+            color=primary_color(),
+            timestamp=datetime.now(),
+        )
+        embed.set_thumbnail(url=self.author.avatar.url)
+        embed.set_footer(text="Pokemon Spawns Inventory")
+        
+        # Update the main message instead of sending ephemeral
+        await interaction.response.edit_message(embed=embed, view=self.parent_view)
+
+    def get_tool_emoji(self, tool_name):
+        """Get emoji for a tool - you'll need to implement this based on your existing logic"""
+        # This should match your existing get_tool_emoji method
+        tool_emojis = {
+            "lockpick": "🔓",
+            "camera": "📷",
+            "microphone": "🎤",
+            "binoculars": "🔭",
+            "disguise": "🥸",
+            # Add more tool emojis as needed
+        }
+        return tool_emojis.get(tool_name.lower(), "🔧")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class ShopView(discord.ui.View):
     def __init__(self, bot, shop_data):
-        super().__init__()
+        super().__init__(timeout=300)
         self.bot = bot
         self.quest_data = Quest_Data(bot)
-
         self.shop_data = shop_data
         self.materials_dict = {
             material["name"]: material["emoji"]
@@ -2058,13 +2437,12 @@ class ShopView(discord.ui.View):
 
             shop_embed = await ShopEmbed.start_shop_embed(self.bot, ctx, balance)
 
-            
-            select = SpyToolSelect(
+            # Add category selector
+            category_select = ShopCategorySelect(
                 self.shop_data, self.materials_dict, self.quest_data, user_id, guild_id
             )
-            self.add_item(select)
+            self.add_item(category_select)
 
-            
             await ctx.send(embed=shop_embed, view=self)
         except Exception as e:
             await self.handle_error(ctx, e)
@@ -2080,9 +2458,406 @@ class ShopView(discord.ui.View):
         print(traceback_msg)
         await interaction.response.send_message(error_message, ephemeral=True)
 
+class ShopCategorySelect(discord.ui.Select):
+    def __init__(self, shop_data, materials_dict, quest_data, user_id, guild_id):
+        options = [
+            discord.SelectOption(
+                emoji="🕵️",
+                label="Spy Tools",
+                description="Tools for espionage and tactical operations",
+                value="spy_tools"
+            ),
+            discord.SelectOption(
+                emoji="🎨",
+                label="Profile Customization",
+                description="Backgrounds, fonts, and decorative items",
+                value="profile_customization"
+            ),
+            discord.SelectOption(
+                emoji="💎",
+                label="Collectables",
+                description="Rare items and collectible treasures",
+                value="collectables"
+            ),
+            discord.SelectOption(
+                emoji="🎰",
+                label="Gacha Games",
+                description="Random item draws and loot boxes",
+                value="gacha_games"
+            ),
+            discord.SelectOption(
+                emoji="⚙️",
+                label="Server Utils",
+                description="Server management and utility tools",
+                value="server_utils"
+            ),
+            discord.SelectOption(
+                emoji="🐾",
+                label="Pokemon Spawns",
+                description="Pokemon decorations and spawn items",
+                value="pokemon_spawns"
+            )
+        ]
+        super().__init__(placeholder="🛒 Select a shop category", options=options)
+        self.shop_data = shop_data
+        self.materials_dict = materials_dict
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            # Check if user owns this interaction
+            if int(self.user_id) != int(interaction.user.id):
+                await interaction.response.send_message(
+                    "This is not your shop interface.", ephemeral=True
+                )
+                return
+
+            category = self.values[0]
+            
+            if category == "spy_tools":
+                await self.show_spy_tools(interaction)
+            elif category == "profile_customization":
+                await self.show_profile_customization(interaction)
+            elif category == "collectables":
+                await self.show_collectables(interaction)
+            elif category == "gacha_games":
+                await self.show_gacha_games(interaction)
+            elif category == "server_utils":
+                await self.show_server_utils(interaction)
+            elif category == "pokemon_spawns":
+                await self.show_pokemon_spawns(interaction)
+
+        except Exception as e:
+            traceback.print_exc()
+            await interaction.response.send_message(
+                f"An error occurred: {e}", ephemeral=True
+            )
+
+    async def show_spy_tools(self, interaction: discord.Interaction):
+        spy_tools = self.shop_data.get("SpyTools", [])
+        if not spy_tools:
+            await interaction.response.send_message(
+                "No spy tools available at the moment.", ephemeral=True
+            )
+            return
+
+        select = SpyToolSelect(
+            self.shop_data, self.materials_dict, self.quest_data, self.user_id, self.guild_id
+        )
+        
+        embed = discord.Embed(
+            title="🕵️ Spy Tools Shop",
+            description="Select a spy tool to view details and purchase materials",
+            color=primary_color()
+        )
+        
+        view = discord.ui.View()
+        view.add_item(select)
+        
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+    async def show_profile_customization(self, interaction: discord.Interaction):
+        profile_data = self.shop_data.get("ProfileCustomization", {})
+        if not profile_data:
+            await interaction.response.send_message(
+                "No profile customization options available.", ephemeral=True
+            )
+            return
+
+        select = ProfileCustomizationSelect(
+            self.shop_data, self.quest_data, self.user_id, self.guild_id
+        )
+        
+        embed = discord.Embed(
+            title="🎨 Profile Customization Shop",
+            description="Customize your profile with backgrounds, fonts, and items",
+            color=primary_color()
+        )
+        
+        view = discord.ui.View()
+        view.add_item(select)
+        
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+    async def show_collectables(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="💎 Collectables Shop",
+            description="Coming soon! Rare items and collectible treasures will be available here.",
+            color=primary_color()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    async def show_gacha_games(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="🎰 Gacha Games",
+            description="Coming soon! Random item draws and loot boxes will be available here.",
+            color=primary_color()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    async def show_server_utils(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="⚙️ Server Utils Shop",
+            description="Coming soon! Server management and utility tools will be available here.",
+            color=primary_color()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    async def show_pokemon_spawns(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="🐾 Pokemon Spawns Shop",
+            description="Coming soon! Pokemon decorations and spawn items will be available here.",
+            color=primary_color()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+class ProfileCustomizationSelect(discord.ui.Select):
+    def __init__(self, shop_data, quest_data, user_id, guild_id):
+        options = [
+            discord.SelectOption(
+                emoji="👨‍👩‍👧‍👦",
+                label="Forger Family",
+                description="Anya, Loid, Yor, and Bond themed items",
+                value="ForgerFamily"
+            ),
+            discord.SelectOption(
+                emoji="🕵️‍♂️",
+                label="WISE Agency",
+                description="Franky, Sylvia, and Fiona themed items",
+                value="WISE"
+            )
+        ]
+        super().__init__(placeholder="Select a character family", options=options)
+        self.shop_data = shop_data
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            if int(self.user_id) != int(interaction.user.id):
+                await interaction.response.send_message(
+                    "This is not your customization interface.", ephemeral=True
+                )
+                return
+
+            family = self.values[0]
+            profile_data = self.shop_data.get("ProfileCustomization", {}).get(family, {})
+            
+            if not profile_data:
+                await interaction.response.send_message(
+                    f"No {family} customization options available.", ephemeral=True
+                )
+                return
+
+            select = ProfileItemTypeSelect(
+                profile_data, self.quest_data, self.user_id, self.guild_id, family
+            )
+            
+            embed = discord.Embed(
+                title=f"🎨 {family} Customization",
+                description="Choose the type of customization item you want to browse",
+                color=primary_color()
+            )
+            
+            view = discord.ui.View()
+            view.add_item(select)
+            
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+        except Exception as e:
+            traceback.print_exc()
+            await interaction.response.send_message(
+                f"An error occurred: {e}", ephemeral=True
+            )
+
+class ProfileItemTypeSelect(discord.ui.Select):
+    def __init__(self, profile_data, quest_data, user_id, guild_id, family):
+        options = []
+        if "Backgrounds" in profile_data:
+            options.append(discord.SelectOption(
+                emoji="🖼️",
+                label="Backgrounds",
+                description=f"Profile backgrounds ({len(profile_data['Backgrounds'])} available)",
+                value="Backgrounds"
+            ))
+        if "Fonts" in profile_data:
+            options.append(discord.SelectOption(
+                emoji="🔤",
+                label="Fonts",
+                description=f"Custom fonts ({len(profile_data['Fonts'])} available)",
+                value="Fonts"
+            ))
+        if "Items" in profile_data:
+            options.append(discord.SelectOption(
+                emoji="🎯",
+                label="Items",
+                description=f"Decorative items ({len(profile_data['Items'])} available)",
+                value="Items"
+            ))
+        
+        super().__init__(placeholder="Select item type", options=options)
+        self.profile_data = profile_data
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+        self.family = family
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            if int(self.user_id) != int(interaction.user.id):
+                await interaction.response.send_message(
+                    "This is not your customization interface.", ephemeral=True
+                )
+                return
+
+            item_type = self.values[0]
+            items = self.profile_data.get(item_type, [])
+            
+            if not items:
+                await interaction.response.send_message(
+                    f"No {item_type.lower()} available for {self.family}.", ephemeral=True
+                )
+                return
+
+            view = ProfileItemView(
+                items, item_type, self.quest_data, self.user_id, self.guild_id, self.family
+            )
+            await view.update_view()
+            
+            embed = discord.Embed(
+                title=f"🎨 {self.family} {item_type}",
+                description=f"Browse and purchase {item_type.lower()} for your profile",
+                color=primary_color()
+            )
+            
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+        except Exception as e:
+            traceback.print_exc()
+            await interaction.response.send_message(
+                f"An error occurred: {e}", ephemeral=True
+            )
+
+class ProfileItemView(discord.ui.View):
+    def __init__(self, items, item_type, quest_data, user_id, guild_id, family):
+        super().__init__(timeout=300)
+        self.items = items
+        self.item_type = item_type
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+        self.family = family
+        self.page = 0
+        self.items_per_page = 5
+        self.max_pages = (len(items) - 1) // self.items_per_page + 1
+
+    async def update_view(self):
+        self.clear_items()
+        
+        start_index = self.page * self.items_per_page
+        end_index = start_index + self.items_per_page
+        current_items = self.items[start_index:end_index]
+        
+        for i, item in enumerate(current_items):
+            button = discord.ui.Button(
+                style=discord.ButtonStyle.primary,
+                label=f"{item['name']} - {item['points']:,} pts",
+                custom_id=f"item_{start_index + i}",
+                row=i % 5
+            )
+            button.callback = self.item_callback
+            self.add_item(button)
+        
+        # Pagination buttons
+        if self.max_pages > 1:
+            if self.page > 0:
+                prev_button = discord.ui.Button(
+                    emoji="⬅️",
+                    style=discord.ButtonStyle.secondary,
+                    custom_id="prev_page"
+                )
+                prev_button.callback = self.prev_page_callback
+                self.add_item(prev_button)
+            
+            if self.page < self.max_pages - 1:
+                next_button = discord.ui.Button(
+                    emoji="➡️",
+                    style=discord.ButtonStyle.secondary,
+                    custom_id="next_page"
+                )
+                next_button.callback = self.next_page_callback
+                self.add_item(next_button)
+
+    async def item_callback(self, interaction: discord.Interaction):
+        try:
+            item_index = int(interaction.data["custom_id"].split("_")[1])
+            item = self.items[item_index]
+            
+            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            
+            if user_balance >= item["points"]:
+                # Purchase the item
+                await self.quest_data.add_balance(self.user_id, self.guild_id, -item["points"])
+                await self.quest_data.add_item_to_inventory(
+                    self.guild_id, self.user_id, item["name"], 1
+                )
+                
+                embed = discord.Embed(
+                    title="✅ Purchase Successful!",
+                    description=f"You've purchased **{item['name']}** for {item['points']:,} points!",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="Description", value=item["description"], inline=False)
+                embed.add_field(name="Character", value=item.get("character", "N/A"), inline=True)
+                
+                new_balance = user_balance - item["points"]
+                embed.set_footer(text=f"Remaining balance: {new_balance:,} points")
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                embed = discord.Embed(
+                    title="❌ Insufficient Points",
+                    description=f"You need {item['points']:,} points but only have {user_balance:,}.",
+                    color=discord.Color.red()
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+        except Exception as e:
+            traceback.print_exc()
+            await interaction.response.send_message(
+                f"An error occurred: {e}", ephemeral=True
+            )
+
+    async def prev_page_callback(self, interaction: discord.Interaction):
+        self.page -= 1
+        await self.update_view()
+        
+        embed = discord.Embed(
+            title=f"🎨 {self.family} {self.item_type}",
+            description=f"Browse and purchase {self.item_type.lower()} for your profile (Page {self.page + 1}/{self.max_pages})",
+            color=primary_color()
+        )
+        
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def next_page_callback(self, interaction: discord.Interaction):
+        self.page += 1
+        await self.update_view()
+        
+        embed = discord.Embed(
+            title=f"🎨 {self.family} {self.item_type}",
+            description=f"Browse and purchase {self.item_type.lower()} for your profile (Page {self.page + 1}/{self.max_pages})",
+            color=primary_color()
+        )
+        
+        await interaction.response.edit_message(embed=embed, view=self)
+
 class MaterialsButton(discord.ui.View):
     def __init__(self, shop_data, quest_data, user_id, guild_id, original_embed=None):
-        super().__init__(timeout=None)
+        super().__init__(timeout=300)
         self.shop_data = shop_data
         self.quest_data = quest_data
         self.user_id = user_id
@@ -2090,14 +2865,14 @@ class MaterialsButton(discord.ui.View):
         self.page = 0
         self.items_per_page = 25
         self.max_pages = (len(shop_data["Materials"]) - 1) // self.items_per_page + 1
-        self.original_embed = original_embed  
+        self.original_embed = original_embed
         self.materials_dict = {
-            material["name"]: material.get("emoji", "")  
+            material["name"]: material.get("emoji", "")
             for material in self.shop_data.get("Materials", [])
         }
 
     async def update_view(self):
-        self.clear_items()  
+        self.clear_items()
 
         material_checks = await asyncio.gather(
             *(
@@ -2106,35 +2881,33 @@ class MaterialsButton(discord.ui.View):
             )
         )
 
-        
+        # Buy button logic
         if all(material_checks):
             buy_button = discord.ui.Button(
-                style=discord.ButtonStyle.blurple,
-                label="Buy",
+                style=discord.ButtonStyle.green,
+                label="Buy Tool",
                 custom_id="buy_button",
-                row=1,
+                row=0,
                 disabled=False,
             )
             buy_button.callback = self.buy_tool_callback
-            self.add_item(buy_button)  
-
+            self.add_item(buy_button)
         else:
             buy_button = discord.ui.Button(
                 style=discord.ButtonStyle.grey,
-                label="Buy",
+                label="Buy Tool",
                 custom_id="buy_button",
-                row=1,
+                row=0,
                 disabled=True,
             )
-            self.add_item(buy_button)  
+            self.add_item(buy_button)
 
-
-        
+        # Get tool and required materials
         tool_name = self.original_embed.title
         tool = next(
             (
                 t
-                for t in self.shop_data.get("Spy Tools", [])
+                for t in self.shop_data.get("SpyTools", [])
                 if t.get("name") == tool_name
             ),
             None,
@@ -2145,7 +2918,7 @@ class MaterialsButton(discord.ui.View):
         else:
             required_materials = []
 
-        
+        # Filter and paginate materials
         start_index = self.page * self.items_per_page
         end_index = start_index + self.items_per_page
         filtered_materials = [
@@ -2153,7 +2926,7 @@ class MaterialsButton(discord.ui.View):
             if material["name"] in [m.get("material") for m in required_materials]
         ][start_index:end_index]
 
-        
+        # Add material buttons
         current_row = 1
         item_count = 0
 
@@ -2163,41 +2936,33 @@ class MaterialsButton(discord.ui.View):
                 emoji = material.get("emoji", "")
                 price = material.get("price", "")
 
-                
-                try:
-                    material_button = discord.ui.Button(
-                        style=discord.ButtonStyle.green,
-                        emoji=emoji,
-                        label=f"{price} stp", 
-                        custom_id=name,
-                        row=current_row,
-                    )
-                    material_button.callback = self.material_callback
-                    self.add_item(material_button)
-                    item_count += 1
+                material_button = discord.ui.Button(
+                    style=discord.ButtonStyle.primary,
+                    emoji=emoji,
+                    label=f"{price} stp",
+                    custom_id=name,
+                    row=current_row,
+                )
+                material_button.callback = self.material_callback
+                self.add_item(material_button)
+                item_count += 1
 
-                    
-                    if item_count % 5 == 0:
-                        current_row += 1
-                        item_count = 0  
-
-                except Exception as e:
-                    print(f"Error generating emoji for material: {name}, Emoji: {emoji}")
-                    print(f"Error: {e}")
-                    continue  
+                if item_count % 5 == 0:
+                    current_row += 1
+                    item_count = 0
 
             except Exception as e:
-                traceback.print_exc()
-                
+                print(f"Error generating button for material: {name}, Emoji: {emoji}")
+                print(f"Error: {e}")
+                continue
 
-
-        
+        # Pagination buttons
         pagination_row = current_row if current_row > 1 else 2
 
         if self.page > 0:
             prev_button = discord.ui.Button(
                 emoji="⬅️",
-                style=discord.ButtonStyle.primary,
+                style=discord.ButtonStyle.secondary,
                 custom_id="prev_page",
                 row=pagination_row,
             )
@@ -2207,19 +2972,19 @@ class MaterialsButton(discord.ui.View):
         if self.page < self.max_pages - 1:
             next_button = discord.ui.Button(
                 emoji="➡️",
-                style=discord.ButtonStyle.primary,
+                style=discord.ButtonStyle.secondary,
                 custom_id="next_page",
                 row=pagination_row,
             )
             next_button.callback = self.next_page_callback
             self.add_item(next_button)
-            
+
     async def refresh_embed(self, interaction: discord.Interaction):
         tool_name = self.original_embed.title
         tool = next(
             (
                 t
-                for t in self.shop_data.get("Spy Tools", [])
+                for t in self.shop_data.get("SpyTools", [])
                 if t.get("name") == tool_name
             ),
             None,
@@ -2244,7 +3009,7 @@ class MaterialsButton(discord.ui.View):
             color=primary_color(),
         )
         shop_embed.add_field(
-            name="Materials",
+            name="Materials Required",
             value=materials_list or "No materials needed",
             inline=False,
         )
@@ -2256,7 +3021,30 @@ class MaterialsButton(discord.ui.View):
 
     async def check_material_indicator(self, material):
         material_name = material.get("name", "")
-        required_quantity = material.get("quantity", 0)
+        
+        # Find required quantity for this material
+        tool_name = self.original_embed.title
+        tool = next(
+            (
+                t
+                for t in self.shop_data.get("SpyTools", [])
+                if t.get("name") == tool_name
+            ),
+            None,
+        )
+        
+        if not tool:
+            return False
+            
+        required_material = next(
+            (m for m in tool.get("materials", []) if m.get("material") == material_name),
+            None
+        )
+        
+        if not required_material:
+            return True  # Material not needed for this tool
+            
+        required_quantity = required_material.get("quantity", 0)
         user_quantity = (
             await self.quest_data.get_user_inventory_count(
                 self.guild_id, self.user_id, material_name
@@ -2264,23 +3052,22 @@ class MaterialsButton(discord.ui.View):
             or 0
         )
         return user_quantity >= required_quantity
-    
+
     async def format_materials(self, item):
         material_name = item.get("material", "")
         required_quantity = item.get("quantity", 0)
         user_quantity = await self.get_user_inventory_count(material_name) or 0
 
         if user_quantity == 0:
-            indicator_emoji = "<:red:1261639413943762944> "  
+            indicator_emoji = "<:red:1261639413943762944>"
         elif user_quantity < required_quantity:
-            indicator_emoji = "<:yellow:1261639412253724774> "  
+            indicator_emoji = "<:yellow:1261639412253724774>"
         else:
-            indicator_emoji = "<:green:1261639410181476443> "  
+            indicator_emoji = "<:green:1261639410181476443>"
 
-        return f"{indicator_emoji} : {self.materials_dict.get(material_name, '')} - {user_quantity}/{required_quantity}"
-    
+        return f"{indicator_emoji} {self.materials_dict.get(material_name, '')} **{material_name}** - {user_quantity}/{required_quantity}"
+
     async def get_user_inventory_count(self, material_name):
-        
         material_count = await self.quest_data.get_user_inventory_count(
             self.guild_id, self.user_id, material_name
         )
@@ -2316,7 +3103,6 @@ class MaterialsButton(discord.ui.View):
                 spent = -price
                 await self.quest_data.add_balance(self.user_id, self.guild_id, spent)
 
-                
                 await self.refresh_embed(interaction)
             else:
                 await interaction.response.send_message(
@@ -2330,14 +3116,13 @@ class MaterialsButton(discord.ui.View):
                 f"An error occurred: {e}", ephemeral=True
             )
 
-
     async def buy_tool_callback(self, interaction: discord.Interaction):
         try:
             tool_name = self.original_embed.title
             tool = next(
                 (
                     t
-                    for t in self.shop_data.get("Spy Tools", [])
+                    for t in self.shop_data.get("SpyTools", [])
                     if t.get("name") == tool_name
                 ),
                 None,
@@ -2349,7 +3134,7 @@ class MaterialsButton(discord.ui.View):
                 )
                 return
 
-            
+            # Check if user has all required materials
             for material in tool.get("materials", []):
                 material_name = material.get("material", "")
                 required_quantity = material.get("quantity", 0)
@@ -2362,11 +3147,12 @@ class MaterialsButton(discord.ui.View):
 
                 if user_quantity < required_quantity:
                     await interaction.response.send_message(
-                        f"Not enough {material_name}.", ephemeral=True
+                        f"Not enough {material_name}. You need {required_quantity} but have {user_quantity}.",
+                        ephemeral=True
                     )
                     return
 
-            
+            # Consume materials
             for material in tool.get("materials", []):
                 material_name = material.get("material", "")
                 required_quantity = material.get("quantity", 0)
@@ -2374,27 +3160,23 @@ class MaterialsButton(discord.ui.View):
                     self.guild_id, self.user_id, material_name, -required_quantity
                 )
 
-            
+            # Add tool to inventory
             await self.quest_data.add_tool_to_inventory(
                 self.guild_id, self.user_id, tool_name, 1
             )
 
-            
-            await self.update_view()
-
-            
+            # Get updated quantity
             quantity = await self.quest_data.get_quantity(
                 self.guild_id, self.user_id, tool_name
             )
 
-            
             success_embed = discord.Embed(
-                title="Purchase Successful",
-                description=f"- {tool_name} has been added to your inventory.\nYou now have {quantity} of this tool.",
+                title="✅ Purchase Successful",
+                description=f"**{tool_name}** has been added to your inventory.\nYou now have {quantity} of this tool.",
                 color=discord.Color.green(),
             )
 
-            await interaction.response.send_message(embed=success_embed)
+            await interaction.response.send_message(embed=success_embed, ephemeral=True)
 
         except Exception as e:
             traceback.print_exc()
@@ -2409,20 +3191,20 @@ class MaterialsButton(discord.ui.View):
     async def next_page_callback(self, interaction: discord.Interaction):
         self.page += 1
         await self.refresh_embed(interaction)
-      
+
 class SpyToolSelect(discord.ui.Select):
     def __init__(self, shop_data, materials_dict, quest_data, user_id, guild_id):
-        spy_tools = shop_data.get("Spy Tools", [])
+        spy_tools = shop_data.get("SpyTools", [])
         options = [
             discord.SelectOption(
                 emoji=f"{tool.get('emoji', '')}",
                 label=f"{tool.get('name', 'Unknown Item')}",
-                description=f"{tool.get('description', 'No description available.')[:50]}",
+                description=f"{tool.get('description', 'No description available.')[:100]}",
                 value=tool.get("name", "Unknown Item"),
             )
             for tool in spy_tools
         ]
-        super().__init__(placeholder="Select a Spy Tool", options=options)
+        super().__init__(placeholder="🕵️ Select a Spy Tool", options=options)
         self.shop_data = shop_data
         self.materials_dict = materials_dict
         self.quest_data = quest_data
@@ -2431,12 +3213,10 @@ class SpyToolSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         try:
-            
-            id_1 = int(self.user_id)
-            id_2 = int(interaction.user.id)
-            if id_1 != id_2:
+            # Check ownership
+            if int(self.user_id) != int(interaction.user.id):
                 await interaction.response.send_message(
-                    "This is not your section.", ephemeral=True
+                    "This is not your spy tools interface.", ephemeral=True
                 )
                 return
 
@@ -2444,7 +3224,7 @@ class SpyToolSelect(discord.ui.Select):
             tool = next(
                 (
                     t
-                    for t in self.shop_data.get("Spy Tools", [])
+                    for t in self.shop_data.get("SpyTools", [])
                     if t.get("name") == selected_tool_name
                 ),
                 None,
@@ -2452,7 +3232,7 @@ class SpyToolSelect(discord.ui.Select):
 
             if not tool:
                 await interaction.response.send_message(
-                    "hey, that's not yours! go awayyy!", ephemeral=True
+                    "Spy tool not found!", ephemeral=True
                 )
                 return
 
@@ -2465,14 +3245,13 @@ class SpyToolSelect(discord.ui.Select):
                 ]
             )
 
-            
             initial_embed = discord.Embed(
                 title=f"{selected_tool_name}",
                 description=f"{emoji} {description}",
                 color=primary_color(),
             )
             initial_embed.add_field(
-                name="Materials",
+                name="Materials Required",
                 value=materials_list or "No materials needed",
                 inline=False,
             )
@@ -2482,7 +3261,6 @@ class SpyToolSelect(discord.ui.Select):
             user_balance = "{:,}".format(user_balance)
             initial_embed.set_footer(text=f"Stella Points: {user_balance}")
 
-            
             materials_button_view = MaterialsButton(
                 self.shop_data,
                 self.quest_data,
@@ -2492,7 +3270,6 @@ class SpyToolSelect(discord.ui.Select):
             )
             await materials_button_view.update_view()
 
-            
             await interaction.response.send_message(
                 embed=initial_embed, view=materials_button_view, ephemeral=True
             )
@@ -2504,7 +3281,6 @@ class SpyToolSelect(discord.ui.Select):
             )
 
     async def get_user_inventory_count(self, material_name):
-        
         material_count = await self.quest_data.get_user_inventory_count(
             self.guild_id, self.user_id, material_name
         )
@@ -2516,10 +3292,11 @@ class SpyToolSelect(discord.ui.Select):
         user_quantity = await self.get_user_inventory_count(material_name) or 0
 
         if user_quantity == 0:
-            indicator_emoji = "<:red:1261639413943762944> "  
+            indicator_emoji = "<:red:1261639413943762944>"
         elif user_quantity < required_quantity:
-            indicator_emoji = "<:yellow:1261639412253724774> "  
+            indicator_emoji = "<:yellow:1261639412253724774>"
         else:
-            indicator_emoji = "<:green:1261639410181476443> "  
+            indicator_emoji = "<:green:1261639410181476443>"
 
-        return f"{indicator_emoji} : {self.materials_dict.get(material_name, '')} - {user_quantity}/{required_quantity}"
+        return f"{indicator_emoji} {self.materials_dict.get(material_name, '')} **{material_name}** - {user_quantity}/{required_quantity}"
+

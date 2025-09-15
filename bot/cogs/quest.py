@@ -185,90 +185,43 @@ class Quest(commands.Cog):
         
     @commands.command(name="inventory", aliases=["inv"])
     async def inventory(self, ctx):
-        try:
-            guild_id = str(ctx.guild.id)
-            user_id = str(ctx.author.id)
+     try:
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
 
-            
-            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
-            server_collection = db["Servers"]
+        db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+        server_collection = db["Servers"]
 
-            user_data = await server_collection.find_one(
-                {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
-                {f"members.{user_id}.inventory.tool"},
-            )
+        user_data = await server_collection.find_one(
+            {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
+            {f"members.{user_id}.inventory"},
+        )
 
-            inventory = (
-                user_data.get("members", {})
-                .get(user_id, {})
-                .get("inventory", {})
-                .get("tool", {})
-            )
+        inventory = (
+            user_data.get("members", {})
+            .get(user_id, {})
+            .get("inventory", {})
+        )
 
-            if not inventory:
-                await ctx.reply(
-                    f"{ctx.author.mention}, your inventory is empty! Start collecting tools to see them here.",
-                    mention_author=False,
-                )
-                return
-
-            
-            embed = discord.Embed(                
-                color=primary_color(),
-                timestamp=datetime.now(),
-            )
-            embed.set_thumbnail(url=ctx.author.avatar.url)
-
-            
-            for tool in inventory.keys():
-                try:
-                    
-                    un_tool_id = await self.quest_data.get_existing_tool_id(
-                        guild_id, user_id, tool
-                    )
-
-                    if not un_tool_id:
-                        
-                        un_tool_id = await self.quest_data.create_un_tool_id(
-                            guild_id, user_id, tool
-                        )
-
-                    
-                    quantity = await self.quest_data.get_quantity(
-                        guild_id, user_id, tool
-                    )
-
-                    emoji = (
-                        self.get_tool_emoji(tool) or ""
-                    )  
-
-                    tool = str(tool)
-                    
-                    embed.add_field(
-                        name=f"{tool.title()}",
-                        value=f"`{un_tool_id}` : \t{emoji}\t`x{quantity}`",
-                        inline=False,
-                    )
-                except Exception as e:
-                    await ctx.reply(
-                        f"{ctx.author.mention}, there was an issue processing `{tool}`. Please try again later.",
-                        mention_author=False,
-                    )
-                    logger.error(
-                        f"Error generating or fetching un_tool_id or quantity for {tool}: {e}"
-                    )
-
-            embed.set_footer(text="Inventory")
-
-            
-            await ctx.reply(embed=embed, mention_author=False)
-
-        except Exception as e:
+        if not inventory:
             await ctx.reply(
-                f"An error occurred while fetching your inventory: {e}",
+                f"{ctx.author.mention}, your inventory is empty! Start collecting items to see them here.",
                 mention_author=False,
             )
-            logger.error(f"Error in inventory command: {e}")
+            return
+
+        # Create inventory view with category selection
+        inventory_view = InventoryView(self.quest_data, guild_id, user_id, ctx.author)
+        await inventory_view.start(ctx)
+
+     except Exception as e:
+        await ctx.reply(
+            f"An error occurred while fetching your inventory: {e}",
+            mention_author=False,
+        )
+        logger.error(f"Error in inventory command: {e}")
+
+
 
     @commands.command(name="balance", aliases=["bal", "points", "stars","stp"])
     async def balance(

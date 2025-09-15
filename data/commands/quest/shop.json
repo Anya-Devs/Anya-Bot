@@ -100,5 +100,26 @@
         {"name": "Nightfall_Badge", "description": "Badge representing Fiona's codename Nightfall.", "character": "Fiona Frost", "image_path": "/assets/profiles/items/nightfall_badge.png", "points": 12500}
       ]
     }
-  }
+  },
+  "Collectables": [
+    {"name": "Golden Spy Medal", "description": "Awarded for exceptional espionage missions.", "emoji": "🥇", "points": 25000},
+    {"name": "Rare Chimera Plush", "description": "Limited edition Chimera plush for collectors.", "emoji": "<:chimera:1317338025470070866>", "points": 30000},
+    {"name": "Spy Goggles", "description": "Decorative collectible inspired by espionage gear.", "emoji": "🕶️", "points": 15000},
+    {"name": "Invisible Ink Pen", "description": "Mystery collectible pen that vanishes when not in use.", "emoji": "🖊️", "points": 18000}
+  ],
+  "GachaGames": [
+    {"name": "Mystery Spy Box", "description": "Contains random spy gadgets, materials, or collectables.", "emoji": "🎁", "points": 5000},
+    {"name": "Lucky Forger Capsule", "description": "Random profile items from the Forger family.", "emoji": "🧸", "points": 7000},
+    {"name": "WISE Gacha Capsule", "description": "Random background, font, or item from WISE agents.", "emoji": "🛠️", "points": 7500}
+  ],
+  "ServerUtils": [
+    {"name": "Role Manager", "description": "Tool for managing server roles quickly.", "emoji": "🛡️", "points": 20000},
+    {"name": "Auto Moderator", "description": "Helps moderate the server automatically.", "emoji": "🤖", "points": 25000},
+    {"name": "Announcement Bot", "description": "Sends automated announcements on schedule.", "emoji": "📢", "points": 18000}
+  ],
+  "PokemonSpawns": [
+    {"name": "Pokeball Decoration", "description": "Adds a pokeball decoration to your profile.", "emoji": "⚪🔴", "points": 8000},
+    {"name": "Pikachu Plush", "description": "Cute Pikachu plush for display.", "emoji": "⚡", "points": 12000},
+    {"name": "Mystery Egg", "description": "Hatches a random Pokemon decoration.", "emoji": "🥚", "points": 10000}
+  ]
 }
