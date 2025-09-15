@@ -5,6 +5,7 @@ import time
 import traceback
 import aiohttp
 import os
+import random
 
 from motor.motor_asyncio import AsyncIOMotorClient
 from utils.events.pokethief import *
@@ -209,12 +210,24 @@ class EventGate(commands.Cog):
 
             shiny_hunter = next((h for h in shiny_hunters if str(h.id) == mentioned_user_id), None)
             if shiny_hunter:
+                thumbnails = [
+                    "https://cdn.discordapp.com/emojis/1328500899953512569.webp?size=96&animated=true",
+                    "https://media.discordapp.net/attachments/1279353553110040596/1417134726631919716/image-removebg-preview_28.png?ex=68c9610f&is=68c80f8f&hm=8d103ce1912a9f059c5627db2d267b105f5dc430381c0b7ade92678877260e94&=&format=webp&quality=lossless&width=563&height=563",
+                    "https://media.discordapp.net/attachments/1279353553110040596/1417137329193091162/image-removebg-preview_30.png?ex=68c9637c&is=68c811fc&hm=a4a79fb63c790cb7ba4ad86f65cdfc0d4114007117f35b4731c22d5157547b12&=&format=webp&quality=lossless&width=563&height=563"]
+                descriptions = [
+                    "Nice job, <@{user_id}>! You're one step closer to finding a shiny.",
+                    "Keep hunting, <@{user_id}>! That shiny is waiting for you.",
+                    "You're making progress, <@{user_id}>! Stay determined.",
+                    "Almost there, <@{user_id}>! One step closer to the shiny Pokémon."
+                    "Best of luck on your shiny hunt, <@{user_id}>!"
+                ]
                 embed = Embed(
                     title=":sparkles: Congratulations!",
-                    description=f"Best of luck on your shiny hunt, <@{who_caught_id}>!",
+                    description=random.choice(descriptions).format(user_id=who_caught_id),
                     color=self.primary_color,
                 )
-                embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1328500899953512569.webp?size=96&animated=true")
+
+                embed.set_thumbnail(url=random.choice(thumbnails))
                 await reference_message.channel.send(embed=embed)
                 await self.delete_embed_on_catch(original_message)
             else:
