@@ -419,7 +419,7 @@ class Quest_Slash(commands.Cog):
                 await interaction.response.send_message(
                     f"The quest with ID {quest_id} has been deleted for all users who had it.",
                     ephemeral=True,
-                )
+                ) 
             else:
                 await interaction.response.send_message(
                     "The specified quest does not exist for any user.", ephemeral=True

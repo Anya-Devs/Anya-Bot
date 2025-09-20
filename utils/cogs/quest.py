@@ -12,7 +12,7 @@ from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from concurrent.futures import ThreadPoolExecutor
 
-
+ 
 
 import json
 import numpy as np
@@ -2417,15 +2417,34 @@ class InventoryCategorySelect(discord.ui.Select):
 
 
 class ShopView(discord.ui.View):
-    def __init__(self, bot, shop_data):
+    def __init__(self, bot, shop_data: Union[str, dict] = "shop_data.json"):
         super().__init__(timeout=300)
         self.bot = bot
         self.quest_data = Quest_Data(bot)
-        self.shop_data = shop_data
+
+        if isinstance(shop_data, dict):
+            self.shop_data = shop_data
+            self.shop_data_path = None
+        else:
+            self.shop_data_path = shop_data
+            self.shop_data = self.load_shop_data()
+
         self.materials_dict = {
-            material["name"]: material["emoji"]
+            material["name"]: material.get("emoji", "")
             for material in self.shop_data.get("Materials", [])
         }
+
+    def load_shop_data(self) -> Dict[str, Any]:
+        """Load shop data from JSON file"""
+        try:
+            with open(self.shop_data_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            print(f"Shop data file {self.shop_data_path} not found")
+            return {}
+        except json.JSONDecodeError as e:
+            print(f"Error parsing JSON from {self.shop_data_path}: {e}")
+            return {}
 
     async def start(self, ctx):
         try:
@@ -2582,36 +2601,323 @@ class ShopCategorySelect(discord.ui.Select):
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     async def show_collectables(self, interaction: discord.Interaction):
+        collectables = self.shop_data.get("Collectables", [])
+        if not collectables:
+            await interaction.response.send_message(
+                "No collectables available at the moment.", ephemeral=True
+            )
+            return
+
+        view = ItemListView(
+            collectables, "Collectables", "💎", self.quest_data, self.user_id, self.guild_id
+        )
+        await view.update_view()
+        
         embed = discord.Embed(
             title="💎 Collectables Shop",
-            description="Coming soon! Rare items and collectible treasures will be available here.",
+            description="Browse and purchase rare items and collectible treasures",
             color=primary_color()
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     async def show_gacha_games(self, interaction: discord.Interaction):
+        gacha_games = self.shop_data.get("GachaGames", [])
+        if not gacha_games:
+            await interaction.response.send_message(
+                "No gacha games available at the moment.", ephemeral=True
+            )
+            return
+
+        view = ItemListView(
+            gacha_games, "GachaGames", "🎰", self.quest_data, self.user_id, self.guild_id
+        )
+        await view.update_view()
+        
         embed = discord.Embed(
             title="🎰 Gacha Games",
-            description="Coming soon! Random item draws and loot boxes will be available here.",
+            description="Try your luck with random item draws and loot boxes",
             color=primary_color()
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     async def show_server_utils(self, interaction: discord.Interaction):
+        server_utils = self.shop_data.get("ServerUtils", [])
+        if not server_utils:
+            await interaction.response.send_message(
+                "No server utilities available at the moment.", ephemeral=True
+            )
+            return
+
+        view = ItemListView(
+            server_utils, "ServerUtils", "⚙️", self.quest_data, self.user_id, self.guild_id
+        )
+        await view.update_view()
+        
         embed = discord.Embed(
             title="⚙️ Server Utils Shop",
-            description="Coming soon! Server management and utility tools will be available here.",
+            description="Purchase server management and utility tools",
             color=primary_color()
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     async def show_pokemon_spawns(self, interaction: discord.Interaction):
+        pokemon_spawns = self.shop_data.get("PokemonSpawns", [])
+        if not pokemon_spawns:
+            await interaction.response.send_message(
+                "No Pokemon spawn items available at the moment.", ephemeral=True
+            )
+            return
+
+        view = ItemListView(
+            pokemon_spawns, "PokemonSpawns", "🐾", self.quest_data, self.user_id, self.guild_id
+        )
+        await view.update_view()
+        
         embed = discord.Embed(
             title="🐾 Pokemon Spawns Shop",
-            description="Coming soon! Pokemon decorations and spawn items will be available here.",
+            description="Purchase Pokemon decorations and spawn items",
             color=primary_color()
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+
+
+class ItemListView(discord.ui.View):
+    def __init__(self, items, category, emoji, quest_data, user_id, guild_id):
+        super().__init__(timeout=300)
+        self.items = items
+        self.category = category
+        self.emoji = emoji
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+        self.page = 0
+        self.items_per_page = 10  # Show more items in embed
+        self.max_pages = (len(items) - 1) // self.items_per_page + 1 if items else 1
+
+    async def create_shop_embed(self):
+        """Create the shop embed with item list and purchase indicators"""
+        start_index = self.page * self.items_per_page
+        end_index = start_index + self.items_per_page
+        current_items = self.items[start_index:end_index]
+        
+        embed = discord.Embed(
+            title=f"{self.emoji} {self.category} Shop",
+            description=f"Browse and purchase items (Page {self.page + 1}/{self.max_pages})",
+            color=primary_color()
+        )
+        
+        # Create item list with indicators
+        item_list = []
+        for i, item in enumerate(current_items):
+            # Check if user owns this item
+            user_quantity = await self.quest_data.get_user_inventory_count(
+                self.guild_id, self.user_id, item["name"]
+            ) or 0
+            
+            # Get user balance to check affordability
+            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            
+            # Create indicator
+            if user_quantity > 0:
+                indicator = "✅"  # Owned
+                name_display = f"~~{item['name']}~~"  # Strike through if bought
+            elif user_balance >= item["points"]:
+                indicator = "💰"  # Can afford
+                name_display = item['name']
+            else:
+                indicator = "❌"  # Cannot afford
+                name_display = item['name']
+            
+            # Format item entry
+            item_emoji = item.get('emoji', '')
+            price_display = f"{item['points']:,} pts"
+            
+            item_entry = f"{indicator} {item_emoji} **{name_display}** - {price_display}"
+            if user_quantity > 0:
+                item_entry += f" (Owned: {user_quantity})"
+            
+            item_list.append(f"`{start_index + i + 1}.` {item_entry}")
+        
+        if item_list:
+            embed.add_field(
+                name="Items Available",
+                value="\n".join(item_list),
+                inline=False
+            )
+        
+        # Add legend
+        legend = "✅ Owned | 💰 Can Purchase | ❌ Insufficient Points"
+        embed.add_field(name="Legend", value=legend, inline=False)
+        
+        # Add user balance
+        user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+        embed.set_footer(text=f"Your Balance: {user_balance:,} Stella Points")
+        
+        return embed
+
+    async def update_view(self):
+        self.clear_items()
+        
+        if not self.items:
+            return
+        
+        start_index = self.page * self.items_per_page
+        end_index = start_index + self.items_per_page
+        current_items = self.items[start_index:end_index]
+        
+        # Add number buttons for each item (1-10)
+        current_row = 0
+        for i, item in enumerate(current_items):
+            # Check if user can afford and doesn't already own
+            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            user_quantity = await self.quest_data.get_user_inventory_count(
+                self.guild_id, self.user_id, item["name"]
+            ) or 0
+            
+            # Determine button style and if it should be disabled
+            if user_quantity > 0:
+                button_style = discord.ButtonStyle.green
+                disabled = True  # Already owned
+            elif user_balance >= item["points"]:
+                button_style = discord.ButtonStyle.primary
+                disabled = False
+            else:
+                button_style = discord.ButtonStyle.grey
+                disabled = True  # Can't afford
+            
+            button = discord.ui.Button(
+                style=button_style,
+                label=str(i + 1),
+                custom_id=f"item_{start_index + i}",
+                row=current_row,
+                disabled=disabled
+            )
+            button.callback = self.item_callback
+            self.add_item(button)
+            
+            # Move to next row after 5 buttons
+            if (i + 1) % 5 == 0:
+                current_row += 1
+        
+        # Pagination buttons
+        pagination_row = current_row + 1 if current_row < 4 else 4
+        
+        if self.max_pages > 1:
+            if self.page > 0:
+                prev_button = discord.ui.Button(
+                    emoji="⬅️",
+                    style=discord.ButtonStyle.secondary,
+                    custom_id="prev_page",
+                    row=pagination_row
+                )
+                prev_button.callback = self.prev_page_callback
+                self.add_item(prev_button)
+            
+            if self.page < self.max_pages - 1:
+                next_button = discord.ui.Button(
+                    emoji="➡️",
+                    style=discord.ButtonStyle.secondary,
+                    custom_id="next_page",
+                    row=pagination_row
+                )
+                next_button.callback = self.next_page_callback
+                self.add_item(next_button)
+
+    async def item_callback(self, interaction: discord.Interaction):
+        try:
+            if int(self.user_id) != int(interaction.user.id):
+                await interaction.response.send_message(
+                    "This is not your shop interface.", ephemeral=True
+                )
+                return
+
+            item_index = int(interaction.data["custom_id"].split("_")[1])
+            item = self.items[item_index]
+            
+            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            user_quantity = await self.quest_data.get_user_inventory_count(
+                self.guild_id, self.user_id, item["name"]
+            ) or 0
+            
+            # Check if already owned
+            if user_quantity > 0:
+                embed = discord.Embed(
+                    title="ℹ️ Already Owned",
+                    description=f"You already own **{item['name']}** (Quantity: {user_quantity})",
+                    color=discord.Color.blue()
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                return
+            
+            if user_balance >= item["points"]:
+                # Purchase the item
+                await self.quest_data.add_balance(self.user_id, self.guild_id, -item["points"])
+                await self.quest_data.add_item_to_inventory(
+                    self.guild_id, self.user_id, item["name"], 1
+                )
+                
+                embed = discord.Embed(
+                    title="✅ Purchase Successful!",
+                    description=f"You've purchased **{item['name']}** for {item['points']:,} points!",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="Description", value=item["description"], inline=False)
+                if "emoji" in item:
+                    embed.add_field(name="Item", value=item["emoji"], inline=True)
+                
+                new_balance = user_balance - item["points"]
+                embed.set_footer(text=f"Remaining balance: {new_balance:,} points")
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+                # Refresh the main shop view
+                await self.refresh_shop_view(interaction)
+                
+            else:
+                embed = discord.Embed(
+                    title="❌ Insufficient Points",
+                    description=f"You need {item['points']:,} points but only have {user_balance:,}.",
+                    color=discord.Color.red()
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+        except Exception as e:
+            traceback.print_exc()
+            await interaction.response.send_message(
+                f"An error occurred: {e}", ephemeral=True
+            )
+
+    async def refresh_shop_view(self, interaction):
+        """Refresh the shop view after a purchase"""
+        try:
+            # Get the original message and update it
+            embed = await self.create_shop_embed()
+            await self.update_view()
+            
+            # Try to edit the original message
+            original_message = interaction.message
+            if original_message:
+                await original_message.edit(embed=embed, view=self)
+        except:
+            # If editing fails, that's okay - the purchase was still successful
+            pass
+
+    async def prev_page_callback(self, interaction: discord.Interaction):
+        self.page -= 1
+        embed = await self.create_shop_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def next_page_callback(self, interaction: discord.Interaction):
+        self.page += 1
+        embed = await self.create_shop_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
 
 class ProfileCustomizationSelect(discord.ui.Select):
     def __init__(self, shop_data, quest_data, user_id, guild_id):
@@ -2725,13 +3031,9 @@ class ProfileItemTypeSelect(discord.ui.Select):
             view = ProfileItemView(
                 items, item_type, self.quest_data, self.user_id, self.guild_id, self.family
             )
-            await view.update_view()
             
-            embed = discord.Embed(
-                title=f"🎨 {self.family} {item_type}",
-                description=f"Browse and purchase {item_type.lower()} for your profile",
-                color=primary_color()
-            )
+            embed = await view.create_shop_embed()
+            await view.update_view()
             
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
@@ -2751,8 +3053,70 @@ class ProfileItemView(discord.ui.View):
         self.guild_id = guild_id
         self.family = family
         self.page = 0
-        self.items_per_page = 5
+        self.items_per_page = 10
         self.max_pages = (len(items) - 1) // self.items_per_page + 1
+
+    async def create_shop_embed(self):
+        """Create the shop embed with item list and purchase indicators"""
+        start_index = self.page * self.items_per_page
+        end_index = start_index + self.items_per_page
+        current_items = self.items[start_index:end_index]
+        
+        embed = discord.Embed(
+            title=f"🎨 {self.family} {self.item_type}",
+            description=f"Browse and purchase {self.item_type.lower()} for your profile (Page {self.page + 1}/{self.max_pages})",
+            color=primary_color()
+        )
+        
+        # Create item list with indicators
+        item_list = []
+        for i, item in enumerate(current_items):
+            # Check if user owns this item
+            user_quantity = await self.quest_data.get_user_inventory_count(
+                self.guild_id, self.user_id, item["name"]
+            ) or 0
+            
+            # Get user balance to check affordability
+            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            
+            # Create indicator
+            if user_quantity > 0:
+                indicator = "✅"  # Owned
+                name_display = f"~~{item['name']}~~"  # Strike through if bought
+            elif user_balance >= item["points"]:
+                indicator = "💰"  # Can afford
+                name_display = item['name']
+            else:
+                indicator = "❌"  # Cannot afford
+                name_display = item['name']
+            
+            # Format item entry
+            price_display = f"{item['points']:,} pts"
+            character = item.get('character', 'N/A')
+            
+            item_entry = f"{indicator} **{name_display}** - {price_display}"
+            if user_quantity > 0:
+                item_entry += f" (Owned: {user_quantity})"
+            item_entry += f"\n   *{character}* - {item['description'][:50]}..."
+            
+            item_list.append(f"`{start_index + i + 1}.` {item_entry}")
+        
+        if item_list:
+            embed.add_field(
+                name="Items Available",
+                value="\n".join(item_list),
+                inline=False
+            )
+        
+        # Add legend
+        legend = "✅ Owned | 💰 Can Purchase | ❌ Insufficient Points"
+        embed.add_field(name="Legend", value=legend, inline=False)
+        
+        # Add user balance
+        user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+        embed.set_footer(text=f"Your Balance: {user_balance:,} Stella Points")
+        
+        return embed
 
     async def update_view(self):
         self.clear_items()
@@ -2761,23 +3125,50 @@ class ProfileItemView(discord.ui.View):
         end_index = start_index + self.items_per_page
         current_items = self.items[start_index:end_index]
         
+        # Add number buttons for each item (1-10)
+        current_row = 0
         for i, item in enumerate(current_items):
+            # Check if user can afford and doesn't already own
+            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            user_quantity = await self.quest_data.get_user_inventory_count(
+                self.guild_id, self.user_id, item["name"]
+            ) or 0
+            
+            # Determine button style and if it should be disabled
+            if user_quantity > 0:
+                button_style = discord.ButtonStyle.green
+                disabled = True  # Already owned
+            elif user_balance >= item["points"]:
+                button_style = discord.ButtonStyle.primary
+                disabled = False
+            else:
+                button_style = discord.ButtonStyle.grey
+                disabled = True  # Can't afford
+            
             button = discord.ui.Button(
-                style=discord.ButtonStyle.primary,
-                label=f"{item['name']} - {item['points']:,} pts",
+                style=button_style,
+                label=str(i + 1),
                 custom_id=f"item_{start_index + i}",
-                row=i % 5
+                row=current_row,
+                disabled=disabled
             )
             button.callback = self.item_callback
             self.add_item(button)
+            
+            # Move to next row after 5 buttons
+            if (i + 1) % 5 == 0:
+                current_row += 1
         
         # Pagination buttons
+        pagination_row = current_row + 1 if current_row < 4 else 4
+        
         if self.max_pages > 1:
             if self.page > 0:
                 prev_button = discord.ui.Button(
                     emoji="⬅️",
                     style=discord.ButtonStyle.secondary,
-                    custom_id="prev_page"
+                    custom_id="prev_page",
+                    row=pagination_row
                 )
                 prev_button.callback = self.prev_page_callback
                 self.add_item(prev_button)
@@ -2786,17 +3177,37 @@ class ProfileItemView(discord.ui.View):
                 next_button = discord.ui.Button(
                     emoji="➡️",
                     style=discord.ButtonStyle.secondary,
-                    custom_id="next_page"
+                    custom_id="next_page",
+                    row=pagination_row
                 )
                 next_button.callback = self.next_page_callback
                 self.add_item(next_button)
 
     async def item_callback(self, interaction: discord.Interaction):
         try:
+            if int(self.user_id) != int(interaction.user.id):
+                await interaction.response.send_message(
+                    "This is not your shop interface.", ephemeral=True
+                )
+                return
+
             item_index = int(interaction.data["custom_id"].split("_")[1])
             item = self.items[item_index]
             
             user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            user_quantity = await self.quest_data.get_user_inventory_count(
+                self.guild_id, self.user_id, item["name"]
+            ) or 0
+            
+            # Check if already owned
+            if user_quantity > 0:
+                embed = discord.Embed(
+                    title="ℹ️ Already Owned",
+                    description=f"You already own **{item['name']}** (Quantity: {user_quantity})",
+                    color=discord.Color.blue()
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                return
             
             if user_balance >= item["points"]:
                 # Purchase the item
@@ -2817,6 +3228,10 @@ class ProfileItemView(discord.ui.View):
                 embed.set_footer(text=f"Remaining balance: {new_balance:,} points")
                 
                 await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+                # Refresh the main shop view
+                await self.refresh_shop_view(interaction)
+                
             else:
                 embed = discord.Embed(
                     title="❌ Insufficient Points",
@@ -2831,30 +3246,34 @@ class ProfileItemView(discord.ui.View):
                 f"An error occurred: {e}", ephemeral=True
             )
 
+    async def refresh_shop_view(self, interaction):
+        """Refresh the shop view after a purchase"""
+        try:
+            # Get the original message and update it
+            embed = await self.create_shop_embed()
+            await self.update_view()
+            
+            # Try to edit the original message
+            original_message = interaction.message
+            if original_message:
+                await original_message.edit(embed=embed, view=self)
+        except:
+            # If editing fails, that's okay - the purchase was still successful
+            pass
+
     async def prev_page_callback(self, interaction: discord.Interaction):
         self.page -= 1
+        embed = await self.create_shop_embed()
         await self.update_view()
-        
-        embed = discord.Embed(
-            title=f"🎨 {self.family} {self.item_type}",
-            description=f"Browse and purchase {self.item_type.lower()} for your profile (Page {self.page + 1}/{self.max_pages})",
-            color=primary_color()
-        )
-        
         await interaction.response.edit_message(embed=embed, view=self)
 
     async def next_page_callback(self, interaction: discord.Interaction):
         self.page += 1
+        embed = await self.create_shop_embed()
         await self.update_view()
-        
-        embed = discord.Embed(
-            title=f"🎨 {self.family} {self.item_type}",
-            description=f"Browse and purchase {self.item_type.lower()} for your profile (Page {self.page + 1}/{self.max_pages})",
-            color=primary_color()
-        )
-        
         await interaction.response.edit_message(embed=embed, view=self)
 
+# Keep the existing MaterialsButton and SpyToolSelect classes unchanged for spy tools
 class MaterialsButton(discord.ui.View):
     def __init__(self, shop_data, quest_data, user_id, guild_id, original_embed=None):
         super().__init__(timeout=300)
@@ -3075,6 +3494,12 @@ class MaterialsButton(discord.ui.View):
 
     async def material_callback(self, interaction: discord.Interaction):
         try:
+            if int(self.user_id) != int(interaction.user.id):
+                await interaction.response.send_message(
+                    "This is not your shop interface.", ephemeral=True
+                )
+                return
+
             material_name = interaction.data["custom_id"]
             material = next(
                 (
@@ -3097,6 +3522,7 @@ class MaterialsButton(discord.ui.View):
             )
 
             if user_balance >= price:
+                # Use consistent inventory method
                 await self.quest_data.add_item_to_inventory(
                     self.guild_id, self.user_id, material_name, 1
                 )
@@ -3118,6 +3544,12 @@ class MaterialsButton(discord.ui.View):
 
     async def buy_tool_callback(self, interaction: discord.Interaction):
         try:
+            if int(self.user_id) != int(interaction.user.id):
+                await interaction.response.send_message(
+                    "This is not your shop interface.", ephemeral=True
+                )
+                return
+
             tool_name = self.original_embed.title
             tool = next(
                 (
@@ -3152,7 +3584,7 @@ class MaterialsButton(discord.ui.View):
                     )
                     return
 
-            # Consume materials
+            # Consume materials using consistent inventory method
             for material in tool.get("materials", []):
                 material_name = material.get("material", "")
                 required_quantity = material.get("quantity", 0)
@@ -3160,13 +3592,13 @@ class MaterialsButton(discord.ui.View):
                     self.guild_id, self.user_id, material_name, -required_quantity
                 )
 
-            # Add tool to inventory
-            await self.quest_data.add_tool_to_inventory(
+            # Add tool to inventory using consistent method
+            await self.quest_data.add_item_to_inventory(
                 self.guild_id, self.user_id, tool_name, 1
             )
 
             # Get updated quantity
-            quantity = await self.quest_data.get_quantity(
+            quantity = await self.quest_data.get_user_inventory_count(
                 self.guild_id, self.user_id, tool_name
             )
 
@@ -3298,5 +3730,4 @@ class SpyToolSelect(discord.ui.Select):
         else:
             indicator_emoji = "<:green:1261639410181476443>"
 
-        return f"{indicator_emoji} {self.materials_dict.get(material_name, '')} **{material_name}** - {user_quantity}/{required_quantity}"
-
+        return f"{indicator_emoji} {self.materials_dict.get(material_name, '')} **{material_name}** - {user_quantity or 0}"
