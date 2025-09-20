@@ -1,0 +1,74 @@
+{
+  "event": {
+    "name": "CELESTIAL TRIBUTE",
+    "type": "Temporary",
+    "duration_days": 15,
+    "start_time": "2024-10-31T00:00:00Z",
+    "end_time": "2024-11-14T23:59:59Z",
+    "banner_url": "https://media.discordapp.net/attachments/1191639374316703794/1417946792846168275/Untitled46_20250917233654.jpg?ex=68ccfe1b&is=68cbac9b&hm=dcb0f186dc5bc43bbea9350e07df037956ee3e76763634defa2406ef5ee0166c&=&format=webp&width=1337&height=749",
+    "apostle_banner_url": "https://media.discordapp.net/attachments/1191639374316703794/1418305852678344746/dg7np6j-6fcf85e0-6089-4ddb-b98e-ff51d32760f2.jpg?ex=68cda3c2&is=68cc5242&hm=9cc39682288dbc573ca6163d0da79f74477ea1522529027f260f9d46164c17a7&=&format=webp&width=1337&height=749"
+  },
+  "bot": {
+    "server_id": "1250125681132572804",
+    "poketwo_bot_id": "716390085896962058",
+    "host_id": "776865099817418793"
+  },
+  "mechanics": {
+    "base_offering_cost": 10,
+    "offering_increment": 5,
+    "max_contribution_multiplier": 100.0,
+    "message_cooldown_minutes": 1,
+    "contribution_per_message": 0.5
+  },
+  "rewards": {
+    "pokecoins": {
+      "base_min": 1000,
+      "base_max": 5000,
+      "multiplier_per_offering": 1.2
+    },
+    "pokemon": {
+      "base_shiny_chance": 0.05,
+      "shiny_chance_increment": 0.02,
+      "max_shiny_chance": 0.3
+    },
+    "special": {
+      "arceus_min_offerings": 20,
+      "arceus_chance": 0.01
+    }
+  },
+  "story": {
+    "intro": "Something feels… off. The world is— {glitch} — shifting strangely. Wait… what just happened? Is that… Arceus? {glitch} — no, it shouldn't be like this. The Original One is fading; its golden light is consumed by a spreading curse. {glitch} — stars fracture, sky bends. If Arceus falls, everything could end: time, space, life… We must {glitch} — act quickly. Arceus (faltering): Little ones… bring forth your devotion to the Stellar {glitch}, Apostle of Aeons. Only through tribute — through your pure hearts — can we hold back the darkness of {glitch}, the Endless Void. This is your chance; the fate of this world is upon you — {glitch} — stay vigilant.",
+    "corruption_stages": {
+      "stage_1": {
+        "name": "Uneasiness",
+        "description": "The sky trembles. The curse lingers at the rim of reality… {glitch}",
+        "threshold": 0
+      },
+      "stage_2": {
+        "name": "Breach Widening", 
+        "description": "The stars flicker and drop like embers. The Void claws outward— {glitch}",
+        "threshold": 25
+      },
+      "stage_3": {
+        "name": "Near collapse",
+        "description": "Rifts tear the heavens. Arceus' voice frays into static— {glitch}",
+        "threshold": 75
+      },
+      "final": {
+        "name": "Critical",
+        "description": "The Endless Void presses upon creation. Everything shivers— {glitch}",
+        "threshold": 150
+      }
+    },
+    "victory": "A tremor passes. Light steadies. The Apostle proclaims: 'The tribute held. The Original One endures.'\nA gentle chorus of stars returns — the curse recedes.",
+    "failure": "A silence like winter. The Apostle falls quie.. — **{glitch}**\nThe Void takes a foothold. The sky is changed. We mourn the lost light."
+  },
+  "emojis": {
+    "celestial_shard": "<:celestial_shard:1234567890>",
+    "arceus": "<:arceus:1234567890>",
+    "corruption": "<:corruption:1234567890>",
+    "purification": "<:purification:1234567890>",
+    "star": "<:star:1234567890>",
+    "void": "<:void:1234567890>"
+  }
+}

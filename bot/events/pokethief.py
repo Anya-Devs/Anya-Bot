@@ -87,6 +87,8 @@ class Anti_Thief(commands.Cog):
         is_shiny_protected_channel = await self.is_shiny_protected_channel(message.guild.id, message.channel.id)
         if self.IGNORE_CHANNEL_KEYWORD in message.channel.name.lower():
             return
+        if ut:
+            return
         if message.author.id in self.BOT_IDS and message.guild:
             if is_shiny_protected_channel:
              self.shiny_hunters = await self.process_pings(message.guild, message.content)
