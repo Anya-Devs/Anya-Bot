@@ -2577,6 +2577,7 @@ class ShopCategorySelect(discord.ui.Select):
             description="Select a spy tool to view details and purchase materials",
             color=primary_color()
         )
+        embed.set_image(url='https://media.discordapp.net/attachments/1326790711864983633/1419378271631704206/image_2025-09-21_134156448-removebg-preview.png?ex=68d18a86&is=68d03906&hm=6a49aadb415f4354b5c0926340b35cac1b81d81f5c6596d201c1f2520e0cdd75&=&format=webp&quality=lossless&width=939&height=336')
         
         view = discord.ui.View()
         view.add_item(select)

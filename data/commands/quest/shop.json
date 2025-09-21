@@ -41,7 +41,7 @@
     {
       "name": "Key Chain Sheep",
       "emoji": "<:keychain_sheep:1318415294758129692>",
-      "description": "Assigns a random role to the targeted member. Setup: `...q_roles <@mention role1> <@mention role2>...`",
+      "description": "Assigns a random role to the targeted member.",
       "materials": [
         {
           "material": "Fabric",
@@ -100,6 +100,63 @@
         {
           "material": "CPU",
           "quantity": 1
+        }
+      ]
+    },
+    {
+      "name": "EMP Device",
+      "emoji": "💣",
+      "description": "Disables all active Spy Tools in the server for 10 minutes.",
+      "materials": [
+        {
+          "material": "Battery",
+          "quantity": 6
+        },
+        {
+          "material": "Wire",
+          "quantity": 10
+        },
+        {
+          "material": "CPU",
+          "quantity": 2
+        }
+      ]
+    },
+    {
+      "name": "Scrambler",
+      "emoji": "🥸",
+      "description": "Changes the target’s nickname to random gibberish for 1 hour.",
+      "materials": [
+        {
+          "material": "Soundproofing Material",
+          "quantity": 2
+        },
+        {
+          "material": "Chip",
+          "quantity": 3
+        },
+        {
+          "material": "Plastic",
+          "quantity": 4
+        }
+      ]
+    },
+    {
+      "name": "Cloaking Watch",
+      "emoji": "⌚",
+      "description": "Grants invisibility from detection tools for 15 minutes (immune to tracking or alarms).",
+      "materials": [
+        {
+          "material": "Metal",
+          "quantity": 4
+        },
+        {
+          "material": "CPU",
+          "quantity": 1
+        },
+        {
+          "material": "Battery",
+          "quantity": 2
         }
       ]
     }
@@ -169,6 +226,11 @@
       "name": "Solder",
       "emoji": "⚒️",
       "price": 25
+    },
+    {
+      "name": "Glass",
+      "emoji": "🔍",
+      "price": 12
     }
   ],
   "ProfileCustomization": {

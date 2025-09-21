@@ -1,5 +1,5 @@
 import asyncio; from data.setup import SetupManager; asyncio.run(SetupManager().run_setup())
-import os, sys, gc, asyncio, importlib, pkgutil, threading, signal, traceback
+import os, sys, gc, asyncio, importlib, pkgutil, threading, signal, traceback, multiprocessing
 from dotenv import load_dotenv
 import aiohttp, yarl, discord
 from flask import Flask, send_from_directory
@@ -42,6 +42,8 @@ class Config:
         'per_seconds', 5,
         'type', commands.BucketType.user
     ]
+    TOTAL_SHARDS = int(os.environ.get("TOTAL_SHARDS", 0))
+    CLUSTERS = int(os.environ.get("CLUSTERS", multiprocessing.cpu_count()))
 
 rate = Config.COOLDOWN[1]
 per = Config.COOLDOWN[3]
@@ -63,20 +65,20 @@ class FlaskServer:
     def run(self):
         self.app.run(host="0.0.0.0", port=self.port, threaded=True)
 
-class ClusteredBot(commands.AutoShardedBot):
-    def __init__(self):
+class ClusteredBot(commands.Bot):
+    def __init__(self, shard_id, shard_count):
         intents = discord.Intents.all()
         super().__init__(
             command_prefix=commands.when_mentioned_or(prefix),
             intents=intents,
             help_command=None,
-            shard_ids=None,
-            shard_count=None,
-            shard_reconnect_interval=15,
+            shard_ids=[shard_id],
+            shard_count=shard_count,
             heartbeat_timeout=90,
             chunk_guilds_at_startup=False,
             guild_ready_timeout=5.0,
         )
+        self.shard_id = shard_id
         self.cog_dirs = ['bot.cogs', 'bot.events']
         self.console = Console()
         self.http_session: aiohttp.ClientSession | None = None
@@ -84,12 +86,7 @@ class ClusteredBot(commands.AutoShardedBot):
     async def setup_hook(self):
         await self._import_cogs()
         self.http_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
-        try:
-            shards = list(self.shards.keys())
-            shard_count = self.shard_count
-            logger.info(f"🧩 Shard Hunting: {len(shards)}/{shard_count} shards initialized.")
-        except Exception as e:
-            logger.warning(f"Shard hunting failed: {e}")
+        logger.info(f"🧩 Shard {self.shard_id}: Initializing.")
 
     async def on_ready(self):
         term = __import__('shutil').get_terminal_size().columns
@@ -100,29 +97,18 @@ class ClusteredBot(commands.AutoShardedBot):
             art_str = art.get_colored_ascii_art()
         except: pass
         banner = "\n\n\n" + (art_str + "\n" if art_str else "")
-        banner += "\033[38;2;88;101;242m" + "Welcome to Discord!".center(term) + "\033[0m\n\033[92m"
+        banner += "\033[38;2;88;101;242m" + f"Shard {self.shard_id} Ready!".center(term) + "\033[0m\n\033[92m"
         banner += "\n".join(line.center(term) for line in text2art(self.user.name[:11], 'sub-zero').splitlines())
-        banner += f"🌐 Connected: {len(self.guilds)} servers | Users ~{sum(g.member_count or 0 for g in self.guilds)}".center(term)
+        banner += f"🌐 Shard {self.shard_id} Connected: {len(self.guilds)} servers".center(term)
         print(banner)
-        await self.change_presence(
-          status=discord.Status.idle,
-          activity=discord.Activity(
-          type=discord.ActivityType.listening,
-          name=f"@{self.user.name} help"
-       ))
-        
         await setup_persistent_views_fun(self)
         await setup_persistent_views(self)
-        
 
-    async def on_shard_ready(self, shard_id: int):
-        logger.info(f"✅ Shard {shard_id} is ready.")
+    async def on_disconnect(self):
+        logger.warning(f"⚠️ Shard {self.shard_id} disconnected.")
 
-    async def on_shard_disconnect(self, shard_id: int):
-        logger.warning(f"⚠️ Shard {shard_id} disconnected. Reconnecting...")
-
-    async def on_shard_resumed(self, shard_id: int):
-        logger.info(f"🔄 Shard {shard_id} resumed.")
+    async def on_resumed(self):
+        logger.info(f"🔄 Shard {self.shard_id} resumed.")
 
     async def close(self):
         if self.http_session and not self.http_session.closed:
@@ -130,7 +116,7 @@ class ClusteredBot(commands.AutoShardedBot):
         await super().close()
 
     async def _import_cogs(self):
-        tree = Tree("[bold cyan]◇ Loading Cogs[/bold cyan]")
+        tree = Tree(f"[bold cyan]◇ Loading Cogs for Shard {self.shard_id}[/bold cyan]")
         for dir_name in self.cog_dirs:
             branch = tree.add(f"[bold magenta]□ {dir_name}[/bold magenta]")
             try:
@@ -171,15 +157,45 @@ class ClusteredBot(commands.AutoShardedBot):
 
         self.console.print(Align(tree, align='center', width=self.console.width))
 
+async def run_single_shard(shard_id, shard_count, token):
+    bot = ClusteredBot(shard_id, shard_count)
+    await bot.start(token)
+
 class BotRunner:
     @staticmethod
     async def _run_bot():
-        bot = ClusteredBot()
         token = await get_bot_token()
         if not token:
             logger.error("No token found.")
             return
-        await bot.start(token, reconnect=True)
+
+        shard_count = Config.TOTAL_SHARDS or (await bot.http.get_bot_gateway())[0]
+
+        if Config.CLUSTERS == 1:
+            bot = ClusteredBot(shard_ids=range(shard_count), shard_count=shard_count)
+            await bot.start(token)
+        else:
+            shards_per_cluster = shard_count // Config.CLUSTERS
+            extra = shard_count % Config.CLUSTERS
+            processes = []
+            start_id = 0
+            for c in range(Config.CLUSTERS):
+                end_id = start_id + shards_per_cluster + (1 if c < extra else 0)
+                cluster_shards = list(range(start_id, end_id))
+                if cluster_shards:
+                    p = multiprocessing.Process(target=asyncio.run, args=(run_cluster_processes(cluster_shards, shard_count, token),))
+                    p.start()
+                    processes.append(p)
+                start_id = end_id
+            for p in processes:
+                p.join()
+
+def run_cluster_processes(cluster_shards, shard_count, token):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    gather_tasks = [run_single_shard(shard_id, shard_count, token) for shard_id in cluster_shards]
+    loop.run_until_complete(asyncio.gather(*gather_tasks, return_exceptions=True))
+    loop.close()
 
     @staticmethod
     def _install_signal_handlers(loop):
@@ -192,6 +208,8 @@ class BotRunner:
     def main(cls):
         gc.collect()
         threading.Thread(target=FlaskServer().run, daemon=True).start()
+        if Config.CLUSTERS > 1:
+            multiprocessing.set_start_method('spawn')
         loop = asyncio.new_event_loop()
         cls._install_signal_handlers(loop)
         loop.run_until_complete(cls._run_bot())
