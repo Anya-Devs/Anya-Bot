@@ -8,6 +8,7 @@ import traceback
 import asyncio
 import random
 from io import BytesIO
+from pathlib import Path
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from concurrent.futures import ThreadPoolExecutor
@@ -2526,7 +2527,6 @@ class ShopCategorySelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         try:
-            # Check if user owns this interaction
             if int(self.user_id) != int(interaction.user.id):
                 await interaction.response.send_message(
                     "This is not your shop interface.", ephemeral=True
@@ -2547,6 +2547,12 @@ class ShopCategorySelect(discord.ui.Select):
                 await self.show_server_utils(interaction)
             elif category == "pokemon_spawns":
                 await self.show_pokemon_spawns(interaction)
+            elif category == "function_keys":
+                await self.show_function_keys(interaction)
+            elif category == "nickname_changer":
+                await self.show_nickname_changer(interaction)
+            elif category == "role_manager":
+                await self.show_role_manager(interaction)
 
         except Exception as e:
             traceback.print_exc()
@@ -2585,7 +2591,8 @@ class ShopCategorySelect(discord.ui.Select):
             )
             return
 
-        select = ProfileCustomizationSelect(
+        # Create a ProfileFamilySelect instead of ProfileShop
+        select = ProfileFamilySelect(
             self.shop_data, self.quest_data, self.user_id, self.guild_id
         )
         
@@ -2684,7 +2691,68 @@ class ShopCategorySelect(discord.ui.Select):
         
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
+    async def show_function_keys(self, interaction: discord.Interaction):
+        function_keys = self.shop_data.get("FunctionKeys", [])
+        if not function_keys:
+            await interaction.response.send_message(
+                "No function keys available at the moment.", ephemeral=True
+            )
+            return
 
+        view = ItemListView(
+            function_keys, "FunctionKeys", "🔑", self.quest_data, self.user_id, self.guild_id
+        )
+        await view.update_view()
+        
+        embed = discord.Embed(
+            title="🔑 Function Keys Shop",
+            description="Unlock special server functions",
+            color=primary_color()
+        )
+        
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+    async def show_nickname_changer(self, interaction: discord.Interaction):
+        nickname_changer = self.shop_data.get("NicknameChanger", [])
+        if not nickname_changer:
+            await interaction.response.send_message(
+                "No nickname changer available at the moment.", ephemeral=True
+            )
+            return
+
+        view = ItemListView(
+            nickname_changer, "NicknameChanger", "📛", self.quest_data, self.user_id, self.guild_id
+        )
+        await view.update_view()
+        
+        embed = discord.Embed(
+            title="📛 Nickname Changer Shop",
+            description="Purchase ability to assign custom nicknames",
+            color=primary_color()
+        )
+        
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+    async def show_role_manager(self, interaction: discord.Interaction):
+        role_manager = self.shop_data.get("RoleManager", [])
+        if not role_manager:
+            await interaction.response.send_message(
+                "No role manager tools available at the moment.", ephemeral=True
+            )
+            return
+
+        view = ItemListView(
+            role_manager, "RoleManager", "🎭", self.quest_data, self.user_id, self.guild_id
+        )
+        await view.update_view()
+        
+        embed = discord.Embed(
+            title="🎭 Role Manager Shop",
+            description="Purchase tools to manage random role assignments",
+            color=primary_color()
+        )
+        
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 class ItemListView(discord.ui.View):
     def __init__(self, items, category, emoji, quest_data, user_id, guild_id):
@@ -2696,7 +2764,7 @@ class ItemListView(discord.ui.View):
         self.user_id = user_id
         self.guild_id = guild_id
         self.page = 0
-        self.items_per_page = 10  # Show more items in embed
+        self.items_per_page = 10
         self.max_pages = (len(items) - 1) // self.items_per_page + 1 if items else 1
 
     async def create_shop_embed(self):
@@ -2711,33 +2779,29 @@ class ItemListView(discord.ui.View):
             color=primary_color()
         )
         
-        # Create item list with indicators
         item_list = []
         for i, item in enumerate(current_items):
-            # Check if user owns this item
             user_quantity = await self.quest_data.get_user_inventory_count(
                 self.guild_id, self.user_id, item["name"]
             ) or 0
             
-            # Get user balance to check affordability
             user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
             
-            # Create indicator
             if user_quantity > 0:
-                indicator = "✅"  # Owned
-                name_display = f"~~{item['name']}~~"  # Strike through if bought
+                indicator = "✅"
+                name_display = f"~~{item['name']}~~"
             elif user_balance >= item["points"]:
-                indicator = "💰"  # Can afford
+                indicator = "💰"
                 name_display = item['name']
             else:
-                indicator = "❌"  # Cannot afford
+                indicator = "❌"
                 name_display = item['name']
             
-            # Format item entry
             item_emoji = item.get('emoji', '')
             price_display = f"{item['points']:,} pts"
+            rarity = item.get('rarity', 'N/A')
             
-            item_entry = f"{indicator} {item_emoji} **{name_display}** - {price_display}"
+            item_entry = f"{indicator} {item_emoji} **{name_display}** - {price_display} (Rarity: {rarity})"
             if user_quantity > 0:
                 item_entry += f" (Owned: {user_quantity})"
             
@@ -2750,11 +2814,9 @@ class ItemListView(discord.ui.View):
                 inline=False
             )
         
-        # Add legend
-        legend = "✅ Owned | 💰 Can Purchase | ❌ Insufficient Points"
-        embed.add_field(name="Legend", value=legend, inline=False)
+        legend = "> ✅ Owned | 💰 Can Purchase | ❌ Insufficient Points"
+        embed.add_field(name="", value=legend, inline=False)
         
-        # Add user balance
         user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
         embed.set_footer(text=f"Your Balance: {user_balance:,} Stella Points")
         
@@ -2770,25 +2832,22 @@ class ItemListView(discord.ui.View):
         end_index = start_index + self.items_per_page
         current_items = self.items[start_index:end_index]
         
-        # Add number buttons for each item (1-10)
         current_row = 0
         for i, item in enumerate(current_items):
-            # Check if user can afford and doesn't already own
             user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
             user_quantity = await self.quest_data.get_user_inventory_count(
                 self.guild_id, self.user_id, item["name"]
             ) or 0
             
-            # Determine button style and if it should be disabled
             if user_quantity > 0:
                 button_style = discord.ButtonStyle.green
-                disabled = True  # Already owned
+                disabled = True
             elif user_balance >= item["points"]:
                 button_style = discord.ButtonStyle.primary
                 disabled = False
             else:
                 button_style = discord.ButtonStyle.grey
-                disabled = True  # Can't afford
+                disabled = True
             
             button = discord.ui.Button(
                 style=button_style,
@@ -2800,11 +2859,9 @@ class ItemListView(discord.ui.View):
             button.callback = self.item_callback
             self.add_item(button)
             
-            # Move to next row after 5 buttons
             if (i + 1) % 5 == 0:
                 current_row += 1
         
-        # Pagination buttons
         pagination_row = current_row + 1 if current_row < 4 else 4
         
         if self.max_pages > 1:
@@ -2844,7 +2901,6 @@ class ItemListView(discord.ui.View):
                 self.guild_id, self.user_id, item["name"]
             ) or 0
             
-            # Check if already owned
             if user_quantity > 0:
                 embed = discord.Embed(
                     title="ℹ️ Already Owned",
@@ -2855,7 +2911,6 @@ class ItemListView(discord.ui.View):
                 return
             
             if user_balance >= item["points"]:
-                # Purchase the item
                 await self.quest_data.add_balance(self.user_id, self.guild_id, -item["points"])
                 await self.quest_data.add_item_to_inventory(
                     self.guild_id, self.user_id, item["name"], 1
@@ -2869,13 +2924,14 @@ class ItemListView(discord.ui.View):
                 embed.add_field(name="Description", value=item["description"], inline=False)
                 if "emoji" in item:
                     embed.add_field(name="Item", value=item["emoji"], inline=True)
+                if "rarity" in item:
+                    embed.add_field(name="Rarity", value=item["rarity"], inline=True)
                 
                 new_balance = user_balance - item["points"]
                 embed.set_footer(text=f"Remaining balance: {new_balance:,} points")
                 
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 
-                # Refresh the main shop view
                 await self.refresh_shop_view(interaction)
                 
             else:
@@ -2893,18 +2949,13 @@ class ItemListView(discord.ui.View):
             )
 
     async def refresh_shop_view(self, interaction):
-        """Refresh the shop view after a purchase"""
         try:
-            # Get the original message and update it
             embed = await self.create_shop_embed()
             await self.update_view()
-            
-            # Try to edit the original message
             original_message = interaction.message
             if original_message:
                 await original_message.edit(embed=embed, view=self)
         except:
-            # If editing fails, that's okay - the purchase was still successful
             pass
 
     async def prev_page_callback(self, interaction: discord.Interaction):
@@ -2918,23 +2969,32 @@ class ItemListView(discord.ui.View):
         embed = await self.create_shop_embed()
         await self.update_view()
         await interaction.response.edit_message(embed=embed, view=self)
+import discord
+from discord.ui import View, Select, Button
+from pathlib import Path
+import json
+import traceback
 
-class ProfileCustomizationSelect(discord.ui.Select):
+# NEW: ProfileFamilySelect class
+class ProfileFamilySelect(Select):
     def __init__(self, shop_data, quest_data, user_id, guild_id):
-        options = [
-            discord.SelectOption(
-                emoji="👨‍👩‍👧‍👦",
-                label="Forger Family",
-                description="Anya, Loid, Yor, and Bond themed items",
-                value="ForgerFamily"
-            ),
-            discord.SelectOption(
-                emoji="🕵️‍♂️",
-                label="WISE Agency",
-                description="Franky, Sylvia, and Fiona themed items",
-                value="WISE"
-            )
-        ]
+        options = []
+        profile_customization = shop_data.get("ProfileCustomization", {})
+
+        for family, data in profile_customization.items():
+            emoji = None
+            for category in ["Backgrounds", "Fonts", "Items"]:
+                items = data.get(category, [])
+                if items:
+                    emoji = items[0].get("emoji")
+                    if emoji:
+                        break
+            if not emoji:
+                emoji = "❔"
+            
+            description = f"{family} themed items"
+            options.append(discord.SelectOption(label=family, description=description, value=family, emoji=emoji))
+
         super().__init__(placeholder="Select a character family", options=options)
         self.shop_data = shop_data
         self.quest_data = quest_data
@@ -2943,107 +3003,165 @@ class ProfileCustomizationSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         try:
-            if int(self.user_id) != int(interaction.user.id):
-                await interaction.response.send_message(
-                    "This is not your customization interface.", ephemeral=True
-                )
+            if int(interaction.user.id) != int(self.user_id):
+                await interaction.response.send_message("This is not your customization interface.", ephemeral=True)
                 return
 
             family = self.values[0]
             profile_data = self.shop_data.get("ProfileCustomization", {}).get(family, {})
-            
             if not profile_data:
-                await interaction.response.send_message(
-                    f"No {family} customization options available.", ephemeral=True
-                )
+                await interaction.response.send_message(f"No {family} customization options available.", ephemeral=True)
                 return
 
-            select = ProfileItemTypeSelect(
-                profile_data, self.quest_data, self.user_id, self.guild_id, family
-            )
+            options = []
+            for item_type in ["Backgrounds", "Fonts", "Items"]:
+                if item_type in profile_data:
+                    emoji_map = {"Backgrounds": "🖼️", "Fonts": "🔤", "Items": "🎯"}
+                    description = f"{item_type} ({len(profile_data[item_type])} available)"
+                    options.append(discord.SelectOption(label=item_type, description=description, value=item_type, emoji=emoji_map[item_type]))
+
+            type_select = ProfileTypeSelect(profile_data, family, self.quest_data, self.user_id, self.guild_id)
+            type_select.options = options
             
+            view = View()
+            view.add_item(type_select)
+
             embed = discord.Embed(
                 title=f"🎨 {family} Customization",
                 description="Choose the type of customization item you want to browse",
-                color=primary_color()
+                color=discord.Color.blue()
             )
-            
-            view = discord.ui.View()
-            view.add_item(select)
-            
+            # Use send_message once; future interactions will edit this
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
         except Exception as e:
             traceback.print_exc()
-            await interaction.response.send_message(
-                f"An error occurred: {e}", ephemeral=True
-            )
+            await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
 
-class ProfileItemTypeSelect(discord.ui.Select):
-    def __init__(self, profile_data, quest_data, user_id, guild_id, family):
-        options = []
-        if "Backgrounds" in profile_data:
-            options.append(discord.SelectOption(
-                emoji="🖼️",
-                label="Backgrounds",
-                description=f"Profile backgrounds ({len(profile_data['Backgrounds'])} available)",
-                value="Backgrounds"
-            ))
-        if "Fonts" in profile_data:
-            options.append(discord.SelectOption(
-                emoji="🔤",
-                label="Fonts",
-                description=f"Custom fonts ({len(profile_data['Fonts'])} available)",
-                value="Fonts"
-            ))
-        if "Items" in profile_data:
-            options.append(discord.SelectOption(
-                emoji="🎯",
-                label="Items",
-                description=f"Decorative items ({len(profile_data['Items'])} available)",
-                value="Items"
-            ))
-        
-        super().__init__(placeholder="Select item type", options=options)
+
+# NEW: ProfileTypeSelect class
+class ProfileTypeSelect(Select):
+    def __init__(self, profile_data, family, quest_data, user_id, guild_id):
+        super().__init__(placeholder="Select item type")
         self.profile_data = profile_data
+        self.family = family
         self.quest_data = quest_data
         self.user_id = user_id
         self.guild_id = guild_id
-        self.family = family
 
     async def callback(self, interaction: discord.Interaction):
         try:
-            if int(self.user_id) != int(interaction.user.id):
-                await interaction.response.send_message(
-                    "This is not your customization interface.", ephemeral=True
-                )
+            if int(interaction.user.id) != int(self.user_id):
+                await interaction.response.send_message("This is not your customization interface.", ephemeral=True)
                 return
 
             item_type = self.values[0]
             items = self.profile_data.get(item_type, [])
-            
             if not items:
-                await interaction.response.send_message(
-                    f"No {item_type.lower()} available for {self.family}.", ephemeral=True
-                )
+                await interaction.response.send_message(f"No {item_type.lower()} available for {self.family}.", ephemeral=True)
                 return
 
-            view = ProfileItemView(
-                items, item_type, self.quest_data, self.user_id, self.guild_id, self.family
-            )
-            
-            embed = await view.create_shop_embed()
-            await view.update_view()
-            
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            item_view = ProfileItemView(items, item_type, self.quest_data, self.user_id, self.guild_id, self.family)
+            embed = await item_view.create_shop_embed()
+            await item_view.update_view()
+            # EDIT original message instead of sending new
+            await interaction.response.edit_message(embed=embed, view=item_view)
 
         except Exception as e:
             traceback.print_exc()
-            await interaction.response.send_message(
-                f"An error occurred: {e}", ephemeral=True
-            )
+            await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
 
-class ProfileItemView(discord.ui.View):
+
+# MODIFIED: ProfileShop as a standalone View
+class ProfileShop(View):
+    def __init__(self, quest_data, user_id, guild_id, json_path="data/commands/quest/shop.json"):
+        super().__init__(timeout=300)
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+        self.json_path = Path(json_path)
+        self.shop_data = self.load_shop_data()
+        self.family_select: Select | None = None
+        self.add_family_select()
+
+    def load_shop_data(self):
+        try:
+            with self.json_path.open("r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading shop JSON: {e}")
+            return {}
+
+    def add_family_select(self):
+        options = []
+        profile_customization = self.shop_data.get("ProfileCustomization", {})
+        for family, data in profile_customization.items():
+            emoji = data['emoji']
+            description = f"{family} themed items"
+            options.append(discord.SelectOption(label=family, description=description, value=family, emoji=emoji))
+        self.family_select = Select(placeholder="Select a character family", options=options)
+        self.family_select.callback = self.family_callback
+        self.add_item(self.family_select)
+
+    async def family_callback(self, interaction: discord.Interaction):
+        try:
+            if int(interaction.user.id) != int(self.user_id):
+                await interaction.response.send_message("This is not your customization interface.", ephemeral=True)
+                return
+
+            family = self.family_select.values[0]
+            profile_data = self.shop_data.get("ProfileCustomization", {}).get(family, {})
+            if not profile_data:
+                await interaction.response.send_message(f"No {family} customization options available.", ephemeral=True)
+                return
+
+            options = []
+            for item_type in ["Backgrounds", "Fonts", "Items"]:
+                if item_type in profile_data:
+                    emoji_map = {"Backgrounds": "🖼️", "Fonts": "🔤", "Items": "🎯"}
+                    description = f"{item_type} ({len(profile_data[item_type])} available)"
+                    options.append(discord.SelectOption(label=item_type, description=description, value=item_type, emoji=emoji_map[item_type]))
+
+            type_select = Select(placeholder="Select item type", options=options)
+            type_select.callback = lambda i, data=profile_data, family=family: self.item_type_callback(i, data, family)
+            view = View()
+            view.add_item(type_select)
+
+            embed = discord.Embed(
+                title=f"🎨 {family} Customization",
+                description="Choose the type of customization item you want to browse",
+                color=discord.Color.blue()
+            )
+            await interaction.response.edit_message(embed=embed, view=view)
+
+        except Exception as e:
+            traceback.print_exc()
+            await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
+
+    async def item_type_callback(self, interaction: discord.Interaction, profile_data, family):
+        try:
+            if int(interaction.user.id) != int(self.user_id):
+                await interaction.response.send_message("This is not your customization interface.", ephemeral=True)
+                return
+
+            item_type = interaction.data["values"][0]
+            items = profile_data.get(item_type, [])
+            if not items:
+                await interaction.response.send_message(f"No {item_type.lower()} available for {family}.", ephemeral=True)
+                return
+
+            item_view = ProfileItemView(items, item_type, self.quest_data, self.user_id, self.guild_id, family)
+            embed = await item_view.create_shop_embed()
+            await item_view.update_view()
+            await interaction.response.edit_message(embed=embed, view=item_view)
+
+        except Exception as e:
+            traceback.print_exc()
+            await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
+
+
+# ProfileItemView class
+class ProfileItemView(View):
     def __init__(self, items, item_type, quest_data, user_id, guild_id, family):
         super().__init__(timeout=300)
         self.items = items
@@ -3057,208 +3175,123 @@ class ProfileItemView(discord.ui.View):
         self.max_pages = (len(items) - 1) // self.items_per_page + 1
 
     async def create_shop_embed(self):
-        """Create the shop embed with item list and purchase indicators"""
-        start_index = self.page * self.items_per_page
-        end_index = start_index + self.items_per_page
-        current_items = self.items[start_index:end_index]
-        
+        start = self.page * self.items_per_page
+        end = start + self.items_per_page
+        current_items = self.items[start:end]
+
         embed = discord.Embed(
             title=f"🎨 {self.family} {self.item_type}",
             description=f"Browse and purchase {self.item_type.lower()} for your profile (Page {self.page + 1}/{self.max_pages})",
-            color=primary_color()
+            color=discord.Color.blue()
         )
-        
-        # Create item list with indicators
+
         item_list = []
         for i, item in enumerate(current_items):
-            # Check if user owns this item
-            user_quantity = await self.quest_data.get_user_inventory_count(
-                self.guild_id, self.user_id, item["name"]
-            ) or 0
-            
-            # Get user balance to check affordability
+            user_quantity = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, item["name"]) or 0
             user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
-            
-            # Create indicator
+
             if user_quantity > 0:
-                indicator = "✅"  # Owned
-                name_display = f"~~{item['name']}~~"  # Strike through if bought
+                indicator = "✅"
+                name_display = f"~~{item['name']}~~"
             elif user_balance >= item["points"]:
-                indicator = "💰"  # Can afford
-                name_display = item['name']
+                indicator = "💰"
+                name_display = item["name"]
             else:
-                indicator = "❌"  # Cannot afford
-                name_display = item['name']
-            
-            # Format item entry
+                indicator = "❌"
+                name_display = item["name"]
+
             price_display = f"{item['points']:,} pts"
-            character = item.get('character', 'N/A')
-            
+            character = item.get("character", "N/A")
             item_entry = f"{indicator} **{name_display}** - {price_display}"
             if user_quantity > 0:
                 item_entry += f" (Owned: {user_quantity})"
             item_entry += f"\n   *{character}* - {item['description'][:50]}..."
-            
-            item_list.append(f"`{start_index + i + 1}.` {item_entry}")
-        
+            item_list.append(f"`{start + i + 1}.` {item_entry}")
+
         if item_list:
-            embed.add_field(
-                name="Items Available",
-                value="\n".join(item_list),
-                inline=False
-            )
-        
-        # Add legend
-        legend = "✅ Owned | 💰 Can Purchase | ❌ Insufficient Points"
-        embed.add_field(name="Legend", value=legend, inline=False)
-        
-        # Add user balance
-        user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
-        embed.set_footer(text=f"Your Balance: {user_balance:,} Stella Points")
-        
+            embed.add_field(name="Items Available", value="\n".join(item_list), inline=False)
+        embed.add_field(name="", value="> ✅ Owned | 💰 Can Purchase | ❌ Insufficient Points", inline=False)
+        embed.set_footer(text=f"Your Balance: {await self.quest_data.get_balance(self.user_id, self.guild_id):,} Stella Points")
         return embed
 
     async def update_view(self):
         self.clear_items()
-        
-        start_index = self.page * self.items_per_page
-        end_index = start_index + self.items_per_page
-        current_items = self.items[start_index:end_index]
-        
-        # Add number buttons for each item (1-10)
-        current_row = 0
+        start = self.page * self.items_per_page
+        end = start + self.items_per_page
+        current_items = self.items[start:end]
+
         for i, item in enumerate(current_items):
-            # Check if user can afford and doesn't already own
             user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
-            user_quantity = await self.quest_data.get_user_inventory_count(
-                self.guild_id, self.user_id, item["name"]
-            ) or 0
-            
-            # Determine button style and if it should be disabled
+            user_quantity = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, item["name"]) or 0
+
             if user_quantity > 0:
-                button_style = discord.ButtonStyle.green
-                disabled = True  # Already owned
+                style, disabled = discord.ButtonStyle.green, True
             elif user_balance >= item["points"]:
-                button_style = discord.ButtonStyle.primary
-                disabled = False
+                style, disabled = discord.ButtonStyle.primary, False
             else:
-                button_style = discord.ButtonStyle.grey
-                disabled = True  # Can't afford
-            
-            button = discord.ui.Button(
-                style=button_style,
-                label=str(i + 1),
-                custom_id=f"item_{start_index + i}",
-                row=current_row,
-                disabled=disabled
-            )
-            button.callback = self.item_callback
-            self.add_item(button)
-            
-            # Move to next row after 5 buttons
-            if (i + 1) % 5 == 0:
-                current_row += 1
-        
-        # Pagination buttons
-        pagination_row = current_row + 1 if current_row < 4 else 4
-        
+                style, disabled = discord.ButtonStyle.grey, True
+
+            btn = Button(style=style, label=str(i + 1), custom_id=f"item_{start + i}", disabled=disabled)
+            btn.callback = self.item_callback
+            self.add_item(btn)
+
         if self.max_pages > 1:
             if self.page > 0:
-                prev_button = discord.ui.Button(
-                    emoji="⬅️",
-                    style=discord.ButtonStyle.secondary,
-                    custom_id="prev_page",
-                    row=pagination_row
-                )
-                prev_button.callback = self.prev_page_callback
-                self.add_item(prev_button)
-            
+                prev_btn = Button(emoji="⬅️", style=discord.ButtonStyle.secondary, custom_id="prev_page")
+                prev_btn.callback = self.prev_page_callback
+                self.add_item(prev_btn)
             if self.page < self.max_pages - 1:
-                next_button = discord.ui.Button(
-                    emoji="➡️",
-                    style=discord.ButtonStyle.secondary,
-                    custom_id="next_page",
-                    row=pagination_row
-                )
-                next_button.callback = self.next_page_callback
-                self.add_item(next_button)
+                next_btn = Button(emoji="➡️", style=discord.ButtonStyle.secondary, custom_id="next_page")
+                next_btn.callback = self.next_page_callback
+                self.add_item(next_btn)
 
     async def item_callback(self, interaction: discord.Interaction):
         try:
-            if int(self.user_id) != int(interaction.user.id):
-                await interaction.response.send_message(
-                    "This is not your shop interface.", ephemeral=True
-                )
+            if int(interaction.user.id) != int(self.user_id):
+                await interaction.response.send_message("This is not your shop interface.", ephemeral=True)
                 return
 
-            item_index = int(interaction.data["custom_id"].split("_")[1])
-            item = self.items[item_index]
-            
+            index = int(interaction.data["custom_id"].split("_")[1])
+            item = self.items[index]
             user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
-            user_quantity = await self.quest_data.get_user_inventory_count(
-                self.guild_id, self.user_id, item["name"]
-            ) or 0
-            
-            # Check if already owned
+            user_quantity = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, item["name"]) or 0
+
             if user_quantity > 0:
-                embed = discord.Embed(
+                return await interaction.response.send_message(embed=discord.Embed(
                     title="ℹ️ Already Owned",
                     description=f"You already own **{item['name']}** (Quantity: {user_quantity})",
                     color=discord.Color.blue()
-                )
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-                return
-            
+                ), ephemeral=True)
+
             if user_balance >= item["points"]:
-                # Purchase the item
                 await self.quest_data.add_balance(self.user_id, self.guild_id, -item["points"])
-                await self.quest_data.add_item_to_inventory(
-                    self.guild_id, self.user_id, item["name"], 1
-                )
-                
-                embed = discord.Embed(
-                    title="✅ Purchase Successful!",
-                    description=f"You've purchased **{item['name']}** for {item['points']:,} points!",
-                    color=discord.Color.green()
-                )
+                await self.quest_data.add_item_to_inventory(self.guild_id, self.user_id, item["name"], 1)
+                new_balance = user_balance - item["points"]
+                embed = discord.Embed(title="✅ Purchase Successful!", description=f"You've purchased **{item['name']}** for {item['points']:,} points!", color=discord.Color.green())
                 embed.add_field(name="Description", value=item["description"], inline=False)
                 embed.add_field(name="Character", value=item.get("character", "N/A"), inline=True)
-                
-                new_balance = user_balance - item["points"]
                 embed.set_footer(text=f"Remaining balance: {new_balance:,} points")
-                
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-                
-                # Refresh the main shop view
+                # EDIT the shop message
+                await interaction.response.edit_message(embed=embed, view=self)
                 await self.refresh_shop_view(interaction)
-                
             else:
-                embed = discord.Embed(
+                await interaction.response.send_message(embed=discord.Embed(
                     title="❌ Insufficient Points",
                     description=f"You need {item['points']:,} points but only have {user_balance:,}.",
                     color=discord.Color.red()
-                )
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-                
+                ), ephemeral=True)
+
         except Exception as e:
             traceback.print_exc()
-            await interaction.response.send_message(
-                f"An error occurred: {e}", ephemeral=True
-            )
+            await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
 
     async def refresh_shop_view(self, interaction):
-        """Refresh the shop view after a purchase"""
         try:
-            # Get the original message and update it
             embed = await self.create_shop_embed()
             await self.update_view()
-            
-            # Try to edit the original message
-            original_message = interaction.message
-            if original_message:
-                await original_message.edit(embed=embed, view=self)
+            if interaction.message:
+                await interaction.message.edit(embed=embed, view=self)
         except:
-            # If editing fails, that's okay - the purchase was still successful
             pass
 
     async def prev_page_callback(self, interaction: discord.Interaction):
@@ -3273,7 +3306,6 @@ class ProfileItemView(discord.ui.View):
         await self.update_view()
         await interaction.response.edit_message(embed=embed, view=self)
 
-# Keep the existing MaterialsButton and SpyToolSelect classes unchanged for spy tools
 class MaterialsButton(discord.ui.View):
     def __init__(self, shop_data, quest_data, user_id, guild_id, original_embed=None):
         super().__init__(timeout=300)
@@ -3300,7 +3332,6 @@ class MaterialsButton(discord.ui.View):
             )
         )
 
-        # Buy button logic
         if all(material_checks):
             buy_button = discord.ui.Button(
                 style=discord.ButtonStyle.green,
@@ -3321,7 +3352,6 @@ class MaterialsButton(discord.ui.View):
             )
             self.add_item(buy_button)
 
-        # Get tool and required materials
         tool_name = self.original_embed.title
         tool = next(
             (
@@ -3337,7 +3367,6 @@ class MaterialsButton(discord.ui.View):
         else:
             required_materials = []
 
-        # Filter and paginate materials
         start_index = self.page * self.items_per_page
         end_index = start_index + self.items_per_page
         filtered_materials = [
@@ -3345,7 +3374,6 @@ class MaterialsButton(discord.ui.View):
             if material["name"] in [m.get("material") for m in required_materials]
         ][start_index:end_index]
 
-        # Add material buttons
         current_row = 1
         item_count = 0
 
@@ -3375,7 +3403,6 @@ class MaterialsButton(discord.ui.View):
                 print(f"Error: {e}")
                 continue
 
-        # Pagination buttons
         pagination_row = current_row if current_row > 1 else 2
 
         if self.page > 0:
@@ -3440,8 +3467,6 @@ class MaterialsButton(discord.ui.View):
 
     async def check_material_indicator(self, material):
         material_name = material.get("name", "")
-        
-        # Find required quantity for this material
         tool_name = self.original_embed.title
         tool = next(
             (
@@ -3461,7 +3486,7 @@ class MaterialsButton(discord.ui.View):
         )
         
         if not required_material:
-            return True  # Material not needed for this tool
+            return True
             
         required_quantity = required_material.get("quantity", 0)
         user_quantity = (
@@ -3522,7 +3547,6 @@ class MaterialsButton(discord.ui.View):
             )
 
             if user_balance >= price:
-                # Use consistent inventory method
                 await self.quest_data.add_item_to_inventory(
                     self.guild_id, self.user_id, material_name, 1
                 )
@@ -3566,7 +3590,6 @@ class MaterialsButton(discord.ui.View):
                 )
                 return
 
-            # Check if user has all required materials
             for material in tool.get("materials", []):
                 material_name = material.get("material", "")
                 required_quantity = material.get("quantity", 0)
@@ -3584,7 +3607,6 @@ class MaterialsButton(discord.ui.View):
                     )
                     return
 
-            # Consume materials using consistent inventory method
             for material in tool.get("materials", []):
                 material_name = material.get("material", "")
                 required_quantity = material.get("quantity", 0)
@@ -3592,12 +3614,10 @@ class MaterialsButton(discord.ui.View):
                     self.guild_id, self.user_id, material_name, -required_quantity
                 )
 
-            # Add tool to inventory using consistent method
             await self.quest_data.add_item_to_inventory(
                 self.guild_id, self.user_id, tool_name, 1
             )
 
-            # Get updated quantity
             quantity = await self.quest_data.get_user_inventory_count(
                 self.guild_id, self.user_id, tool_name
             )
@@ -3626,17 +3646,15 @@ class MaterialsButton(discord.ui.View):
 
 class SpyToolSelect(discord.ui.Select):
     def __init__(self, shop_data, materials_dict, quest_data, user_id, guild_id):
-        spy_tools = shop_data.get("SpyTools", [])
         options = [
             discord.SelectOption(
-                emoji=f"{tool.get('emoji', '')}",
-                label=f"{tool.get('name', 'Unknown Item')}",
-                description=f"{tool.get('description', 'No description available.')[:100]}",
-                value=tool.get("name", "Unknown Item"),
-            )
-            for tool in spy_tools
+                label=tool["name"],
+                description=tool["description"][:100],
+                emoji=tool.get("emoji", "🕵️"),
+                value=tool["name"]
+            ) for tool in shop_data.get("SpyTools", [])
         ]
-        super().__init__(placeholder="🕵️ Select a Spy Tool", options=options)
+        super().__init__(placeholder="Select a spy tool", options=options)
         self.shop_data = shop_data
         self.materials_dict = materials_dict
         self.quest_data = quest_data
@@ -3645,66 +3663,54 @@ class SpyToolSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         try:
-            # Check ownership
             if int(self.user_id) != int(interaction.user.id):
                 await interaction.response.send_message(
-                    "This is not your spy tools interface.", ephemeral=True
+                    "This is not your shop interface.", ephemeral=True
                 )
                 return
 
-            selected_tool_name = self.values[0]
+            tool_name = self.values[0]
             tool = next(
-                (
-                    t
-                    for t in self.shop_data.get("SpyTools", [])
-                    if t.get("name") == selected_tool_name
-                ),
-                None,
+                (t for t in self.shop_data.get("SpyTools", []) if t["name"] == tool_name),
+                None
             )
 
             if not tool:
                 await interaction.response.send_message(
-                    "Spy tool not found!", ephemeral=True
+                    "Spy Tool not found.", ephemeral=True
                 )
                 return
 
             emoji = tool.get("emoji", "")
             description = tool.get("description", "No description available.")
             materials_list = "\n".join(
-                [
-                    await self.format_materials(item)
-                    for item in tool.get("materials", [])
-                ]
+                [await self.format_materials(item) for item in tool.get("materials", [])]
             )
+            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
 
-            initial_embed = discord.Embed(
-                title=f"{selected_tool_name}",
+            shop_embed = discord.Embed(
+                title=f"{tool_name}",
                 description=f"{emoji} {description}",
                 color=primary_color(),
             )
-            initial_embed.add_field(
+            shop_embed.add_field(
                 name="Materials Required",
                 value=materials_list or "No materials needed",
                 inline=False,
             )
-            user_balance = await self.quest_data.get_balance(
-                self.user_id, self.guild_id
-            )
             user_balance = "{:,}".format(user_balance)
-            initial_embed.set_footer(text=f"Stella Points: {user_balance}")
+            shop_embed.set_footer(text=f"Stella Points: {user_balance}")
 
-            materials_button_view = MaterialsButton(
+            view = MaterialsButton(
                 self.shop_data,
                 self.quest_data,
                 self.user_id,
                 self.guild_id,
-                original_embed=initial_embed,
+                shop_embed
             )
-            await materials_button_view.update_view()
+            await view.update_view()
 
-            await interaction.response.send_message(
-                embed=initial_embed, view=materials_button_view, ephemeral=True
-            )
+            await interaction.response.send_message(embed=shop_embed, view=view, ephemeral=True)
 
         except Exception as e:
             traceback.print_exc()
@@ -3712,16 +3718,14 @@ class SpyToolSelect(discord.ui.Select):
                 f"An error occurred: {e}", ephemeral=True
             )
 
-    async def get_user_inventory_count(self, material_name):
-        material_count = await self.quest_data.get_user_inventory_count(
-            self.guild_id, self.user_id, material_name
-        )
-        return material_count
-
     async def format_materials(self, item):
         material_name = item.get("material", "")
         required_quantity = item.get("quantity", 0)
-        user_quantity = await self.get_user_inventory_count(material_name) or 0
+        user_quantity = (
+            await self.quest_data.get_user_inventory_count(
+                self.guild_id, self.user_id, material_name
+            ) or 0
+        )
 
         if user_quantity == 0:
             indicator_emoji = "<:red:1261639413943762944>"
@@ -3730,4 +3734,163 @@ class SpyToolSelect(discord.ui.Select):
         else:
             indicator_emoji = "<:green:1261639410181476443>"
 
-        return f"{indicator_emoji} {self.materials_dict.get(material_name, '')} **{material_name}** - {user_quantity or 0}"
+        return f"{indicator_emoji} {self.materials_dict.get(material_name, '')} **{material_name}** - {user_quantity}/{required_quantity}"
+
+class CollectablesGenerator:
+    @staticmethod
+    def generate_collectable():
+        """Generate a unique collectable with a rarity seed value"""
+        base_names = [
+            "Anya's Peanut", "Loid's Disguise Kit", "Yor's Thorn Dagger", "Bond's Collar Tag",
+            "Franky's Gadget Blueprint", "Sylvia's Directive Scroll", "Fiona's Nightfall Veil",
+            "Chimera Plush Variant", "WISE Encryption Device", "Forger Family Photo"
+        ]
+        prefixes = ["Legendary", "Epic", "Rare", "Uncommon", "Common"]
+        suffixes = ["Relic", "Artifact", "Treasure", "Memento", "Heirloom"]
+        
+        # Generate unique ID
+        collectable_id = str(uuid.uuid4())
+        
+        # Randomly combine elements for name
+        name_parts = [
+            random.choice(prefixes),
+            random.choice(base_names),
+            random.choice(suffixes)
+        ]
+        name = " ".join(name_parts)
+        
+        # Generate rarity seed (0 to 100)
+        rarity_seed = random.uniform(0, 100)
+        if rarity_seed >= 95:
+            rarity = "Legendary"
+            points = 50000
+        elif rarity_seed >= 85:
+            rarity = "Epic"
+            points = 30000
+        elif rarity_seed >= 70:
+            rarity = "Rare"
+            points = 15000
+        elif rarity_seed >= 50:
+            rarity = "Uncommon"
+            points = 8000
+        else:
+            rarity = "Common"
+            points = 4000
+        
+        # Generate description
+        description = f"A {rarity.lower()} collectable inspired by Spy x Family. ID: {collectable_id[:8]}"
+        
+        return {
+            "id": collectable_id,
+            "name": name,
+            "description": description,
+            "emoji": "💎",
+            "points": points,
+            "rarity": rarity
+        }
+
+class GachaGameView(discord.ui.View):
+    def __init__(self, quest_data, user_id, guild_id, gacha_item):
+        super().__init__(timeout=300)
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+        self.gacha_item = gacha_item
+
+    async def pull_gacha(self):
+        """Simulate a gacha pull"""
+        if self.gacha_item["name"] == "Mystery Spy Box":
+            possible_items = self.quest_data.shop_data.get("SpyTools", []) + \
+                           self.quest_data.shop_data.get("Collectables", []) + \
+                           self.quest_data.shop_data.get("Materials", [])
+        elif self.gacha_item["name"] == "Lucky Forger Capsule":
+            possible_items = []
+            forger_data = self.quest_data.shop_data.get("ProfileCustomization", {}).get("ForgerFamily", {})
+            for item_type in ["Backgrounds", "Fonts", "Items"]:
+                possible_items.extend(forger_data.get(item_type, []))
+        elif self.gacha_item["name"] == "WISE Gacha Capsule":
+            possible_items = []
+            wise_data = self.quest_data.shop_data.get("ProfileCustomization", {}).get("WISE", {})
+            for item_type in ["Backgrounds", "Fonts", "Items"]:
+                possible_items.extend(wise_data.get(item_type, []))
+        else:
+            possible_items = []
+
+        if not possible_items:
+            return None
+
+        weights = [1 / (item.get("points", 1000) / 1000) for item in possible_items]
+        item = random.choices(possible_items, weights=weights, k=1)[0]
+        
+        # Chance to get a unique collectable
+        if random.random() < 0.3:  # 30% chance for unique collectable
+            item = CollectablesGenerator.generate_collectable()
+        
+        return item
+
+    async def update_view(self):
+        self.clear_items()
+        pull_button = discord.ui.Button(
+            style=discord.ButtonStyle.primary,
+            label="Pull Gacha",
+            custom_id="pull_gacha",
+            row=0
+        )
+        pull_button.callback = self.pull_callback
+        self.add_item(pull_button)
+
+    async def pull_callback(self, interaction: discord.Interaction):
+        try:
+            if int(self.user_id) != int(interaction.user.id):
+                await interaction.response.send_message(
+                    "This is not your gacha interface.", ephemeral=True
+                )
+                return
+
+            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            if user_balance < self.gacha_item["points"]:
+                embed = discord.Embed(
+                    title="❌ Insufficient Points",
+                    description=f"You need {self.gacha_item['points']:,} points to pull from **{self.gacha_item['name']}**.",
+                    color=discord.Color.red()
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                return
+
+            await self.quest_data.add_balance(self.user_id, self.guild_id, -self.gacha_item["points"])
+            item = await self.pull_gacha()
+            
+            if not item:
+                embed = discord.Embed(
+                    title="❌ Gacha Error",
+                    description="No items available in this gacha.",
+                    color=discord.Color.red()
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                return
+
+            await self.quest_data.add_item_to_inventory(
+                self.guild_id, self.user_id, item["name"], 1
+            )
+            
+            embed = discord.Embed(
+                title="🎉 Gacha Pull Result!",
+                description=f"You received **{item['name']}** from **{self.gacha_item['name']}**!",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Description", value=item["description"], inline=False)
+            if "emoji" in item:
+                embed.add_field(name="Item", value=item["emoji"], inline=True)
+            if "rarity" in item:
+                embed.add_field(name="Rarity", value=item["rarity"], inline=True)
+            
+            new_balance = user_balance - self.gacha_item["points"]
+            embed.set_footer(text=f"Remaining balance: {new_balance:,} points")
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        except Exception as e:
+            traceback.print_exc()
+            await interaction.response.send_message(
+                f"An error occurred: {e}", ephemeral=True
+            )

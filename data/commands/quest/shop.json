@@ -5,9 +5,18 @@
       "emoji": "<:chimera:1317338025470070866>",
       "description": "Hold it close for unexpected protection. Grants one-time protection against effects from other users.",
       "materials": [
-        {"material": "Cotton", "quantity": 5},
-        {"material": "Fabric", "quantity": 5},
-        {"material": "Thread", "quantity": 10}
+        {
+          "material": "Cotton",
+          "quantity": 5
+        },
+        {
+          "material": "Fabric",
+          "quantity": 5
+        },
+        {
+          "material": "Thread",
+          "quantity": 10
+        }
       ]
     },
     {
@@ -15,9 +24,18 @@
       "emoji": "<:spy_briefcase:1317341084833284157>",
       "description": "Discreetly siphon 30% of another member's points.",
       "materials": [
-        {"material": "Metal", "quantity": 3},
-        {"material": "Leather", "quantity": 5},
-        {"material": "Wire", "quantity": 5}
+        {
+          "material": "Metal",
+          "quantity": 3
+        },
+        {
+          "material": "Leather",
+          "quantity": 5
+        },
+        {
+          "material": "Wire",
+          "quantity": 5
+        }
       ]
     },
     {
@@ -25,10 +43,22 @@
       "emoji": "<:keychain_sheep:1318415294758129692>",
       "description": "Assigns a random role to the targeted member. Setup: `...q_roles <@mention role1> <@mention role2>...`",
       "materials": [
-        {"material": "Fabric", "quantity": 5},
-        {"material": "Thread", "quantity": 6},
-        {"material": "Cotton", "quantity": 10},
-        {"material": "Chain", "quantity": 5}
+        {
+          "material": "Fabric",
+          "quantity": 5
+        },
+        {
+          "material": "Thread",
+          "quantity": 6
+        },
+        {
+          "material": "Cotton",
+          "quantity": 10
+        },
+        {
+          "material": "Chain",
+          "quantity": 5
+        }
       ]
     },
     {
@@ -36,9 +66,18 @@
       "emoji": "🔇",
       "description": "Silences the target user for 30 minutes.",
       "materials": [
-        {"material": "Solder", "quantity": 6},
-        {"material": "Soundproofing Material", "quantity": 4},
-        {"material": "Battery", "quantity": 3}
+        {
+          "material": "Solder",
+          "quantity": 6
+        },
+        {
+          "material": "Soundproofing Material",
+          "quantity": 4
+        },
+        {
+          "material": "Battery",
+          "quantity": 3
+        }
       ]
     },
     {
@@ -46,80 +85,380 @@
       "emoji": "<:motion_sensor:1317345108869513227>",
       "description": "Single-use alarm triggers a 20-minute timeout if the target sends any emoji (checks last 10 messages).",
       "materials": [
-        {"material": "Plastic", "quantity": 8},
-        {"material": "Chip", "quantity": 4},
-        {"material": "Solder", "quantity": 6},
-        {"material": "CPU", "quantity": 1}
+        {
+          "material": "Plastic",
+          "quantity": 8
+        },
+        {
+          "material": "Chip",
+          "quantity": 4
+        },
+        {
+          "material": "Solder",
+          "quantity": 6
+        },
+        {
+          "material": "CPU",
+          "quantity": 1
+        }
       ]
     }
   ],
   "Materials": [
-    {"name": "Leather", "emoji": "<:leather:1317346727929319475>", "price": 15},
-    {"name": "Cotton", "emoji": "<:cotton:1318417195512103044>", "price": 15},
-    {"name": "Chain", "emoji": "<:chain:1318417784019091506>", "price": 15},
-    {"name": "Metal", "emoji": "<:metal:1318666800350892142>", "price": 15},
-    {"name": "Fabric", "emoji": "<:fabric:1318668051335348294>", "price": 15},
-    {"name": "CPU", "emoji": "<:cpu:1318667759667646504>", "price": 90},
-    {"name": "Wire", "emoji": "<:wireless:1333780912797913099>", "price": 5},
-    {"name": "Thread", "emoji": "<:thread:1318668493960511520>", "price": 15},
-    {"name": "Soundproofing Material", "emoji": "🎧", "price": 30},
-    {"name": "Battery", "emoji": "🔋", "price": 30},
-    {"name": "Plastic", "emoji": "🧴", "price": 20},
-    {"name": "Chip", "emoji": "💽", "price": 10},
-    {"name": "Solder", "emoji": "⚒️", "price": 25}
+    {
+      "name": "Leather",
+      "emoji": "<:leather:1317346727929319475>",
+      "price": 15
+    },
+    {
+      "name": "Cotton",
+      "emoji": "<:cotton:1318417195512103044>",
+      "price": 15
+    },
+    {
+      "name": "Chain",
+      "emoji": "<:chain:1318417784019091506>",
+      "price": 15
+    },
+    {
+      "name": "Metal",
+      "emoji": "<:metal:1318666800350892142>",
+      "price": 15
+    },
+    {
+      "name": "Fabric",
+      "emoji": "<:fabric:1318668051335348294>",
+      "price": 15
+    },
+    {
+      "name": "CPU",
+      "emoji": "<:cpu:1318667759667646504>",
+      "price": 90
+    },
+    {
+      "name": "Wire",
+      "emoji": "<:wireless:1333780912797913099>",
+      "price": 5
+    },
+    {
+      "name": "Thread",
+      "emoji": "<:thread:1318668493960511520>",
+      "price": 15
+    },
+    {
+      "name": "Soundproofing Material",
+      "emoji": "🎧",
+      "price": 30
+    },
+    {
+      "name": "Battery",
+      "emoji": "🔋",
+      "price": 30
+    },
+    {
+      "name": "Plastic",
+      "emoji": "🧴",
+      "price": 20
+    },
+    {
+      "name": "Chip",
+      "emoji": "💽",
+      "price": 10
+    },
+    {
+      "name": "Solder",
+      "emoji": "⚒️",
+      "price": 25
+    }
   ],
   "ProfileCustomization": {
     "ForgerFamily": {
       "Backgrounds": [
-        {"name": "Anya_Forger", "description": "Vibrant background featuring Anya with her chimera plush.", "character": "Anya Forger", "image_path": "/assets/profiles/backgrounds/anya_forger.png", "points": 12000},
-        {"name": "Loid_Forger", "description": "Sleek spy-themed background with Loid's suit and hat.", "character": "Loid Forger", "image_path": "/assets/profiles/backgrounds/loid_forger.png", "points": 15000},
-        {"name": "Yor_Forger", "description": "Stylish background with Yor's assassin outfit and red roses.", "character": "Yor Forger", "image_path": "/assets/profiles/backgrounds/yor_forger.png", "points": 15000},
-        {"name": "Bond_Forger", "description": "Warm background with Bond in a park setting.", "character": "Bond Forger", "image_path": "/assets/profiles/backgrounds/bond_forger.png", "points": 11000}
+        {
+          "name": "Anya_SchoolDay",
+          "description": "Background of Anya in her Eden Academy uniform, cheerful and bright.",
+          "character": "Anya Forger",
+          "image_path": "/assets/profiles/backgrounds/anya_schoolday.png",
+          "points": 12500,
+          "emoji": "🎒"
+        },
+        {
+          "name": "Loid_Mission",
+          "description": "Stealthy background with Loid during an undercover mission.",
+          "character": "Loid Forger",
+          "image_path": "/assets/profiles/backgrounds/loid_mission.png",
+          "points": 15500,
+          "emoji": "🕵️‍♂️"
+        },
+        {
+          "name": "Yor_Evening",
+          "description": "Elegant evening setting with Yor in a dress.",
+          "character": "Yor Forger",
+          "image_path": "/assets/profiles/backgrounds/yor_evening.png",
+          "points": 16000,
+          "emoji": "🌹"
+        },
+        {
+          "name": "Bond_Dream",
+          "description": "Whimsical dreamlike background inspired by Bond's visions.",
+          "character": "Bond Forger",
+          "image_path": "/assets/profiles/backgrounds/bond_dream.png",
+          "points": 12000,
+          "emoji": "🐶"
+        }
       ],
       "Fonts": [
-        {"name": "Anya_Handwriting", "description": "Playful handwritten font inspired by Anya's notes.", "character": "Anya Forger", "image_path": "/assets/profiles/fonts/anya_handwriting.ttf", "points": 10000}
+        {
+          "name": "Bond_Pawprint",
+          "description": "Fun paw-print style font inspired by Bond.",
+          "character": "Bond Forger",
+          "image_path": "/assets/profiles/fonts/bond_pawprint.ttf",
+          "points": 10500,
+          "emoji": "🐾"
+        }
       ],
       "Items": [
-        {"name": "Chimera_Badge", "description": "Badge of Anya's favorite chimera plush.", "character": "Anya Forger", "image_path": "/assets/profiles/items/chimera_plush.png", "points": 11000},
-        {"name": "Thorn_Pin", "description": "Pin inspired by Yor's assassin weapon.", "character": "Yor Forger", "image_path": "/assets/profiles/items/thorn_pin.png", "points": 13000},
-        {"name": "Bond_Collar", "description": "Profile add-on featuring Bond's collar.", "character": "Bond Forger", "image_path": "/assets/profiles/items/bond_collar.png", "points": 11000}
+        {
+          "name": "Family_Photo",
+          "description": "Framed photo item of the Forger family together.",
+          "character": "Forger Family",
+          "image_path": "/assets/profiles/items/family_photo.png",
+          "points": 14000,
+          "emoji": "🖼️"
+        },
+        {
+          "name": "Elegant_Rose",
+          "description": "Rose accessory symbolizing Yor’s elegance.",
+          "character": "Yor Forger",
+          "image_path": "/assets/profiles/items/elegant_rose.png",
+          "points": 12500,
+          "emoji": "🌹"
+        }
       ]
     },
     "WISE": {
       "Backgrounds": [
-        {"name": "Franky_Franklin", "description": "Gadget-filled background inspired by Franky.", "character": "Franky Franklin", "image_path": "/assets/profiles/backgrounds/franky_franklin.png", "points": 13000},
-        {"name": "Sylvia_Sherwood", "description": "Command center background for Sylvia.", "character": "Sylvia Sherwood", "image_path": "/assets/profiles/backgrounds/sylvia_sherwood.png", "points": 14000},
-        {"name": "Fiona_Frost", "description": "Cool icy background reflecting Fiona's Nightfall persona.", "character": "Fiona Frost", "image_path": "/assets/profiles/backgrounds/fiona_frost.png", "points": 13500}
+        {
+          "name": "WISE_HQ",
+          "description": "Secretive HQ background with encrypted screens and spy files.",
+          "character": "WISE",
+          "image_path": "/assets/profiles/backgrounds/wise_hq.png",
+          "points": 15000,
+          "emoji": "🏢"
+        }
       ],
       "Fonts": [
-        {"name": "WISE_Code", "description": "Spy-code-inspired font tied to Loid's missions.", "character": "Loid Forger", "image_path": "/assets/profiles/fonts/wise_code.ttf", "points": 12000},
-        {"name": "Handler_Directive", "description": "Bold font inspired by Sylvia's WISE commands.", "character": "Sylvia Sherwood", "image_path": "/assets/profiles/fonts/handler_directive.ttf", "points": 11500}
+        {
+          "name": "Cipher_Type",
+          "description": "Stylized cipher-inspired font for secret messages.",
+          "character": "WISE",
+          "image_path": "/assets/profiles/fonts/cipher_type.ttf",
+          "points": 11800,
+          "emoji": "🔐"
+        }
       ],
       "Items": [
-        {"name": "Gadget_Wristwatch", "description": "Spy gadget wristwatch inspired by Franky.", "character": "Franky Franklin", "image_path": "/assets/profiles/items/gadget_wristwatch.png", "points": 12000},
-        {"name": "Nightfall_Badge", "description": "Badge representing Fiona's codename Nightfall.", "character": "Fiona Frost", "image_path": "/assets/profiles/items/nightfall_badge.png", "points": 12500}
+        {
+          "name": "Encrypted_File",
+          "description": "Mysterious encrypted dossier item from WISE.",
+          "character": "WISE",
+          "image_path": "/assets/profiles/items/encrypted_file.png",
+          "points": 13500,
+          "emoji": "📄"
+        }
+      ]
+    },
+    "EdenAcademy": {
+      "Backgrounds": [
+        {
+          "name": "Damian_Study",
+          "description": "Background featuring Damian Desmond with books and luxury.",
+          "character": "Damian Desmond",
+          "image_path": "/assets/profiles/backgrounds/damian_study.png",
+          "points": 13500,
+          "emoji": "📚"
+        },
+        {
+          "name": "Becky_Fashion",
+          "description": "Lavish background with Becky’s fashionable lifestyle.",
+          "character": "Becky Blackbell",
+          "image_path": "/assets/profiles/backgrounds/becky_fashion.png",
+          "points": 13000,
+          "emoji": "👗"
+        }
+      ],
+      "Fonts": [
+        {
+          "name": "Eden_Elegant",
+          "description": "Classic elegant font resembling Eden’s school letters.",
+          "character": "Eden Academy",
+          "image_path": "/assets/profiles/fonts/eden_elegant.ttf",
+          "points": 11000,
+          "emoji": "✒️"
+        }
+      ],
+      "Items": [
+        {
+          "name": "Stella_Star",
+          "description": "Achievement badge symbolizing a Stella award.",
+          "character": "Eden Academy",
+          "image_path": "/assets/profiles/items/stella_star.png",
+          "points": 14500,
+          "emoji": "⭐"
+        },
+        {
+          "name": "Tonitrus_Bolt",
+          "description": "Item shaped like the dreaded Tonitrus Bolt punishment mark.",
+          "character": "Eden Academy",
+          "image_path": "/assets/profiles/items/tonitrus_bolt.png",
+          "points": 9000,
+          "emoji": "⚡"
+        }
+      ]
+    },
+    "Garden": {
+      "Backgrounds": [
+        {
+          "name": "Garden_Thorns",
+          "description": "Dark assassin guild background with blood-red roses.",
+          "character": "Garden",
+          "image_path": "/assets/profiles/backgrounds/garden_thorns.png",
+          "points": 16000,
+          "emoji": "🌹"
+        }
+      ],
+      "Items": [
+        {
+          "name": "Assassin_Dagger",
+          "description": "Small symbolic dagger from Yor’s secret life.",
+          "character": "Yor Forger",
+          "image_path": "/assets/profiles/items/assassin_dagger.png",
+          "points": 15500,
+          "emoji": "🗡️"
+        }
+      ]
+    },
+    "Extras": {
+      "Backgrounds": [
+        {
+          "name": "Penguin_Pal",
+          "description": "Lighthearted background of Bond’s penguin plush.",
+          "character": "Bond Forger",
+          "image_path": "/assets/profiles/backgrounds/penguin_pal.png",
+          "points": 10000,
+          "emoji": "🐧"
+        }
+      ],
+      "Items": [
+        {
+          "name": "Spy_Penguin",
+          "description": "Silly penguin plush wearing spy glasses.",
+          "character": "Bond Forger",
+          "image_path": "/assets/profiles/items/spy_penguin.png",
+          "points": 9500,
+          "emoji": "🕶️"
+        },
+        {
+          "name": "Elegant_Tea_Set",
+          "description": "Tea set accessory inspired by Yor’s tea gatherings.",
+          "character": "Yor Forger",
+          "image_path": "/assets/profiles/items/elegant_tea_set.png",
+          "points": 12000,
+          "emoji": "🍵"
+        }
       ]
     }
   },
   "Collectables": [
-    {"name": "Golden Spy Medal", "description": "Awarded for exceptional espionage missions.", "emoji": "🥇", "points": 25000},
-    {"name": "Rare Chimera Plush", "description": "Limited edition Chimera plush for collectors.", "emoji": "<:chimera:1317338025470070866>", "points": 30000},
-    {"name": "Spy Goggles", "description": "Decorative collectible inspired by espionage gear.", "emoji": "🕶️", "points": 15000},
-    {"name": "Invisible Ink Pen", "description": "Mystery collectible pen that vanishes when not in use.", "emoji": "🖊️", "points": 18000}
+    {
+      "name": "Golden Spy Medal",
+      "description": "Awarded for exceptional espionage missions.",
+      "emoji": "🥇",
+      "points": 25000
+    },
+    {
+      "name": "Rare Chimera Plush",
+      "description": "Limited edition Chimera plush for collectors.",
+      "emoji": "<:chimera:1317338025470070866>",
+      "points": 30000
+    },
+    {
+      "name": "Spy Goggles",
+      "description": "Decorative collectible inspired by espionage gear.",
+      "emoji": "🕶️",
+      "points": 15000
+    },
+    {
+      "name": "Invisible Ink Pen",
+      "description": "Mystery collectible pen that vanishes when not in use.",
+      "emoji": "🖊️",
+      "points": 18000
+    }
   ],
   "GachaGames": [
-    {"name": "Mystery Spy Box", "description": "Contains random spy gadgets, materials, or collectables.", "emoji": "🎁", "points": 5000},
-    {"name": "Lucky Forger Capsule", "description": "Random profile items from the Forger family.", "emoji": "🧸", "points": 7000},
-    {"name": "WISE Gacha Capsule", "description": "Random background, font, or item from WISE agents.", "emoji": "🛠️", "points": 7500}
+    {
+      "name": "Mystery Spy Box",
+      "description": "Contains random spy gadgets, materials, or collectables.",
+      "emoji": "🎁",
+      "points": 5000
+    },
+    {
+      "name": "Lucky Forger Capsule",
+      "description": "Random profile items from the Forger family.",
+      "emoji": "🧸",
+      "points": 7000
+    },
+    {
+      "name": "WISE Gacha Capsule",
+      "description": "Random background, font, or item from WISE agents.",
+      "emoji": "🛠️",
+      "points": 7500
+    }
   ],
   "ServerUtils": [
-    {"name": "Role Manager", "description": "Tool for managing server roles quickly.", "emoji": "🛡️", "points": 20000},
-    {"name": "Auto Moderator", "description": "Helps moderate the server automatically.", "emoji": "🤖", "points": 25000},
-    {"name": "Announcement Bot", "description": "Sends automated announcements on schedule.", "emoji": "📢", "points": 18000}
+    {
+      "name": "Random Role",
+      "description": "Allows user to give/receive randomly configured roles.",
+      "emoji": "🛡️",
+      "points": 20000
+    },
+    {
+      "name": "Slowmode Toggle",
+      "description": "Lets the user toggle slowmode in a channel. (3-min max)",
+      "emoji": "🐢",
+      "points": 12000
+    },
+    {
+      "name": "Message Cleaner",
+      "description": "Clears a small number of the targets recent messages.",
+      "emoji": "🧹",
+      "points": 22000
+    },
+    {
+      "name": "Temporary Role",
+      "description": "Grants the user a special role for 24 hours. (Non-Admin, Non-Mod)",
+      "emoji": "⏳",
+      "points": 27000
+    }
   ],
   "PokemonSpawns": [
-    {"name": "Pokeball Decoration", "description": "Adds a pokeball decoration to your profile.", "emoji": "⚪🔴", "points": 8000},
-    {"name": "Pikachu Plush", "description": "Cute Pikachu plush for display.", "emoji": "⚡", "points": 12000},
-    {"name": "Mystery Egg", "description": "Hatches a random Pokemon decoration.", "emoji": "🥚", "points": 10000}
+    {
+      "name": "Pokeball Decoration",
+      "description": "Adds a pokeball decoration to your profile.",
+      "emoji": "⚪🔴",
+      "points": 8000
+    },
+    {
+      "name": "Pikachu Plush",
+      "description": "Cute Pikachu plush for display.",
+      "emoji": "⚡",
+      "points": 12000
+    },
+    {
+      "name": "Mystery Egg",
+      "description": "Hatches a random Pokemon decoration.",
+      "emoji": "🥚",
+      "points": 10000
+    }
   ]
 }
