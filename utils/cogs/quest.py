@@ -2969,13 +2969,26 @@ class ItemListView(discord.ui.View):
         embed = await self.create_shop_embed()
         await self.update_view()
         await interaction.response.edit_message(embed=embed, view=self)
-import discord
-from discord.ui import View, Select, Button
-from pathlib import Path
-import json
-import traceback
 
-# NEW: ProfileFamilySelect class
+
+class Config:
+    EMOJIS = {
+        "backgrounds": "🖼️",
+        "fonts": "🔤",
+        "items": "🎯",
+        "owned": "<:check:1399603549100441723>",
+        "insufficient": "<:x_:1399603637105463386>",
+        "purchase": "💰",
+        "prev": "⬅️",
+        "next": "➡️",
+        "default_family": "❔",
+        "shop": "🎨",
+        "info": "ℹ️",
+        "success": "✅",
+        "error": "❌"
+    }
+
+
 class ProfileFamilySelect(Select):
     def __init__(self, shop_data, quest_data, user_id, guild_id):
         options = []
@@ -2990,7 +3003,7 @@ class ProfileFamilySelect(Select):
                     if emoji:
                         break
             if not emoji:
-                emoji = "❔"
+                emoji = Config.EMOJIS["default_family"]
             
             description = f"{family} themed items"
             options.append(discord.SelectOption(label=family, description=description, value=family, emoji=emoji))
@@ -3016,9 +3029,9 @@ class ProfileFamilySelect(Select):
             options = []
             for item_type in ["Backgrounds", "Fonts", "Items"]:
                 if item_type in profile_data:
-                    emoji_map = {"Backgrounds": "🖼️", "Fonts": "🔤", "Items": "🎯"}
+                    emoji = Config.EMOJIS[item_type.lower()]
                     description = f"{item_type} ({len(profile_data[item_type])} available)"
-                    options.append(discord.SelectOption(label=item_type, description=description, value=item_type, emoji=emoji_map[item_type]))
+                    options.append(discord.SelectOption(label=item_type, description=description, value=item_type, emoji=emoji))
 
             type_select = ProfileTypeSelect(profile_data, family, self.quest_data, self.user_id, self.guild_id)
             type_select.options = options
@@ -3027,19 +3040,16 @@ class ProfileFamilySelect(Select):
             view.add_item(type_select)
 
             embed = discord.Embed(
-                title=f"🎨 {family} Customization",
+                title=f"{Config.EMOJIS['shop']} {family} Customization",
                 description="Choose the type of customization item you want to browse",
                 color=discord.Color.blue()
             )
-            # Use send_message once; future interactions will edit this
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
         except Exception as e:
             traceback.print_exc()
             await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
 
-
-# NEW: ProfileTypeSelect class
 class ProfileTypeSelect(Select):
     def __init__(self, profile_data, family, quest_data, user_id, guild_id):
         super().__init__(placeholder="Select item type")
@@ -3064,15 +3074,12 @@ class ProfileTypeSelect(Select):
             item_view = ProfileItemView(items, item_type, self.quest_data, self.user_id, self.guild_id, self.family)
             embed = await item_view.create_shop_embed()
             await item_view.update_view()
-            # EDIT original message instead of sending new
             await interaction.response.edit_message(embed=embed, view=item_view)
 
         except Exception as e:
             traceback.print_exc()
             await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
 
-
-# MODIFIED: ProfileShop as a standalone View
 class ProfileShop(View):
     def __init__(self, quest_data, user_id, guild_id, json_path="data/commands/quest/shop.json"):
         super().__init__(timeout=300)
@@ -3096,7 +3103,7 @@ class ProfileShop(View):
         options = []
         profile_customization = self.shop_data.get("ProfileCustomization", {})
         for family, data in profile_customization.items():
-            emoji = data['emoji']
+            emoji = data.get('emoji', Config.EMOJIS["default_family"])
             description = f"{family} themed items"
             options.append(discord.SelectOption(label=family, description=description, value=family, emoji=emoji))
         self.family_select = Select(placeholder="Select a character family", options=options)
@@ -3118,9 +3125,9 @@ class ProfileShop(View):
             options = []
             for item_type in ["Backgrounds", "Fonts", "Items"]:
                 if item_type in profile_data:
-                    emoji_map = {"Backgrounds": "🖼️", "Fonts": "🔤", "Items": "🎯"}
+                    emoji = Config.EMOJIS[item_type.lower()]
                     description = f"{item_type} ({len(profile_data[item_type])} available)"
-                    options.append(discord.SelectOption(label=item_type, description=description, value=item_type, emoji=emoji_map[item_type]))
+                    options.append(discord.SelectOption(label=item_type, description=description, value=item_type, emoji=emoji))
 
             type_select = Select(placeholder="Select item type", options=options)
             type_select.callback = lambda i, data=profile_data, family=family: self.item_type_callback(i, data, family)
@@ -3128,7 +3135,7 @@ class ProfileShop(View):
             view.add_item(type_select)
 
             embed = discord.Embed(
-                title=f"🎨 {family} Customization",
+                title=f"{Config.EMOJIS['shop']} {family} Customization",
                 description="Choose the type of customization item you want to browse",
                 color=discord.Color.blue()
             )
@@ -3159,8 +3166,6 @@ class ProfileShop(View):
             traceback.print_exc()
             await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
 
-
-# ProfileItemView class
 class ProfileItemView(View):
     def __init__(self, items, item_type, quest_data, user_id, guild_id, family):
         super().__init__(timeout=300)
@@ -3180,9 +3185,9 @@ class ProfileItemView(View):
         current_items = self.items[start:end]
 
         embed = discord.Embed(
-            title=f"🎨 {self.family} {self.item_type}",
+            title=f"{Config.EMOJIS['shop']} {self.family} {self.item_type}",
             description=f"Browse and purchase {self.item_type.lower()} for your profile (Page {self.page + 1}/{self.max_pages})",
-            color=discord.Color.blue()
+            color=primary_color()
         )
 
         item_list = []
@@ -3191,13 +3196,13 @@ class ProfileItemView(View):
             user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
 
             if user_quantity > 0:
-                indicator = "✅"
+                indicator = Config.EMOJIS["owned"]
                 name_display = f"~~{item['name']}~~"
             elif user_balance >= item["points"]:
-                indicator = "💰"
+                indicator = Config.EMOJIS["purchase"]
                 name_display = item["name"]
             else:
-                indicator = "❌"
+                indicator = Config.EMOJIS["insufficient"]
                 name_display = item["name"]
 
             price_display = f"{item['points']:,} pts"
@@ -3205,12 +3210,12 @@ class ProfileItemView(View):
             item_entry = f"{indicator} **{name_display}** - {price_display}"
             if user_quantity > 0:
                 item_entry += f" (Owned: {user_quantity})"
-            item_entry += f"\n   *{character}* - {item['description'][:50]}..."
+            item_entry += f"\n╰➺   *{character}* - {item['description'][:50]}...\n"
             item_list.append(f"`{start + i + 1}.` {item_entry}")
 
         if item_list:
             embed.add_field(name="Items Available", value="\n".join(item_list), inline=False)
-        embed.add_field(name="", value="> ✅ Owned | 💰 Can Purchase | ❌ Insufficient Points", inline=False)
+        embed.add_field(name="", value=f"> {Config.EMOJIS['owned']} Owned | {Config.EMOJIS['purchase']} Can Purchase | {Config.EMOJIS['insufficient']} Insufficient Points", inline=False)
         embed.set_footer(text=f"Your Balance: {await self.quest_data.get_balance(self.user_id, self.guild_id):,} Stella Points")
         return embed
 
@@ -3237,11 +3242,11 @@ class ProfileItemView(View):
 
         if self.max_pages > 1:
             if self.page > 0:
-                prev_btn = Button(emoji="⬅️", style=discord.ButtonStyle.secondary, custom_id="prev_page")
+                prev_btn = Button(emoji=Config.EMOJIS["prev"], style=discord.ButtonStyle.secondary, custom_id="prev_page")
                 prev_btn.callback = self.prev_page_callback
                 self.add_item(prev_btn)
             if self.page < self.max_pages - 1:
-                next_btn = Button(emoji="➡️", style=discord.ButtonStyle.secondary, custom_id="next_page")
+                next_btn = Button(emoji=Config.EMOJIS["next"], style=discord.ButtonStyle.secondary, custom_id="next_page")
                 next_btn.callback = self.next_page_callback
                 self.add_item(next_btn)
 
@@ -3258,7 +3263,7 @@ class ProfileItemView(View):
 
             if user_quantity > 0:
                 return await interaction.response.send_message(embed=discord.Embed(
-                    title="ℹ️ Already Owned",
+                    title=f"{Config.EMOJIS['info']} Already Owned",
                     description=f"You already own **{item['name']}** (Quantity: {user_quantity})",
                     color=discord.Color.blue()
                 ), ephemeral=True)
@@ -3267,16 +3272,19 @@ class ProfileItemView(View):
                 await self.quest_data.add_balance(self.user_id, self.guild_id, -item["points"])
                 await self.quest_data.add_item_to_inventory(self.guild_id, self.user_id, item["name"], 1)
                 new_balance = user_balance - item["points"]
-                embed = discord.Embed(title="✅ Purchase Successful!", description=f"You've purchased **{item['name']}** for {item['points']:,} points!", color=discord.Color.green())
+                embed = discord.Embed(
+                    title=f"{Config.EMOJIS['success']} Purchase Successful!",
+                    description=f"You've purchased **{item['name']}** for {item['points']:,} points!",
+                    color=discord.Color.green()
+                )
                 embed.add_field(name="Description", value=item["description"], inline=False)
                 embed.add_field(name="Character", value=item.get("character", "N/A"), inline=True)
                 embed.set_footer(text=f"Remaining balance: {new_balance:,} points")
-                # EDIT the shop message
                 await interaction.response.edit_message(embed=embed, view=self)
                 await self.refresh_shop_view(interaction)
             else:
                 await interaction.response.send_message(embed=discord.Embed(
-                    title="❌ Insufficient Points",
+                    title=f"{Config.EMOJIS['error']} Insufficient Points",
                     description=f"You need {item['points']:,} points but only have {user_balance:,}.",
                     color=discord.Color.red()
                 ), ephemeral=True)
