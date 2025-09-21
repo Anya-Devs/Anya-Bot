@@ -1,239 +1,246 @@
 {
-  "SpyTools": [
-    {
-      "name": "Chimera",
-      "emoji": "<:chimera:1317338025470070866>",
-      "description": "Hold it close for unexpected protection. Grants one-time protection against effects from other users.",
-      "materials": [
-        {
-          "material": "Cotton",
-          "quantity": 5
-        },
-        {
-          "material": "Fabric",
-          "quantity": 5
-        },
-        {
-          "material": "Thread",
-          "quantity": 10
-        }
-      ]
-    },
-    {
-      "name": "Spy Briefcase",
-      "emoji": "<:spy_briefcase:1317341084833284157>",
-      "description": "Discreetly siphon 30% of another member's points.",
-      "materials": [
-        {
-          "material": "Metal",
-          "quantity": 3
-        },
-        {
-          "material": "Leather",
-          "quantity": 5
-        },
-        {
-          "material": "Wire",
-          "quantity": 5
-        }
-      ]
-    },
-    {
-      "name": "Key Chain Sheep",
-      "emoji": "<:keychain_sheep:1318415294758129692>",
-      "description": "Assigns a random role to the targeted member.",
-      "materials": [
-        {
-          "material": "Fabric",
-          "quantity": 5
-        },
-        {
-          "material": "Thread",
-          "quantity": 6
-        },
-        {
-          "material": "Cotton",
-          "quantity": 10
-        },
-        {
-          "material": "Chain",
-          "quantity": 5
-        }
-      ]
-    },
-    {
-      "name": "Mute Muffler",
-      "emoji": "🔇",
-      "description": "Silences the target user for 30 minutes.",
-      "materials": [
-        {
-          "material": "Solder",
-          "quantity": 6
-        },
-        {
-          "material": "Soundproofing Material",
-          "quantity": 4
-        },
-        {
-          "material": "Battery",
-          "quantity": 3
-        }
-      ]
-    },
-    {
-      "name": "Motion Alarm",
-      "emoji": "<:motion_sensor:1317345108869513227>",
-      "description": "Single-use alarm triggers a 20-minute timeout if the target sends any emoji (checks last 10 messages).",
-      "materials": [
-        {
-          "material": "Plastic",
-          "quantity": 8
-        },
-        {
-          "material": "Chip",
-          "quantity": 4
-        },
-        {
-          "material": "Solder",
-          "quantity": 6
-        },
-        {
-          "material": "CPU",
-          "quantity": 1
-        }
-      ]
-    },
-    {
-      "name": "EMP Device",
-      "emoji": "💣",
-      "description": "Disables all active Spy Tools in the server for 10 minutes.",
-      "materials": [
-        {
-          "material": "Battery",
-          "quantity": 6
-        },
-        {
-          "material": "Wire",
-          "quantity": 10
-        },
-        {
-          "material": "CPU",
-          "quantity": 2
-        }
-      ]
-    },
-    {
-      "name": "Scrambler",
-      "emoji": "🥸",
-      "description": "Changes the target’s nickname to random gibberish for 1 hour.",
-      "materials": [
-        {
-          "material": "Soundproofing Material",
-          "quantity": 2
-        },
-        {
-          "material": "Chip",
-          "quantity": 3
-        },
-        {
-          "material": "Plastic",
-          "quantity": 4
-        }
-      ]
-    },
-    {
-      "name": "Cloaking Watch",
-      "emoji": "⌚",
-      "description": "Grants invisibility from detection tools for 15 minutes (immune to tracking or alarms).",
-      "materials": [
-        {
-          "material": "Metal",
-          "quantity": 4
-        },
-        {
-          "material": "CPU",
-          "quantity": 1
-        },
-        {
-          "material": "Battery",
-          "quantity": 2
-        }
-      ]
-    }
-  ],
-  "Materials": [
-    {
-      "name": "Leather",
-      "emoji": "<:leather:1317346727929319475>",
-      "price": 15
-    },
-    {
-      "name": "Cotton",
-      "emoji": "<:cotton:1318417195512103044>",
-      "price": 15
-    },
-    {
-      "name": "Chain",
-      "emoji": "<:chain:1318417784019091506>",
-      "price": 15
-    },
-    {
-      "name": "Metal",
-      "emoji": "<:metal:1318666800350892142>",
-      "price": 15
-    },
-    {
-      "name": "Fabric",
-      "emoji": "<:fabric:1318668051335348294>",
-      "price": 15
-    },
-    {
-      "name": "CPU",
-      "emoji": "<:cpu:1318667759667646504>",
-      "price": 90
-    },
-    {
-      "name": "Wire",
-      "emoji": "<:wireless:1333780912797913099>",
-      "price": 5
-    },
-    {
-      "name": "Thread",
-      "emoji": "<:thread:1318668493960511520>",
-      "price": 15
-    },
-    {
-      "name": "Soundproofing Material",
-      "emoji": "🎧",
-      "price": 30
-    },
-    {
-      "name": "Battery",
-      "emoji": "🔋",
-      "price": 30
-    },
-    {
-      "name": "Plastic",
-      "emoji": "🧴",
-      "price": 20
-    },
-    {
-      "name": "Chip",
-      "emoji": "💽",
-      "price": 10
-    },
-    {
-      "name": "Solder",
-      "emoji": "⚒️",
-      "price": 25
-    },
-    {
-      "name": "Glass",
-      "emoji": "🔍",
-      "price": 12
-    }
-  ],
+  "SpyTools": {
+    "main_description": "A collection of spy-themed tools with unique abilities and crafting requirements.",
+    "items": [
+      {
+        "name": "Chimera",
+        "emoji": "<:chimera:1317338025470070866>",
+        "description": "Hold it close for unexpected protection. Grants one-time protection against effects from other users.",
+        "materials": [
+          {
+            "material": "Cotton",
+            "quantity": 5
+          },
+          {
+            "material": "Fabric",
+            "quantity": 5
+          },
+          {
+            "material": "Thread",
+            "quantity": 10
+          }
+        ]
+      },
+      {
+        "name": "Spy Briefcase",
+        "emoji": "<:spy_briefcase:1317341084833284157>",
+        "description": "Discreetly siphon 30% of another member's points.",
+        "materials": [
+          {
+            "material": "Metal",
+            "quantity": 3
+          },
+          {
+            "material": "Leather",
+            "quantity": 5
+          },
+          {
+            "material": "Wire",
+            "quantity": 5
+          }
+        ]
+      },
+      {
+        "name": "Key Chain Sheep",
+        "emoji": "<:keychain_sheep:1318415294758129692>",
+        "description": "Assigns a random role to the targeted member.",
+        "materials": [
+          {
+            "material": "Fabric",
+            "quantity": 5
+          },
+          {
+            "material": "Thread",
+            "quantity": 6
+          },
+          {
+            "material": "Cotton",
+            "quantity": 10
+          },
+          {
+            "material": "Chain",
+            "quantity": 5
+          }
+        ]
+      },
+      {
+        "name": "Mute Muffler",
+        "emoji": "🔇",
+        "description": "Silences the target user for 30 minutes.",
+        "materials": [
+          {
+            "material": "Solder",
+            "quantity": 6
+          },
+          {
+            "material": "Soundproofing Material",
+            "quantity": 4
+          },
+          {
+            "material": "Battery",
+            "quantity": 3
+          }
+        ]
+      },
+      {
+        "name": "Motion Alarm",
+        "emoji": "<:motion_sensor:1317345108869513227>",
+        "description": "Single-use alarm triggers a 20-minute timeout if the target sends any emoji (checks last 10 messages).",
+        "materials": [
+          {
+            "material": "Plastic",
+            "quantity": 8
+          },
+          {
+            "material": "Chip",
+            "quantity": 4
+          },
+          {
+            "material": "Solder",
+            "quantity": 6
+          },
+          {
+            "material": "CPU",
+            "quantity": 1
+          }
+        ]
+      },
+      {
+        "name": "EMP Device",
+        "emoji": "💣",
+        "description": "Disables all active Spy Tools in the server for 10 minutes.",
+        "materials": [
+          {
+            "material": "Battery",
+            "quantity": 6
+          },
+          {
+            "material": "Wire",
+            "quantity": 10
+          },
+          {
+            "material": "CPU",
+            "quantity": 2
+          }
+        ]
+      },
+      {
+        "name": "Scrambler",
+        "emoji": "🥸",
+        "description": "Changes the target’s nickname to random gibberish for 1 hour.",
+        "materials": [
+          {
+            "material": "Soundproofing Material",
+            "quantity": 2
+          },
+          {
+            "material": "Chip",
+            "quantity": 3
+          },
+          {
+            "material": "Plastic",
+            "quantity": 4
+          }
+        ]
+      },
+      {
+        "name": "Cloaking Watch",
+        "emoji": "⌚",
+        "description": "Grants invisibility from detection tools for 15 minutes (immune to tracking or alarms).",
+        "materials": [
+          {
+            "material": "Metal",
+            "quantity": 4
+          },
+          {
+            "material": "CPU",
+            "quantity": 1
+          },
+          {
+            "material": "Battery",
+            "quantity": 2
+          }
+        ]
+      }
+    ]
+  },
+  "Materials": {
+    "main_description": "Resources used to craft Spy Tools, each with a specific price and emoji representation.",
+    "items": [
+      {
+        "name": "Leather",
+        "emoji": "<:leather:1317346727929319475>",
+        "price": 15
+      },
+      {
+        "name": "Cotton",
+        "emoji": "<:cotton:1318417195512103044>",
+        "price": 15
+      },
+      {
+        "name": "Chain",
+        "emoji": "<:chain:1318417784019091506>",
+        "price": 15
+      },
+      {
+        "name": "Metal",
+        "emoji": "<:metal:1318666800350892142>",
+        "price": 15
+      },
+      {
+        "name": "Fabric",
+        "emoji": "<:fabric:1318668051335348294>",
+        "price": 15
+      },
+      {
+        "name": "CPU",
+        "emoji": "<:cpu:1318667759667646504>",
+        "price": 90
+      },
+      {
+        "name": "Wire",
+        "emoji": "<:wireless:1333780912797913099>",
+        "price": 5
+      },
+      {
+        "name": "Thread",
+        "emoji": "<:thread:1318668493960511520>",
+        "price": 15
+      },
+      {
+        "name": "Soundproofing Material",
+        "emoji": "🎧",
+        "price": 30
+      },
+      {
+        "name": "Battery",
+        "emoji": "🔋",
+        "price": 30
+      },
+      {
+        "name": "Plastic",
+        "emoji": "🧴",
+        "price": 20
+      },
+      {
+        "name": "Chip",
+        "emoji": "💽",
+        "price": 10
+      },
+      {
+        "name": "Solder",
+        "emoji": "⚒️",
+        "price": 25
+      },
+      {
+        "name": "Glass",
+        "emoji": "🔍",
+        "price": 12
+      }
+    ]
+  },
   "ProfileCustomization": {
+    "main_description": "Customizable profile assets including backgrounds, fonts, and items themed around Spy x Family characters and factions.",
     "ForgerFamily": {
       "Backgrounds": [
         {
@@ -431,96 +438,88 @@
       ]
     }
   },
-  "Collectables": [
-    {
-      "name": "Golden Spy Medal",
-      "description": "Awarded for exceptional espionage missions.",
-      "emoji": "🥇",
-      "points": 25000
-    },
-    {
-      "name": "Rare Chimera Plush",
-      "description": "Limited edition Chimera plush for collectors.",
-      "emoji": "<:chimera:1317338025470070866>",
-      "points": 30000
-    },
-    {
-      "name": "Spy Goggles",
-      "description": "Decorative collectible inspired by espionage gear.",
-      "emoji": "🕶️",
-      "points": 15000
-    },
-    {
-      "name": "Invisible Ink Pen",
-      "description": "Mystery collectible pen that vanishes when not in use.",
-      "emoji": "🖊️",
-      "points": 18000
+  "GachaGames": {
+    "main_description": "Randomized reward systems offering spy-themed items, gadgets, or profile customizations for points.",
+    "items": [
+      {
+        "name": "Mystery Spy Box",
+        "description": "Contains random spy gadgets, materials, or collectables.",
+        "emoji": "🎁",
+        "points": 5000
+      },
+      {
+        "name": "Lucky Forger Capsule",
+        "description": "Random profile items from the Forger family.",
+        "emoji": "🧸",
+        "points": 7000
+      },
+      {
+        "name": "WISE Gacha Capsule",
+        "description": "Random background, font, or item from WISE agents.",
+        "emoji": "🛠️",
+        "points": 7500
+      }
+    ]
+  },
+  "PokemonSpawns": {
+    "main_description": "Collect and customize your profile with Anya Forger seasonal images, Spy x Family decorations, and optional custom backgrounds. Each item has a unique style and points cost.",
+    "sections": {
+      "Seasonal Anya Images": [
+        {
+          "name": "Anya Forger - Fall Theme",
+          "description": "Custom Anya Forger image in a fall theme.",
+          "emoji": "🍂",
+          "points": 15000,
+          "season": "fall",
+          "theme": "Spy x Family",
+          "image_path": "/assets/poketwo-spawns/anya_fall.png",
+          "custom_background_url": null
+        },
+        {
+          "name": "Anya Forger - Winter Theme",
+          "description": "Custom Anya Forger image in a winter theme.",
+          "emoji": "❄️",
+          "points": 15000,
+          "season": "winter",
+          "theme": "Spy x Family",
+          "image_path": "/assets/poketwo-spawns/anya_winter.png",
+          "custom_background_url": null
+        },
+        {
+          "name": "Anya Forger - Spring Theme",
+          "description": "Custom Anya Forger image in a spring theme.",
+          "emoji": "🌸",
+          "points": 15000,
+          "season": "spring",
+          "theme": "Spy x Family",
+          "image_path": "/assets/poketwo-spawns/anya_spring.png",
+          "custom_background_url": null
+        }
+      ],
+      "Spy x Family Decorations": [
+        {
+          "name": "Spy x Family Decor",
+          "description": "Decor items inspired by Spy x Family for your profile.",
+          "emoji": "🕵️‍♀️",
+          "points": 10000,
+          "season": null,
+          "theme": "Spy x Family",
+          "image_path": "/assets/poketwo-spawns/spy_family_decor.png",
+          "custom_background_url": null
+        }
+      ],
+      "Custom Backgrounds": [
+        {
+          "name": "Custom Background URL",
+          "description": "Set a custom background using a URL for your profile image.",
+          "emoji": "🖼️",
+          "points": 25000,
+          "season": null,
+          "theme": null,
+          "image_path": null,
+          "custom_background_url": "{custom_link}"
+        }
+      ]
     }
-  ],
-  "GachaGames": [
-    {
-      "name": "Mystery Spy Box",
-      "description": "Contains random spy gadgets, materials, or collectables.",
-      "emoji": "🎁",
-      "points": 5000
-    },
-    {
-      "name": "Lucky Forger Capsule",
-      "description": "Random profile items from the Forger family.",
-      "emoji": "🧸",
-      "points": 7000
-    },
-    {
-      "name": "WISE Gacha Capsule",
-      "description": "Random background, font, or item from WISE agents.",
-      "emoji": "🛠️",
-      "points": 7500
-    }
-  ],
-  "ServerUtils": [
-    {
-      "name": "Random Role",
-      "description": "Allows user to give/receive randomly configured roles.",
-      "emoji": "🛡️",
-      "points": 20000
-    },
-    {
-      "name": "Slowmode Toggle",
-      "description": "Lets the user toggle slowmode in a channel. (3-min max)",
-      "emoji": "🐢",
-      "points": 12000
-    },
-    {
-      "name": "Message Cleaner",
-      "description": "Clears a small number of the targets recent messages.",
-      "emoji": "🧹",
-      "points": 22000
-    },
-    {
-      "name": "Temporary Role",
-      "description": "Grants the user a special role for 24 hours. (Non-Admin, Non-Mod)",
-      "emoji": "⏳",
-      "points": 27000
-    }
-  ],
-  "PokemonSpawns": [
-    {
-      "name": "Pokeball Decoration",
-      "description": "Adds a pokeball decoration to your profile.",
-      "emoji": "⚪🔴",
-      "points": 8000
-    },
-    {
-      "name": "Pikachu Plush",
-      "description": "Cute Pikachu plush for display.",
-      "emoji": "⚡",
-      "points": 12000
-    },
-    {
-      "name": "Mystery Egg",
-      "description": "Hatches a random Pokemon decoration.",
-      "emoji": "🥚",
-      "points": 10000
-    }
-  ]
+  }
 }
