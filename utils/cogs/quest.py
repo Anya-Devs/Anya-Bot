@@ -2603,9 +2603,8 @@ class ShopCategorySelect(discord.ui.Select):
             description="Try your luck with random item draws and loot boxes",
             color=primary_color()
         )
-        embed.set_image(url="https://media.discordapp.net/attachments/1279353553110040596/1419493026648035458/61250eaf-9b44-4215-9452-a79d4b7f019e_removalai_preview.png?ex=68d1f566&is=68d0a3e6&hm=7a9dff24161525c5625083e0748ef95723dc55d1da5b75985d7c009bac28a3be&=&format=webp&quality=lossless&width=675&height=262")
+        embed.set_image(url="https://media.discordapp.net/attachments/1279353553110040596/1419526087402197032/AAHar4d7MANRf42MFGfA2njCtEHCWpykVRKDnJLC3meHNd3HyA6KVzcjTfiaF58RFnziXWuDf0swhWDC3kTrBb0JIqrzN5-0twFmxzxrBJEA9sAVinvI4LByafkDoMUL4UWa0tgruwHvxW5i0ESq45EewiR-3amR-MH5uTzga5xpatWp0zvgt75HteP9DjdqkUKkVg6xsiOZQy8RIY2vBW-w0jMvoK5pv3CCqMAyImtPQEHw68_RNHwvGkXd0C9GYu4d-m8zs-o8ERpPRdupKVdrAcPbV93QcyQ9YRId.png?ex=68d21430&is=68d0c2b0&hm=a117830714a0dc5fa87a468c238476b906936fcdc31ced2bbcd5ae426910ce7c&=&format=webp&quality=lossless")
 
-        
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     async def show_pokemon_spawns(self, interaction: discord.Interaction):
