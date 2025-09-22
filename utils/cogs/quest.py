@@ -2603,6 +2603,8 @@ class ShopCategorySelect(discord.ui.Select):
             description="Try your luck with random item draws and loot boxes",
             color=primary_color()
         )
+        embed.set_image(url="https://media.discordapp.net/attachments/1279353553110040596/1419493026648035458/61250eaf-9b44-4215-9452-a79d4b7f019e_removalai_preview.png?ex=68d1f566&is=68d0a3e6&hm=7a9dff24161525c5625083e0748ef95723dc55d1da5b75985d7c009bac28a3be&=&format=webp&quality=lossless&width=675&height=262")
+
         
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
