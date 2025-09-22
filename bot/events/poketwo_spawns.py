@@ -183,21 +183,37 @@ class PoketwoSpawnDetector(commands.Cog):
             )
 
             img_bytes = self.img_bytes_cache.get(base_name)
+            view = PokemonSpawnView(
+                slug=base_name,
+                pokemon_data=self.pokemon_utils.load_full_pokemon_data(),
+                pokemon_utils=self.pokemon_utils
+            )
+
             if not img_bytes:
                 path = os.path.join(self.spawn_dir, f"{base_name}.png")
                 if base_name not in self.file_cache:
-                    await loop.run_in_executor(
-                        _thread_executor,
-                        self.image_builder.create_image,
-                        base_name,
-                        self.pokemon_utils.format_name(base_name).replace("_", " ").title(),
-                        self.alt_cache.get(base_name, ""),
-                        self.type_cache.get(base_name, []),
-                        None,
-                        path,
-                        "PNG",
-                    )
-                    self.file_cache[base_name] = path
+                    try:
+                        await loop.run_in_executor(
+                            _thread_executor,
+                            self.image_builder.create_image,
+                            base_name,
+                            self.pokemon_utils.format_name(base_name).replace("_", " ").title(),
+                            self.alt_cache.get(base_name, ""),
+                            self.type_cache.get(base_name, []),
+                            None,
+                            path,
+                            "PNG",
+                        )
+                        self.file_cache[base_name] = path
+                        async with aiofiles.open(path, "rb") as f:
+                            img_bytes = await f.read()
+                        self.img_bytes_cache[base_name] = img_bytes
+                    except:
+                        return await message.channel.send(
+                            content=ping_msg,
+                            reference=message,
+                            view=view
+                        )
 
                 try:
                     async with aiofiles.open(path, "rb") as f:
@@ -205,15 +221,11 @@ class PoketwoSpawnDetector(commands.Cog):
                     self.img_bytes_cache[base_name] = img_bytes
                 except:
                     return await message.channel.send(
-                        f"{self.cross_emoji} Missing image for {base_name}",
+                        content=ping_msg,
                         reference=message,
+                        view=view
                     )
 
-            view = PokemonSpawnView(
-                slug=base_name,
-                pokemon_data=self.pokemon_utils.load_full_pokemon_data(),
-                pokemon_utils=self.pokemon_utils
-            )
             await message.channel.send(
                 content=ping_msg,
                 file=discord.File(fp=BytesIO(img_bytes), filename=f"{base_name}.png"),
@@ -259,7 +271,7 @@ class PoketwoSpawnDetector(commands.Cog):
             self.file_cache[slug] = path
 
         if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+            await asyncio.gather(*tasks, return_exceptions=True, dragen=True)
 
         for slug in missing_or_empty:
             path = self.file_cache[slug]
