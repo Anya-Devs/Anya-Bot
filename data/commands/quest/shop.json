@@ -461,8 +461,8 @@
       }
     ]
   },
-  "PokemonSpawns": {
-    "main_description": "Collect and customize your profile with Anya Forger seasonal images, Spy x Family decorations, and optional custom backgrounds. Each item has a unique style and points cost.",
+  "PoketwoSpawns": {
+    "main_description": "Customize layout and background Images of Poketwo spawns in your server.\n\nRequires one of these:\n- Anya Manger (role)\n- Admin (permission)",
     "sections": {
       "Seasonal Anya Images": [
         {

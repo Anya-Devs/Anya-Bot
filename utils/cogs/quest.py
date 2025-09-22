@@ -2501,8 +2501,8 @@ class ShopCategorySelect(discord.ui.Select):
             ),
             discord.SelectOption(
                 emoji="🐾",
-                label="Pokemon Spawns",
-                description="Pokemon decorations and spawn items",
+                label="Poketwo Spawns",
+                description="Poketwo decorations and spawn layout",
                 value="pokemon_spawns"
             )
         ]
@@ -2525,8 +2525,6 @@ class ShopCategorySelect(discord.ui.Select):
             
             if category == "spy_tools":
                 await self.show_spy_tools(interaction)
-            elif category == "materials":
-                await self.show_materials(interaction)
             elif category == "profile_customization":
                 await self.show_profile_customization(interaction)
             elif category == "gacha_games":
@@ -2581,7 +2579,7 @@ class ShopCategorySelect(discord.ui.Select):
             description="Customize your profile with backgrounds, fonts, and items",
             color=primary_color()
         )
-        embed.set_image(url='https://media.discordapp.net/attachments/1279353553110040596/1419422011972648970/799ca97d-d698-46d4-8450-3d09557661b1_removalai_preview.png?ex=68d1b343&is=68d061c3&hm=957d75061c68e44b5d802ccf867ecb942098477c8eeaed74a8093f2e538261d0&=&format=webp&quality=lossless&width=675&height=242')
+        embed.set_image(url='https://media.discordapp.net/attachments/1279353553110040596/1419486274531889262/04310b69-499a-4487-90ea-027bfce4a0aa_removalai_preview.png?ex=68d1ef1c&is=68d09d9c&hm=bdcfe7804bc82b0e7c1fb8e4fca55a24c2d89efdc535b2224590fca059984325&=&format=webp&quality=lossless&width=675&height=320')
         view = discord.ui.View()
         view.add_item(select)
         
@@ -2609,27 +2607,39 @@ class ShopCategorySelect(discord.ui.Select):
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     async def show_pokemon_spawns(self, interaction: discord.Interaction):
-        pokemon_spawns = self.shop_data.get("PokemonSpawns", {})
-        if not pokemon_spawns:
-            await interaction.response.send_message(
-                "No Pokemon spawn items available at the moment.", ephemeral=True
-            )
-            return
+     pokemon_spawns = self.shop_data.get("PoketwoSpawns", {})
+     if not pokemon_spawns:
+        await interaction.response.send_message(
+            "No Pokemon spawn items available at the moment.", ephemeral=True
+        )
+        return
 
-        select = PokemonSpawnSectionSelect(
-            self.shop_data, self.quest_data, self.user_id, self.guild_id
+     main_description = pokemon_spawns.get("main_description", "")
+     sections = pokemon_spawns.get("sections", {})
+
+     if not sections:
+        await interaction.response.send_message(
+            "No Pokemon spawn sections available at the moment.", ephemeral=True
         )
-        
-        embed = discord.Embed(
-            title="🐾 Pokemon Spawns Shop",
-            description="Select a section to browse Pokemon spawn items",
-            color=primary_color()
-        )
-        #embed.set_image(url='https://media.discordapp.net/attachments/1279353553110040596/1419422011972648970/799ca97d-d698-46d4-8450-3d09557661b1_removalai_preview.png?ex=68d1b343&is=68d061c3&hm=957d75061c68e44b5d802ccf867ecb942098477c8eeaed74a8093f2e538261d0&=&format=webp&quality=lossless&width=675&height=242')
-        view = discord.ui.View()
-        view.add_item(select)
-        
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        return
+
+     # build select using section keys
+     select = PokemonSpawnSectionSelect(
+        self.shop_data, self.quest_data, self.user_id, self.guild_id
+     )
+
+     embed = discord.Embed(
+        title="🐾 Poketwo Spawns Shop",
+        description=main_description or "Select a section to browse Pokemon spawn items",
+        color=primary_color()
+     )
+     embed.set_image(url="https://media.discordapp.net/attachments/1279353553110040596/1419478776613699665/ad51d45f-70b8-4a52-99ff-f87592ce3d2c_removalai_preview.png")
+
+     view = discord.ui.View()
+     view.add_item(select)
+
+     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
 
 class ItemListView(discord.ui.View):
     def __init__(self, items, category, emoji, quest_data, user_id, guild_id):
@@ -3667,7 +3677,7 @@ class GachaGameView(discord.ui.View):
 class PokemonSpawnSectionSelect(discord.ui.Select):
     def __init__(self, shop_data, quest_data, user_id, guild_id):
         options = []
-        pokemon_spawns = shop_data.get("PokemonSpawns", {}).get("sections", {})
+        pokemon_spawns = shop_data.get("PoketwoSpawns", {}).get("sections", {})
         
         for section_name, section_items in pokemon_spawns.items():
             emoji = None
@@ -3692,7 +3702,7 @@ class PokemonSpawnSectionSelect(discord.ui.Select):
                 return
 
             section = self.values[0]
-            pokemon_spawns = self.shop_data.get("PokemonSpawns", {}).get("sections", {})
+            pokemon_spawns = self.shop_data.get("PoketwoSpawns", {}).get("sections", {})
             items = pokemon_spawns.get(section, [])
             if not items:
                 await interaction.response.send_message(f"No items available in {section}.", ephemeral=True)
