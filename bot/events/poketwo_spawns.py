@@ -56,7 +56,7 @@ class PoketwoSpawnDetector(commands.Cog):
                 self.file_cache[slug] = path
 
         self.queue = asyncio.Queue()
-        self.worker_count = worker_count or min((os.cpu_count() or 4) * 2, 32)
+        self.worker_count = worker_count or min((os.cpu_count() or 4) * 4, 64)  # Increased workers for better parallelism
         self.success_emoji = "<:green:1261639410181476443>"
         self.error_emoji = "<:red:1261639413943762944>"
         self.cross_emoji = "❌"
@@ -75,6 +75,13 @@ class PoketwoSpawnDetector(commands.Cog):
                 logger.error(f"Worker error: {type(e).__name__}: {e}")
             finally:
                 self.queue.task_done()
+
+    async def _read_file(self, path, slug):
+        try:
+            async with aiofiles.open(path, "rb") as f:
+                self.img_bytes_cache[slug] = await f.read()
+        except:
+            pass
 
     async def _pickellize_all(self):
         loop = asyncio.get_running_loop()
@@ -110,12 +117,12 @@ class PoketwoSpawnDetector(commands.Cog):
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
+        read_tasks = []
         for slug, path in self.file_cache.items():
-            try:
-                async with aiofiles.open(path, "rb") as f:
-                    self.img_bytes_cache[slug] = await f.read()
-            except:
-                continue
+            read_tasks.append(self._read_file(path, slug))
+
+        if read_tasks:
+            await asyncio.gather(*read_tasks)
 
         logger.info("Preloaded all Pokémon data: images, bytes, descriptions, types, alt names.")
 
@@ -123,10 +130,14 @@ class PoketwoSpawnDetector(commands.Cog):
         try:
             loop = asyncio.get_running_loop()
 
-            raw_name, conf = self.pred_cache.get(image_url) or await loop.run_in_executor(
-                _thread_executor, self.predictor.predict, image_url
-            )
-            self.pred_cache[image_url] = (raw_name, conf)
+            pred = self.pred_cache.get(image_url)
+            if pred:
+                raw_name, conf = pred
+            else:
+                raw_name, conf = await loop.run_in_executor(
+                    _thread_executor, self.predictor.predict, image_url
+                )
+                self.pred_cache[image_url] = (raw_name, conf)
 
             base_name = self.base_cache.get(raw_name)
             if not base_name:
@@ -143,16 +154,23 @@ class PoketwoSpawnDetector(commands.Cog):
             low_conf = conf_float < 30
 
             sid = message.guild.id
-            server_config = self.server_cache.get(sid) or await self.pokemon_utils.get_server_config(sid)
-            self.server_cache[sid] = server_config
+            server_config = self.server_cache.get(sid)
+            if not server_config:
+                server_config = await self.pokemon_utils.get_server_config(sid)
+                self.server_cache[sid] = server_config
 
-            shiny_collect, type_pings, quest_pings = await asyncio.gather(
-                self.pokemon_utils.get_ping_users(message.guild, base_name),
-                self.pokemon_utils.get_type_ping_users(message.guild, base_name),
-                self.pokemon_utils.get_quest_ping_users(message.guild, base_name),
-            )
-            shiny_pings, collect_pings = shiny_collect
-            self.ping_cache[(sid, base_name)] = (type_pings, quest_pings, shiny_pings, collect_pings)
+            pings = self.ping_cache.get((sid, base_name))
+            if pings:
+                type_pings, quest_pings, shiny_pings, collect_pings = pings
+            else:
+                shiny_collect, type_pings, quest_pings = await asyncio.gather(
+                    self.pokemon_utils.get_ping_users(message.guild, base_name),
+                    self.pokemon_utils.get_type_ping_users(message.guild, base_name),
+                    self.pokemon_utils.get_quest_ping_users(message.guild, base_name),
+                )
+                shiny_pings, collect_pings = shiny_collect
+                pings = (type_pings, quest_pings, shiny_pings, collect_pings)
+                self.ping_cache[(sid, base_name)] = pings
 
             rare, regional = self.pokemon_utils._special_names
             special_roles = []
@@ -271,15 +289,15 @@ class PoketwoSpawnDetector(commands.Cog):
             self.file_cache[slug] = path
 
         if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True, dragen=True)
+            await asyncio.gather(*tasks, return_exceptions=True)
 
+        read_tasks = []
         for slug in missing_or_empty:
             path = self.file_cache[slug]
-            try:
-                async with aiofiles.open(path, "rb") as f:
-                    self.img_bytes_cache[slug] = await f.read()
-            except:
-                continue
+            read_tasks.append(self._read_file(path, slug))
+
+        if read_tasks:
+            await asyncio.gather(*read_tasks)
 
         await ctx.send("✅ All spawn images generated, cached, and verified!")
 
