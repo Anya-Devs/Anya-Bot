@@ -1,12 +1,8 @@
-import os
-import asyncio
-import logging
+import os, asyncio, logging
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 import aiofiles
-import aiohttp
-from cachetools import LRUCache
-from discord.ext import commands
+import numpy as np
 from bot.token import use_test_bot as ut
 from imports.discord_imports import *
 from utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils, PokemonSpawnView
@@ -16,7 +12,7 @@ from bot.cogs.pokemon import PoketwoCommands
 from motor.motor_asyncio import AsyncIOMotorClient
 
 logger = logging.getLogger(__name__)
-_thread_executor = ThreadPoolExecutor(max_workers=max(os.cpu_count() or 4, 8))
+_thread_executor = ThreadPoolExecutor(max_workers=os.cpu_count() or 4)
 
 class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot, worker_count=None):
@@ -48,66 +44,58 @@ class PoketwoSpawnDetector(commands.Cog):
         self.spawn_dir = "data/events/poketwo_spawns/spawns"
         os.makedirs(self.spawn_dir, exist_ok=True)
 
-        # Caches with size limits
-        self.file_cache = LRUCache(maxsize=1000)
-        self.img_bytes_cache = LRUCache(maxsize=1000)
-        self.pred_cache = LRUCache(maxsize=5000)
-        self.base_cache = LRUCache(maxsize=1000)
-        self.server_cache = LRUCache(maxsize=100)
-        self.ping_cache = LRUCache(maxsize=500)
-        self.desc_cache = LRUCache(maxsize=1000)
-        self.type_cache = LRUCache(maxsize=1000)
-        self.alt_cache = LRUCache(maxsize=1000)
-
         self._pokemon_ids = self.pokemon_utils.load_pokemon_ids()
-        self.server_queues = {}  # Per-server queues
-        self.worker_count = worker_count or max((os.cpu_count() or 4) * 2, 16)
+        self.file_cache, self.img_bytes_cache = {}, {}
+        self.pred_cache, self.base_cache = {}, {}
+        self.server_cache, self.ping_cache = {}, {}
+        self.desc_cache, self.type_cache, self.alt_cache = {}, {}, {}
+
+        for slug in self._pokemon_ids:
+            path = os.path.join(self.spawn_dir, f"{slug}.png")
+            if os.path.exists(path):
+                self.file_cache[slug] = path
+
+        self.queue = asyncio.Queue()
+        self.worker_count = worker_count or min((os.cpu_count() or 4) * 4, 64)  # Increased workers for better parallelism
         self.success_emoji = "<:green:1261639410181476443>"
         self.error_emoji = "<:red:1261639413943762944>"
         self.cross_emoji = "❌"
 
-        # Preload existing images
-        for slug in self._pokemon_ids:
-            path = os.path.join(self.spawn_dir, f"{slug}.png")
-            if os.path.exists(path) and os.path.getsize(path) > 0:
-                self.file_cache[slug] = path
+        for _ in range(self.worker_count):
+            self.bot.loop.create_task(self._worker())
 
-        # Start workers for each server queue
-        self.bot.loop.create_task(self._start_workers())
-        asyncio.create_task(self._preload_data())
+        asyncio.create_task(self._pickellize_all())
 
-    async def _start_workers(self):
-        """Start workers for each server queue."""
+    async def _worker(self):
         while True:
-            for guild_id in list(self.server_queues.keys()):
-                queue = self.server_queues[guild_id]
-                for _ in range(self.worker_count):
-                    self.bot.loop.create_task(self._worker(guild_id, queue))
-            await asyncio.sleep(60)  # Periodically check for new queues
-
-    async def _worker(self, guild_id, queue):
-        """Process tasks from a server-specific queue."""
-        while True:
+            message, image_url = await self.queue.get()
             try:
-                message, image_url = await asyncio.wait_for(queue.get(), timeout=30.0)
-                async with aiohttp.ClientSession() as session:
-                    await self._process_spawn_with_retry(message, image_url, session)
-            except asyncio.TimeoutError:
-                continue  # Continue checking queue
+                await self.process_spawn(message, image_url)
             except Exception as e:
-                logger.error(f"Worker error for guild {guild_id}: {type(e).__name__}: {e}")
+                logger.error(f"Worker error: {type(e).__name__}: {e}")
             finally:
-                queue.task_done()
+                self.queue.task_done()
 
-    async def _preload_data(self):
-        """Preload Pokémon data and images."""
+    async def _read_file(self, path, slug):
+        try:
+            async with aiofiles.open(path, "rb") as f:
+                self.img_bytes_cache[slug] = await f.read()
+        except:
+            pass
+
+    async def _pickellize_all(self):
         loop = asyncio.get_running_loop()
         tasks = []
 
         for slug in self._pokemon_ids:
             self.base_cache[slug] = self.pokemon_utils.get_base_pokemon_name(slug)
-            desc, dex = self.pokemon_utils.get_description(slug) or ("", "???")
+
+            desc, dex = "", self._pokemon_ids.get(slug, "???")
+            desc_data = self.pokemon_utils.get_description(slug)
+            if desc_data:
+                desc, dex = desc_data[:2]
             self.desc_cache[slug] = (desc, dex)
+
             self.type_cache[slug] = self.pokemon_utils.get_pokemon_types(slug)
             self.alt_cache[slug] = self.pokemon_utils.get_best_normal_alt_name(slug) or ""
 
@@ -134,184 +122,149 @@ class PoketwoSpawnDetector(commands.Cog):
             read_tasks.append(self._read_file(path, slug))
 
         if read_tasks:
-            await asyncio.gather(*read_tasks, return_exceptions=True)
+            await asyncio.gather(*read_tasks)
 
-        logger.info("Preloaded all Pokémon data and images.")
+        logger.info("Preloaded all Pokémon data: images, bytes, descriptions, types, alt names.")
 
-    async def _read_file(self, path, slug):
-        """Read image file asynchronously."""
+    async def process_spawn(self, message, image_url):
         try:
-            async with aiofiles.open(path, "rb") as f:
-                self.img_bytes_cache[slug] = await f.read()
-        except Exception as e:
-            logger.warning(f"Failed to read image {path}: {e}")
+            loop = asyncio.get_running_loop()
 
-    async def _download_image(self, url, session, retries=3):
-        """Download image with retry logic."""
-        for attempt in range(retries):
-            try:
-                async with session.get(url, timeout=10) as response:
-                    if response.status == 200:
-                        return await response.read()
-                    logger.warning(f"Failed to download {url}: Status {response.status}")
-            except Exception as e:
-                logger.warning(f"Download attempt {attempt + 1} failed for {url}: {e}")
-                if attempt < retries - 1:
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
-        return None
-
-    async def _process_spawn_with_retry(self, message, image_url, session, retries=3):
-        """Process a spawn with retry logic."""
-        for attempt in range(retries):
-            try:
-                await self.process_spawn(message, image_url, session)
-                return
-            except Exception as e:
-                logger.error(f"Attempt {attempt + 1} failed for spawn {image_url}: {e}")
-                if attempt < retries - 1:
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
-        await message.channel.send(
-            f"{self.error_emoji} Failed to process spawn after {retries} attempts",
-            reference=message
-        )
-
-    async def process_spawn(self, message, image_url, session):
-        """Process a Pokémon spawn."""
-        loop = asyncio.get_running_loop()
-
-        # Prediction
-        pred = self.pred_cache.get(image_url)
-        if not pred:
-            raw_name, conf = await loop.run_in_executor(
-                _thread_executor, self.predictor.predict, image_url
-            )
-            self.pred_cache[image_url] = (raw_name, float(str(conf).strip().rstrip("%")))
-
-        raw_name, conf_float = self.pred_cache[image_url]
-        low_conf = conf_float < 30
-
-        # Base name lookup
-        base_name = self.base_cache.get(raw_name)
-        if not base_name:
-            base_name = self.pokemon_utils.get_base_pokemon_name(raw_name)
-            if base_name not in self._pokemon_ids:
-                base_name = self.pokemon_utils.find_full_name_for_slug(raw_name).lower().replace("_", "-")
-            self.base_cache[raw_name] = base_name
-
-        # Server config
-        sid = message.guild.id
-        server_config = self.server_cache.get(sid)
-        if not server_config:
-            server_config = await self.pokemon_utils.get_server_config(sid)
-            self.server_cache[sid] = server_config
-
-        # Pings
-        pings = self.ping_cache.get((sid, base_name))
-        if not pings:
-            shiny_collect, type_pings, quest_pings = await asyncio.gather(
-                self.pokemon_utils.get_ping_users(message.guild, base_name),
-                self.pokemon_utils.get_type_ping_users(message.guild, base_name),
-                self.pokemon_utils.get_quest_ping_users(message.guild, base_name),
-            )
-            shiny_pings, collect_pings = shiny_collect
-            pings = (type_pings, quest_pings, shiny_pings, collect_pings)
-            self.ping_cache[(sid, base_name)] = pings
-
-        type_pings, quest_pings, shiny_pings, collect_pings = pings
-
-        # Special roles
-        rare, regional = self.pokemon_utils._special_names
-        special_roles = []
-        if server_config.get("rare_role"):
-            special_roles += [f"<@&{server_config['rare_role']}>" for r in rare if r in base_name]
-        if server_config.get("regional_role"):
-            special_roles += [f"<@&{server_config['regional_role']}>" for r in regional if r in base_name]
-
-        # Description and dex
-        desc, dex = self.desc_cache.get(base_name, ("", "???"))
-        dex = self._pokemon_ids.get(base_name, dex)
-
-        # Format message
-        ping_msg, _ = await self.pokemon_utils.format_messages(
-            raw_name,
-            type_pings,
-            quest_pings,
-            shiny_pings,
-            collect_pings,
-            " ".join(special_roles),
-            f"{conf_float:.2f}%",
-            dex,
-            desc,
-            image_url,
-            low_conf,
-        )
-
-        # Image handling
-        img_bytes = self.img_bytes_cache.get(base_name)
-        view = PokemonSpawnView(
-            slug=base_name,
-            pokemon_data=self.pokemon_utils.load_full_pokemon_data(),
-            pokemon_utils=self.pokemon_utils
-        )
-
-        if not img_bytes:
-            path = os.path.join(self.spawn_dir, f"{base_name}.png")
-            if base_name not in self.file_cache:
-                await loop.run_in_executor(
-                    _thread_executor,
-                    self.image_builder.create_image,
-                    base_name,
-                    self.pokemon_utils.format_name(base_name).replace("_", " ").title(),
-                    self.alt_cache.get(base_name, ""),
-                    self.type_cache.get(base_name, []),
-                    None,
-                    path,
-                    "PNG",
+            pred = self.pred_cache.get(image_url)
+            if pred:
+                raw_name, conf = pred
+            else:
+                raw_name, conf = await loop.run_in_executor(
+                    _thread_executor, self.predictor.predict, image_url
                 )
-                self.file_cache[base_name] = path
+                self.pred_cache[image_url] = (raw_name, conf)
 
-            try:
-                async with aiofiles.open(path, "rb") as f:
-                    img_bytes = await f.read()
-                self.img_bytes_cache[base_name] = img_bytes
-            except:
-                img_bytes = await self._download_image(image_url, session)
-                if img_bytes:
-                    async with aiofiles.open(path, "wb") as f:
-                        await f.write(img_bytes)
+            base_name = self.base_cache.get(raw_name)
+            if not base_name:
+                base_name = self.pokemon_utils.get_base_pokemon_name(raw_name)
+                if base_name not in self._pokemon_ids:
+                    base_name = (
+                        self.pokemon_utils.find_full_name_for_slug(raw_name)
+                        .lower()
+                        .replace("_", "-")
+                    )
+                self.base_cache[raw_name] = base_name
+
+            conf_float = float(str(conf).strip().rstrip("%"))
+            low_conf = conf_float < 30
+
+            sid = message.guild.id
+            server_config = self.server_cache.get(sid)
+            if not server_config:
+                server_config = await self.pokemon_utils.get_server_config(sid)
+                self.server_cache[sid] = server_config
+
+            pings = self.ping_cache.get((sid, base_name))
+            if pings:
+                type_pings, quest_pings, shiny_pings, collect_pings = pings
+            else:
+                shiny_collect, type_pings, quest_pings = await asyncio.gather(
+                    self.pokemon_utils.get_ping_users(message.guild, base_name),
+                    self.pokemon_utils.get_type_ping_users(message.guild, base_name),
+                    self.pokemon_utils.get_quest_ping_users(message.guild, base_name),
+                )
+                shiny_pings, collect_pings = shiny_collect
+                pings = (type_pings, quest_pings, shiny_pings, collect_pings)
+                self.ping_cache[(sid, base_name)] = pings
+
+            rare, regional = self.pokemon_utils._special_names
+            special_roles = []
+            if server_config.get("rare_role"):
+                special_roles += [
+                    f"<@&{server_config['rare_role']}>" for r in rare if r in base_name
+                ]
+            if server_config.get("regional_role"):
+                special_roles += [
+                    f"<@&{server_config['regional_role']}>" for r in regional if r in base_name
+                ]
+
+            desc, dex = self.desc_cache.get(base_name, ("", "???"))
+            dex = self._pokemon_ids.get(base_name, dex)
+
+            ping_msg, _ = await self.pokemon_utils.format_messages(
+                raw_name,
+                type_pings,
+                quest_pings,
+                shiny_pings,
+                collect_pings,
+                " ".join(special_roles),
+                f"{conf_float:.2f}%",
+                dex,
+                desc,
+                image_url,
+                low_conf,
+            )
+
+            img_bytes = self.img_bytes_cache.get(base_name)
+            view = PokemonSpawnView(
+                slug=base_name,
+                pokemon_data=self.pokemon_utils.load_full_pokemon_data(),
+                pokemon_utils=self.pokemon_utils
+            )
+
+            if not img_bytes:
+                path = os.path.join(self.spawn_dir, f"{base_name}.png")
+                if base_name not in self.file_cache:
+                    try:
+                        await loop.run_in_executor(
+                            _thread_executor,
+                            self.image_builder.create_image,
+                            base_name,
+                            self.pokemon_utils.format_name(base_name).replace("_", " ").title(),
+                            self.alt_cache.get(base_name, ""),
+                            self.type_cache.get(base_name, []),
+                            None,
+                            path,
+                            "PNG",
+                        )
+                        self.file_cache[base_name] = path
+                        async with aiofiles.open(path, "rb") as f:
+                            img_bytes = await f.read()
+                        self.img_bytes_cache[base_name] = img_bytes
+                    except:
+                        return await message.channel.send(
+                            content=ping_msg,
+                            reference=message,
+                            view=view
+                        )
+
+                try:
+                    async with aiofiles.open(path, "rb") as f:
+                        img_bytes = await f.read()
                     self.img_bytes_cache[base_name] = img_bytes
-                else:
+                except:
                     return await message.channel.send(
                         content=ping_msg,
                         reference=message,
                         view=view
                     )
 
-        # Send response
-        try:
             await message.channel.send(
                 content=ping_msg,
                 file=discord.File(fp=BytesIO(img_bytes), filename=f"{base_name}.png"),
                 reference=message,
                 view=view
             )
-        except discord.errors.HTTPException as e:
-            logger.error(f"Discord send error: {e}")
-            await asyncio.sleep(1)  # Respect rate limits
+
+        except Exception as e:
+            logger.error(f"Spawn processing error: {type(e).__name__}: {e}")
             await message.channel.send(
-                content=ping_msg,
-                reference=message,
-                view=view
+                f"{self.error_emoji} Failed to process spawn", reference=message
             )
 
     @commands.command(name="generate_spawns", hidden=True)
     async def generate_all_spawn_images(self, ctx):
-        """Generate all missing or invalid spawn images."""
         os.makedirs(self.spawn_dir, exist_ok=True)
-        missing_or_empty = [
-            slug for slug in self._pokemon_ids
-            if slug not in self.file_cache or not os.path.exists(self.file_cache[slug]) or os.path.getsize(self.file_cache[slug]) == 0
-        ]
+        missing_or_empty = []
+        for slug in self._pokemon_ids:
+            path = os.path.join(self.spawn_dir, f"{slug}.png")
+            if not os.path.exists(path) or os.path.getsize(path) == 0:
+                missing_or_empty.append(slug)
 
         if not missing_or_empty:
             return await ctx.send("✅ All spawn images preloaded and valid!")
@@ -340,34 +293,34 @@ class PoketwoSpawnDetector(commands.Cog):
 
         read_tasks = []
         for slug in missing_or_empty:
-            read_tasks.append(self._read_file(self.file_cache[slug], slug))
+            path = self.file_cache[slug]
+            read_tasks.append(self._read_file(path, slug))
 
         if read_tasks:
-            await asyncio.gather(*read_tasks, return_exceptions=True)
+            await asyncio.gather(*read_tasks)
 
-        await ctx.send("✅ All spawn images generated and cached!")
+        await ctx.send("✅ All spawn images generated, cached, and verified!")
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        """Handle incoming messages for Pokémon spawns."""
         if message.author.id != self.target_id or ut:
             return
-        guild_id = message.guild.id
-        if guild_id not in self.server_queues:
-            self.server_queues[guild_id] = asyncio.Queue()
         for e in message.embeds:
             if e.title and "pokémon has appeared!" in e.title.lower() and e.image:
-                await self.server_queues[guild_id].put((message, e.image.url))
+                await self.queue.put((message, e.image.url))
 
     @commands.command(name="ps", hidden=True)
     async def predict_spawn(self, ctx, image_url=None):
-        """Manually predict a spawn from an image URL or message."""
         try:
             def extract_image_from_message(msg: discord.Message):
                 if msg.attachments:
                     return msg.attachments[0].url
-                if msg.embeds and msg.embeds[0].image:
-                    return msg.embeds[0].image.url
+                if msg.embeds:
+                    embed = msg.embeds[0]
+                    if embed.image and embed.image.url:
+                        return embed.image.url
+                    if embed.thumbnail and embed.thumbnail.url:
+                        return embed.thumbnail.url
                 return None
 
             message = ctx.message
@@ -381,11 +334,7 @@ class PoketwoSpawnDetector(commands.Cog):
                         image_url = extract_image_from_message(ref2)
             if not image_url:
                 return await ctx.send(f"{self.cross_emoji} No image URL found.")
-
-            guild_id = ctx.guild.id
-            if guild_id not in self.server_queues:
-                self.server_queues[guild_id] = asyncio.Queue()
-            await self.server_queues[guild_id].put((message, image_url))
+            await self.process_spawn(message, image_url)
         except Exception as e:
             logger.error(f"Prediction error: {type(e).__name__}: {e}")
             await ctx.send(f"{self.error_emoji} Failed to process prediction.")
