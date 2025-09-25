@@ -43,8 +43,8 @@ class StarboardConfig:
         "congrats": {
             "title": "<a:tada:1401401635439251587> Congrats!",
             "description_template": (
-                "- {mention}, you've caught a {type_label} **{shiny}{pokemon_name}**!\n"
-                "> It’s now proudly displayed in {spawn_link} for everyone to admire!"
+                "- {mention}, you've caught a {type_label} **{shiny}{pokemon_name}**!"
+               
             ),
             "show_thumbnail": True,
             "show_timestamp": True,
@@ -197,7 +197,7 @@ class StarboardProcessor:
             type_label="rare" if is_rare else "regional",
             shiny="Shiny " if shiny else "",
             pokemon_name=pokemon_name,
-            spawn_link=spawn_channel_mention,  # updated
+          
         ),
         color=spawn_color or self.determine_color(shiny, pokemon_name),
         timestamp=message.created_at if cfg.get("show_timestamp") else None,
