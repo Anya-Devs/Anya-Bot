@@ -405,13 +405,13 @@ class QuestEmbed:
         return embed
 
     @staticmethod
-    async def get_agree_confirmation_embed(bot, user):
+    async def get_agree_confirmation_embed(bot, user, prefix):
         check_emoji_id = 1243403342722371645
         check_emoji = discord.utils.get(bot.emojis, id=check_emoji_id)
 
         confirmation_embed = discord.Embed(
             title=f"{check_emoji} Confirmation Complete",
-            description=f"Do `...quest` to check server quest.",
+            description=f"Do `{prefix}quest` to view your server quest.",
             color=discord.Color.pink(),
         )
 

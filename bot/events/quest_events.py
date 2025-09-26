@@ -34,7 +34,7 @@ class Quest_Events(commands.Cog):
         quest_content_replaced = quest_content.replace("{member}", f"<@{member_ids[0]}>" if member_ids else "{member}")
         norm_msg = re.sub(r"\s+", " ", message.content.strip()).lower()
         norm_quest = re.sub(r"\s+", " ", quest_content_replaced.strip()).lower()
-        if fuzz.ratio(norm_msg, norm_quest) >= 88:
+        if fuzz.ratio(norm_msg, norm_quest) >= 83:
             mentions = [m for m in message.mentions if m.id != message.author.id and not m.bot]
             if "{member}" in quest_content and not mentions: return
             if "{member}" not in quest_content or (mentions and mentions[0].id != message.author.id):

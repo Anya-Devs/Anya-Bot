@@ -115,9 +115,12 @@ class Quest(commands.Cog):
                 else:
                     await ctx.reply(embed=embeds, mention_author=False, file=file)
             else:
-                no_quest_message = "You have no quests."
+                no_quest_message = "You currently don't have any quest."
+                description = f"```ansi\n\u2753 \033[97m{no_quest_message}```"
+                embed = discord.Embed(description=description, color=discord.Color.yellow())
+
                 await ctx.reply(
-                    no_quest_message,
+                    embed=embed,
                     view=Quest_Button1(self.bot, ctx),
                     mention_author=False,
                 )
@@ -375,7 +378,7 @@ class Quest_Slash(commands.Cog):
                 logger.debug("Quest creation successful.")
             else:
                 await interaction.response.send_message(
-                    "Try doing `...quest`", ephemeral=True
+                    "Try doing `.quest`", ephemeral=True
                 )
                 logger.debug("Failed to create the quest.")
 

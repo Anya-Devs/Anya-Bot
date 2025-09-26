@@ -157,3 +157,197 @@ What's your favorite thing about being alive, {member}?
 What's your favorite thing about love, {member}?
 What's your favorite thing about the universe, {member}?
 What's your favorite thing about life, the universe, and everything, {member}?
+Hey {member}, ready for an adventure?
+Hi {member}, got any funny stories?
+Hello {member}, what's your current obsession?
+Hey {member}, tried any new recipes lately?
+Hi {member}, any shows you're binge-watching?
+Hey {member}, what's a fun fact about you?
+Hello {member}, got a favorite quote?
+Hey {member}, what's your morning routine?
+Hi {member}, any goals for this week?
+Hey {member}, what's your dream job?
+Hello {member}, how do you celebrate special occasions?
+Hey {member}, what inspires you?
+Hi {member}, what's your favorite gadget?
+Hey {member}, how do you relax after work/school?
+Hello {member}, any recent achievements?
+Hey {member}, what's your favorite snack?
+Hi {member}, any hobbies you want to start?
+Hey {member}, what's your favorite app?
+Hello {member}, how do you handle stress?
+Hey {member}, what's your favorite place to hang out?
+Hi {member}, any pets? Tell me about them.
+Hey {member}, what motivates you the most?
+Hello {member}, how do you spend weekends?
+Hey {member}, favorite memory from childhood?
+Hi {member}, what's a skill you'd like to learn?
+Hey {member}, any favorite podcasts?
+Hello {member}, what's your favorite type of music?
+Hey {member}, any upcoming events you’re excited for?
+Hi {member}, favorite movie genre?
+Hey {member}, what's your favorite outdoor activity?
+Hello {member}, any cool traditions in your family?
+Hey {member}, how do you like to celebrate holidays?
+Hi {member}, what's the best gift you've received?
+Hey {member}, what's your favorite board game?
+Hello {member}, how do you stay productive?
+Hey {member}, favorite time of day?
+Hi {member}, what's your favorite dessert?
+Hey {member}, any guilty pleasures?
+Hello {member}, how do you spend your free time?
+Hey {member}, what's the best trip you’ve ever taken?
+Hi {member}, favorite way to exercise?
+Hey {member}, what's your favorite outfit?
+Hello {member}, any hidden talents?
+Hey {member}, what's your favorite type of weather?
+Hi {member}, favorite place to read?
+Hey {member}, what book changed your life?
+Hello {member}, how do you celebrate achievements?
+Hey {member}, favorite indoor activity?
+Hi {member}, what's your favorite scent?
+Hey {member}, favorite season and why?
+Hello {member}, what's your dream house like?
+Hey {member}, favorite type of art?
+Hi {member}, favorite childhood game?
+Hey {member}, what hobby would you like to master?
+Hello {member}, what's your favorite festival?
+Hey {member}, favorite comfort food?
+Hi {member}, what's your favorite way to travel?
+Hey {member}, favorite thing about technology?
+Hello {member}, favorite way to communicate with friends?
+Hey {member}, favorite way to spend a holiday?
+Hi {member}, favorite type of movie snack?
+Hey {member}, what do you like to collect?
+Hello {member}, favorite way to learn new things?
+Hey {member}, what's your favorite plant or flower?
+Hi {member}, favorite childhood show?
+Hey {member}, favorite hobby you rarely get to do?
+Hello {member}, favorite historical figure?
+Hey {member}, favorite science topic?
+Hi {member}, favorite math trick or puzzle?
+Hey {member}, favorite way to celebrate success?
+Hello {member}, favorite charity or cause?
+Hey {member}, what's your favorite challenge?
+Hi {member}, favorite animal encounter?
+Hey {member}, favorite way to unwind after a long day?
+Hello {member}, favorite online game?
+Hey {member}, favorite type of tea or coffee?
+Hi {member}, favorite museum or exhibition?
+Hey {member}, favorite creative outlet?
+Hello {member}, favorite type of comedy?
+Hey {member}, favorite thing about the internet?
+Hi {member}, favorite childhood toy?
+Hey {member}, favorite thing to do on a lazy day?
+Hello {member}, favorite tech gadget?
+Hey {member}, favorite road trip memory?
+Hi {member}, favorite way to celebrate milestones?
+Hey {member}, favorite fashion accessory?
+Hello {member}, favorite sport to watch?
+Hey {member}, favorite type of vacation?
+Hi {member}, favorite city to visit?
+Hey {member}, favorite type of music instrument?
+Hello {member}, favorite way to stay connected with friends?
+Hey {member}, what's your favorite type of exercise?
+Hi {member}, any recent adventures?
+Hello {member}, what's a hobby you always enjoy?
+Hey {member}, favorite memory from school?
+Hi {member}, favorite app to use daily?
+Hey {member}, what's your dream car?
+Hello {member}, favorite place to eat out?
+Hey {member}, what inspires your creativity?
+Hi {member}, favorite way to spend a rainy afternoon?
+Hey {member}, what's your favorite dessert recipe?
+Hello {member}, favorite local spot to hang out?
+Hey {member}, what book would you recommend?
+Hi {member}, favorite weekend routine?
+Hey {member}, favorite way to relax after work?
+Hello {member}, favorite type of outdoor adventure?
+Hey {member}, favorite way to celebrate birthdays?
+Hi {member}, favorite motivational quote?
+Hey {member}, favorite thing to do on vacation?
+Hello {member}, favorite breakfast food?
+Hey {member}, favorite kind of music playlist?
+Hi {member}, favorite way to spend the evening?
+Hey {member}, favorite childhood game to play?
+Hello {member}, favorite indoor activity on a cold day?
+Hey {member}, favorite beach memory?
+Hi {member}, favorite weekend getaway spot?
+Hey {member}, favorite fruit or vegetable?
+Hello {member}, favorite way to learn something new?
+Hey {member}, favorite podcast or show to binge?
+Hi {member}, favorite app for productivity?
+Hey {member}, favorite way to exercise outdoors?
+Hello {member}, favorite way to spend a long weekend?
+Hey {member}, favorite holiday tradition?
+Hi {member}, favorite social media platform?
+Hey {member}, favorite quote to live by?
+Hello {member}, favorite kind of tea or coffee?
+Hey {member}, favorite way to connect with family?
+Hi {member}, favorite craft or DIY project?
+Hey {member}, favorite festival or event to attend?
+Hello {member}, favorite way to treat yourself?
+Hey {member}, favorite museum or exhibit to visit?
+Hi {member}, favorite hobby to do alone?
+Hey {member}, favorite way to celebrate achievements?
+Hello {member}, favorite city to explore?
+Hey {member}, favorite weekend brunch spot?
+Hi {member}, favorite outdoor sport or activity?
+Hey {member}, favorite meal to cook?
+Hello {member}, favorite place for morning walks?
+Hey {member}, favorite childhood memory at home?
+Hi {member}, favorite game to play with friends?
+Hey {member}, favorite inspirational book?
+Hello {member}, favorite time to be outside?
+Hey {member}, favorite way to spend a cozy night?
+Hi {member}, favorite music festival or concert?
+Hey {member}, favorite dessert to bake?
+Hello {member}, favorite app for entertainment?
+Hey {member}, favorite way to connect with nature?
+Hi {member}, favorite board or card game?
+Hey {member}, favorite art style or movement?
+Hello {member}, favorite thing to do on a Sunday?
+Hey {member}, favorite type of movie or show?
+Hi {member}, favorite sport to play casually?
+Hey {member}, favorite snack for watching movies?
+Hello {member}, favorite way to start your weekend?
+Hey {member}, favorite way to end a busy day?
+Hi {member}, favorite local café or coffee shop?
+Hey {member}, favorite place to watch the sunset?
+Hello {member}, favorite thing about your morning routine?
+Hey {member}, favorite comfort activity when stressed?
+Hi {member}, favorite outdoor adventure memory?
+Hey {member}, favorite motivational speaker or figure?
+Hello {member}, favorite song to sing along to?
+Hey {member}, favorite season for travel?
+Hi {member}, favorite way to celebrate accomplishments?
+Hey {member}, favorite type of puzzle or brain game?
+Hello {member}, favorite thing about learning new skills?
+Hey {member}, favorite travel destination for relaxation?
+Hi {member}, favorite way to spend a day off?
+Hey {member}, favorite childhood show or cartoon?
+Hello {member}, favorite way to express creativity?
+Hey {member}, favorite game to play online?
+Hi {member}, favorite way to motivate yourself?
+Hey {member}, favorite type of adventure sport?
+Hello {member}, favorite thing to do with friends?
+Hey {member}, favorite treat after a long day?
+Hi {member}, favorite way to stay organized?
+Hey {member}, favorite way to spend a Sunday morning?
+Hello {member}, favorite book series to re-read?
+Hey {member}, favorite type of cuisine to cook?
+Hi {member}, favorite way to unwind after a long week?
+Hey {member}, favorite city to explore at night?
+Hello {member}, favorite type of outdoor scenery?
+Hey {member}, favorite way to celebrate holidays?
+Hi {member}, favorite creative hobby to try?
+Hey {member}, favorite app for music or audio?
+Hello {member}, favorite activity with family or friends?
+Hey {member}, favorite kind of cultural experience?
+Hi {member}, favorite way to stay active indoors?
+Hey {member}, favorite thing to do on a rainy day?
+Hello {member}, favorite way to spend a holiday morning?
+Hey {member}, favorite type of workout or class?
+Hi {member}, favorite travel memory with friends?
+Hey {member}, favorite kind of relaxation activity?
+Hello {member}, favorite type of street food or local dish?

@@ -262,15 +262,14 @@ class QuestButton(discord.ui.Button):
             )
             return
 
-        embed = None  
-        view = None  
+        embed = None
+        view = None
 
         if self.custom_id == "previous":
             self.page -= 1
         elif self.custom_id == "next":
             self.page += 1
         elif self.custom_id == "fresh_start":
-            
             success = await self.quest_data.delete_all_quests(
                 self.ctx.guild.id, self.ctx.author
             )
@@ -279,25 +278,23 @@ class QuestButton(discord.ui.Button):
                     description=f":white_check_mark: All quests have been deleted for you {self.ctx.author.mention}. Starting fresh!",
                     color=discord.Color.green(),
                 )
-                
                 self.page = 0
-                self.all_quests = []  
+                self.all_quests = []
                 self.filtered_quests = []
-                
-                view = None  
+                view = None
+                # Clear attachments
+                await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+                return
             else:
                 embed = discord.Embed(
                     description="You have no quests.", color=discord.Color.red()
                 )
-                
                 view = Quest_View(self.bot, self.all_quests, self.ctx, self.page)
 
-        
         if not embed:
             view = Quest_View(self.bot, self.all_quests, self.ctx, self.page, self.filtered_quests)
             embed = await view.generate_messages()
 
-        
         await interaction.response.edit_message(embed=embed, view=view)
 
 
@@ -361,6 +358,7 @@ class Quest_Button1(discord.ui.View):
             
             await interaction.response.edit_message(
                 content=f"Successfully created new quests for you, {button_user.mention}!",
+                embed=None,
                 view=None,
             )
 
@@ -401,7 +399,7 @@ class Quest_Button1(discord.ui.View):
             )
             return False
 
-    @discord.ui.button(label="New Quest", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="New Quest", emoji="➕", style=discord.ButtonStyle.gray)
     async def new_quest_button(
         self, button: discord.ui.Button, interaction: discord.Interaction
     ):
@@ -432,6 +430,7 @@ class Quest_Button1(discord.ui.View):
             
             await button.response.edit_message(
                 content=f"Successfully created new quests for you, {button_user.mention}!",
+                embed=None,
                 view=None,
             )
 
@@ -496,7 +495,7 @@ class Quest_Button(discord.ui.View):
 
                 
                 embed = await QuestEmbed.get_agree_confirmation_embed(
-                    self.bot, button.user
+                    bot=self.bot, user=button.user, prefix=self.ctx.prefix
                 )
                 await button.response.send_message(embed=embed)
                 await button.followup.delete_message(button.message.id)
@@ -726,13 +725,31 @@ class ImageGenerator:
         return img_bytes.getvalue()
 
 
+class QuestConfig:
+    def __init__(self):
+        self.db_name = "Quest"
+        self.quest_content_file = "data/commands/quest/quest_content.txt"
+        self.min_reward_per_time = 4
+        self.max_reward_per_time = 20
+        self.min_reward_per_time_message = 5
+        self.max_reward_per_time_message = 22
+        self.min_times = 1
+        self.max_times_message = 3
+        self.max_times_emoji = 5
+        self.max_times_reaction = 5
+        self.default_quest_limit = 25
+        self.add_quest_chance = 50
+        self.most_active_threshold = 5
+        self.most_active_message_limit = 100
+        self.short_uuid_digits = 6
+        self.min_custom_emojis = 5
+
 class Quest_Data(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.DB_NAME = "Quest"
+        self.config = QuestConfig()
         self.quest_content_file = "data/commands/quest/quest_content.txt"
-
-        
         mongo_url = os.getenv("MONGO_URI")
 
         if not mongo_url:
@@ -1385,29 +1402,19 @@ class Quest_Data(commands.Cog):
         interaction=None,
     ):
         try:
-            
             fallback_channel = (
-                discord.utils.get(
-                    interaction.guild.text_channels, name="general")
+                discord.utils.get(interaction.guild.text_channels, name="general")
                 if interaction
                 else None
             )
-            channel_id = await self.get_random_channel_for_guild(
-                guild_id, fallback_channel=fallback_channel
-            )
-
+            channel_id = await self.get_random_channel_for_guild(guild_id, fallback_channel=fallback_channel)
             if not channel_id:
-                
                 message = "No redirected channels found for this guild. Please use the command to set redirect channels first."
                 logger.error(message)
                 if interaction:
                     await interaction.send(message)
-                return  
-
-            
-            reward = random.randint(4, 20) * times
-
-            
+                return
+            reward = random.randint(self.config.min_reward_per_time, self.config.max_reward_per_time) * times
             quest_data = {
                 "action": action,
                 "method": method,
@@ -1416,36 +1423,23 @@ class Quest_Data(commands.Cog):
                 "times": times,
                 "reward": reward,
             }
-
-            
             await self.validate_input(**quest_data)
-
-            
             await self.store_server_quest(guild_id, quest_data)
-
-            
             quest_count = await self.get_server_quest_count(guild_id)
             quest_data["quest_id"] = quest_count + 1
-
-            
             users_in_server = await self.find_users_in_server(guild_id)
             if not users_in_server:
                 raise ValueError("No users found in the server.")
-
             for user_id in users_in_server:
                 await self.insert_quest(guild_id, user_id, quest_data, interaction)
-
-            logger.debug(
-                f"Created quest for guild {guild_id} with action {action} and content {content}."
-            )
-
-            return quest_count + 1  
-
+            logger.debug(f"Created quest for guild {guild_id} with action {action} and content {content}.")
+            return quest_count + 1
         except (ValueError, PyMongoError) as e:
             logger.error(f"Error occurred while creating quest: {e}")
             if interaction:
                 await self.handle_error(interaction, e, title="Quest Creation")
             raise e
+
 
     async def create_member_quest(
         self,
@@ -1458,10 +1452,7 @@ class Quest_Data(commands.Cog):
         interaction=None,
     ):
         try:
-            
-            reward = random.randint(4, 20) * times
-
-            
+            reward = random.randint(self.config.min_reward_per_time, self.config.max_reward_per_time) * times
             quest_data = {
                 "action": action,
                 "method": method,
@@ -1470,33 +1461,24 @@ class Quest_Data(commands.Cog):
                 "reward": reward,
             }
             await self.validate_input(**quest_data)
-            db = self.mongoConnect[self.DB_NAME]
+            db = self.mongoConnect[self.config.db_name]
             server_collection = db["Servers"]
-
             quest_count = await self.get_server_quest_count(guild_id)
             quest_limit = await self.get_quest_limit(guild_id)
-
             if quest_count >= quest_limit:
                 raise ValueError("Quest limit exceeded for this server.")
-
             user_exists = await self.find_user_in_server(user_id, guild_id)
             if not user_exists:
                 raise ValueError("User not found in the server.")
-
-            quest_data["quest_id"] = (
-                quest_count + 1
-            )  
+            quest_data["quest_id"] = quest_count + 1
             await self.insert_quest(guild_id, user_id, quest_data, interaction)
-
-            logger.debug(
-                f"Created member quest for user {user_id} in guild {guild_id} with action {action} and content {content}."
-            )
+            logger.debug(f"Created member quest for user {user_id} in guild {guild_id} with action {action} and content {content}.")
         except (ValueError, PyMongoError) as e:
             logger.error(f"Error occurred while creating member quest: {e}")
             if interaction:
                 await self.handle_error(interaction, e, title="Member Quest Creation")
             raise e
-
+  
     async def generate_random_quest_content(self, bot, author, guild_id):
         try:
             with open(self.quest_content_file, "r") as quest_content_file:
@@ -1672,127 +1654,73 @@ class Quest_Data(commands.Cog):
                 await self.handle_error(interaction, e, title="Quest Insertion")
             return False
 
-    async def add_new_quest(
-        self, guild_id, message_author, action="send", method=None, chance=50
-    ):
-        logger.debug(
-            f"Attempting to add new quest for guild_id: {guild_id}, message_author: {message_author}, action: {action}, method: {method}, chance: {chance}"
-        )
+    async def add_new_quest(self, guild_id, message_author, action="send", method=None, chance=50):
+        logger.debug(f"Attempting to add new quest for guild_id: {guild_id}, message_author: {message_author}, action: {action}, method: {method}, chance: {chance}")
         try:
             user_id = str(message_author.id)
             logger.debug(f"User ID: {user_id}")
-
-            
-            times = random.randint(1, 3)
+            times = random.randint(self.config.min_times, self.config.max_times_message)
             logger.debug(f"Random times selected: {times}")
-
-            reward = random.randint(4, 20) * times
-
-            
-            if random.randint(1, 100) > chance:
-                logger.debug(
-                    "Random chance check failed. No quest will be created.")
+            reward = random.randint(self.config.min_reward_per_time, self.config.max_reward_per_time) * times
+            if random.randint(1, 100) > self.config.add_quest_chance:
+                logger.debug("Random chance check failed. No quest will be created.")
                 return None
-
-            
             quest_limit = await self.get_quest_limit(guild_id)
-            existing_quests = await self.find_quests_by_user_and_server(
-                user_id, guild_id
-            )
+            existing_quests = await self.find_quests_by_user_and_server(user_id, guild_id)
             if existing_quests is None:
-                existing_quests = []  
-
+                existing_quests = []
             if len(existing_quests) >= quest_limit:
-                logger.debug(
-                    "User has reached the quest limit. No quest will be created."
-                )
+                logger.debug("User has reached the quest limit. No quest will be created.")
                 return None
-
-            
             fallback_channel = (
-                discord.utils.get(
-                    message_author.guild.text_channels, name="general")
+                discord.utils.get(message_author.guild.text_channels, name="general")
                 if message_author.guild
                 else None
             )
-            channel_id = await self.get_random_channel_for_guild(
-                guild_id, fallback_channel=fallback_channel
-            )
-
+            channel_id = await self.get_random_channel_for_guild(guild_id, fallback_channel=fallback_channel)
             if not channel_id:
-                
                 message = "No redirected channels found for this guild. Please use the command to set redirect channels first."
                 logger.error(message)
-                await message_author.send(
-                    message
-                )  
-                return None  
-
+                await message_author.send(message)
+                return None
             while True:
-                
                 if method is None:
                     method = random.choice(["message", "reaction", "emoji"])
                     logger.debug(f"Method chosen: {method}")
-
-                
                 if method == "message":
-                    content = await self.generate_random_quest_content(
-                        self.bot, message_author, guild_id
-                    )
-                else:  
+                    content = await self.generate_random_quest_content(self.bot, message_author, guild_id)
+                else:
                     content = await self.generate_random_reaction_content(guild_id)
                 if content is None:
                     logger.error("Failed to generate random quest content.")
                     return None
-
-                
-                content_exists = any(
-                    quest["content"] == content for quest in existing_quests
-                )
-
+                content_exists = any(quest["content"] == content for quest in existing_quests)
                 if not content_exists:
-                    break  
-
+                    break
             logger.debug(f"Generated quest content: {content}")
-
-            
             latest_quest_id = await self.get_latest_quest_id(guild_id, user_id)
-
-            
             new_quest_id = 1 if latest_quest_id is None else latest_quest_id + 1
-
-            
             quest_data = {
                 "quest_id": new_quest_id,
                 "action": action,
                 "method": method,
                 "channel_id": channel_id,
-                
                 "times": times if method not in ("message", "emoji") else 1,
                 "content": content,
                 "reward": reward,
-                "progress": 0,  
+                "progress": 0,
             }
-            logger.debug(
-                f"Creating quest for user_id: {user_id}, guild_id: {guild_id}, quest_data: {quest_data}"
-            )
-
-            
+            logger.debug(f"Creating quest for user_id: {user_id}, guild_id: {guild_id}, quest_data: {quest_data}")
             if await self.insert_quest_existing_path(guild_id, user_id, quest_data):
-                logger.debug(
-                    f"Quest created for user_id: {user_id}, guild_id: {guild_id}, quest_data: {quest_data}"
-                )
-                return new_quest_id  
+                logger.debug(f"Quest created for user_id: {user_id}, guild_id: {guild_id}, quest_data: {quest_data}")
+                return new_quest_id
             else:
-                logger.debug(
-                    f"Failed to create quest for user_id: {user_id}, guild_id: {guild_id} because the user path does not exist."
-                )
+                logger.debug(f"Failed to create quest for user_id: {user_id}, guild_id: {guild_id} because the user path does not exist.")
                 return None
-
         except Exception as e:
             logger.error(f"Error occurred while adding new quest: {e}")
             return None
-
+   
     async def delete_all_quests(self, guild_id, message_author):
         logger.debug(
             f"Attempting to delete all quests for guild_id: {guild_id}, user_id: {message_author.id}"
@@ -2064,8 +1992,6 @@ class Quest_Data(commands.Cog):
             )
         except PyMongoError as e:
             logger.error(f"Error occurred while initializing balance: {e}")
-
-
 
 
 
