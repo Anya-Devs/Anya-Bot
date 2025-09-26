@@ -1,0 +1,24 @@
+{
+  "font_path_header": "data/commands/help/menu/initial/style/assets/font/valentine.ttf",
+  "font_path_description": "data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf",
+  "character_path": "data/commands/help/menu/initial/style/assets/character_quest.png",
+  "background_path": "data/commands/help/menu/initial/style/assets/background.png",
+
+  "header_font_size": 35,
+  "description_font_size": 15,
+
+  "header_font_color": "white",
+  "description_font_color": "black",
+
+  "character_scale": 0.4,
+  "header_text": "Anya Quest!",
+
+  "character_pos": [5, 5],
+  "text_x_offset": 10,
+  "text_y_offset": 25,
+  "text_spacing": 20,
+  "text_box_margin": 20,
+
+  "color_replacements_map": {
+  }
+}

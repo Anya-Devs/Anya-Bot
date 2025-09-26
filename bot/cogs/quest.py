@@ -97,7 +97,7 @@ class Quest(commands.Cog):
 
                 image_generator = ImageGenerator(
                     ctx,
-                    text="Here are the quests you need to complete. Each quest has a specific objective, progress, and reward. Click on the location link to navigate to the respective channel where the quest can be completed.",
+                    text="Complete each quest to earn rewards. Click the location link to go to the corresponding channel."
                 )
 
                 img = image_generator.create_image()

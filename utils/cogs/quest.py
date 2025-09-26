@@ -31,25 +31,20 @@ from utils.cogs.quest import *
 
 
 class Quest_View(View):
-    def __init__(self, bot, quests, ctx, page=0, filtered_quests=None):
+    def __init__(self, bot, all_quests, ctx, page=0, filtered_quests=None):
         super().__init__(timeout=None)
         self.bot = bot
-        self.quests = quests
-        self.filtered_quests = (
-            filtered_quests if filtered_quests is not None else quests
-        )
+        self.all_quests = all_quests
+        self.filtered_quests = filtered_quests if filtered_quests is not None else all_quests
         self.ctx = ctx
         self.page = page
-        self.max_pages = (
-            len(self.filtered_quests) + 2
-        ) // 3  
+        self.max_pages = (len(self.filtered_quests) + 4) // 5  # Increased to 5 per page, ceil division
 
-        
-        self.add_item(Quest_Select_Filter(bot, quests, ctx))
-        if self.page < self.max_pages - 1:
+        self.add_item(Quest_Select_Filter(bot, self.all_quests, ctx))
+        if self.max_pages > 1:
             self.add_item(
-                Quest_Select(bot, self.filtered_quests, ctx, self.max_pages)
-            )  
+                Quest_Select(bot, self.filtered_quests, ctx, self.max_pages, self.all_quests)
+            )
         if self.page > 0:
             self.add_item(
                 QuestButton(
@@ -60,6 +55,7 @@ class Quest_View(View):
                     self.filtered_quests,
                     ctx,
                     self.page,
+                    self.all_quests,
                 )
             )
         if self.page < self.max_pages - 1:
@@ -72,10 +68,10 @@ class Quest_View(View):
                     self.filtered_quests,
                     ctx,
                     self.page,
+                    self.all_quests,
                 )
             )
 
-        
         self.add_item(
             QuestButton(
                 "Fresh Start",
@@ -85,28 +81,24 @@ class Quest_View(View):
                 self.filtered_quests,
                 ctx,
                 self.page,
+                self.all_quests,
             )
         )
 
     async def generate_messages(self):
-        start_index = self.page * 3
-        end_index = start_index + 3  
-        quests_to_display = self.filtered_quests[start_index:end_index]
-
-        
+        start_index = self.page * 5
+        index = start_index
         embed = discord.Embed(color=primary_color())
         embed.set_footer(
             text=f"{self.ctx.author.display_name}'s quests",
             icon_url=self.ctx.author.avatar,
         )
 
-        field_count = 0  
-        index = start_index  
+        field_count = 0
 
-        
-        while field_count < 3 and index < len(self.filtered_quests):
+        while field_count < 5 and index < len(self.filtered_quests):
             quest = self.filtered_quests[index]
-            index += 1  
+            index += 1
 
             quest_id = quest["quest_id"]
             progress = quest["progress"]
@@ -114,11 +106,10 @@ class Quest_View(View):
             method = quest["method"]
             content = quest["content"]
             reward = quest["reward"]
+            percent = int((progress / times) * 100) if times > 0 else 0
 
-            
             channel = self.bot.get_channel(int(quest["channel_id"]))
 
-            
             if method == "message":
                 instruction = "Send: {0}".format(content.replace("\n", " "))
             elif method == "emoji":
@@ -128,77 +119,62 @@ class Quest_View(View):
             else:
                 instruction = "Unknown method. Please refer to the quest details."
 
-            
             progress_bar = await Quest_Progress.generate_progress_bar(
-                progress / times, self.bot
+                progress / times if times > 0 else 0, self.bot
             )
 
             reward_emoji_id = 1247800150479339581
             reward_emoji = discord.utils.get(
                 self.bot.emojis, id=reward_emoji_id)
-            instructions_emoji = "📋"
+            instructions_emoji = "📍"
 
-            
             if channel:
                 channel_link = (
                     f"[Go here](https://discord.com/channels/{self.ctx.guild.id}/{channel.id})"
                     if channel.id != self.ctx.channel.id
                     else "In this channel"
                 )
+                can_view_channel = channel.permissions_for(self.ctx.author).view_channel
             else:
-                
-                channel_link = f"Channel not found | Recommended: `/quest delete quest_id: {quest_id}`"
+                channel_link = f"Channel not found | Recommended: `{self.ctx.prefix}quest delete quest_id: {quest_id}`"
+                can_view_channel = True  # Show to allow deletion recommendation
 
-            message = (
-                
-                f"✦ Quest {quest_id} | {progress_bar} `{progress}/{times}`\n"
-                f"├ {instructions_emoji} {channel_link} | **{instruction}**\n"
-                
-                f"└ {reward_emoji} Reward: `{reward} stp`"
-                f"\n\n"  
-            )
-
-            
-            can_view_channel = True  
-            if channel:
-                overwrites = channel.overwrites
-                can_view_channel = False
-                for role, overwrite in overwrites.items():
-                    if overwrite.read_messages and any(
-                        role in self.ctx.author.roles for role in [role]
-                    ):
-                        can_view_channel = True
-                        break
-
-            
-            if can_view_channel:
-                embed.add_field(
-                    name="",
-                    value=message,
-                    inline=False,  
-                )
-                field_count += 1
-            else:
-                
+            if not can_view_channel:
                 continue
 
-        
+            # Inspired by leaderboard: #ID - Instruction   bar   percent%
+            message = (
+                f"#{quest_id} - **{instruction}**\n"
+                f"`{progress}/{times}` {progress_bar} `{percent}%`\n"
+                f"`•` {instructions_emoji} {channel_link}\n"
+                f"`└─` {reward_emoji} Reward: `{reward} stp`\n\n"
+
+            )
+
+            embed.add_field(
+                name="",
+                value=message,
+                inline=False,
+            )
+            field_count += 1
+
         file = discord.File(
             "data/images/generated_image.png", filename="image.png")
         embed.set_image(url=f"attachment://image.png")
 
         return embed
- 
+    
 
 class Quest_Select(Select):
-    def __init__(self, bot, quests, ctx, max_pages):
+    def __init__(self, bot, filtered_quests, ctx, max_pages, all_quests):
         options = [
             discord.SelectOption(label=f"Page {i+1}", value=str(i))
             for i in range(max_pages)
         ]
         super().__init__(placeholder="Select page...", options=options)
         self.bot = bot
-        self.quests = quests
+        self.all_quests = all_quests
+        self.filtered_quests = filtered_quests
         self.ctx = ctx
         self.max_pages = max_pages
 
@@ -213,10 +189,10 @@ class Quest_Select(Select):
             page_index = int(self.values[0])
             view = Quest_View(
                 self.bot,
-                self.quests,
+                self.all_quests,
                 self.ctx,
                 page=page_index,
-                filtered_quests=self.quests,
+                filtered_quests=self.filtered_quests,
             )
             embed = await view.generate_messages()
             await interaction.response.edit_message(embed=embed, view=view)
@@ -229,8 +205,8 @@ class Quest_Select(Select):
 
 
 class Quest_Select_Filter(Select):
-    def __init__(self, bot, quests, ctx):
-        methods = list(set(quest["method"] for quest in quests))
+    def __init__(self, bot, all_quests, ctx):
+        methods = list(set(quest["method"] for quest in all_quests))
         options = [
             discord.SelectOption(label=method.title(), value=method)
             for method in methods
@@ -238,7 +214,7 @@ class Quest_Select_Filter(Select):
         options.insert(0, discord.SelectOption(label="All", value="all"))
         super().__init__(placeholder="Filter...", options=options)
         self.bot = bot
-        self.quests = quests
+        self.all_quests = all_quests
         self.ctx = ctx
 
     async def callback(self, interaction: discord.Interaction):
@@ -254,11 +230,11 @@ class Quest_Select_Filter(Select):
                 filtered_quests = None
             else:
                 filtered_quests = [
-                    quest for quest in self.quests if quest["method"] == selected_method
+                    quest for quest in self.all_quests if quest["method"] == selected_method
                 ]
 
             view = Quest_View(
-                self.bot, self.quests, self.ctx, filtered_quests=filtered_quests
+                self.bot, self.all_quests, self.ctx, filtered_quests=filtered_quests
             )
             embed = await view.generate_messages()
             await interaction.response.edit_message(embed=embed, view=view)
@@ -269,12 +245,12 @@ class Quest_Select_Filter(Select):
             traceback.print_exc()
             await self.ctx.send(f"{error_message}")
 
-
 class QuestButton(discord.ui.Button):
-    def __init__(self, label, style, custom_id, bot, quests, ctx, page):
+    def __init__(self, label, style, custom_id, bot, filtered_quests, ctx, page, all_quests):
         super().__init__(label=label, style=style, custom_id=custom_id)
         self.bot = bot
-        self.quests = quests
+        self.all_quests = all_quests
+        self.filtered_quests = filtered_quests
         self.ctx = ctx
         self.page = page
         self.quest_data = Quest_Data(bot)
@@ -305,7 +281,8 @@ class QuestButton(discord.ui.Button):
                 )
                 
                 self.page = 0
-                self.quests = []  
+                self.all_quests = []  
+                self.filtered_quests = []
                 
                 view = None  
             else:
@@ -313,16 +290,87 @@ class QuestButton(discord.ui.Button):
                     description="You have no quests.", color=discord.Color.red()
                 )
                 
-                view = Quest_View(self.bot, self.quests, self.ctx, self.page)
+                view = Quest_View(self.bot, self.all_quests, self.ctx, self.page)
 
         
         if not embed:
-            view = Quest_View(self.bot, self.quests, self.ctx, self.page)
+            view = Quest_View(self.bot, self.all_quests, self.ctx, self.page, self.filtered_quests)
             embed = await view.generate_messages()
 
         
         await interaction.response.edit_message(embed=embed, view=view)
 
+
+class Quest_Button1(discord.ui.View):
+    def __init__(self, bot, ctx):
+        super().__init__()
+        self.ctx = ctx
+        self.bot = bot
+        self.quest_data = Quest_Data(bot)
+
+    async def add_user_to_server(self):
+        logger.debug("Adding user to server.")
+        try:
+            user_id = str(self.ctx.author.id)
+            guild_id = str(self.ctx.guild.id)
+            users_in_server = await self.quest_data.find_users_in_server(guild_id)
+            logger.debug(f"Users in server: {users_in_server}")
+
+            if user_id not in users_in_server:
+                await self.quest_data.add_user_to_server(user_id, guild_id)
+                return True
+            else:
+                return False
+        except Exception as e:
+            error_message = "An error occurred while adding user to server."
+            logger.error(f"{error_message}: {e}")
+            traceback.print_exc()
+            await error_custom_embed(
+                self.bot, self.ctx, error_message, title="Add User Error"
+            )
+            return False
+
+    @discord.ui.button(label="New Quest", style=discord.ButtonStyle.success)
+    async def new_quest_button(
+        self, button: discord.ui.Button, interaction: discord.Interaction
+    ):
+        try:
+            
+            guild_id = str(interaction.guild.id)
+            channel_id = await self.quest_data.get_random_channel_for_guild(guild_id)
+
+            if not channel_id:
+                
+                await interaction.response.edit_message(
+                    content="No redirected channels found for this guild. Please set redirect channels before creating a new quest.\n"
+                    f"> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `{self.ctx.prefix}redirect <channels>`"
+                )
+                return  
+
+            
+            button_user = interaction.user
+
+            
+            await self.quest_data.add_balance(button_user, guild_id, 0)
+
+            
+            for _ in range(50):
+                logger.debug("Adding new quest")
+                await self.quest_data.add_new_quest(guild_id, button_user, chance=100)
+
+            
+            await interaction.response.edit_message(
+                content=f"Successfully created new quests for you, {button_user.mention}!",
+                view=None,
+            )
+
+        except Exception as e:
+            error_message = "An error occurred while processing the new quest button."
+            logger.error(f"{error_message}: {e}")
+            traceback.print_exc()
+            await error_custom_embed(
+                self.bot, self.ctx, error_message, title="Button Error"
+            )
 
 class Quest_Button1(discord.ui.View):
     def __init__(self, bot, ctx):
@@ -506,55 +554,50 @@ class Quest_Button(discord.ui.View):
 
 
 class ImageGenerator:
-    def __init__(self, ctx, text):
-        """Initialize the ImageGenerator with cog-specific data and load resources."""
-        
-        self.font_path_header = (
-            "data/commands/help/menu/initial/style/assets/font/valentine.ttf"
-        )
-        self.font_path_base = (
-            "data/commands/help/menu/initial/style/assets/font/dizhitl-italic.ttf"
-        )
-        self.character_path = (
-            "data/commands/help/menu/initial/style/assets/character_quest.png"
-        )
-        self.background_path = (
-            "data/commands/help/menu/initial/style/assets/background.png"
-        )
-
-        
-        self.header_font_size = 35
-        self.base_font_size = 11
-
-        
-        self.header_font_color = "white"
-        self.base_font_color = "black"
-
-        
-        self.character_scale = 0.4
-
-        
-        self.header_text = "Anya Quest!"
+    def __init__(self, ctx, text, config_path="data/commands/quest/image/quest_view.json"):
+        self.config_path = config_path
         self.description_text = text
 
-        
-        self.character_pos = (5, 5)
-        self.text_x_offset = 10
-        self.text_y_offset = 25
-        self.text_spacing = 20
-        self.text_box_margin = 20  
+        self.config = self._load_config()
+        self._apply_config()
 
-        
-        self.color_replacements_map = {
-            
-        }
-
-        
         self._load_resources()
         self._apply_color_replacements()
 
+    def _load_config(self):
+        with open(self.config_path, "r") as file:
+            return json.load(file)
+
+    def _apply_config(self):
+        """Assign config values to class attributes."""
+        cfg = self.config
+
+        self.font_path_header = cfg.get("font_path_header")
+        self.font_path_description = cfg.get("font_path_description")
+        self.character_path = cfg.get("character_path")
+        self.background_path = cfg.get("background_path")
+
+        self.header_font_size = cfg.get("header_font_size", 35)
+        self.description_font_size = cfg.get("description_font_size", 11)
+
+        self.header_font_color = cfg.get("header_font_color", "white")
+        self.description_font_color = cfg.get("description_font_color", "black")
+
+        self.character_scale = cfg.get("character_scale", 0.4)
+
+        self.header_text = cfg.get("header_text", "Quest!")
+        # description_text is dynamic, not from config
+
+        self.character_pos = tuple(cfg.get("character_pos", (5, 5)))
+        self.text_x_offset = cfg.get("text_x_offset", 10)
+        self.text_y_offset = cfg.get("text_y_offset", 25)
+        self.text_spacing = cfg.get("text_spacing", 20)
+        self.text_box_margin = cfg.get("text_box_margin", 20)
+
+        self.color_replacements_map = cfg.get("color_replacements_map", {})
+
     def _load_resources(self):
-        """Load the fonts and images required for generating the image."""
+        """Load fonts and images."""
         try:
             self.header_font = ImageFont.truetype(
                 self.font_path_header, self.header_font_size
@@ -563,26 +606,30 @@ class ImageGenerator:
             self.header_font = ImageFont.load_default()
 
         try:
-            self.base_font = ImageFont.truetype(
-                self.font_path_base, self.base_font_size
+            self.description_font = ImageFont.truetype(
+                self.font_path_description, self.description_font_size
             )
         except Exception:
-            self.base_font = ImageFont.load_default()
+            self.description_font = ImageFont.load_default()
 
         self.character = Image.open(self.character_path).convert("RGBA")
         self.background = Image.open(self.background_path).convert("RGBA")
 
-        
         self._resize_character()
 
+    def _resize_background(self):
+        config = self._load_config()
+        new_width = round(self.background.width * config["background_scale"])
+        new_height = round(self.background.height * config["background_scale"])
+        self.background = self.background.resize((new_width, new_height))
+
+
     def _resize_character(self):
-        """Resize the character image to a percentage of its original size."""
         new_width = round(self.character.width * self.character_scale)
         new_height = round(self.character.height * self.character_scale)
         self.character = self.character.resize((new_width, new_height))
 
     def _apply_color_replacements(self):
-        """Replace specific colors in the background image."""
         bg_array = np.array(self.background).copy()
 
         for old_hex, replacement in self.color_replacements_map.items():
@@ -590,32 +637,27 @@ class ImageGenerator:
             lower_bound = np.array(old_color) - 10
             upper_bound = np.array(old_color) + 10
 
-            if replacement == "transparent":  
-                mask = cv2.inRange(
-                    bg_array[:, :, :3], lower_bound, upper_bound)
+            if replacement == "transparent":
+                mask = cv2.inRange(bg_array[:, :, :3], lower_bound, upper_bound)
                 bg_array[mask > 0] = [0, 0, 0, 0]
-            elif replacement.startswith("http"):  
+            elif replacement.startswith("http"):
                 replacement_img = self._download_image(replacement)
                 replacement_img = replacement_img.resize(
                     (self.background.width, self.background.height)
                 )
                 replacement_array = np.array(replacement_img)[:, :, :3]
-
-                mask = cv2.inRange(
-                    bg_array[:, :, :3], lower_bound, upper_bound)
+                mask = cv2.inRange(bg_array[:, :, :3], lower_bound, upper_bound)
                 bg_array[mask > 0, :3] = replacement_array[mask > 0]
-            else:  
+            else:
                 replacement_color = tuple(
                     int(replacement[i: i + 2], 16) for i in (1, 3, 5)
                 )
-                mask = cv2.inRange(
-                    bg_array[:, :, :3], lower_bound, upper_bound)
+                mask = cv2.inRange(bg_array[:, :, :3], lower_bound, upper_bound)
                 bg_array[mask > 0, :3] = replacement_color
 
         self.background = Image.fromarray(bg_array, "RGBA")
 
     def _wrap_text(self, text, max_width):
-        """Wrap text to fit within the specified width."""
         lines = []
         words = text.split()
         current_line = []
@@ -625,8 +667,7 @@ class ImageGenerator:
 
         for word in words:
             current_line.append(word)
-            line_width = draw.textlength(
-                " ".join(current_line), font=self.base_font)
+            line_width = draw.textlength(" ".join(current_line), font=self.description_font)
             if line_width > max_width:
                 current_line.pop()
                 lines.append(" ".join(current_line))
@@ -638,8 +679,6 @@ class ImageGenerator:
         return "\n".join(lines)
 
     def _draw_text(self, draw, text_x, text_y):
-        """Draw all text on the image, ensuring it doesn't touch the edges."""
-        
         draw.text(
             (text_x, text_y),
             self.header_text,
@@ -648,54 +687,43 @@ class ImageGenerator:
         )
         text_y += self.header_font.size + self.text_spacing
 
-        
         text_box_width = self.background.width - text_x - self.text_box_margin * 2
         wrapped_text = self._wrap_text(self.description_text, text_box_width)
         draw.multiline_text(
             (text_x + self.text_box_margin, text_y),
             wrapped_text,
-            font=self.base_font,
-            fill=self.base_font_color,
+            font=self.description_font,
+            fill=self.description_font_color,
         )
 
     @staticmethod
     def _download_image(url):
-        """Download an image from a URL."""
-        try:
-            response = requests.get(url)
-            response.raise_for_status()
-            return Image.open(BytesIO(response.content)).convert("RGBA")
-        except Exception as e:
-            print(f"Error downloading image: {e}")
-            raise
+        response = requests.get(url)
+        response.raise_for_status()
+        return Image.open(BytesIO(response.content)).convert("RGBA")
 
     def create_image(self):
-        """Generate the complete image with the background, character, and text."""
         bg = self.background.copy()
         draw = ImageDraw.Draw(bg)
         character_x, character_y = self.character_pos
         bg.paste(self.character, (character_x, character_y), self.character)
 
-        
         text_x = self.character.width + self.text_x_offset - 45
-
         text_y = self.text_y_offset
         self._draw_text(draw, text_x, text_y)
 
         return bg
 
     def save_image(self, file_path):
-        """Save the generated image to the given file path."""
         img = self.create_image()
         img.save(file_path)
         return file_path
 
     def show_image(self):
-        """Display the generated image."""
         img = self.create_image()
         img_bytes = BytesIO()
         img.save(img_bytes, format="PNG")
-        
+        return img_bytes.getvalue()
 
 
 class Quest_Data(commands.Cog):

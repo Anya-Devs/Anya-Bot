@@ -313,19 +313,20 @@ class Quest_Prompt:
 class Quest_Progress:
     
     Progress_Bar_MAPPING = {
-        "front_empty": 1237456749674364969,
-        "front_full": 1237456617776218205,
-        "mid_empty": 1237456613527523328,
-        "mid_full": 1237456614697730139,
-        "back_empty": 1237456616119599164,
-        "back_full": 1237456619143696395,
+        "front_empty": 1421229056946470993,
+        "front_full": 1421224992263114905,
+        "mid_empty": 1421229540444737727,
+        "mid_full": 1421222542596771891,
+        "back_empty": 1421228774761959464,
+        "back_full": 1421225912657252452,
     }
+    Progress_Bar_Length = 10
 
     
     @staticmethod
     async def generate_progress_bar(progress, bot):
         bar = ""
-        for i in range(6):
+        for i in range(Quest_Progress.Progress_Bar_Length):
             front_emoji = (
                 discord.utils.get(
                     bot.emojis,
