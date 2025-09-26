@@ -470,37 +470,37 @@ class Quest_Completed_Embed:
         reward="N/A",
         balance=None,
     ):
-        
-        check_emoji_id = 1243403342722371645
-        reward_emoji_id = 1247800150479339581
+        # Emojis
+        inner_dirs = {
+            "check_emoji_id": 1243403342722371645,
+            "reward_emoji_id": 1247800150479339581,
+        }
+        check_emoji = discord.utils.get(bot.emojis, id=inner_dirs["check_emoji_id"])
+        reward_emoji = discord.utils.get(bot.emojis, id=inner_dirs["reward_emoji_id"])
 
-        
-        check_emoji = discord.utils.get(bot.emojis, id=check_emoji_id)
-        reward_emoji = discord.utils.get(bot.emojis, id=reward_emoji_id)
-        
+        # Quest text
         amount = "times" if times > 1 else "time"
+        quest_completed = (
+            f'-# {user.mention}\n{check_emoji} {"reacted with" if method == "reaction" else method.title()}'
+            f'"{quest_content.replace("`", "")}", {times} {amount}'
+        )
 
-        quest_completed = f'-# {check_emoji} {user.mention} : {method.title()} "{quest_content.replace("`", "")}", {times} {amount}'
-
+        # Reward text
         reward_text = f"`{reward} stp`"
 
-        
+        # Embed
         embed = discord.Embed(
-            timestamp=datetime.now(), description=quest_completed, color=primary_color()
+            timestamp=datetime.now(),
+            description=quest_completed,
+            color=primary_color(),
         )
-
-        
-
-        embed.add_field(
-            name=f"Reward ", value=f"{reward_emoji} {reward_text}", inline=True
-        )
-        embed.add_field(name=f"Stella Points:",
-                        value=f"{balance:,}", inline=True)
-
-        
+        embed.add_field(name="Reward", value=f"{reward_emoji} {reward_text}", inline=True)
+        embed.add_field(name="Stella Points:", value=f"{balance:,}", inline=True)
         embed.set_thumbnail(url=user.avatar)
-        embed.set_footer(text=f"Congrats, you've completed quest {quest_id}!")
+        embed.set_footer(text=f"Congrats, you've completed  Quest {quest_id}!")
+
         return embed
+
 
 
 class ShopEmbed:
