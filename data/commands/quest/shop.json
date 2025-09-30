@@ -439,30 +439,36 @@
     }
   },
   "GachaGames": {
-    "main_description": "Randomized reward systems offering spy-themed items, gadgets, or profile customizations for points.",
+    "main_description": "Randomized games offering collectable card draws or gambling challenges for points.",
     "items": [
       {
-        "name": "Mystery Spy Box",
-        "description": "Contains random spy gadgets, materials, or collectables.",
-        "emoji": "🎁",
-        "points": 5000
+        "name": "Pokémon Card Draw",
+        "description": "Draw random Pokémon cards. Each draw costs 100 points.",
+        "emoji": "🃏",
+        "points": 100
       },
       {
-        "name": "Lucky Forger Capsule",
-        "description": "Random profile items from the Forger family.",
-        "emoji": "🧸",
-        "points": 7000
+        "name": "Anime Card Draw",
+        "description": "Draw random anime characters. Each draw costs 100 points.",
+        "emoji": "🎴",
+        "points": 100
       },
       {
-        "name": "WISE Gacha Capsule",
-        "description": "Random background, font, or item from WISE agents.",
-        "emoji": "🛠️",
-        "points": 7500
+        "name": "Slot Game",
+        "description": "Bet points to try your luck at a slot machine.",
+        "emoji": "🎰",
+        "points": 0
+      },
+      {
+        "name": "Dice Guess Game",
+        "description": "Guess the dice roll outcome. Bet points to play.",
+        "emoji": "🎲",
+        "points": 0
       }
     ]
   },
   "PoketwoSpawns": {
-    "main_description": "Customize layout and background Images of Poketwo spawns in your server.\n\nRequires one of these:\n- Anya Manger (role)\n- Admin (permission)",
+    "main_description": "Customize layout and background images of Poketwo spawns in your server.\n\nRequires one of these:\n- Anya Manger (role)\n- Admin (permission)",
     "sections": {
       "Seasonal Anya Images": [
         {

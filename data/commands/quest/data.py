@@ -83,60 +83,105 @@ class DatabaseManager:
             return []
 
     class InventoryClass:
-        """Handles inventory-related database operations."""
-        def __init__(self, mongo_connect, db_name):
-            self.mongoConnect = mongo_connect
-            self.DB_NAME = db_name
+     def __init__(self, mongo_connect, db_name: str):
+        self.mongoConnect = mongo_connect
+        self.DB_NAME = db_name
 
-        async def get_user_inventory_count(
-            self, guild_id: str, user_id: str, material_name: str
-        ) -> int:
-            try:
-                db = self.mongoConnect[self.DB_NAME]
-                server_collection = db["Servers"]
+     async def get_user_inventory_count(
+        self, guild_id: str, user_id: str, category: str, item_name: str, context: str = None
+    ) -> int:
+        """Retrieve the count of a specific item in a user's inventory."""
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db["Servers"]
 
-                user_data = await server_collection.find_one(
-                    {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
-                    {f"members.{user_id}.inventory.{material_name}": 1},
-                )
+            user_data = await server_collection.find_one(
+                {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
+                {f"members.{user_id}.inventory.{category}.{item_name}": 1},
+            )
 
-                if user_data:
-                    if (
-                        "inventory" in user_data["members"][user_id]
-                        and material_name in user_data["members"][user_id]["inventory"]
-                    ):
-                        return user_data["members"][user_id]["inventory"].get(
-                            material_name, 0
-                        )
-                    else:
-                        await server_collection.update_one(
-                            {"guild_id": guild_id},
-                            {"$set": {f"members.{user_id}.inventory.{material_name}": 0}},
-                            upsert=True,
-                        )
-                        return 0
-                else:
-                    return 0
-            except PyMongoError as e:
-                logger.error(
-                    f"Error occurred while getting user inventory count: {e}")
-                return 0
+            if (
+                user_data
+                and "members" in user_data
+                and user_id in user_data["members"]
+                and "inventory" in user_data["members"][user_id]
+                and category in user_data["members"][user_id]["inventory"]
+                and item_name in user_data["members"][user_id]["inventory"][category]
+            ):
+                return user_data["members"][user_id]["inventory"][category].get(item_name, 0)
 
-        async def add_item_to_inventory(
-            self, guild_id: str, user_id: str, material_name: str, quantity: int
+            # Initialize missing item
+            await server_collection.update_one(
+                {"guild_id": guild_id},
+                {"$set": {f"members.{user_id}.inventory.{category}.{item_name}": 0}},
+                upsert=True,
+            )
+            return 0
+
+        except PyMongoError as e:
+            logger.error(f"Error getting inventory count for {item_name} ({user_id}, {guild_id}): {e}")
+            return 0
+
+     async def add_item_to_inventory(
+        self, guild_id: str, user_id: str, category: str, item_name: str, quantity: int
         ) -> None:
-            try:
-                db = self.mongoConnect[self.DB_NAME]
-                server_collection = db["Servers"]
-                await server_collection.update_one(
-                    {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
-                    {"$inc": {f"members.{user_id}.inventory.{material_name}": quantity}},
-                    upsert=True,
-                )
-            except PyMongoError as e:
-                logger.error(f"Error occurred while adding item to inventory: {e}")
-                raise e
+        """Add a quantity of an item to a user's inventory."""
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db["Servers"]
 
+            await server_collection.update_one(
+                {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
+                {"$inc": {f"members.{user_id}.inventory.{category}.{item_name}": quantity}},
+                upsert=True,
+            )
+
+        except PyMongoError as e:
+            logger.error(f"Error adding {quantity} of {item_name} to {user_id} ({guild_id}): {e}")
+            raise e
+
+     async def remove_item_from_inventory(
+        self, guild_id: str, user_id: str, category: str, item_name: str, quantity: int
+        ) -> bool:
+        """Remove a quantity of an item if the user has enough."""
+        try:
+            current_count = await self.get_user_inventory_count(guild_id, user_id, category, item_name)
+            if current_count < quantity:
+                logger.warning(
+                    f"Cannot remove {quantity} of {item_name} from {user_id} in {guild_id}. Only {current_count} available."
+                )
+                return False
+
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db["Servers"]
+
+            await server_collection.update_one(
+                {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
+                {"$inc": {f"members.{user_id}.inventory.{category}.{item_name}": -quantity}},
+            )
+            return True
+
+        except PyMongoError as e:
+            logger.error(f"Error removing {item_name} from {user_id} ({guild_id}): {e}")
+            return False
+
+     async def reset_inventory_item(
+        self, guild_id: str, user_id: str, category: str, item_name: str ) -> None:
+        """Reset a specific inventory item to zero."""
+        try:
+            db = self.mongoConnect[self.DB_NAME]
+            server_collection = db["Servers"]
+
+            await server_collection.update_one(
+                {"guild_id": guild_id},
+                {"$set": {f"members.{user_id}.inventory.{category}.{item_name}": 0}},
+                upsert=True,
+            )
+
+        except PyMongoError as e:
+            logger.error(f"Error resetting {item_name} for {user_id} ({guild_id}): {e}")
+            raise e
+    
     class ToolClass:
         """Handles tool-related database operations."""
         def __init__(self, mongo_connect, db_name, config):
