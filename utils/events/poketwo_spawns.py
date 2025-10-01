@@ -722,7 +722,7 @@ class PokemonSpawnView(View):
             embed.set_image(url=f"attachment://{self.slug}.png")
             embed.set_footer(
                 icon_url='https://discords.com/_next/image?url=https%3A%2F%2Fcdn.discordapp.com%2Femojis%2F808909357240025099.png%3Fv%3D1&w=128&q=75',
-                text=f"Height: {float(data['height']):.2f} m\nWeight: {float(data['weight']):.2f} kg\tGender: {gender_text}" +
+                text=f"Height: {float(data['height']):.2f} m\nWeight: {float(data['weight']):.2f} kg    Gender: {gender_text}" +
                      (f"\nRarity: {rarity}" if rarity != 'Normal' else "")
             )
 
