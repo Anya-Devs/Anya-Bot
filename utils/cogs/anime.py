@@ -113,7 +113,7 @@ class AnimeView(discord.ui.View):
                     "Next",
                     discord.ButtonStyle.gray,
                     "next",
-                    left_buton_emoji,
+                    left_button_emoji,
                     self.anime_data,
                     self.current_index,
                     self.current_page,
