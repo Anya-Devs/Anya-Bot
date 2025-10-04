@@ -47,8 +47,7 @@ class PoketwoSpawnDetector(commands.Cog):
         self._pokemon_ids = self.pokemon_utils.load_pokemon_ids()
         self.file_cache, self.img_bytes_cache = {}, {}
         self.pred_cache, self.base_cache = {}, {}
-        self.server_cache, self.ping_cache = {}, {}
-        self.desc_cache, self.type_cache, self.alt_cache = {}, {}, {}
+        self.server_cache, self.desc_cache, self.type_cache, self.alt_cache = {}, {}, {}, {}
 
         for slug in self._pokemon_ids:
             path = os.path.join(self.spawn_dir, f"{slug}.png")
@@ -56,7 +55,7 @@ class PoketwoSpawnDetector(commands.Cog):
                 self.file_cache[slug] = path
 
         self.queue = asyncio.Queue()
-        self.worker_count = worker_count or min((os.cpu_count() or 4) * 4, 64)  # Increased workers for better parallelism
+        self.worker_count = worker_count or min((os.cpu_count() or 4) * 4, 64)
         self.success_emoji = "<:green:1261639410181476443>"
         self.error_emoji = "<:red:1261639413943762944>"
         self.cross_emoji = "❌"
@@ -159,18 +158,12 @@ class PoketwoSpawnDetector(commands.Cog):
                 server_config = await self.pokemon_utils.get_server_config(sid)
                 self.server_cache[sid] = server_config
 
-            pings = self.ping_cache.get((sid, base_name))
-            if pings:
-                type_pings, quest_pings, shiny_pings, collect_pings = pings
-            else:
-                shiny_collect, type_pings, quest_pings = await asyncio.gather(
-                    self.pokemon_utils.get_ping_users(message.guild, base_name),
-                    self.pokemon_utils.get_type_ping_users(message.guild, base_name),
-                    self.pokemon_utils.get_quest_ping_users(message.guild, base_name),
-                )
-                shiny_pings, collect_pings = shiny_collect
-                pings = (type_pings, quest_pings, shiny_pings, collect_pings)
-                self.ping_cache[(sid, base_name)] = pings
+            shiny_collect, type_pings, quest_pings = await asyncio.gather(
+                self.pokemon_utils.get_ping_users(message.guild, base_name),
+                self.pokemon_utils.get_type_ping_users(message.guild, base_name),
+                self.pokemon_utils.get_quest_ping_users(message.guild, base_name),
+            )
+            shiny_pings, collect_pings = shiny_collect
 
             rare, regional = self.pokemon_utils._special_names
             special_roles = []
