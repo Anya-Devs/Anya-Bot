@@ -1,4 +1,4 @@
-import sys, os, re, time, subprocess, asyncio
+import sys, os, time, subprocess, asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 def ensure_rich():
@@ -20,7 +20,7 @@ class SetupManager:
         self.submodule_url = "https://github.com/senko-sleep/Poketwo-AutoNamer.git"
         self.submodule_path = "submodules/poketwo_autonamer"
         self.requirements_file = "requirements.txt"
-        self.executor = ThreadPoolExecutor(max_workers=16)
+        self.executor = ThreadPoolExecutor(max_workers=8)
         self.task_times = {}
         self.start_time = time.time()
         self.progress = Progress(
@@ -35,7 +35,7 @@ class SetupManager:
         self.pkg_groups = {
             "heavy": ["onnxruntime", "opencv-python-headless"],
             "medium": ["emoji==1.7.0", "python-Levenshtein"],
-            "common": ["pip", "setuptools", "wheel", "urllib3", "pipreqs", "Flask", 'rapidfuzz', 'aiocache', 'aiokafka', 'cachetools']
+            "common": ["pip", "setuptools", "wheel", "urllib3", "pipreqs", "Flask", "rapidfuzz", "aiocache", "aiokafka", "cachetools"]
         }
 
     def log_time(self, key, start):
@@ -43,39 +43,83 @@ class SetupManager:
         self.task_times[key] = elapsed
         return f"[dim]({elapsed:.1f}s)[/dim]"
 
-    def ensure_pip(self):
-        try:
-            subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"], check=True, capture_output=True)
-            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"], check=True, capture_output=True)
-            return True
-        except Exception as e:
-            self.console.print(Panel(f"[red]pip repair failed:[/red] {e}", title="pip Error"))
-            return False
+    async def _exec(self, args, check=False):
+        """Run subprocess in thread executor. Returns CompletedProcess or raises CalledProcessError if check=True."""
+        loop = asyncio.get_event_loop()
+        def run():
+            return subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=check)
+        return await loop.run_in_executor(self.executor, run)
 
     async def run_cmd(self, *args):
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(self.executor, lambda: subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode)
+        """Compatibility helper that returns returncode."""
+        try:
+            cp = await self._exec(list(args), check=False)
+            return cp.returncode
+        except Exception:
+            return 1
+
+    async def ensure_pip(self):
+        start = time.time()
+        try:
+            await self._exec([sys.executable, "-m", "ensurepip", "--upgrade"], check=True)
+            await self._exec([sys.executable, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"], check=True)
+            return True
+        except subprocess.CalledProcessError as e:
+            msg = e.stderr or str(e)
+            self.console.print(Panel(f"[red]pip repair failed:[/red]\n{msg}", title="pip Error"))
+            self.task_times["ensure_pip"] = time.time() - start
+            return False
 
     async def sync_submodule(self, task_id):
         start = time.time()
-        if os.path.exists(os.path.join(self.submodule_path, ".git")):
-            self.progress.update(task_id, description=f"✅ Already exists {self.log_time('submodule', start)}", completed=100)
+        repo_dir = os.getcwd()
+        # ensure we're in a git repo
+        if not os.path.isdir(os.path.join(repo_dir, ".git")):
+            self.progress.update(task_id, description=f"❌ Not a git repo {self.log_time('submodule', start)}", completed=100)
             return
-        self.progress.update(task_id, description="□ Cloning submodule...", completed=10)
-        await self.run_cmd("git", "submodule", "add", self.submodule_url, self.submodule_path)
-        await self.run_cmd("git", "submodule", "sync")
-        await self.run_cmd("git", "submodule", "update", "--init", "--remote", "--jobs", "16", "--depth", "1")
-        self.progress.update(task_id, description=f"✅ Submodules {self.log_time('submodule', start)}", completed=100)
+
+        self.progress.update(task_id, description="□ Checking submodule...", completed=5)
+        try:
+            if os.path.isdir(self.submodule_path):
+                # If .git exists inside submodule folder -> treat as existing submodule
+                git_meta = os.path.join(self.submodule_path, ".git")
+                if os.path.isdir(git_meta) or os.path.islink(git_meta):
+                    self.progress.update(task_id, description="□ Updating existing submodule...", completed=15)
+                    await self._exec(["git", "submodule", "sync", "--recursive"], check=True)
+                    await self._exec(["git", "submodule", "update", "--init", "--recursive", "--remote", "--jobs", "8", "--depth", "1"], check=True)
+                    self.progress.update(task_id, description=f"✅ Submodule updated {self.log_time('submodule', start)}", completed=100)
+                    return
+                else:
+                    # Folder exists but not a proper submodule metadata: try to add (force)
+                    self.progress.update(task_id, description="□ Adding submodule into existing folder...", completed=15)
+                    await self._exec(["git", "submodule", "add", "--force", self.submodule_url, self.submodule_path], check=True)
+                    await self._exec(["git", "submodule", "sync", "--recursive"], check=True)
+                    await self._exec(["git", "submodule", "update", "--init", "--recursive", "--remote", "--jobs", "8", "--depth", "1"], check=True)
+                    self.progress.update(task_id, description=f"✅ Submodule added {self.log_time('submodule', start)}", completed=100)
+                    return
+
+            # fresh add
+            self.progress.update(task_id, description="□ Cloning submodule...", completed=10)
+            await self._exec(["git", "submodule", "add", "--force", self.submodule_url, self.submodule_path], check=True)
+            await self._exec(["git", "submodule", "sync", "--recursive"], check=True)
+            await self._exec(["git", "submodule", "update", "--init", "--recursive", "--remote", "--jobs", "8", "--depth", "1"], check=True)
+            self.progress.update(task_id, description=f"✅ Submodule cloned {self.log_time('submodule', start)}", completed=100)
+
+        except subprocess.CalledProcessError as e:
+            stderr = e.stderr or str(e)
+            self.progress.update(task_id, description=f"❌ Submodule failed {self.log_time('submodule', start)}", completed=100)
+            self.console.print(Panel(f"[red]Git error:[/red]\n{stderr}", title="Git Error"))
 
     async def install_pkg_group(self, group_name, pkgs, task_id):
         start = time.time()
         self.progress.update(task_id, description=f"□ Installing {group_name}...", completed=10)
         try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade"] + pkgs, check=True, capture_output=True)
+            await self._exec([sys.executable, "-m", "pip", "install", "--upgrade"] + pkgs, check=True)
             self.progress.update(task_id, description=f"✅ {group_name} {self.log_time(group_name, start)}", completed=100)
-        except Exception as e:
+        except subprocess.CalledProcessError as e:
+            stderr = e.stderr or str(e)
             self.progress.update(task_id, description=f"❌ {group_name} failed {self.log_time(group_name, start)}", completed=100)
-            self.console.print(Panel(str(e), title=f"{group_name.title()} Error"))
+            self.console.print(Panel(stderr, title=f"{group_name.title()} Error"))
 
     async def resolve_conflicts(self, task_id):
         start = time.time()
@@ -102,14 +146,15 @@ class SetupManager:
             self.progress.update(task_id, description=f"⚠️ No requirements.txt", completed=100)
             return
         try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "-r", self.requirements_file, "--upgrade"], check=True, capture_output=True)
+            await self._exec([sys.executable, "-m", "pip", "install", "-r", self.requirements_file, "--upgrade"], check=True)
             self.progress.update(task_id, description=f"✅ Installed {self.log_time('requirements', start)}", completed=100)
-        except Exception as e:
+        except subprocess.CalledProcessError as e:
+            stderr = e.stderr or str(e)
             self.progress.update(task_id, description=f"❌ Install failed {self.log_time('requirements', start)}", completed=100)
-            self.console.print(Panel(str(e), title="Requirements Error"))
+            self.console.print(Panel(stderr, title="Requirements Error"))
 
     async def run_setup(self):
-        if not self.ensure_pip():
+        if not await self.ensure_pip():
             return
         self.console.print(Panel(Text("⚡ Optimized Setup v3", justify="center"), title="Setup", box=ROUNDED, border_style="bright_blue"))
 
@@ -122,8 +167,12 @@ class SetupManager:
                 "heavy": self.progress.add_task("Heavy packages", total=100),
                 "requirements": self.progress.add_task("Install requirements", total=100)
             }
+
+            # Run submodule first so any local deps are present before pip installs
+            await self.sync_submodule(tasks["submodule"])
+
+            # Run remaining tasks concurrently
             await asyncio.gather(
-                self.sync_submodule(tasks["submodule"]),
                 self.resolve_conflicts(tasks["conflict"]),
                 self.install_pkg_group("common", self.pkg_groups["common"], tasks["common"]),
                 self.install_pkg_group("medium", self.pkg_groups["medium"], tasks["medium"]),
