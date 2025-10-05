@@ -33,8 +33,9 @@ class SetupManager:
             transient=True
         )
         self.pkg_groups = {
+            "emoji": ["emoji==1.7.0"],
             "heavy": ["onnxruntime", "opencv-python-headless"],
-            "medium": ["emoji==1.7.0", "python-Levenshtein"],
+            "medium": ["python-Levenshtein"],
             "common": ["pip", "setuptools", "wheel", "urllib3", "pipreqs", "Flask", "rapidfuzz", "aiocache", "aiokafka", "cachetools"]
         }
 
@@ -45,7 +46,16 @@ class SetupManager:
 
     async def _exec(self, args, check=False):
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(self.executor, lambda: subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=check))
+        def run():
+            return subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=check)
+        return await loop.run_in_executor(self.executor, run)
+
+    async def run_cmd(self, *args):
+        try:
+            cp = await self._exec(list(args), check=False)
+            return cp.returncode
+        except Exception:
+            return 1
 
     async def ensure_pip(self):
         start = time.time()
@@ -54,7 +64,8 @@ class SetupManager:
             await self._exec([sys.executable, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"], check=True)
             return True
         except subprocess.CalledProcessError as e:
-            self.console.print(Panel(f"[red]pip repair failed:[/red]\n{e}", title="pip Error"))
+            msg = e.stderr or str(e)
+            self.console.print(Panel(f"[red]pip repair failed:[/red]\n{msg}", title="pip Error"))
             self.task_times["ensure_pip"] = time.time() - start
             return False
 
@@ -63,19 +74,31 @@ class SetupManager:
         if not os.path.isdir(".git"):
             self.progress.update(task_id, description=f"❌ Not a git repo {self.log_time('submodule', start)}", completed=100)
             return
-        self.progress.update(task_id, description="□ Cloning/updating submodule...", completed=10)
         try:
-            if os.path.isdir(self.submodule_path) and (os.path.isdir(os.path.join(self.submodule_path, ".git")) or os.path.islink(os.path.join(self.submodule_path, ".git"))):
-                await self._exec(["git", "submodule", "sync", "--recursive"], check=True)
-                await self._exec(["git", "submodule", "update", "--init", "--recursive", "--remote", "--jobs", "16", "--depth", "1"], check=True)
-            else:
-                await self._exec(["git", "submodule", "add", "--force", self.submodule_url, self.submodule_path], check=True)
-                await self._exec(["git", "submodule", "sync", "--recursive"], check=True)
-                await self._exec(["git", "submodule", "update", "--init", "--recursive", "--remote", "--jobs", "16", "--depth", "1"], check=True)
-            self.progress.update(task_id, description=f"✅ Submodule ready {self.log_time('submodule', start)}", completed=100)
+            if os.path.isdir(self.submodule_path):
+                git_meta = os.path.join(self.submodule_path, ".git")
+                if os.path.isdir(git_meta) or os.path.islink(git_meta):
+                    self.progress.update(task_id, description="□ Updating existing submodule...", completed=15)
+                    await self._exec(["git", "submodule", "sync", "--recursive"], check=True)
+                    await self._exec(["git", "submodule", "update", "--init", "--recursive", "--remote", "--jobs", "16", "--depth", "1"], check=True)
+                    self.progress.update(task_id, description=f"✅ Submodule updated {self.log_time('submodule', start)}", completed=100)
+                    return
+                else:
+                    self.progress.update(task_id, description="□ Adding submodule...", completed=15)
+                    await self._exec(["git", "submodule", "add", "--force", self.submodule_url, self.submodule_path], check=True)
+                    await self._exec(["git", "submodule", "sync", "--recursive"], check=True)
+                    await self._exec(["git", "submodule", "update", "--init", "--recursive", "--remote", "--jobs", "16", "--depth", "1"], check=True)
+                    self.progress.update(task_id, description=f"✅ Submodule added {self.log_time('submodule', start)}", completed=100)
+                    return
+            self.progress.update(task_id, description="□ Cloning submodule...", completed=10)
+            await self._exec(["git", "submodule", "add", "--force", self.submodule_url, self.submodule_path], check=True)
+            await self._exec(["git", "submodule", "sync", "--recursive"], check=True)
+            await self._exec(["git", "submodule", "update", "--init", "--recursive", "--remote", "--jobs", "16", "--depth", "1"], check=True)
+            self.progress.update(task_id, description=f"✅ Submodule cloned {self.log_time('submodule', start)}", completed=100)
         except subprocess.CalledProcessError as e:
+            stderr = e.stderr or str(e)
             self.progress.update(task_id, description=f"❌ Submodule failed {self.log_time('submodule', start)}", completed=100)
-            self.console.print(Panel(f"[red]Git error:[/red]\n{e}", title="Git Error"))
+            self.console.print(Panel(f"[red]Git error:[/red]\n{stderr}", title="Git Error"))
 
     async def install_pkg_group(self, group_name, pkgs, task_id):
         start = time.time()
@@ -84,17 +107,27 @@ class SetupManager:
             await self._exec([sys.executable, "-m", "pip", "install", "--upgrade"] + pkgs, check=True)
             self.progress.update(task_id, description=f"✅ {group_name} {self.log_time(group_name, start)}", completed=100)
         except subprocess.CalledProcessError as e:
+            stderr = e.stderr or str(e)
             self.progress.update(task_id, description=f"❌ {group_name} failed {self.log_time(group_name, start)}", completed=100)
-            self.console.print(Panel(f"{e}", title=f"{group_name.title()} Error"))
+            self.console.print(Panel(stderr, title=f"{group_name.title()} Error"))
 
     async def resolve_conflicts(self, task_id):
         start = time.time()
         if not os.path.exists(self.requirements_file):
             self.progress.update(task_id, description=f"✅ No conflicts {self.log_time('conflicts', start)}", completed=100)
             return
-        lines = open(self.requirements_file).read().splitlines()
-        fixed = [("numpy>=2.0.0,<2.3.0" if "numpy" in l else "opencv-python-headless" if "opencv-python-headless" in l else l.strip()) for l in lines if l.strip() and not l.startswith("#")]
-        open(self.requirements_file, "w").write("\n".join(fixed)+"\n")
+        with open(self.requirements_file) as f:
+            lines = f.read().splitlines()
+        fixed = []
+        for line in lines:
+            if "numpy" in line:
+                fixed.append("numpy>=2.0.0,<2.3.0")
+            elif "opencv-python-headless" in line:
+                fixed.append("opencv-python-headless")
+            elif line.strip() and not line.startswith("#"):
+                fixed.append(line.strip())
+        with open(self.requirements_file, "w") as f:
+            f.write("\n".join(fixed) + "\n")
         self.progress.update(task_id, description=f"✅ Conflicts resolved {self.log_time('conflicts', start)}", completed=100)
 
     async def install_requirements(self, task_id):
@@ -106,16 +139,29 @@ class SetupManager:
             await self._exec([sys.executable, "-m", "pip", "install", "-r", self.requirements_file, "--upgrade"], check=True)
             self.progress.update(task_id, description=f"✅ Installed {self.log_time('requirements', start)}", completed=100)
         except subprocess.CalledProcessError as e:
+            stderr = e.stderr or str(e)
             self.progress.update(task_id, description=f"❌ Install failed {self.log_time('requirements', start)}", completed=100)
-            self.console.print(Panel(f"{e}", title="Requirements Error"))
+            self.console.print(Panel(stderr, title="Requirements Error"))
 
     async def run_setup(self):
         if not await self.ensure_pip():
             return
-        self.console.print(Panel(Text("⚡ Optimized Setup v4", justify="center"), title="Setup", box=ROUNDED, border_style="bright_blue"))
+        self.console.print(Panel(Text("⚡ Optimized Setup v3", justify="center"), title="Setup", box=ROUNDED, border_style="bright_blue"))
+
         with self.progress:
-            tasks = {k:self.progress.add_task(k, total=100) for k in ["submodule","conflict","common","medium","heavy","requirements"]}
+            tasks = {
+                "submodule": self.progress.add_task("Git submodule", total=100),
+                "emoji": self.progress.add_task("Emoji 1.7.0", total=100),
+                "conflict": self.progress.add_task("Package conflicts", total=100),
+                "common": self.progress.add_task("Common packages", total=100),
+                "medium": self.progress.add_task("Medium packages", total=100),
+                "heavy": self.progress.add_task("Heavy packages", total=100),
+                "requirements": self.progress.add_task("Install requirements", total=100)
+            }
+
             await self.sync_submodule(tasks["submodule"])
+            await self.install_pkg_group("emoji", self.pkg_groups["emoji"], tasks["emoji"])
+
             await asyncio.gather(
                 self.resolve_conflicts(tasks["conflict"]),
                 self.install_pkg_group("common", self.pkg_groups["common"], tasks["common"]),
@@ -123,10 +169,11 @@ class SetupManager:
                 self.install_pkg_group("heavy", self.pkg_groups["heavy"], tasks["heavy"]),
                 self.install_requirements(tasks["requirements"])
             )
-        total=time.time()-self.start_time
-        report="\n".join(f"[cyan]{k}[/cyan]: {v:.2f}s" for k,v in self.task_times.items())
+
+        total = time.time() - self.start_time
+        report = "\n".join(f"[cyan]{k}[/cyan]: {v:.2f}s" for k, v in self.task_times.items())
         self.console.print(Panel(Text(f"🚀 Completed in {total:.1f}s", justify="center"), title="Done", border_style="green"))
         self.console.print(Panel(report, title="Task Timing", border_style="cyan"))
 
-if __name__=="__main__":
+if __name__ == "__main__":
     asyncio.run(SetupManager().run_setup())
