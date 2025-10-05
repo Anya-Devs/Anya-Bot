@@ -69,13 +69,14 @@ class PoketwoSpawnDetector(commands.Cog):
         asyncio.create_task(self._pickellize_all())
 
         # Load config for default GIF/PNG
-        # Fixed: Hardcode to PNG for faster generation (GIFs are slower, especially if animated)
-        self.default_ext = "png"
         try:
             with open("data/events/poketwo_spawns/image/config.json", "r", encoding="utf-8") as f:
                 self.config_data = json.load(f)
+            bg_url = self.config_data.get("background_url")
+            self.default_ext = "gif" if bg_url and bg_url.lower().endswith(".gif") else "png"
         except Exception:
-            print("[WARN] Failed to read config.json.")
+            self.default_ext = "png"
+            print("[WARN] Failed to read config.json, defaulting to PNG.")
 
     async def _worker(self):
         while True:
@@ -89,10 +90,8 @@ class PoketwoSpawnDetector(commands.Cog):
                 self.queue.task_done()
 
     async def _pickellize_all(self):
-        # Fixed: Removed pre-generation of all images at startup to avoid long delays on render.com
-        # Images will now be generated on-demand in process_spawn, which is lazy and faster for startup
-        # Only precompute fast caches here
         loop = asyncio.get_running_loop()
+        tasks = []
 
         # Precompute all caches
         for slug in self._pokemon_ids:
@@ -104,6 +103,28 @@ class PoketwoSpawnDetector(commands.Cog):
             self.desc_cache[slug] = (desc, dex)
             self.type_cache[slug] = self.pokemon_utils.get_pokemon_types(slug)
             self.alt_cache[slug] = self.pokemon_utils.get_best_normal_alt_name(slug) or ""
+
+            # Only generate missing images
+            if slug not in self.file_cache:
+                path = os.path.join(self.spawn_dir, f"{slug}.{self.default_ext}")
+                tasks.append(loop.run_in_executor(
+                    _thread_executor,
+                    self.image_builder.create_image,
+                    slug,
+                    self.pokemon_utils.format_name(slug).replace("_", " ").title(),
+                    self.alt_cache[slug],
+                    self.type_cache[slug],
+                    None,
+                    path,
+                    self.default_ext.upper()
+                ))
+                self.file_cache[slug] = path
+                self.ext_cache[slug] = self.default_ext
+
+        # Run all image generation concurrently
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
 
     async def process_spawn(self, message, image_url):
         try:
@@ -258,8 +279,7 @@ class PoketwoSpawnDetector(commands.Cog):
             return await ctx.send(f"{self.error_emoji} Failed to read CSV: {e}")
         if not reader:
             return await ctx.send("⚠️ CSV empty.")
-        # Fixed: Hardcode to PNG for faster generation
-        file_ext = "png"
+        file_ext = "gif" if getattr(self.image_builder.config, "get", lambda k: None)("background_url") and getattr(self.image_builder.config, "get", lambda k: None)("background_url").lower().endswith(".gif") else "png"
         work_items = []
         for row in reader:
             slug = (row.get("slug") or row.get("name") or "").strip()
