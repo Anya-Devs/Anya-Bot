@@ -1,7 +1,8 @@
-import os, asyncio, logging, json, traceback
-from concurrent.futures import ThreadPoolExecutor
+import os, asyncio, logging, json, traceback, csv
+from concurrent.futures import ThreadPoolExecutor,ProcessPoolExecutor
 from io import BytesIO
 import aiofiles
+from tqdm.asyncio import tqdm_asyncio
 from bot.token import use_test_bot as ut
 from imports.discord_imports import *
 from utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils, PokemonSpawnView
@@ -289,87 +290,47 @@ class PoketwoSpawnDetector(commands.Cog):
         await ctx.defer()
         SPAWN_DIR = "data/events/poketwo_spawns/spawns"
         os.makedirs(SPAWN_DIR, exist_ok=True)
-        description_file = self.pokemon_utils.pokemon_description_file
         loop = asyncio.get_running_loop()
-
-        # --- Load CSV asynchronously ---
         try:
-            async with aiofiles.open(description_file, "r", encoding="utf-8") as f:
-                text = await f.read()
-            reader = list(csv.DictReader(text.splitlines()))
+            async with aiofiles.open(self.pokemon_utils.pokemon_description_file, "r", encoding="utf-8") as f:
+                reader = csv.DictReader((await f.read()).splitlines())
         except Exception as e:
             traceback.print_exception(type(e), e, e.__traceback__)
             return await ctx.send(f"{self.error_emoji} Failed to read CSV: {e}")
-
         if not reader:
             return await ctx.send("⚠️ CSV empty.")
-
-        # --- Determine file extension ---
-        bg_url = getattr(self.image_builder.config, "get", lambda k: None)("background_url")
-        file_ext = "gif" if bg_url and bg_url.lower().endswith(".gif") else "png"
-
-        # --- Prepare work items ---
+        file_ext = "gif" if getattr(self.image_builder.config, "get", lambda k: None)("background_url") and getattr(self.image_builder.config, "get", lambda k: None)("background_url").lower().endswith(".gif") else "png"
         work_items = []
         for row in reader:
             slug = (row.get("slug") or row.get("name") or "").strip()
-            if not slug:
-                continue
-            output_path = os.path.join(SPAWN_DIR, f"{slug}.{file_ext}")
-            if os.path.exists(output_path):
-                self.file_cache[slug] = output_path
-                continue
-            formatted_name = self.pokemon_utils.format_name(slug).replace("_", " ").title()
-            alt = self.alt_cache.get(slug, "")
-            types = self.type_cache.get(slug, [])
-            work_items.append((slug, formatted_name, alt, types, output_path))
-
-        total_new = len(work_items)
-        if total_new == 0:
+            if slug:
+                path = os.path.join(SPAWN_DIR, f"{slug}.{file_ext}")
+                if os.path.exists(path):
+                    self.file_cache[slug] = path
+                else:
+                    name = self.pokemon_utils.format_name(slug).replace("_", " ").title()
+                    alt = self.alt_cache.get(slug, "")
+                    types = self.type_cache.get(slug, [])
+                    work_items.append((slug, name, alt, types, path))
+        if not work_items:
             return await ctx.send("⚠️ No new spawn images to generate.")
-
-        # --- Setup ThreadPoolExecutor ---
-        cpu_count = os.cpu_count() or 4
-        max_workers = min(128, max(16, cpu_count * 8))
-        thread_executor = ThreadPoolExecutor(max_workers=max_workers)
-
-        # --- Offload image creation to threads ---
+        # Increase workers for potentially more parallelism, assuming mixed CPU/IO load
+        pe = ProcessPoolExecutor(max_workers=(os.cpu_count() or 4) * 2)
         async def build_one(item):
-            slug, formatted_name, alt, types, output_path = item
+            s, n, a, t, p = item
             try:
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                await loop.run_in_executor(
-                    thread_executor,
-                    self.image_builder.create_image,
-                    slug, formatted_name, alt, types, None, output_path, file_ext.upper()
-                )
-                self.file_cache[slug] = output_path
-                return output_path
+                await loop.run_in_executor(pe, self.image_builder.create_image, s, n, a, t, None, p, file_ext.upper())
+                self.file_cache[s] = p
+                return p
             except Exception as e:
                 return e
-
-        # --- Run concurrently with tqdm_asyncio for live progress ---
-        tasks = [build_one(item) for item in work_items]
         results = []
-        for future in tqdm_asyncio.as_completed(tasks, total=total_new, desc="Generating spawns"):
-            res = await future
-            if isinstance(res, Exception):
-                print(f"[ERROR] {res}")
-            else:
-                print(f"[FILE CREATED] {res}")
+        for r in tqdm_asyncio.as_completed([build_one(i) for i in work_items], total=len(work_items), desc="Generating spawns"):
+            res = await r
+            print(f"[ERROR] {res}" if isinstance(res, Exception) else f"[FILE CREATED] {res}")
             results.append(res)
-
-        # --- Report results ---
-        success_count = sum(1 for r in results if not isinstance(r, Exception))
-        errors = [r for r in results if isinstance(r, Exception)]
-        if errors:
-            for err in errors:
-                traceback.print_exception(type(err), err, err.__traceback__)
-
-        await ctx.send(f"✅ Generated {success_count} spawn images. ❌ {len(errors)} failed.")
-
+        await ctx.send(f"✅ Generated {sum(1 for r in results if not isinstance(r, Exception))} spawn images. ❌ {sum(1 for r in results if isinstance(r, Exception))} failed.")
      except Exception as e:
         traceback.print_exception(type(e), e, e.__traceback__)
-        await ctx.send(f"{self.error_emoji} Fatal error: {e}")
-        
 def setup(bot):
     bot.add_cog(PoketwoSpawnDetector(bot))

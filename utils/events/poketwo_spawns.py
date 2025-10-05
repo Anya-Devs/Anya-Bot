@@ -542,12 +542,12 @@ class PokemonSpawnView(View):
         return True
 
 
+   
 
 
 
 class PokemonImageBuilder:
     def __init__(self):
-        # Paths
         self.config_path = "data/events/poketwo_spawns/image/config.json"
         self.type_emojis_file = "data/commands/pokemon/pokemon_emojis/_pokemon_types.json"
         self.emoji_icon_dir = "data/commands/pokemon/pokemon_emojis/icons/types"
@@ -558,9 +558,8 @@ class PokemonImageBuilder:
         os.makedirs(self.pokemon_image_dir, exist_ok=True)
         os.makedirs(self.output_dir, exist_ok=True)
 
-        # Load configs
-        with open(self.config_path, 'r', encoding='utf-8') as f: self.config = json.load(f)
-        with open(self.type_emojis_file, 'r', encoding='utf-8') as f: self.type_emojis = json.load(f)
+        with open(self.config_path,'r',encoding='utf-8') as f: self.config=json.load(f)
+        with open(self.type_emojis_file,'r',encoding='utf-8') as f: self.type_emojis=json.load(f)
 
         self.font_header = ImageFont.truetype(self.config.get("font_path_header","arial.ttf"),
                                               self.config.get("font_size_header",24))
@@ -574,65 +573,65 @@ class PokemonImageBuilder:
         self.shader_opacity = max(0.0,min(1.0,shader_opacity/100.0))
 
     def create_shader_layer(self,size):
-        w,h = size
-        alpha = int(255*self.shader_opacity)
+        w,h=size
+        alpha=int(255*self.shader_opacity)
         return Image.new("RGBA",(w,h),(0,0,0,alpha))
 
     def fetch_pokemon_image(self,pokemon_raw_name):
-        path = os.path.join(self.pokemon_image_dir,f"{pokemon_raw_name}.png")
+        path=os.path.join(self.pokemon_image_dir,f"{pokemon_raw_name}.png")
         if not os.path.exists(path): raise FileNotFoundError(f"Missing Pokémon image: {path}")
-        img = Image.open(path).convert("RGBA")
-        buf = io.BytesIO(); img.save(buf,format="PNG"); buf.seek(0)
-        return img, buf
+        img=Image.open(path).convert("RGBA")
+        buf=io.BytesIO(); img.save(buf,format="PNG"); buf.seek(0)
+        return img,buf
 
     @staticmethod
     def country_code_to_flag_emoji(cc): return "".join(chr(ord(c)+127397) for c in cc.upper())
 
     def get_dominant_color(self,image_bytes_io):
-        pil_img = Image.open(image_bytes_io).convert("RGB")
-        arr = cv2.cvtColor(np.array(pil_img),cv2.COLOR_RGB2BGR)
-        pixels = arr.reshape((-1,3)).astype(np.float32)
-        _, labels, centers = cv2.kmeans(pixels,3,None,(cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER,20,1.0),10,cv2.KMEANS_RANDOM_CENTERS)
-        counts = np.bincount(labels.flatten())
-        dom = centers[np.argmax(counts)]
+        pil_img=Image.open(image_bytes_io).convert("RGB")
+        arr=cv2.cvtColor(np.array(pil_img),cv2.COLOR_RGB2BGR)
+        pixels=arr.reshape((-1,3)).astype(np.float32)
+        _,labels,centers=cv2.kmeans(pixels,3,None,(cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER,20,1.0),10,cv2.KMEANS_RANDOM_CENTERS)
+        counts=np.bincount(labels.flatten())
+        dom=centers[np.argmax(counts)]
         return tuple(int(c) for c in dom[::-1])
 
     def extract_emoji_id(self,emoji_str):
-        m = re.search(r"<:.+?:(\d+)>",emoji_str)
+        m=re.search(r"<:.+?:(\d+)>",emoji_str)
         return m.group(1) if m else None
 
     def get_local_emoji_image(self,emoji_str):
-        eid = self.extract_emoji_id(emoji_str)
+        eid=self.extract_emoji_id(emoji_str)
         if not eid: return None
-        path = os.path.join(self.emoji_icon_dir,f"{eid}.png")
+        path=os.path.join(self.emoji_icon_dir,f"{eid}.png")
         if not os.path.exists(path): return None
         return Image.open(path).convert("RGBA")
 
     def draw_type_emojis(self,canvas,types,pos):
-        x,y = pos
-        spacing = self.config.get("type_spacing",40)
-        w,h = (self.config.get("type_icon_size",32),)*2 if isinstance(self.config.get("type_icon_size",32),int) else self.config.get("type_icon_size",32)
+        x,y=pos
+        spacing=self.config.get("type_spacing",40)
+        w,h=(self.config.get("type_icon_size",32),)*2 if isinstance(self.config.get("type_icon_size",32),int) else self.config.get("type_icon_size",32)
         if len(types)==1: x+=spacing
         for t in types:
-            emoji_img = self.get_local_emoji_image(self.type_emojis.get(f"{t.lower()}_type",""))
+            emoji_img=self.get_local_emoji_image(self.type_emojis.get(f"{t.lower()}_type",""))
             if emoji_img:
-                emoji_img = emoji_img.resize((w,h))
+                emoji_img=emoji_img.resize((w,h))
                 canvas.paste(emoji_img,(x,y),emoji_img)
                 x+=spacing
 
     def resize_and_crop(self,img,target_size):
-        w,h = target_size
-        ratio, target_ratio = img.width/img.height, w/h
-        scale = h/img.height if ratio>target_ratio else w/img.width
-        img = img.resize((int(img.width*scale),int(img.height*scale)),Image.LANCZOS)
-        left, top = (img.width-w)//2, (img.height-h)//2
+        w,h=target_size
+        ratio,target_ratio=img.width/img.height,w/h
+        scale=h/img.height if ratio>target_ratio else w/img.width
+        img=img.resize((int(img.width*scale),int(img.height*scale)),Image.LANCZOS)
+        left,top=(img.width-w)//2,(img.height-h)//2
         return img.crop((left,top,left+w,top+h))
 
     def get_type_colors(self,types):
         def lighten(rgb,f=0.45): return tuple(min(int(c+(255-c)*f),255) for c in rgb)
         colors=[]
         for t in types:
-            emoji_img = self.get_local_emoji_image(self.type_emojis.get(f"{t.lower()}_type",""))
+            emoji_img=self.get_local_emoji_image(self.type_emojis.get(f"{t.lower()}_type",""))
             if emoji_img:
                 with io.BytesIO() as buf:
                     emoji_img.save(buf,format="PNG"); buf.seek(0)
@@ -643,27 +642,33 @@ class PokemonImageBuilder:
         return tuple(sum(c[i] for c in colors)//len(colors) for i in range(3))
 
     def prepare_background_frames(self,bg_colors,bg_url=None):
-        w,h = self.config.get("canvas_size",(512,512))
-        blur = self.config.get("background_blur",False)
-        transparent = self.config.get("transparent_background",False)
-        url = bg_url if bg_url else self.default_bg_url
+        w,h=self.config.get("canvas_size",(512,512))
+        blur=self.config.get("background_blur",False)
+        transparent=self.config.get("transparent_background",False)
+        url=bg_url if bg_url else self.default_bg_url
 
         frames,durations,is_gif=[],[],False
         if transparent: return [Image.new("RGBA",(w,h),(0,0,0,0))],[100],False
 
         if url:
             try:
-                resp=requests.get(url,timeout=5); resp.raise_for_status()
-                bg_img = Image.open(io.BytesIO(resp.content))
-                is_gif = getattr(bg_img,"is_animated",False)
+                # --- local file first ---
+                if os.path.isfile(url):
+                    bg_img=Image.open(url)
+                else:
+                    headers={"User-Agent":"Mozilla/5.0"}
+                    resp=requests.get(url,headers=headers,timeout=10); resp.raise_for_status()
+                    bg_img=Image.open(io.BytesIO(resp.content))
+
+                is_gif=getattr(bg_img,"is_animated",False)
                 if is_gif:
                     for frame in ImageSequence.Iterator(bg_img):
                         frame=frame.convert("RGBA")
                         frame=self.resize_and_crop(frame,(w,h))
                         if blur: frame=frame.filter(ImageFilter.GaussianBlur(8))
                         shader=self.create_shader_layer(frame.size)
-                        flat=Image.alpha_composite(frame,shader)
-                        frames.append(flat.convert("RGBA"))
+                        frame=Image.alpha_composite(frame,shader)
+                        frames.append(frame.convert("RGBA"))
                         durations.append(frame.info.get("duration",40))
                     return frames,durations,True
                 else:
@@ -674,10 +679,11 @@ class PokemonImageBuilder:
                     return [frame],[100],False
             except Exception as e: print("Background fetch error:",e)
 
-        color = self.blend_colors(bg_colors) if len(bg_colors)>1 else bg_colors[0]
-        canvas = Image.new("RGBA",(w,h), color + (255,))
-        shader = self.create_shader_layer(canvas.size)
-        canvas = Image.alpha_composite(canvas,shader)
+        # fallback solid color
+        color=self.blend_colors(bg_colors) if len(bg_colors)>1 else bg_colors[0]
+        canvas=Image.new("RGBA",(w,h), color + (255,))
+        shader=self.create_shader_layer(canvas.size)
+        canvas=Image.alpha_composite(canvas,shader)
         if blur: canvas=canvas.filter(ImageFilter.GaussianBlur(8))
         return [canvas],[100],False
 
@@ -738,9 +744,6 @@ class PokemonImageBuilder:
                            append_images=frames[1:],duration=durations,loop=0)
         return path
 
-
-
-         
 if __name__ == "__main__":
     builder = PokemonImageBuilder()
     builder.create_image(

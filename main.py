@@ -2,7 +2,7 @@ import asyncio; from data.setup import SetupManager; asyncio.run(SetupManager().
 import os, sys, gc, asyncio, importlib, pkgutil, threading, signal, traceback
 from dotenv import load_dotenv
 import aiohttp, yarl, discord
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory 
 from rich.console import Console
 from rich.align import Align
 from rich.tree import Tree
