@@ -40,6 +40,7 @@ class PoketwoSpawnDetector(commands.Cog):
             bot=bot,
             pp=self.pp,
         )
+        self.full_pokemon_data = self.pokemon_utils.load_full_pokemon_data()
         self.image_builder = PokemonImageBuilder()
         self.spawn_dir = "data/events/poketwo_spawns/spawns"
         os.makedirs(self.spawn_dir, exist_ok=True)
@@ -196,7 +197,7 @@ class PoketwoSpawnDetector(commands.Cog):
             img_bytes = self.img_bytes_cache.get(base_name)
             view = PokemonSpawnView(
                 slug=base_name,
-                pokemon_data=self.pokemon_utils.load_full_pokemon_data(),
+                pokemon_data=self.full_pokemon_data,
                 pokemon_utils=self.pokemon_utils
             )
 

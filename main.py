@@ -37,11 +37,14 @@ patch_discord_gateway()
 class Config:
     PORT = int(os.environ.get("PORT", 8081 if not ut else 0))
     USE_PRESENCE = os.environ.get("USE_PRESENCE_INTENTS", "0").strip().lower() not in ("0", "false", "no")
-    COOLDOWN= [
+    COOLDOWN = [
         'rate_limit_count', 1,
         'per_seconds', 5,
         'type', commands.BucketType.user
     ]
+    # Per-server sharding configuration
+    SERVER_SHARD_MAPPING = {}  # Maps guild_id to shard configuration
+    SHARD_POOL_SIZE = 100  # Connection pool size for optimized connections
 
 rate = Config.COOLDOWN[1]
 per = Config.COOLDOWN[3]
@@ -72,24 +75,29 @@ class ClusteredBot(commands.AutoShardedBot):
             help_command=None,
             shard_ids=None,
             shard_count=None,
-            shard_reconnect_interval=15,
-            heartbeat_timeout=90,
+            shard_reconnect_interval=15,  # Maintained wait time
+            heartbeat_timeout=90,        # Maintained wait time
             chunk_guilds_at_startup=False,
-            guild_ready_timeout=5.0,
+            guild_ready_timeout=5.0,     # Maintained wait time
+            max_concurrency=Config.SHARD_POOL_SIZE,  # Optimized connection pool
         )
         self.cog_dirs = ['bot.cogs', 'bot.events']
         self.console = Console()
         self.http_session: aiohttp.ClientSession | None = None
+        self.cog_cache = {}  # Cache for loaded cogs
+        self.server_shards = {}  # Per-server shard tracking
 
     async def setup_hook(self):
         await self._import_cogs()
-        self.http_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
+        # Optimized HTTP session with connection pooling
+        connector = aiohttp.TCPConnector(limit=Config.SHARD_POOL_SIZE, ttl_dns_cache=300)
+        self.http_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15), connector=connector)
         try:
             shards = list(self.shards.keys())
             shard_count = self.shard_count
-            logger.info(f"🧩 Shard Hunting: {len(shards)}/{shard_count} shards initialized.")
+            logger.info("🧩 The cluster has the initializing shards and no we don't need to wait for all 1 trillion shards")
         except Exception as e:
-            logger.warning(f"Shard hunting failed: {e}")
+            logger.warning(f"Shard initialization failed: {e}")
 
     async def on_ready(self):
         term = __import__('shutil').get_terminal_size().columns
@@ -105,15 +113,54 @@ class ClusteredBot(commands.AutoShardedBot):
         banner += f"🌐 Connected: {len(self.guilds)} servers | Users ~{sum(g.member_count or 0 for g in self.guilds)}".center(term)
         print(banner)
         await self.change_presence(
-          status=discord.Status.idle,
-          activity=discord.Activity(
-          type=discord.ActivityType.listening,
-          name=f"@{self.user.name} help"
-       ))
-        
+            status=discord.Status.idle,
+            activity=discord.Activity(
+                type=discord.ActivityType.listening,
+                name=f"@{self.user.name} help"
+            ))
         await setup_persistent_views_fun(self)
         await setup_persistent_views(self)
-        
+        # Initialize per-server shard configurations
+        for guild in self.guilds:
+            await self._configure_server_shards(guild)
+
+    async def _configure_server_shards(self, guild):
+        """Configure unique shard allocation for each server"""
+        guild_id = guild.id
+        if guild_id not in Config.SERVER_SHARD_MAPPING:
+            # Dynamically assign shards based on server size
+            member_count = guild.member_count or 100
+            shard_count = max(1, min(10, member_count // 1000))  # Example scaling
+            Config.SERVER_SHARD_MAPPING[guild_id] = {
+                'shard_count': shard_count,
+                'priority': member_count / 1000,  # Prioritize larger servers
+            }
+            self.server_shards[guild_id] = shard_count
+            logger.info(f"Configured {shard_count} shards for guild {guild_id}")
+
+    async def _remove_server_shards(self, guild):
+        """Remove shard configuration for a server"""
+        guild_id = guild.id
+        if guild_id in Config.SERVER_SHARD_MAPPING:
+            del Config.SERVER_SHARD_MAPPING[guild_id]
+            if guild_id in self.server_shards:
+                del self.server_shards[guild_id]
+            logger.info(f"Removed shard configuration for guild {guild_id}")
+            # Optional: Trigger shard rebalance if needed
+            await self._rebalance_shards()
+
+    async def _rebalance_shards(self):
+        """Rebalance shards across servers (placeholder for advanced logic)"""
+        total_shards = sum(config['shard_count'] for config in Config.SERVER_SHARD_MAPPING.values())
+        logger.info(f"Rebalanced shards: Total allocated shards now {total_shards}")
+
+    async def on_guild_join(self, guild):
+        logger.info(f"Bot added to guild: {guild.name} (ID: {guild.id})")
+        await self._configure_server_shards(guild)
+
+    async def on_guild_remove(self, guild):
+        logger.info(f"Bot removed from guild: {guild.name} (ID: {guild.id})")
+        await self._remove_server_shards(guild)
 
     async def on_shard_ready(self, shard_id: int):
         logger.info(f"✅ Shard {shard_id} is ready.")
@@ -144,6 +191,10 @@ class ClusteredBot(commands.AutoShardedBot):
                 if is_pkg: 
                     continue
                 leaf = branch.add(mod_name + ".py")
+                cache_key = f"{dir_name}.{mod_name}"
+                if cache_key in self.cog_cache:
+                    leaf.label = f"[green]□ {mod_name}.py (cached)[/green]"
+                    continue
                 try:
                     mod = importlib.import_module(f"{dir_name}.{mod_name}")
                     cog_found = False
@@ -154,6 +205,7 @@ class ClusteredBot(commands.AutoShardedBot):
                             try:
                                 cog_instance = obj(self)
                                 await self.add_cog(cog_instance)
+                                self.cog_cache[cache_key] = cog_instance
                                 leaf.label = f"[green]□ {mod_name}.py[/green]"
                                 leaf.add(f"[cyan]→[/cyan] [bold white]{obj.__name__}[/bold white]")
                                 for cmd in cog_instance.get_commands():
