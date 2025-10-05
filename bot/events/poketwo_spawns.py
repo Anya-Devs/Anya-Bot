@@ -93,7 +93,8 @@ class PoketwoSpawnDetector(commands.Cog):
             async with aiofiles.open(path, "rb") as f:
                 self.img_bytes_cache[slug] = await f.read()
         except Exception as e:
-            print(f"[WARN] Failed to read file {path}: {e}")
+            pass
+            # print(f"[WARN] Failed to read file {path}: {e}")
 
     async def _pickellize_all(self):
         loop = asyncio.get_running_loop()
@@ -134,11 +135,9 @@ class PoketwoSpawnDetector(commands.Cog):
         # Read all images concurrently
         await asyncio.gather(*(self._read_file(path, slug) for slug, path in self.file_cache.items()))
 
-        print("[INFO] Preloaded all Pokémon data.")
 
     async def process_spawn(self, message, image_url):
         try:
-            print(f"[INFO] Processing spawn from {image_url}")
             loop = asyncio.get_running_loop()
 
             # Predict name and confidence
@@ -231,8 +230,6 @@ class PoketwoSpawnDetector(commands.Cog):
                 reference=message,
                 view=view
             )
-            print(f"[INFO] Successfully sent {base_name}.{ext}")
-
         except Exception as e:
             print(f"[ERROR] Spawn processing error: {type(e).__name__}: {e}")
             traceback.print_exc()

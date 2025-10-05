@@ -8,10 +8,9 @@
 
   "canvas_size": [418, 120],
   "background_color": [166, 237, 164],
-  "background_url": "https://i.pinimg.com/originals/06/ff/bb/06ffbb14255b4dfc870802bceb219c29.gif",
   "background_blur": false,
   "transparent_background": false,
-  "shader_opacity": "55%",
+  "shader_opacity": "50%",
 
   "pokemon_image_position": [20, 20],
   "pokemon_image_size": [80, 80],
