@@ -43,7 +43,7 @@ class PoketwoSpawnDetector(commands.Cog):
         os.makedirs(self.spawn_dir, exist_ok=True)
 
         self._pokemon_ids = self.pokemon_utils.load_pokemon_ids()
-        self.file_cache, self.img_bytes_cache = {}, {}
+        self.file_cache = {}
         self.pred_cache, self.base_cache = {}, {}
         self.server_cache, self.desc_cache, self.type_cache, self.alt_cache = {}, {}, {}, {}
         self.ext_cache = {}  # Stores file extensions for speed
@@ -89,14 +89,6 @@ class PoketwoSpawnDetector(commands.Cog):
             finally:
                 self.queue.task_done()
 
-    async def _read_file(self, path, slug):
-        try:
-            async with aiofiles.open(path, "rb") as f:
-                self.img_bytes_cache[slug] = await f.read()
-        except Exception as e:
-            pass
-            # print(f"[WARN] Failed to read file {path}: {e}")
-
     async def _pickellize_all(self):
         loop = asyncio.get_running_loop()
         tasks = []
@@ -132,9 +124,6 @@ class PoketwoSpawnDetector(commands.Cog):
         # Run all image generation concurrently
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Read all images concurrently
-        await asyncio.gather(*(self._read_file(path, slug) for slug, path in self.file_cache.items()))
 
 
     async def process_spawn(self, message, image_url):
@@ -188,13 +177,12 @@ class PoketwoSpawnDetector(commands.Cog):
                 image_url, low_conf
             )
 
-            # Fetch image bytes
-            img_bytes = self.img_bytes_cache.get(base_name)
-            view = PokemonSpawnView(slug=base_name, pokemon_data=self.full_pokemon_data, pokemon_utils=self.pokemon_utils)
+            # Get or generate image path
+            path = self.file_cache.get(base_name)
             ext = self.ext_cache.get(base_name, self.default_ext)
+            view = PokemonSpawnView(slug=base_name, pokemon_data=self.full_pokemon_data, pokemon_utils=self.pokemon_utils)
 
-            if not img_bytes:
-                # Generate image if missing
+            if not path:
                 path = os.path.join(self.spawn_dir, f"{base_name}.{ext}")
                 if base_name not in self.file_cache:
                     try:
@@ -216,18 +204,9 @@ class PoketwoSpawnDetector(commands.Cog):
                         traceback.print_exc()
                         return await message.channel.send(content=ping_msg, reference=message, view=view)
 
-                try:
-                    async with aiofiles.open(path, "rb") as f:
-                        img_bytes = await f.read()
-                    self.img_bytes_cache[base_name] = img_bytes
-                except Exception as e:
-                    print(f"[ERROR] Failed to read image for {base_name}: {e}")
-                    traceback.print_exc()
-                    return await message.channel.send(content=ping_msg, reference=message, view=view)
-
             await message.channel.send(
                 content=ping_msg,
-                file=discord.File(fp=BytesIO(img_bytes), filename=f"{base_name}.{ext}"),
+                file=discord.File(path, filename=f"{base_name}.{ext}"),
                 reference=message,
                 view=view
             )
@@ -281,6 +260,7 @@ class PoketwoSpawnDetector(commands.Cog):
             traceback.print_exception(type(e), e, e.__traceback__)
             await ctx.send(f"{self.error_emoji} Failed to process prediction.\n```\n{e}\n```")
 
+            
     # ------------------------------------------------------------------
     # NEW COMMAND: generate_spawns
     # ------------------------------------------------------------------
