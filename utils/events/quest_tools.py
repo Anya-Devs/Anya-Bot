@@ -13,7 +13,7 @@ class Config:
     TOOL_DURATIONS = {
         "Motion Alarm": 20,
         "Chimera": 0,
-        "Shadow Cloak": 45,
+        "Shadow Cloak": 45, 
         "Spy Briefcase": 0,
     }
 
