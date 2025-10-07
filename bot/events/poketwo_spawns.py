@@ -70,6 +70,10 @@ class PoketwoSpawnDetector(commands.Cog):
             except Exception as e:
                 logger.error(f"Failed to load image_urls.json: {e}")
 
+        # If image_urls is empty, schedule upload of existing images
+        if not self.image_urls:
+            self.bot.loop.create_task(self.upload_all_existing())
+
         # Load config for default GIF/PNG
         try:
             with open("data/events/poketwo_spawns/image/config.json", "r", encoding="utf-8") as f:
@@ -203,7 +207,7 @@ class PoketwoSpawnDetector(commands.Cog):
 
             view = PokemonSpawnView(slug=base_name, pokemon_data=self.full_pokemon_data, pokemon_utils=self.pokemon_utils)
 
-            # Get image URL from cache
+            # Get image URL from cache or generate/upload
             url = self.image_urls.get(base_name)
             if not url:
                 # Check if existing file in spawn_dir
@@ -223,7 +227,7 @@ class PoketwoSpawnDetector(commands.Cog):
                             traceback.print_exc()
 
                 if not url:
-                    # Generate new if no existing and no URL in cache
+                    # Generate new if no existing
                     ext = self.default_ext
                     temp_path = f"/tmp/{base_name}.{ext}"
                     name = self.pokemon_utils.format_name(base_name).replace("_", " ").title()
@@ -247,7 +251,7 @@ class PoketwoSpawnDetector(commands.Cog):
                         traceback.print_exc()
                         return await message.channel.send(content=ping_msg, reference=message, view=view)
 
-                # Save updated JSON
+                # Save updated JSON (ephemeral on Render; run locally to persist)
                 try:
                     os.makedirs("data/events/poketwo_spawns", exist_ok=True)
                     async with aiofiles.open("data/events/poketwo_spawns/image_urls.json", 'w', encoding='utf-8') as f:
@@ -314,6 +318,9 @@ class PoketwoSpawnDetector(commands.Cog):
             traceback.print_exc()
             await ctx.send(f"{self.error_emoji} Failed to process prediction.\n```\n{e}\n```")
 
+    # ------------------------------------------------------------------
+    # COMMAND: generate_spawns
+    # ------------------------------------------------------------------
     @commands.command(name="generate_spawns", hidden=True)
     async def generate_spawns(self, ctx):
         try:
@@ -347,8 +354,6 @@ class PoketwoSpawnDetector(commands.Cog):
 
             async def build_and_upload_one(item):
                 s, n, a, t = item
-                if s in self.image_urls:
-                    return self.image_urls[s]  # Skip if URL already exists
                 temp_path = f"/tmp/{s}.{file_ext}"
                 try:
                     # Generate image
@@ -375,7 +380,7 @@ class PoketwoSpawnDetector(commands.Cog):
             success_count = sum(1 for r in results if not isinstance(r, Exception))
             error_count = sum(1 for r in results if isinstance(r, Exception))
 
-            # Save updated JSON
+            # Save updated JSON (ephemeral on Render; run locally to persist)
             try:
                 os.makedirs("data/events/poketwo_spawns", exist_ok=True)
                 async with aiofiles.open("data/events/poketwo_spawns/image_urls.json", 'w', encoding='utf-8') as f:
