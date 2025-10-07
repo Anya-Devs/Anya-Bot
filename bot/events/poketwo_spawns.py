@@ -15,8 +15,8 @@ from functools import partial
 from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
-_thread_executor = ThreadPoolExecutor(max_workers=32)  # Increased for IO
-_process_executor = ProcessPoolExecutor(max_workers=(os.cpu_count() or 4) * 2)  # Increased for CPU
+_thread_executor = ThreadPoolExecutor(max_workers=max(os.cpu_count() or 4, 16))
+_process_executor = ProcessPoolExecutor(max_workers=max(os.cpu_count() or 4, 8))
 
 class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot, worker_count=None):
@@ -50,12 +50,12 @@ class PoketwoSpawnDetector(commands.Cog):
         self.desc_cache = {}
         self.type_cache = {}
         self.alt_cache = {}
-        self.queue = asyncio.Queue()  # Unbounded for reliability
-        self.worker_count = worker_count or min((os.cpu_count() or 4) * 16, 256)  # Higher for speed
+        self.queue = asyncio.Queue(maxsize=10000)  # Bounded queue to prevent unbounded growth
+        self.worker_count = worker_count or min((os.cpu_count() or 4) * 8, 128)  # Increased max workers for scale
         self.success_emoji = "<:green:1261639410181476443>"
         self.error_emoji = "<:red:1261639413943762944>"
         self.cross_emoji = "❌"
-        self.max_cache_size = 20000  # Increased
+        self.max_cache_size = 10000  # Limit for LRU-like caches
 
         # Configure Cloudinary
         cloudinary.config(
@@ -77,7 +77,9 @@ class PoketwoSpawnDetector(commands.Cog):
             except Exception as e:
                 logger.error(f"Failed to load image_urls.json: {e}")
 
-        # Auto-upload existing and generate missing on init
+        # If image_urls is empty, schedule upload of existing images
+        if not self.image_urls:
+            self.bot.loop.create_task(self.upload_all_existing())
 
         # Load config for default GIF/PNG
         try:
@@ -93,20 +95,6 @@ class PoketwoSpawnDetector(commands.Cog):
             self.bot.loop.create_task(self._worker())
 
         asyncio.create_task(self._pickellize_all())
-        asyncio.create_task(self._monitor_queue())  # New: Monitor queue size
-        self.bot.loop.create_task(self.auto_prepare_images())
-
-    async def auto_prepare_images(self):
-        await self.upload_all_existing()
-        if len(self.image_urls) < len(self._pokemon_ids):
-            await self.generate_spawns_internal()
-
-    async def _monitor_queue(self):
-        while True:
-            size = self.queue.qsize()
-            if size > 5000:
-                logger.warning(f"Queue size high: {size} - Consider more workers or optimizations.")
-            await asyncio.sleep(60)  # Check every minute
 
     def _evict_oldest(self, cache):
         if len(cache) > self.max_cache_size:
@@ -239,7 +227,6 @@ class PoketwoSpawnDetector(commands.Cog):
             # Get image URL from cache or generate/upload
             url = self.image_urls.get(base_name)
             if not url:
-                logger.warning(f"Missing URL for {base_name} - Fallback to generation")
                 # Check if existing file in spawn_dir
                 for ext in ['.gif', '.png']:
                     local_path = os.path.join(self.spawn_dir, f"{base_name}{ext}")
@@ -309,7 +296,10 @@ class PoketwoSpawnDetector(commands.Cog):
             return
         for e in message.embeds:
             if e.title and "pokémon has appeared!" in e.title.lower() and e.image:
-                await self.queue.put((message, e.image.url))  # No try/except, unbounded
+                try:
+                    await self.queue.put_nowait((message, e.image.url))
+                except asyncio.queues.QueueFull:
+                    logger.warning("Queue full, dropping spawn processing for message")
 
     @commands.command(name="ps", hidden=True)
     async def predict_spawn(self, ctx, image_url=None):
@@ -351,9 +341,10 @@ class PoketwoSpawnDetector(commands.Cog):
     # ------------------------------------------------------------------
     # COMMAND: generate_spawns
     # ------------------------------------------------------------------
-    async def generate_spawns_internal(self):
-        # Internal version of generate_spawns, no ctx
+    @commands.command(name="generate_spawns", hidden=True)
+    async def generate_spawns(self, ctx):
         try:
+            await ctx.defer()
             loop = asyncio.get_running_loop()
 
             try:
@@ -361,8 +352,7 @@ class PoketwoSpawnDetector(commands.Cog):
                     reader = csv.DictReader((await f.read()).splitlines())
             except Exception as e:
                 traceback.print_exc()
-                logger.error(f"Failed to read CSV: {e}")
-                return
+                return await ctx.send(f"{self.error_emoji} Failed to read CSV: {e}")
 
             file_ext = self.default_ext
 
@@ -377,8 +367,7 @@ class PoketwoSpawnDetector(commands.Cog):
                     work_items.append((slug, name, alt, types))
 
             if not work_items:
-                logger.info("All spawn images pre-generated.")
-                return
+                return await ctx.send("✅ All spawn images are already in the database.")
 
             # Increase workers for parallelism
             pe = ProcessPoolExecutor(max_workers=(os.cpu_count() or 4) * 4)
@@ -402,9 +391,14 @@ class PoketwoSpawnDetector(commands.Cog):
                     logger.error(f"Failed for {s}: {e}")
                     return e
 
-            results = await tqdm_asyncio.gather(*[build_and_upload_one(i) for i in work_items], desc="Pre-generating spawns")
+            results = []
+            for r in tqdm_asyncio.as_completed([build_and_upload_one(i) for i in work_items], total=len(work_items), desc="Generating and uploading missing spawns"):
+                res = await r
+                print(f"[ERROR] {res}" if isinstance(res, Exception) else f"[UPLOADED] {res}")
+                results.append(res)
+
             success_count = sum(1 for r in results if not isinstance(r, Exception))
-            logger.info(f"Pre-generated {success_count} spawn images.")
+            error_count = sum(1 for r in results if isinstance(r, Exception))
 
             # Save updated JSON (ephemeral on Render; run locally to persist)
             try:
@@ -413,17 +407,10 @@ class PoketwoSpawnDetector(commands.Cog):
                     await f.write(json.dumps(self.image_urls, indent=2))
             except Exception as e:
                 logger.warning(f"Failed to save image_urls.json: {e}")
+                await ctx.send(f"⚠️ Updated {success_count} images on Cloudinary, but failed to save JSON locally: {e}")
 
-        except Exception as e:
-            traceback.print_exc()
-            logger.error(f"Pre-generation error: {e}")
-
-    @commands.command(name="generate_spawns", hidden=True)
-    async def generate_spawns(self, ctx):
-        try:
-            await ctx.defer()
-            await self.generate_spawns_internal()
-            await ctx.send("✅ Pre-generation complete.")
+            await ctx.send(f"✅ Generated and uploaded {success_count} missing spawn images to Cloudinary. ❌ {error_count} failed.\n"
+                           f"Total URLs in cache: {len(self.image_urls)}")
         except Exception as e:
             traceback.print_exc()
             await ctx.send(f"{self.error_emoji} Error during spawn generation: {e}")
