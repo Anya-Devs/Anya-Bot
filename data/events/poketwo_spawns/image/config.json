@@ -8,10 +8,10 @@
 
   "canvas_size": [418, 120],
   "background_color": [166, 237, 164],
-  "background_url": "data/events/poketwo_spawns/image/new.png" ,
+  "background_url": "" ,
   "background_blur": false,
   "transparent_background": false,
-  "shader_opacity": "45%",
+  "shader_opacity": "0%",
    
   "pokemon_image_position": [20, 20],
   "pokemon_image_size": [80, 80],
