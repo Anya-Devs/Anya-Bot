@@ -349,38 +349,58 @@ class PoketwoSpawnDetector(commands.Cog):
             if not work_items:
                 return await ctx.send("✅ All spawn images are already in the database.")
 
-            # Increase workers for parallelism
-            pe = ProcessPoolExecutor(max_workers=(os.cpu_count() or 4) * 2)
+            # Increase workers for parallelism - bumped up for speed
+            cpu_count = os.cpu_count() or 4
+            gen_workers = cpu_count * 4  # More aggressive for CPU-bound generation
+            upload_workers = 64  # High for IO-bound uploads
 
-            async def build_and_upload_one(item):
+            pe = ProcessPoolExecutor(max_workers=gen_workers)
+            te = ThreadPoolExecutor(max_workers=upload_workers)
+
+            # First, generate all images in parallel (CPU-bound)
+            temp_paths = {}
+            async def generate_one(item):
                 s, n, a, t = item
                 temp_path = f"/tmp/{s}.{file_ext}"
                 try:
-                    # Generate image
                     await loop.run_in_executor(pe, self.image_builder.create_image, s, n, a, t, None, temp_path, file_ext.upper())
-                    # Upload with overwrite
+                    return s, temp_path
+                except Exception as e:
+                    logger.error(f"Failed to generate for {s}: {e}")
+                    return s, e
+
+            gen_results = await tqdm_asyncio.gather(*[generate_one(i) for i in work_items], desc="Generating images")
+            for s, res in gen_results:
+                if not isinstance(res, Exception):
+                    temp_paths[s] = res
+
+            # Then, upload all generated images in parallel (IO-bound)
+            async def upload_one(s, temp_path):
+                try:
                     response = await loop.run_in_executor(
-                        pe,
+                        te,
                         partial(cloudinary.uploader.upload, temp_path, **{"folder": "poketwo_spawns", "public_id": s, "overwrite": True})
                     )
                     url = response['secure_url']
                     self.image_urls[s] = url
                     os.remove(temp_path)
-                    return url
+                    return s, url
                 except Exception as e:
-                    logger.error(f"Failed for {s}: {e}")
-                    return e
+                    logger.error(f"Failed to upload for {s}: {e}")
+                    return s, e
 
-            results = []
-            for r in tqdm_asyncio.as_completed([build_and_upload_one(i) for i in work_items], total=len(work_items), desc="Generating and uploading missing spawns"):
-                res = await r
-                print(f"[ERROR] {res}" if isinstance(res, Exception) else f"[UPLOADED] {res}")
-                results.append(res)
+            upload_tasks = [upload_one(s, p) for s, p in temp_paths.items()]
+            upload_results = await tqdm_asyncio.gather(*upload_tasks, desc="Uploading images")
 
-            success_count = sum(1 for r in results if not isinstance(r, Exception))
-            error_count = sum(1 for r in results if isinstance(r, Exception))
+            success_count = sum(1 for _, r in upload_results if not isinstance(r, Exception))
+            error_count = len(work_items) - success_count
 
-            # Save updated JSON (ephemeral on Render; run locally to persist)
+            # Cleanup any remaining temp files on error
+            for p in temp_paths.values():
+                if os.path.exists(p):
+                    os.remove(p)
+
+            # Save updated JSON
             try:
                 os.makedirs("data/events/poketwo_spawns", exist_ok=True)
                 async with aiofiles.open("data/events/poketwo_spawns/image_urls.json", 'w', encoding='utf-8') as f:
@@ -394,6 +414,103 @@ class PoketwoSpawnDetector(commands.Cog):
         except Exception as e:
             traceback.print_exc()
             await ctx.send(f"{self.error_emoji} Error during spawn generation: {e}")
+
+    # ------------------------------------------------------------------
+    # COMMAND: regenerate_spawns
+    # ------------------------------------------------------------------
+    @commands.command(name="regenerate_spawns", hidden=True)
+    async def regenerate_spawns(self, ctx):
+        try:
+            await ctx.defer()
+            loop = asyncio.get_running_loop()
+
+            try:
+                async with aiofiles.open(self.pokemon_utils.pokemon_description_file, "r", encoding="utf-8") as f:
+                    reader = csv.DictReader((await f.read()).splitlines())
+            except Exception as e:
+                traceback.print_exc()
+                return await ctx.send(f"{self.error_emoji} Failed to read CSV: {e}")
+
+            file_ext = self.default_ext
+
+            # Collect all items (regenerate everything)
+            work_items = []
+            for row in reader:
+                slug = (row.get("slug") or row.get("name") or "").strip().lower()
+                if slug:
+                    name = self.pokemon_utils.format_name(slug).replace("_", " ").title()
+                    alt = self.alt_cache.get(slug, "")
+                    types = self.type_cache.get(slug, [])
+                    work_items.append((slug, name, alt, types))
+
+            if not work_items:
+                return await ctx.send("❌ No spawn items found in the database.")
+
+            # Increase workers for parallelism - bumped up for speed
+            cpu_count = os.cpu_count() or 4
+            gen_workers = cpu_count * 4  # More aggressive for CPU-bound generation
+            upload_workers = 64  # High for IO-bound uploads
+
+            pe = ProcessPoolExecutor(max_workers=gen_workers)
+            te = ThreadPoolExecutor(max_workers=upload_workers)
+
+            # First, generate all images in parallel (CPU-bound)
+            temp_paths = {}
+            async def generate_one(item):
+                s, n, a, t = item
+                temp_path = f"/tmp/{s}.{file_ext}"
+                try:
+                    await loop.run_in_executor(pe, self.image_builder.create_image, s, n, a, t, None, temp_path, file_ext.upper())
+                    return s, temp_path
+                except Exception as e:
+                    logger.error(f"Failed to generate for {s}: {e}")
+                    return s, e
+
+            gen_results = await tqdm_asyncio.gather(*[generate_one(i) for i in work_items], desc="Generating images")
+            for s, res in gen_results:
+                if not isinstance(res, Exception):
+                    temp_paths[s] = res
+
+            # Then, upload all generated images in parallel (IO-bound)
+            async def upload_one(s, temp_path):
+                try:
+                    response = await loop.run_in_executor(
+                        te,
+                        partial(cloudinary.uploader.upload, temp_path, **{"folder": "poketwo_spawns", "public_id": s, "overwrite": True})
+                    )
+                    url = response['secure_url']
+                    self.image_urls[s] = url
+                    os.remove(temp_path)
+                    return s, url
+                except Exception as e:
+                    logger.error(f"Failed to upload for {s}: {e}")
+                    return s, e
+
+            upload_tasks = [upload_one(s, p) for s, p in temp_paths.items()]
+            upload_results = await tqdm_asyncio.gather(*upload_tasks, desc="Uploading images")
+
+            success_count = sum(1 for _, r in upload_results if not isinstance(r, Exception))
+            error_count = len(work_items) - success_count
+
+            # Cleanup any remaining temp files on error
+            for p in temp_paths.values():
+                if os.path.exists(p):
+                    os.remove(p)
+
+            # Save updated JSON
+            try:
+                os.makedirs("data/events/poketwo_spawns", exist_ok=True)
+                async with aiofiles.open("data/events/poketwo_spawns/image_urls.json", 'w', encoding='utf-8') as f:
+                    await f.write(json.dumps(self.image_urls, indent=2))
+            except Exception as e:
+                logger.warning(f"Failed to save image_urls.json: {e}")
+                await ctx.send(f"⚠️ Updated {success_count} images on Cloudinary, but failed to save JSON locally: {e}")
+
+            await ctx.send(f"✅ Regenerated and uploaded {success_count} spawn images to Cloudinary (overwriting existing). ❌ {error_count} failed.\n"
+                           f"Total URLs in cache: {len(self.image_urls)}")
+        except Exception as e:
+            traceback.print_exc()
+            await ctx.send(f"{self.error_emoji} Error during spawn regeneration: {e}")
 
 def setup(bot):
     bot.add_cog(PoketwoSpawnDetector(bot))

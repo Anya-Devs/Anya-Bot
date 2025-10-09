@@ -8,7 +8,7 @@
 
   "canvas_size": [418, 120],
   "background_color": [166, 237, 164],
-  "background_url": "https://i.pinimg.com/originals/a2/57/39/a25739e1f5ecb49d1849d7d8cb1382b5.gif" ,
+  "background_url": "data/events/poketwo_spawns/image/new.png" ,
   "background_blur": false,
   "transparent_background": false,
   "shader_opacity": "45%",
