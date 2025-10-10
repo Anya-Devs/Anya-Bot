@@ -29,7 +29,7 @@ class PoketwoSpawnDetector(commands.Cog):
         self.bot = bot
         self.target_id = 716390085896962058
 
-        self.predictor = Prediction()
+        self.predictor = None
         self.pp = PoketwoCommands(bot)
         self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
         self.pokemon_utils = PokemonUtils(
@@ -63,16 +63,16 @@ class PoketwoSpawnDetector(commands.Cog):
         self.default_ext = self._get_default_ext()
 
         self.queue = asyncio.Queue()
-        self.worker_count = worker_count or min((os.cpu_count() or 4) * 4, 64)
+        self.worker_count = 2
 
         self.success_emoji = "<:green:1261639410181476443>"
         self.error_emoji = "<:red:1261639413943762944>"
         self.cross_emoji = "❌"
 
         # Executors for concurrency
-        max_thread_workers = max(os.cpu_count() or 4, 8)
+        max_thread_workers = 4
         self.thread_executor = ThreadPoolExecutor(max_workers=max_thread_workers)
-        self.process_executor = ProcessPoolExecutor(max_workers=max_thread_workers * 2)
+        self.process_executor = ProcessPoolExecutor(max_workers=2)
 
         cloudinary.config(
             cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
@@ -87,10 +87,6 @@ class PoketwoSpawnDetector(commands.Cog):
 
         # Preload caches async
         asyncio.create_task(self._preload_caches())
-
-        # Upload missing images if no cache
-        if not self.image_urls:
-            self.bot.loop.create_task(self.upload_all_existing())
 
     def _load_image_urls(self):
         path = "data/events/poketwo_spawns/image_urls.json"
@@ -145,8 +141,12 @@ class PoketwoSpawnDetector(commands.Cog):
                     logger.error(f"Upload failed for {file}: {e}")
                     return False
 
-            results = await asyncio.gather(*[upload_file(f) for f in files])
-            successes = sum(results)
+            successes = 0
+            batch_size = 10
+            for i in range(0, len(files), batch_size):
+                batch = files[i:i+batch_size]
+                results = await asyncio.gather(*[upload_file(f) for f in batch])
+                successes += sum(results)
             logger.info(f"Uploaded {successes} spawn images to Cloudinary")
 
         try:
@@ -168,7 +168,6 @@ class PoketwoSpawnDetector(commands.Cog):
                 self.queue.task_done()
 
     async def _preload_caches(self):
-        # Efficiently preload all caches in parallel
         tasks = []
         for slug in self._pokemon_ids:
             tasks.append(self._load_cache_for_slug(slug))
@@ -184,6 +183,9 @@ class PoketwoSpawnDetector(commands.Cog):
 
     async def process_spawn(self, message, image_url):
         try:
+            if self.predictor is None:
+                self.predictor = Prediction()
+
             loop = asyncio.get_running_loop()
 
             # Predict asynchronously with caching
@@ -384,9 +386,9 @@ class PoketwoSpawnDetector(commands.Cog):
                 msg = "❌ No spawn items found." if regenerate else "✅ All spawn images already in database."
                 return await ctx.send(msg)
 
-            cpu_count = os.cpu_count() or 4
-            gen_workers = cpu_count * 4
-            upload_workers = 64
+            batch_size = 20
+            success_count = 0
+            error_count = 0
 
             # Create executors only once at init, reuse here
             pe = self.process_executor
@@ -401,9 +403,6 @@ class PoketwoSpawnDetector(commands.Cog):
                 except Exception as e:
                     logger.error(f"Generation failed for {s}: {e}")
                     return s, e
-
-            gen_results = await asyncio.gather(*[generate_one(i) for i in work_items])
-            temp_paths = {s: p for s, p in gen_results if not isinstance(p, Exception)}
 
             async def upload_one(s, temp_path):
                 try:
@@ -421,11 +420,25 @@ class PoketwoSpawnDetector(commands.Cog):
                         pass
                     return s, e
 
-            upload_tasks = [upload_one(s, tp) for s, tp in temp_paths.items()]
-            upload_results = await asyncio.gather(*upload_tasks)
+            for start in range(0, len(work_items), batch_size):
+                batch = work_items[start:start + batch_size]
+                gen_results = await asyncio.gather(*[generate_one(i) for i in batch])
+                temp_paths = {s: p for s, p in gen_results if not isinstance(p, Exception)}
 
-            success_count = sum(1 for _, r in upload_results if not isinstance(r, Exception))
-            error_count = len(work_items) - success_count
+                upload_tasks = [upload_one(s, tp) for s, tp in temp_paths.items()]
+                upload_results = await asyncio.gather(*upload_tasks)
+
+                batch_success = sum(1 for _, r in upload_results if not isinstance(r, Exception))
+                success_count += batch_success
+                error_count += len(batch) - batch_success
+
+                # Clean up any remaining temp files (though upload_one should handle it)
+                for s, tp in temp_paths.items():
+                    if os.path.exists(tp):
+                        try:
+                            os.remove(tp)
+                        except Exception:
+                            pass
 
             try:
                 await self._save_image_urls()
