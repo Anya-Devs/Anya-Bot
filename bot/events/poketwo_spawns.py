@@ -4,6 +4,9 @@ import logging
 import json
 import traceback
 from functools import partial
+from collections import OrderedDict
+import gc
+import resource
 
 import aiofiles
 import aiohttp
@@ -50,13 +53,16 @@ class PoketwoSpawnDetector(commands.Cog):
         self.image_builder = PokemonImageBuilder()
         self._pokemon_ids = self.pokemon_utils.load_pokemon_ids()
 
-        # Updated caches with locking for thread safety
-        self.pred_cache = {}
-        self.base_cache = {}
-        self.server_cache = {}
-        self.desc_cache = {}
-        self.type_cache = {}
-        self.alt_cache = {}
+        # Bounded caches to prevent unbounded growth
+        self.pred_cache = OrderedDict()  # For image predictions
+        self.base_cache = {}  # Fixed size, no limit needed
+        self.server_cache = OrderedDict()  # For server configs
+        self.desc_cache = {}  # Fixed
+        self.type_cache = {}  # Fixed
+        self.alt_cache = {}  # Fixed
+
+        self.max_pred_cache_size = 1000  # Limit to recent 1000 predictions
+        self.max_server_cache_size = 5000  # Assuming bot in up to 5000 guilds
 
         self.spawn_dir = "data/events/poketwo_spawns/spawns"
         self.image_urls = self._load_image_urls()
@@ -81,12 +87,20 @@ class PoketwoSpawnDetector(commands.Cog):
             secure=True
         )
 
+        # Set memory limit to prevent OOM kills (e.g., 512MB soft limit)
+        soft_limit = 512 * 1024 * 1024  # 512 MB
+        hard_limit = 512 * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_AS, (soft_limit, hard_limit))
+
         # Start worker tasks
         for _ in range(self.worker_count):
             self.bot.loop.create_task(self._worker())
 
         # Preload caches async
         asyncio.create_task(self._preload_caches())
+
+        # Start periodic cleanup
+        self.bot.loop.create_task(self._periodic_cleanup())
 
     def _load_image_urls(self):
         path = "data/events/poketwo_spawns/image_urls.json"
@@ -181,6 +195,24 @@ class PoketwoSpawnDetector(commands.Cog):
         self.type_cache[slug] = self.pokemon_utils.get_pokemon_types(slug)
         self.alt_cache[slug] = self.pokemon_utils.get_best_normal_alt_name(slug) or ""
 
+    async def _periodic_cleanup(self):
+        while True:
+            try:
+                # Trim pred_cache if over size
+                while len(self.pred_cache) > self.max_pred_cache_size:
+                    self.pred_cache.popitem(last=False)
+
+                # Trim server_cache if over size
+                while len(self.server_cache) > self.max_server_cache_size:
+                    self.server_cache.popitem(last=False)
+
+                # Force garbage collection
+                gc.collect()
+            except Exception as e:
+                logger.error(f"Periodic cleanup error: {e}")
+
+            await asyncio.sleep(3600)  # Every hour
+
     async def process_spawn(self, message, image_url):
         try:
             if self.predictor is None:
@@ -194,6 +226,8 @@ class PoketwoSpawnDetector(commands.Cog):
             else:
                 raw_name, conf = await loop.run_in_executor(self.thread_executor, self.predictor.predict, image_url)
                 self.pred_cache[image_url] = (raw_name, conf)
+                if len(self.pred_cache) > self.max_pred_cache_size:
+                    self.pred_cache.popitem(last=False)
 
             base_name = self.base_cache.get(raw_name) or self.pokemon_utils.get_base_pokemon_name(raw_name)
             if base_name not in self._pokemon_ids:
@@ -207,6 +241,8 @@ class PoketwoSpawnDetector(commands.Cog):
             if (server_config := self.server_cache.get(sid)) is None:
                 server_config = await self.pokemon_utils.get_server_config(sid)
                 self.server_cache[sid] = server_config
+                if len(self.server_cache) > self.max_server_cache_size:
+                    self.server_cache.popitem(last=False)
 
             shiny_collect, type_pings, quest_pings = await asyncio.gather(
                 self.pokemon_utils.get_ping_users(message.guild, base_name),
@@ -244,6 +280,12 @@ class PoketwoSpawnDetector(commands.Cog):
 
             await message.channel.send(content=ping_msg, embed=embed, reference=message, view=view)
 
+        except MemoryError:
+            logger.error("MemoryError: Clearing caches and collecting garbage")
+            self.pred_cache.clear()
+            self.server_cache.clear()
+            gc.collect()
+            await message.channel.send(f"{self.error_emoji} Memory issue, cleared caches", reference=message)
         except Exception as e:
             logger.error(f"Spawn processing error: {type(e).__name__}: {e}")
             traceback.print_exc()
@@ -294,6 +336,8 @@ class PoketwoSpawnDetector(commands.Cog):
         except Exception as e:
             logger.error(f"Create/upload failed for {base_name}: {e}")
             traceback.print_exc()
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
             return None
 
     async def _save_image_urls(self):
@@ -439,6 +483,9 @@ class PoketwoSpawnDetector(commands.Cog):
                             os.remove(tp)
                         except Exception:
                             pass
+
+                # Collect garbage after each batch
+                gc.collect()
 
             try:
                 await self._save_image_urls()
