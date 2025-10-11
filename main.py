@@ -1,8 +1,8 @@
-import asyncio; from data.setup import SetupManager; asyncio.run(SetupManager().run_setup())
-import os, sys, gc, asyncio, importlib, pkgutil, threading, signal, traceback
+import asyncio;from data.setup import SetupManager;asyncio.run(SetupManager().run_setup())
+import os, sys, gc, importlib, pkgutil, threading, signal, traceback#, asyncio
 from dotenv import load_dotenv
 import aiohttp, yarl, discord
-from flask import Flask, send_from_directory 
+from flask import Flask, send_from_directory
 from rich.console import Console
 from rich.align import Align
 from rich.tree import Tree
@@ -13,20 +13,24 @@ from imports.discord_imports import *
 from utils.cogs.ticket import setup_persistent_views
 from utils.cogs.fun import setup_persistent_views_fun
 from art import text2art
-from bot.token import get_bot_token as ut 
+from bot.token import get_bot_token as ut
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 load_dotenv(dotenv_path=os.path.join(".github", ".env"))
 
 def patch_discord_gateway(env_gateway="wss://gateway.discord.gg/"):
     class CustomHTTP(discord.http.HTTPClient):
-        async def get_gateway(self, **_): return f"{env_gateway}?encoding=json&v=10"
+        async def get_gateway(self, **_):
+            return f"{env_gateway}?encoding=json&v=10"
+
         async def get_bot_gateway(self, **_):
             data = await self.request(discord.http.Route("GET","/gateway/bot"))
             return data["shards"], f"{env_gateway}?encoding=json&v=10", data.get("session_start_limit", {})
+
     class CustomWebSocket(discord.gateway.DiscordWebSocket):
         DEFAULT_GATEWAY = yarl.URL(env_gateway)
         def is_ratelimited(self): return False
+
     discord.http.HTTPClient.get_gateway = CustomHTTP.get_gateway
     discord.http.HTTPClient.get_bot_gateway = CustomHTTP.get_bot_gateway
     discord.gateway.DiscordWebSocket.DEFAULT_GATEWAY = CustomWebSocket.DEFAULT_GATEWAY
@@ -42,9 +46,12 @@ class Config:
         'per_seconds', 5,
         'type', commands.BucketType.user
     ]
-    # Per-server sharding configuration
-    SERVER_SHARD_MAPPING = {}  # Maps guild_id to shard configuration
-    SHARD_POOL_SIZE = 100  # Connection pool size for optimized connections
+    SERVER_SHARD_MAPPING = {}
+    SHARD_POOL_SIZE = 100
+
+discord.Client.MAX_MESSAGES = 800  # limit message cache size
+discord.Client.member_cache_flags = discord.MemberCacheFlags.none()  # minimal member caching
+gc.enable()
 
 rate = Config.COOLDOWN[1]
 per = Config.COOLDOWN[3]
@@ -75,29 +82,30 @@ class ClusteredBot(commands.AutoShardedBot):
             help_command=None,
             shard_ids=None,
             shard_count=None,
-            shard_reconnect_interval=15,  # Maintained wait time
-            heartbeat_timeout=90,        # Maintained wait time
+            shard_reconnect_interval=15,
+            heartbeat_timeout=90,
             chunk_guilds_at_startup=False,
-            guild_ready_timeout=5.0,     # Maintained wait time
-            max_concurrency=Config.SHARD_POOL_SIZE,  # Optimized connection pool
+            guild_ready_timeout=5.0,
+            max_concurrency=Config.SHARD_POOL_SIZE,
+            max_messages=800,
         )
         self.cog_dirs = ['bot.cogs', 'bot.events']
         self.console = Console()
         self.http_session: aiohttp.ClientSession | None = None
-        self.cog_cache = {}  # Cache for loaded cogs
-        self.server_shards = {}  # Per-server shard tracking
+        self.cog_cache = {}
+        self.server_shards = {}
+        self._gc_task = None
 
     async def setup_hook(self):
         await self._import_cogs()
-        # Optimized HTTP session with connection pooling
         connector = aiohttp.TCPConnector(limit=Config.SHARD_POOL_SIZE, ttl_dns_cache=300)
         self.http_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15), connector=connector)
-        try:
-            shards = list(self.shards.keys())
-            shard_count = self.shard_count
-            logger.info("🧩 The cluster has the initializing shards and no we don't need to wait for all 1 trillion shards")
-        except Exception as e:
-            logger.warning(f"Shard initialization failed: {e}")
+        self._gc_task = asyncio.create_task(self._run_periodic_gc())
+
+    async def _run_periodic_gc(self):
+        while True:
+            gc.collect()
+            await asyncio.sleep(600)
 
     async def on_ready(self):
         term = __import__('shutil').get_terminal_size().columns
@@ -120,37 +128,31 @@ class ClusteredBot(commands.AutoShardedBot):
             ))
         await setup_persistent_views_fun(self)
         await setup_persistent_views(self)
-        # Initialize per-server shard configurations
         for guild in self.guilds:
             await self._configure_server_shards(guild)
 
     async def _configure_server_shards(self, guild):
-        """Configure unique shard allocation for each server"""
         guild_id = guild.id
         if guild_id not in Config.SERVER_SHARD_MAPPING:
-            # Dynamically assign shards based on server size
             member_count = guild.member_count or 100
-            shard_count = max(1, min(10, member_count // 1000))  # Example scaling
+            shard_count = max(1, min(10, member_count // 1000))
             Config.SERVER_SHARD_MAPPING[guild_id] = {
                 'shard_count': shard_count,
-                'priority': member_count / 1000,  # Prioritize larger servers
+                'priority': member_count / 1000,
             }
             self.server_shards[guild_id] = shard_count
             logger.info(f"Configured {shard_count} shards for guild {guild_id}")
 
     async def _remove_server_shards(self, guild):
-        """Remove shard configuration for a server"""
         guild_id = guild.id
         if guild_id in Config.SERVER_SHARD_MAPPING:
             del Config.SERVER_SHARD_MAPPING[guild_id]
             if guild_id in self.server_shards:
                 del self.server_shards[guild_id]
             logger.info(f"Removed shard configuration for guild {guild_id}")
-            # Optional: Trigger shard rebalance if needed
             await self._rebalance_shards()
 
     async def _rebalance_shards(self):
-        """Rebalance shards across servers (placeholder for advanced logic)"""
         total_shards = sum(config['shard_count'] for config in Config.SERVER_SHARD_MAPPING.values())
         logger.info(f"Rebalanced shards: Total allocated shards now {total_shards}")
 
@@ -172,6 +174,9 @@ class ClusteredBot(commands.AutoShardedBot):
         logger.info(f"🔄 Shard {shard_id} resumed.")
 
     async def close(self):
+        if self._gc_task:
+            self._gc_task.cancel()
+            await asyncio.sleep(0)
         if self.http_session and not self.http_session.closed:
             await self.http_session.close()
         await super().close()
@@ -186,7 +191,6 @@ class ClusteredBot(commands.AutoShardedBot):
                 branch.add(f"[red]Could not import {dir_name}: {e}[/red]")
                 logger.error(f"Failed to import package {dir_name}", exc_info=True)
                 continue
-
             for _, mod_name, is_pkg in pkgutil.iter_modules(package.__path__):
                 if is_pkg: 
                     continue
@@ -220,7 +224,6 @@ class ClusteredBot(commands.AutoShardedBot):
                     leaf.label = f"[red]□ {mod_name}.py[/red]"
                     leaf.add(f"[red]Import Error: {type(e).__name__}: {e}[/red]")
                     logger.error(f"Error importing cog {dir_name}.{mod_name}", exc_info=True)
-
         self.console.print(Align(tree, align='center', width=self.console.width))
 
 class BotRunner:
