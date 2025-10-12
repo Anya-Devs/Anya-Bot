@@ -160,32 +160,32 @@ class Moderation(commands.Cog):
     # ---------------- Note-Taker Roles Config ----------------
     @commands.group(name="notetaker", invoke_without_command=True)
     @commands.has_permissions(manage_guild=True)
-    async def notetaker(self, ctx):
-        roles = await self.get_notetaker_roles(ctx.guild)
-        if not roles:
-            await ctx.reply("No note-taker roles configured.")
+    async def notetaker(self, ctx, *roles: discord.Role):
+      guild_id = ctx.guild.id
+      config = await self.db.find_one({"guild_id": guild_id}) or {}
+      existing_ids = config.get("note_taker_roles", [])
+
+      # If no roles provided → show current roles
+      if not roles:
+        if not existing_ids:
+            desc = "No note-taker roles configured."
         else:
-            await ctx.reply(f"Current note-taker roles: {', '.join(r.mention for r in roles)}")
+            current_roles = [ctx.guild.get_role(rid) for rid in existing_ids if ctx.guild.get_role(rid)]
+            desc = f"Current note-taker roles: {', '.join(r.mention for r in current_roles)}"
 
-    @notetaker.command(name="add")
-    async def add_notetaker(self, ctx, *roles: discord.Role):
-        role_ids = [r.id for r in roles]
-        await self.db.update_one(
-            {"guild_id": ctx.guild.id},
-            {"$addToSet": {"note_taker_roles": {"$each": role_ids}}},
-            upsert=True
-        )
-        await ctx.reply(f"Added note-taker roles: {', '.join(r.mention for r in roles)}")
+        embed = discord.Embed(description=desc)
+        embed.set_footer(text=f"Use: {ctx.prefix}notetaker @Role1 @Role2 to add roles | {ctx.prefix}notetaker clear to remove all")
+        return await ctx.reply(embed=embed)
+      
+      # Otherwise, add new roles
+      role_ids = [r.id for r in roles]
+      await self.db.update_one(
+        {"guild_id": guild_id},
+        {"$addToSet": {"note_taker_roles": {"$each": role_ids}}},
+        upsert=True
+      )
+      await ctx.reply(f"Added note-taker roles: {', '.join(r.mention for r in roles)}")
 
-    @notetaker.command(name="overwrite")
-    async def overwrite_notetaker(self, ctx, *roles: discord.Role):
-        role_ids = [r.id for r in roles]
-        await self.db.update_one(
-            {"guild_id": ctx.guild.id},
-            {"$set": {"note_taker_roles": role_ids}},
-            upsert=True
-        )
-        await ctx.reply(f"Overwritten note-taker roles: {', '.join(r.mention for r in roles)}")
 
     @notetaker.command(name="clear")
     async def clear_notetaker(self, ctx):
