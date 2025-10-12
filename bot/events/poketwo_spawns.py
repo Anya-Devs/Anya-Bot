@@ -44,7 +44,7 @@ class PoketwoSpawnDetector(commands.Cog):
     BATCH_SIZE = 10
     PERIODIC_SAVE_INTERVAL = 30  # seconds
     SPAM_WINDOW_SECONDS = 60
-    SPAM_THRESHOLD = 500  # messages per window
+    SPAM_THRESHOLD = 100  # messages per window
     SPAWN_DIR = "data/events/poketwo_spawns/spawns"
     IMAGE_URLS_PATH = "data/events/poketwo_spawns/image_urls.json"
     CONFIG_PATH = "data/events/poketwo_spawns/image/config.json"
