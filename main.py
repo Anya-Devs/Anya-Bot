@@ -39,7 +39,7 @@ def patch_discord_gateway(env_gateway="wss://gateway.discord.gg/"):
 patch_discord_gateway()
 
 class Config:
-    PORT = int(os.environ.get("PORT", 8081 if not ut else 0))
+    PORT = int(os.environ.get("PORT", 5000))
     USE_PRESENCE = os.environ.get("USE_PRESENCE_INTENTS", "0").strip().lower() not in ("0", "false", "no")
     COOLDOWN = [
         'rate_limit_count', 1,
@@ -71,6 +71,7 @@ class FlaskServer:
         def serve_static(filename):
             return send_from_directory(self.app.static_folder, filename)
     def run(self):
+        logger.info(f"Starting Flask server on port {self.port}")
         self.app.run(host="0.0.0.0", port=self.port, threaded=True)
 
 class ClusteredBot(commands.AutoShardedBot):
