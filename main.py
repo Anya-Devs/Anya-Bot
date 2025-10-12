@@ -1,5 +1,5 @@
 import asyncio;from data.setup import SetupManager;asyncio.run(SetupManager().run_setup())
-import os, sys, gc, importlib, pkgutil, threading, signal, traceback#, asyncio
+import os, sys, gc, importlib, pkgutil, threading, signal, traceback, asyncio
 from dotenv import load_dotenv
 import aiohttp, yarl, discord
 from flask import Flask, send_from_directory
