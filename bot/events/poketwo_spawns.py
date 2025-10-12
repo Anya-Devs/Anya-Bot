@@ -205,96 +205,114 @@ class PoketwoSpawnDetector(commands.Cog):
                 await asyncio.sleep(1)
 
     async def _process_spawn(self, message: discord.Message, image_url: str) -> None:
-        overall_start = time.time()
-        try:
-            pred_start = time.time()
-            raw_name, conf = self.pred_cache(image_url)
-            pred_end = time.time()
-            pred_time = pred_end - pred_start
+     overall_start = time.time()
+     try:
+        pred_start = time.time()
+        raw_name, conf = self.pred_cache(image_url)
+        pred_end = time.time()
+        pred_time = pred_end - pred_start
 
-            base = self.base_cache(raw_name)
-            base_name = base.lower()
-            conf_float = self._parse_confidence(conf)
-            low_conf = conf_float < 30.0
+        base = self.base_cache(raw_name)
+        base_name = base.lower()
+        conf_float = self._parse_confidence(conf)
+        low_conf = conf_float < 30.0
 
-            if message.guild is None:
-                logger.warning("Spawn message without guild; skipping.")
-                return
+        if message.guild is None:
+            logger.warning("Spawn message without guild; skipping.")
+            return
 
-            sid = message.guild.id
-            server_config = await self.server_cache(sid)
+        sid = message.guild.id
+        server_config = await self.server_cache(sid)
 
-            desc_data = self.desc_cache.get(base_name, ("", "???"))
-            desc, dex = desc_data[:2]
-            dex = self._pokemon_ids.get(base_name, dex)
+        desc_data = self.desc_cache.get(base_name, ("", "???"))
+        desc, dex = desc_data[:2]
+        dex = self._pokemon_ids.get(base_name, dex)
 
-            key = (sid, base_name)
-            if key not in self.ping_cache:
-                shiny_collect, type_pings, quest_pings = await asyncio.gather(
-                    self.pokemon_utils.get_ping_users(message.guild, base_name),
-                    self.pokemon_utils.get_type_ping_users(message.guild, base_name),
-                    self.pokemon_utils.get_quest_ping_users(message.guild, base_name),
-                )
-                self.ping_cache[key] = (shiny_collect, type_pings, quest_pings)
-                if len(self.ping_cache) > self.MAX_PING_CACHE_SIZE:
-                    self.ping_cache.popitem(last=False)
-            else:
-                shiny_collect, type_pings, quest_pings = self.ping_cache[key]
-
-            shiny_pings, collect_pings = shiny_collect
-
-            rare, regional = getattr(self.pokemon_utils, "_special_names", ([], []))
-            special_roles = self._get_special_roles(server_config, base_name, rare, regional)
-
-            ping_msg, _ = await self.pokemon_utils.format_messages(
-                raw_name, type_pings, quest_pings, shiny_pings, collect_pings,
-                " ".join(special_roles), f"{conf_float:.2f}%", dex, desc,
-                image_url, low_conf
+        key = (sid, base_name)
+        if key not in self.ping_cache:
+            shiny_collect, type_pings, quest_pings = await asyncio.gather(
+                self.pokemon_utils.get_ping_users(message.guild, base_name),
+                self.pokemon_utils.get_type_ping_users(message.guild, base_name),
+                self.pokemon_utils.get_quest_ping_users(message.guild, base_name),
             )
+            self.ping_cache[key] = (shiny_collect, type_pings, quest_pings)
+            if len(self.ping_cache) > self.MAX_PING_CACHE_SIZE:
+                self.ping_cache.popitem(last=False)
+        else:
+            shiny_collect, type_pings, quest_pings = self.ping_cache[key]
 
-            view = PokemonSpawnView(
-                slug=base_name,
-                pokemon_data=self.full_pokemon_data,
-                pokemon_utils=self.pokemon_utils
-            )
+        shiny_pings, collect_pings = shiny_collect
 
-            image_start = time.time()
-            url = self._get_image_url(base_name) or await self._handle_image_upload(base_name)
-            image_end = time.time()
-            image_time = image_end - image_start
+        rare, regional = getattr(self.pokemon_utils, "_special_names", ([], []))
+        special_roles = self._get_special_roles(server_config, base_name, rare, regional)
 
-            embed = discord.Embed()
+        ping_msg, _ = await self.pokemon_utils.format_messages(
+            raw_name, type_pings, quest_pings, shiny_pings, collect_pings,
+            " ".join(special_roles), f"{conf_float:.2f}%", dex, desc,
+            image_url, low_conf
+        )
+
+        view = PokemonSpawnView(
+            slug=base_name,
+            pokemon_data=self.full_pokemon_data,
+            pokemon_utils=self.pokemon_utils
+        )
+
+        image_start = time.time()
+        url = self._get_image_url(base_name) or await self._handle_image_upload(base_name)
+        image_end = time.time()
+        image_time = image_end - image_start
+
+        if not self.testing:
             if url:
-                embed.set_image(url=url)
-
-            if not self.testing:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url) as resp:
+                        if resp.status == 200:
+                            content = await resp.read()
+                            from urllib.parse import urlparse
+                            import os
+                            from io import BytesIO
+                            filename = os.path.basename(urlparse(url).path)
+                            file = discord.File(BytesIO(content), filename=filename)
+                            await message.channel.send(
+                                content=ping_msg,
+                                file=file,
+                                reference=message,
+                                view=view
+                            )
+                        else:
+                            await message.channel.send(
+                                content=ping_msg,
+                                reference=message,
+                                view=view
+                            )
+            else:
                 await message.channel.send(
                     content=ping_msg,
-                    embed=embed if url else None,
                     reference=message,
                     view=view
                 )
-            else:
-                logger.info(f"Test spawn processed: {base_name} (skipped send)")
+        else:
+            logger.info(f"Test spawn processed: {base_name} (skipped send)")
 
-            self.processed_count += 1
-            if self.processed_count % 10 == 0:
-                gc.collect()
-                logger.debug(f"GC collected after {self.processed_count} processes")
+        self.processed_count += 1
+        if self.processed_count % 10 == 0:
+            gc.collect()
+            logger.debug(f"GC collected after {self.processed_count} processes")
 
-            overall_end = time.time()
-            overall_time = overall_end - overall_start
+        overall_end = time.time()
+        overall_time = overall_end - overall_start
 
-            logger.info(
-                f"Spawn Processing Times - Prediction: {pred_time:.2f} seconds | "
-                f"Image Preparation: {image_time:.2f} seconds | "
-                f"Overall Response: {overall_time:.2f} seconds"
-            )
-        except MemoryError:
-            self._handle_memory_error(message)
-        except Exception as e:
-            self._handle_processing_error(message, e)
-
+        logger.info(
+            f"Spawn Processing Times - Prediction: {pred_time:.2f} seconds | "
+            f"Image Preparation: {image_time:.2f} seconds | "
+            f"Overall Response: {overall_time:.2f} seconds"
+        )
+     except MemoryError:
+        self._handle_memory_error(message)
+     except Exception as e:
+        self._handle_processing_error(message, e)
+        
     def _parse_confidence(self, conf: str) -> float:
         try:
             return float(str(conf).strip().rstrip("%"))
@@ -452,7 +470,7 @@ class PoketwoSpawnDetector(commands.Cog):
         if not stats['ignored'] and stats['count'] > self.SPAM_THRESHOLD:
             stats['ignored'] = True
             channel_name = message.channel.name if hasattr(message.channel, 'name') else 'Unknown'
-            logger.warning(f"Marked high-volume channel {cid} ({channel_name}) as spam (rate: {stats['count']} msg/{self.SPAM_WINDOW_SECONDS}s), ignoring future messages.")
+            print(f"Marked high-volume channel {cid} ({channel_name}) as spam (rate: {stats['count']} msg/{self.SPAM_WINDOW_SECONDS}s), ignoring future messages.")
         if stats['ignored']:
             return
 
