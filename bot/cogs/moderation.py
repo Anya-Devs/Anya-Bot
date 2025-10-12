@@ -28,6 +28,74 @@ class Moderation(commands.Cog):
             return guild.get_channel(config["log_channel"])
         return None
 
+    # ---------------- Purge ----------------
+    @commands.group(name="purge", invoke_without_command=True)
+    @commands.has_permissions(manage_messages=True)
+    async def purge(self, ctx, amount: int):
+        """Purge the last N messages from the channel."""
+        if amount <= 0:
+            return await ctx.reply("Amount must be positive.")
+        if amount > 1000:
+            amount = 1000  # Discord limit
+        deleted = await ctx.channel.purge(limit=amount)
+        embed = discord.Embed(
+            title="Messages Purged",
+            description=f"Purged {len(deleted)} messages.",
+        )
+        embed.set_author(name=ctx.author, icon_url=ctx.author.display_avatar.url)
+        msg = await ctx.send(embed=embed)
+        await asyncio.sleep(5)
+        await msg.delete()
+        log_channel = await self.get_log_channel(ctx.guild)
+        if log_channel:
+            await log_channel.send(embed=embed)
+
+    @purge.command(name="user")
+    @commands.has_permissions(manage_messages=True)
+    async def purge_user(self, ctx, member: discord.Member, amount: int):
+        """Purge the last N messages from a specific user."""
+        if amount <= 0:
+            return await ctx.reply("Amount must be positive.")
+        if amount > 1000:
+            amount = 1000
+        def is_user(m):
+            return m.author == member
+        deleted = await ctx.channel.purge(limit=amount, check=is_user)
+        embed = discord.Embed(
+            title="User Messages Purged",
+            description=f"Purged {len(deleted)} messages from {member.mention}.",
+        )
+        embed.set_author(name=ctx.author, icon_url=ctx.author.display_avatar.url)
+        msg = await ctx.send(embed=embed)
+        await asyncio.sleep(5)
+        await msg.delete()
+        log_channel = await self.get_log_channel(ctx.guild)
+        if log_channel:
+            await log_channel.send(embed=embed)
+
+    @purge.command(name="bot")
+    @commands.has_permissions(manage_messages=True)
+    async def purge_bot(self, ctx, amount: int):
+        """Purge the last N bot messages from the channel."""
+        if amount <= 0:
+            return await ctx.reply("Amount must be positive.")
+        if amount > 1000:
+            amount = 1000
+        def is_bot(m):
+            return m.author.bot
+        deleted = await ctx.channel.purge(limit=amount, check=is_bot)
+        embed = discord.Embed(
+            title="Bot Messages Purged",
+            description=f"Purged {len(deleted)} bot messages.",
+        )
+        embed.set_author(name=ctx.author, icon_url=ctx.author.display_avatar.url)
+        msg = await ctx.send(embed=embed)
+        await asyncio.sleep(5)
+        await msg.delete()
+        log_channel = await self.get_log_channel(ctx.guild)
+        if log_channel:
+            await log_channel.send(embed=embed)
+
     # ---------------- Ban ----------------
     @commands.command()
     @commands.has_permissions(ban_members=True)
@@ -36,6 +104,20 @@ class Moderation(commands.Cog):
         embed = discord.Embed(
             title="Member Banned",
             description=f"{member.mention} was banned.\nReason: {reason or 'No reason provided.'}",
+        )
+        embed.set_author(name=ctx.author, icon_url=ctx.author.display_avatar.url)
+        await ctx.reply(embed=embed)
+        log_channel = await self.get_log_channel(ctx.guild)
+        if log_channel:
+            await log_channel.send(embed=embed)
+
+    @commands.command()
+    @commands.has_permissions(ban_members=True)
+    async def unban(self, ctx, user: discord.User, *, reason: Optional[str] = None):
+        await ctx.guild.unban(user, reason=reason)
+        embed = discord.Embed(
+            title="Member Unbanned",
+            description=f"{user.mention} was unbanned.\nReason: {reason or 'No reason provided.'}",
         )
         embed.set_author(name=ctx.author, icon_url=ctx.author.display_avatar.url)
         await ctx.reply(embed=embed)
@@ -54,6 +136,20 @@ class Moderation(commands.Cog):
         embed = discord.Embed(
             title="Member Timed Out",
             description=f"{member.mention} was timed out for {time}.\nReason: {reason or 'No reason provided.'}",
+        )
+        embed.set_author(name=ctx.author, icon_url=ctx.author.display_avatar.url)
+        await ctx.reply(embed=embed)
+        log_channel = await self.get_log_channel(ctx.guild)
+        if log_channel:
+            await log_channel.send(embed=embed)
+
+    @commands.command()
+    @commands.has_permissions(moderate_members=True)
+    async def untimeout(self, ctx, member: discord.Member, *, reason: Optional[str] = None):
+        await member.timeout(None, reason=reason)
+        embed = discord.Embed(
+            title="Member Timeout Removed",
+            description=f"{member.mention} timeout was removed.\nReason: {reason or 'No reason provided.'}",
         )
         embed.set_author(name=ctx.author, icon_url=ctx.author.display_avatar.url)
         await ctx.reply(embed=embed)
