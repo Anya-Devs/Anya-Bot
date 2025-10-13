@@ -1,5 +1,6 @@
 from functools import partial, lru_cache
 from collections import OrderedDict
+import io
 import os
 import gc
 import json
@@ -14,8 +15,7 @@ import aiofiles
 import cloudinary
 import cloudinary.uploader
 import requests
-import psutil  # For accurate RAM monitoring; assume installed or add if needed
-
+import psutil
 from imports.discord_imports import *
 from bot.token import use_test_bot as ut
 from bot.cogs.pokemon import PoketwoCommands
@@ -32,29 +32,23 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class PoketwoSpawnDetector(commands.Cog):
-    """
-    A Discord Cog for detecting and processing Pokétwo spawns.
-    Handles image prediction, caching, pinging, and image generation/uploading.
-    Optimized for extreme memory efficiency: sequential processing, lazy loading,
-    no in-memory attachments, aggressive GC, and RAM monitoring.
-    """
 
     TARGET_BOT_ID = 716390085896962058
-    MAX_DYNAMIC_CACHE_SIZE = 100  # Drastically reduced for safety
+    MAX_DYNAMIC_CACHE_SIZE = 100
     MAX_STATIC_CACHE_SIZE = 10000
-    MAX_PING_CACHE_SIZE = 50  # Smaller to limit user list bloat
-    WORKER_COUNT = 1  # Sequential: only one worker
-    BATCH_SIZE = 1  # Sequential generation
-    PERIODIC_SAVE_INTERVAL = 30  # seconds
+    MAX_PING_CACHE_SIZE = 50
+    WORKER_COUNT = 1
+    BATCH_SIZE = 1
+    PERIODIC_SAVE_INTERVAL = 30
     SPAM_WINDOW_SECONDS = 60
-    SPAM_THRESHOLD = 50  # messages per window
+    SPAM_THRESHOLD = 50
     SPAWN_DIR = "data/events/poketwo_spawns/spawns"
     IMAGE_URLS_PATH = "data/events/poketwo_spawns/image_urls.json"
     CONFIG_PATH = "data/events/poketwo_spawns/image/config.json"
     SUCCESS_EMOJI = "<:green:1261639410181476443>"
     ERROR_EMOJI = "<:red:1261639413943762944>"
     CROSS_EMOJI = "❌"
-    RAM_THRESHOLD_MB = 400  # Alert/GC if approaching 512 MB limit
+    RAM_THRESHOLD_MB = 400
     TEST_SPAWN_URLS = [
         "https://i.redd.it/4x0qmnu2y4571.png",
         "https://i.redd.it/pls6rcr2gb591.jpg",
@@ -67,7 +61,7 @@ class PoketwoSpawnDetector(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.predictor = None  # Lazy load heavy model
+        self.predictor = None
         self.pp = PoketwoCommands(bot)
         self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
         self.pokemon_utils = PokemonUtils(
@@ -84,25 +78,24 @@ class PoketwoSpawnDetector(commands.Cog):
             bot=bot,
             pp=self.pp,
         )
-        self.full_pokemon_data = None  # Lazy load
+        self.full_pokemon_data = None
         self.image_builder = PokemonImageBuilder()
-        self._pokemon_ids = None  # Lazy load
+        self._pokemon_ids = None
 
-        # Caches: Smaller LRU, manual eviction where possible
         self.pred_cache = lru_cache(maxsize=self.MAX_DYNAMIC_CACHE_SIZE)(self._predict_pokemon)
         self.base_cache = lru_cache(maxsize=self.MAX_DYNAMIC_CACHE_SIZE)(self._get_base_name)
         self.server_config_cache = OrderedDict()
-        self.ping_cache = OrderedDict()  # (guild_id, base_name): (shiny_collect, type_pings, quest_pings)
-        self.desc_cache = {}  # Compute on fly, small cache
+        self.ping_cache = OrderedDict()
+        self.desc_cache = {}
         self.type_cache = {}
         self.alt_cache = {}
-        self.image_url_cache = OrderedDict()  # URLs are lightweight
+        self.image_url_cache = OrderedDict()
         self.test_images = None
-        self.channel_stats = {}  # channel_id: {'count': int, 'window_start': float, 'ignored': bool}
+        self.channel_stats = {}
 
         self.default_ext = self._get_default_ext()
-        self.queue = asyncio.Queue(maxsize=1)  # Only one at a time
-        self.thread_executor = ThreadPoolExecutor(max_workers=1)  # Sequential even for threads
+        self.queue = asyncio.Queue(maxsize=1)
+        self.thread_executor = ThreadPoolExecutor(max_workers=1)
         self.processed_count = 0
 
         cloudinary.config(
@@ -116,22 +109,19 @@ class PoketwoSpawnDetector(commands.Cog):
         self.testing = False
         self._load_image_urls()
 
-        # Start single worker, saver, cleanup, and RAM monitor
         self.bot.loop.create_task(self._start_workers_and_saver())
         self.bot.loop.create_task(self._periodic_cleanup())
         self.bot.loop.create_task(self._ram_monitor())
 
     def _get_ram_mb(self) -> float:
-        """Get current RAM usage in MB."""
         try:
             return psutil.Process().memory_info().rss / 1024 / 1024
         except:
             return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
 
     async def _ram_monitor(self):
-        """Periodic RAM check: GC and clear caches if high."""
         while True:
-            await asyncio.sleep(30)  # Every 30s
+            await asyncio.sleep(30)
             ram = self._get_ram_mb()
             if ram > self.RAM_THRESHOLD_MB:
                 logger.warning(f"High RAM usage ({ram:.1f} MB): Aggressive cleanup")
@@ -139,12 +129,10 @@ class PoketwoSpawnDetector(commands.Cog):
                 gc.collect()
 
     def _aggressive_cleanup(self):
-        """Clear all dynamic caches and force GC."""
         self.pred_cache.cache_clear()
         self.base_cache.cache_clear()
         self.server_config_cache.clear()
         self.ping_cache.clear()
-        # Keep static caches small
         if len(self.desc_cache) > 50:
             self.desc_cache.clear()
         if len(self.type_cache) > 50:
@@ -153,19 +141,17 @@ class PoketwoSpawnDetector(commands.Cog):
             self.alt_cache.clear()
 
     async def _start_workers_and_saver(self):
-        self.bot.loop.create_task(self._worker())  # Only one
+        self.bot.loop.create_task(self._worker())
         self.bot.loop.create_task(self._periodic_save())
 
     async def _periodic_cleanup(self):
         while True:
-            await asyncio.sleep(600)  # Every 10 minutes
+            await asyncio.sleep(600)
             now = time.time()
-            to_remove = [cid for cid, stats in self.channel_stats.items() if now - stats['window_start'] > 1800]  # 30 min inactive
+            to_remove = [cid for cid, stats in self.channel_stats.items() if now - stats['window_start'] > 1800]
             for cid in to_remove:
                 del self.channel_stats[cid]
-            # Also trim channel_stats if too many
             if len(self.channel_stats) > 100:
-                # Keep recent/active
                 recent = {cid: stats for cid, stats in self.channel_stats.items() if now - stats['window_start'] < 3600}
                 self.channel_stats.clear()
                 self.channel_stats.update(recent)
@@ -194,7 +180,6 @@ class PoketwoSpawnDetector(commands.Cog):
                     data = json.load(f)
                     if isinstance(data, dict):
                         self.image_url_cache = OrderedDict((k.lower(), v) for k, v in data.items())
-                        # Trim if too large (though URLs are cheap)
                         while len(self.image_url_cache) > self.MAX_STATIC_CACHE_SIZE:
                             self.image_url_cache.popitem(last=False)
             except Exception as e:
@@ -234,7 +219,6 @@ class PoketwoSpawnDetector(commands.Cog):
                     await self._process_spawn(message, image_url)
                 finally:
                     self.queue.task_done()
-                    # Immediate GC after each process
                     gc.collect()
             except asyncio.CancelledError:
                 break
@@ -244,121 +228,65 @@ class PoketwoSpawnDetector(commands.Cog):
                 await asyncio.sleep(1)
                 gc.collect()
 
-    async def _process_spawn(self, message: discord.Message, image_url: str) -> None:
-        overall_start = time.time()
+    async def _process_spawn(self, msg: discord.Message, img_url: str):
         try:
-            # RAM check before heavy ops
-            if self._get_ram_mb() > self.RAM_THRESHOLD_MB * 0.8:
-                self._aggressive_cleanup()
-                gc.collect()
-
-            pred_start = time.time()
-            raw_name, conf = self.pred_cache(image_url)
-            pred_end = time.time()
-            pred_time = pred_end - pred_start
-            del image_url  # Free early
-
-            base = self.base_cache(raw_name)
-            base_name = base.lower()
-            conf_float = self._parse_confidence(conf)
-            low_conf = conf_float < 30.0
-            del raw_name, conf  # Free
-
-            if message.guild is None:
-                logger.warning("Spawn message without guild; skipping.")
-                return
-
-            sid = message.guild.id
-            server_config = await self.server_cache(sid)
-
-            self._lazy_load_pokemon_data()
-            desc_data = self._get_description(base_name)
-            desc, dex = desc_data[:2]
-            dex = self._pokemon_ids.get(base_name, dex)
-
-            key = (sid, base_name)
-            if key not in self.ping_cache:
-                shiny_collect, type_pings, quest_pings = await asyncio.gather(
-                    self.pokemon_utils.get_ping_users(message.guild, base_name),
-                    self.pokemon_utils.get_type_ping_users(message.guild, base_name),
-                    self.pokemon_utils.get_quest_ping_users(message.guild, base_name),
-                )
-                self.ping_cache[key] = (shiny_collect, type_pings, quest_pings)
-                if len(self.ping_cache) > self.MAX_PING_CACHE_SIZE:
-                    self.ping_cache.popitem(last=False)
-                # Free large lists early if possible, but needed below
-            else:
-                shiny_collect, type_pings, quest_pings = self.ping_cache[key]
-
-            shiny_pings, collect_pings = shiny_collect
-
-            rare, regional = getattr(self.pokemon_utils, "_special_names", ([], []))
-            special_roles = self._get_special_roles(server_config, base_name, rare, regional)
-
-            ping_msg, _ = await self.pokemon_utils.format_messages(
-                base_name.title(), type_pings, quest_pings, shiny_pings, collect_pings,  # Use base_name
-                " ".join(special_roles), f"{conf_float:.2f}%", dex, desc,
-                "", low_conf  # No spawn image_url needed
-            )
-            # Free pings after formatting
-            del type_pings, quest_pings, shiny_pings, collect_pings, shiny_collect
-
-            view = PokemonSpawnView(
-                slug=base_name,
-                pokemon_data=self.full_pokemon_data,  # Reference only
-                pokemon_utils=self.pokemon_utils
-            )
-
-            image_start = time.time()
-            url = self._get_image_url(base_name) or await self._handle_image_upload(base_name)
-            image_end = time.time()
-            image_time = image_end - image_start
-
+            if self._get_ram_mb() > self.RAM_THRESHOLD_MB * .8: self._aggressive_cleanup(); gc.collect()
+            s = time.time(); rn, cf = self.pred_cache(img_url); del img_url
+            bn = self.base_cache(rn).lower(); cfv = self._parse_confidence(cf); low = cfv < 30.0; del rn, cf
+            if not msg.guild: logger.warning("No guild; skip."); return
+            sid = msg.guild.id; sc = await self._get_server_config(sid); self._lazy_load_pokemon_data()
+            d, dx = self._get_description(bn)[:2]; dx = self._pokemon_ids.get(bn, dx); k = (sid, bn)
+            if k not in self.ping_cache:
+                scoll, tp, qp = await asyncio.gather(
+                    self.pokemon_utils.get_ping_users(msg.guild, bn),
+                    self.pokemon_utils.get_type_ping_users(msg.guild, bn),
+                    self.pokemon_utils.get_quest_ping_users(msg.guild, bn))
+                self.ping_cache[k] = (scoll, tp, qp)
+                if len(self.ping_cache) > self.MAX_PING_CACHE_SIZE: self.ping_cache.popitem(last=False)
+            else: scoll, tp, qp = self.ping_cache[k]
+            sp, cp = scoll; r, reg = getattr(self.pokemon_utils, "_special_names", ([], []))
+            roles = self._get_special_roles(sc, bn, r, reg)
+            pmsg, _ = await self.pokemon_utils.format_messages(
+                bn.title(), tp, qp, sp, cp, " ".join(roles), f"{cfv:.2f}%", dx, d, "", low)
+            view = PokemonSpawnView(slug=bn, pokemon_data=self.full_pokemon_data, pokemon_utils=self.pokemon_utils)
+            url = self._get_image_url(bn) or await self._handle_image_upload(bn)
             if not self.testing:
                 if url:
-                    # Send as embed image URL: NO DOWNLOAD, NO BYTESIO
-                    embed = discord.Embed()
-                    embed.set_image(url=url)
-                    embed.description = ping_msg  # Or title/color as needed
-                    await message.channel.send(embed=embed, reference=message, view=view)
+                    try:
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(url) as resp:
+                                if resp.status == 200:
+                                    content = await resp.read()
+                                    f = discord.File(io.BytesIO(content), "prediction.png")
+                                    await msg.channel.send(content=pmsg, file=f, reference=msg, view=view)
+                                    del content
+                                else:
+                                    logger.warning(f"Failed to fetch image from {url}: status {resp.status}")
+                                    await msg.channel.send(content=pmsg, reference=msg, view=view)
+                    except Exception as e:
+                        logger.error(f"Error fetching/sending image from {url}: {e}")
+                        await msg.channel.send(content=pmsg, reference=msg, view=view)
                 else:
-                    await message.channel.send(content=ping_msg, reference=message, view=view)
+                    await msg.channel.send(content=pmsg, reference=msg, view=view)
+                await asyncio.sleep(0.05)
             else:
-                logger.info(f"Test spawn processed: {base_name} (skipped send)")
-
-            self.processed_count += 1
-            logger.debug(f"GC after {self.processed_count} processes")
-
-            overall_end = time.time()
-            overall_time = overall_end - overall_start
-
-            logger.info(
-                f"Spawn Processing Times - Prediction: {pred_time:.2f} seconds | "
-                f"Image Preparation: {image_time:.2f} seconds | "
-                f"Overall Response: {overall_time:.2f} seconds | RAM: {self._get_ram_mb():.1f} MB"
-            )
-        except MemoryError:
-            self._handle_memory_error(message)
-        except Exception as e:
-            self._handle_processing_error(message, e)
-        finally:
-            # Final cleanup
-            gc.collect()
+                logger.info(f"Test spawn {bn}")
+            self.processed_count += 1; logger.info(f"Done {bn} | RAM {self._get_ram_mb():.1f}MB | {time.time() - s:.2f}s")
+        except MemoryError: self._handle_memory_error(msg)
+        except Exception as e: self._handle_processing_error(msg, e)
+        finally: gc.collect()
 
     def _get_description(self, base_name: str):
-        """Lazy compute description with small cache."""
         if base_name not in self.desc_cache:
             self._lazy_load_pokemon_data()
             desc_data = self.pokemon_utils.get_description(base_name) or ("", "???")
             self.desc_cache[base_name] = desc_data
-            if len(self.desc_cache) > 50:  # Tiny cache
-                # Evict oldest
+            if len(self.desc_cache) > 50:
                 oldest = next(iter(self.desc_cache))
                 del self.desc_cache[oldest]
         return self.desc_cache[base_name]
 
     def _get_types(self, base_name: str):
-        """Lazy compute types with small cache."""
         if base_name not in self.type_cache:
             self._lazy_load_pokemon_data()
             types = self.pokemon_utils.get_pokemon_types(base_name)
@@ -369,7 +297,6 @@ class PoketwoSpawnDetector(commands.Cog):
         return self.type_cache[base_name]
 
     def _get_alt(self, base_name: str):
-        """Lazy compute alt with small cache."""
         if base_name not in self.alt_cache:
             self._lazy_load_pokemon_data()
             alt = self.pokemon_utils.get_best_normal_alt_name(base_name) or ""
@@ -414,9 +341,8 @@ class PoketwoSpawnDetector(commands.Cog):
 
     def _predict_pokemon(self, image_url: str) -> tuple[str, str]:
         if self.predictor is None:
-            self.predictor = Prediction()  # Lazy load once
+            self.predictor = Prediction()
         if not image_url.startswith(('http://', 'https://')):
-            # Local file path
             original_get = requests.get
             def mock_get(url, *args, **kwargs):
                 with open(image_url, 'rb') as f:
@@ -453,7 +379,6 @@ class PoketwoSpawnDetector(commands.Cog):
         return self.server_config_cache[sid]
 
     async def _handle_image_upload(self, base_name: str) -> str | None:
-        # RAM check before gen
         if self._get_ram_mb() > self.RAM_THRESHOLD_MB * 0.7:
             self._aggressive_cleanup()
             gc.collect()
@@ -463,7 +388,6 @@ class PoketwoSpawnDetector(commands.Cog):
             url = await self._upload_local_image(local_path, base_name)
             if url:
                 return url
-        # Generate and upload new image
         return await self._generate_and_upload_image(base_name, ext)
 
     async def _upload_local_image(self, local_path: str, base_name: str) -> str | None:
@@ -494,7 +418,7 @@ class PoketwoSpawnDetector(commands.Cog):
 
         try:
             await self.bot.loop.run_in_executor(
-                self.thread_executor,  # Single thread, no pool explosion
+                self.thread_executor,
                 self.image_builder.create_image,
                 base_name, name, alt, types, None, temp_path, ext.upper()
             )
@@ -518,7 +442,7 @@ class PoketwoSpawnDetector(commands.Cog):
             self._cleanup_temp_file(temp_path)
             return None
         finally:
-            gc.collect()  # After gen
+            gc.collect()
 
     def _get_temp_path(self, base_name: str, ext: str) -> str:
         return os.path.join("/tmp" if os.name != "nt" else os.getcwd(), f"{base_name}.{ext}")
@@ -610,6 +534,26 @@ class PoketwoSpawnDetector(commands.Cog):
     async def regenerate_spawns(self, ctx: commands.Context) -> None:
         await self._handle_spawn_images(ctx, regenerate=True)
 
+    @commands.command(name="list_spawn_images", hidden=True)
+    @commands.is_owner()
+    async def list_spawn_images(self, ctx: commands.Context) -> None:
+        await ctx.defer()
+        if not self.image_url_cache:
+            return await ctx.send("❌ No spawn images cached yet. Run `generate_spawns` first.")
+        
+        table_lines = ["| Pokémon Slug | Image URL |", "|-------------|-----------|"]
+        for slug, url in list(self.image_url_cache.items())[:50]:
+            table_lines.append(f"| `{slug}` | {url} |")
+        table = "\n".join(table_lines)
+        
+        if len(table) > 1900:
+            parts = [table[:1900], table[1900:]]
+            for part in parts:
+                await ctx.send(f"```{part}```")
+        else:
+            await ctx.send(f"**Current Spawn Image Mapping** (showing first 50):\n```{table}```")
+        await ctx.send(f"Total cached: {len(self.image_url_cache)} images.")
+
     async def _handle_spawn_images(self, ctx: commands.Context, regenerate: bool = False) -> None:
         await ctx.defer()
         try:
@@ -628,14 +572,19 @@ class PoketwoSpawnDetector(commands.Cog):
 
             success_count = 0
             error_count = 0
+            success_urls = {}
             async def process_slug(slug: str):
-                self._aggressive_cleanup()  # Clean before each
+                self._aggressive_cleanup()
                 gc.collect()
                 url = await self._handle_image_upload(slug)
-                gc.collect()  # After
+                gc.collect()
+                if url:
+                    success_urls[slug] = url
                 return bool(url)
 
-            for item in work_items:  # Sequential, no batches
+            await ctx.send(f"Starting {'regeneration' if regenerate else 'generation'} of {len(work_items)} images...")
+
+            for i, item in enumerate(work_items):
                 slug, needs_process = item
                 if needs_process:
                     result = await process_slug(slug)
@@ -646,10 +595,21 @@ class PoketwoSpawnDetector(commands.Cog):
                             error_count += 1
                     else:
                         error_count += 1
-                    await asyncio.sleep(0.1)  # Tiny pause for stability
+                    if (i + 1) % 10 == 0:
+                        await ctx.send(f"Progress: {i + 1}/{len(work_items)} (Success: {success_count}, Errors: {error_count})")
+                    await asyncio.sleep(0.1)
 
             action = "Regenerated" if regenerate else "Generated"
             await ctx.send(f"✅ {action} {success_count} spawn images. ❌ {error_count} failed.")
+
+            if success_urls:
+                table_lines = ["| Pokémon Slug | Image URL |", "|-------------|-----------|"]
+                for slug, url in list(success_urls.items())[:20]:
+                    table_lines.append(f"| `{slug}` | {url} |")
+                table = "\n".join(table_lines)
+                await ctx.send(f"**Newly {action.lower()} Mapping** (first 20):\n```{table}```")
+                if len(success_urls) > 20:
+                    await ctx.send(f"... and {len(success_urls) - 20} more. Use `list_spawn_images` for full list.")
         except Exception as e:
             logger.error(f"Spawn image handler failure: {type(e).__name__}: {e}")
             await ctx.send(f"{self.ERROR_EMOJI} Error: {e}")
@@ -662,7 +622,7 @@ class PoketwoSpawnDetector(commands.Cog):
         logger.info(f"Initial RAM: {initial_ram} MB")
 
         i = 0
-        delay = 2.0  # Fixed longer delay for sequential sim
+        delay = 2.0
         start_time = time.time()
 
         while self.testing:
@@ -670,14 +630,14 @@ class PoketwoSpawnDetector(commands.Cog):
                 await asyncio.sleep(0.5)
                 continue
             url = random.choice(self.test_images)
-            message = ctx.message  # Simulate using the command's message
+            message = ctx.message
             try:
                 self.queue.put_nowait((message, url))
             except asyncio.QueueFull:
                 await asyncio.sleep(0.1)
                 continue
 
-            await asyncio.sleep(delay)  # Slow to mimic real, prevent queue buildup
+            await asyncio.sleep(delay)
 
             i += 1
 
@@ -693,7 +653,6 @@ class PoketwoSpawnDetector(commands.Cog):
         if self.testing:
             return await ctx.send("Pressure test already running.")
         
-        # Download test images locally if not done
         if self.test_images is None:
             self.test_images = []
             for i, url in enumerate(self.TEST_SPAWN_URLS):
@@ -726,7 +685,7 @@ class PoketwoSpawnDetector(commands.Cog):
         self.testing = False
         if self.pressure_task:
             await self.pressure_task
-            await asyncio.sleep(0.1)  # Allow worker to finish
+            await asyncio.sleep(0.1)
         
         final_ram = self._get_ram_mb()
         print(f"Pressure test stopped. Final RAM: {final_ram} MB")
@@ -745,7 +704,7 @@ class PoketwoSpawnDetector(commands.Cog):
                         pass
         self.thread_executor.shutdown(wait=False, cancel_futures=True)
         if hasattr(self, 'predictor'):
-            self.predictor = None  # Hint GC
+            self.predictor = None
         self.full_pokemon_data = None
         self._pokemon_ids = None
         self.bot.loop.run_until_complete(self._save_image_urls())
