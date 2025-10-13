@@ -1388,18 +1388,12 @@ class PokemonTypeSelect(discord.ui.View):
 
             if afk_on:
                 embed = discord.Embed(
-                    title="⚙️ Type Ping",
+                    title="⚙️ Type Ping Settings",
                     description="### 😴 AFK Mode is Currently Active\n"
                                "Your type ping notifications are **paused**. Toggle AFK mode below to reactivate them and restore your saved preferences.",
                     color=0xFF6B6B  # Soft red
                 )
-                embed.add_field(
-                    name="💡 What happens in AFK mode?",
-                    value="• All type pings are **disabled**\n"
-                          "• Your preferences are **safely stored**\n"
-                          "• Click 'AFK Mode (ON)' to restore everything",
-                    inline=False
-                )
+                
                 if user and getattr(user, "avatar", None):
                     embed.set_thumbnail(url=user.avatar.url)
             else:
@@ -1443,7 +1437,7 @@ class PokemonTypeSelect(discord.ui.View):
 
             # Always show footer with helpful info
             embed.set_footer(
-                text="💡 Tip: Use the dropdown to select multiple types at once!",
+                text="Use the dropdown to select multiple types at once.",
                 icon_url=self.bot.user.avatar.url if self.bot.user.avatar else None
             )
             
@@ -1570,7 +1564,7 @@ class PokemonTypeSelect(discord.ui.View):
             )
             
             embed.add_field(
-                name="📋 Using the Interface",
+                name="Using the Interface",
                 value="• **Dropdown Menu**: Select multiple types at once\n"
                       "• **Clear All**: Remove all selected types\n"
                       "• **AFK Mode**: Temporarily pause all pings",
@@ -1578,7 +1572,7 @@ class PokemonTypeSelect(discord.ui.View):
             )
             
             embed.add_field(
-                name="😴 AFK Mode Benefits",
+                name="AFK Mode Benefits",
                 value="• **Pause** all type pings when you're away\n"
                       "• **Save** your current type selections\n"
                       "• **Restore** everything when you're back\n"
@@ -1586,7 +1580,6 @@ class PokemonTypeSelect(discord.ui.View):
                 inline=False
             )
             
-            embed.set_footer(text="💡 Pro tip: You can select up to all available types for maximum coverage!")
             
             await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception:
@@ -1761,16 +1754,12 @@ class PokemonRegionSelect(discord.ui.View):
                     embed.description = "\n".join(lines)
                 else:
                     embed.description = "### No Regions Selected\nSelect regions from the dropdown below to receive spawn notifications."
-                    embed.add_field(
-                        name="How it works",
-                        value="• Choose regions from the dropdown\n• Get pinged when Pokémon spawn\n• Use AFK mode to pause pings",
-                        inline=False
-                    )
+                    
                 if user and getattr(user, "avatar", None):
                     embed.set_thumbnail(url=user.avatar.url)
 
             embed.set_footer(
-                text=status_message or self.status_message or "💡 Tip: Use the dropdown to select multiple regions!",
+                text=status_message or self.status_message or "Use the dropdown to select multiple regions",
                 icon_url=self.bot.user.avatar.url if self.bot.user.avatar else None
             )
             return embed
@@ -1795,7 +1784,7 @@ class PokemonRegionSelect(discord.ui.View):
             )
 
             await self.refresh_view()
-            embed = await self._create_embed(interaction, status_message="✅ Selection updated.")
+            embed = await self._create_embed(interaction)
             await interaction.response.edit_message(embed=embed, view=self)
             self.message = interaction.message
         except Exception:
@@ -1855,7 +1844,7 @@ class PokemonRegionSelect(discord.ui.View):
             color=0x3498DB
         )
         embed.add_field(
-            name="🌍 How Region Pings Work",
+            name="How Region Pings Work",
             value=f"Whenever a <@716390085896962058> Pokémon spawns in any of your **selected regions**, {self.bot.user.mention} will mention you.",
             inline=False
         )
@@ -1869,7 +1858,6 @@ class PokemonRegionSelect(discord.ui.View):
             value="• Pauses all region pings\n• Saves current selection\n• Restores saved regions when AFK is toggled off",
             inline=False
         )
-        embed.set_footer(text="💡 Pro tip: You can select up to all available regions for maximum coverage!")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def on_timeout(self):
