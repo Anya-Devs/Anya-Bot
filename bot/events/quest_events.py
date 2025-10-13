@@ -1,5 +1,5 @@
-
-import logging, re, traceback
+import logging, re, traceback, asyncio
+import time
 from fuzzywuzzy import fuzz
 from data.local.const import Quest_Completed_Embed
 from imports.discord_imports import *
@@ -11,10 +11,44 @@ class Quest_Events(commands.Cog):
         self.bot = bot
         self.quest_data = bot.get_cog("Quest_Data")
         self.progress_emoji = "<:anyasus:1244195699331960863>"
+        self.channel_stats = {}  # channel_id: {'count': int, 'window_start': float, 'ignored': bool}
+        self.SPAM_WINDOW_SECONDS = 60  # Time window for tracking message rate
+        self.SPAM_THRESHOLD = 50  # Messages per window to mark as spam
+        self.bot.loop.create_task(self._periodic_cleanup())
+
+    async def _periodic_cleanup(self):
+        """Clean up inactive channel stats to manage memory."""
+        while True:
+            await asyncio.sleep(600)  # Every 10 minutes
+            now = time.time()
+            to_remove = [cid for cid, stats in self.channel_stats.items() if now - stats['window_start'] > 1800]  # 30 min inactive
+            for cid in to_remove:
+                del self.channel_stats[cid]
+            if len(self.channel_stats) > 100:  # Limit total channels tracked
+                recent = {cid: stats for cid, stats in self.channel_stats.items() if now - stats['window_start'] < 3600}
+                self.channel_stats.clear()
+                self.channel_stats.update(recent)
+            logger.debug(f"Cleaned up {len(to_remove)} inactive channel stats; total now {len(self.channel_stats)}")
 
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot: return
+        cid = message.channel.id
+        now = time.time()
+        if cid not in self.channel_stats:
+            self.channel_stats[cid] = {'count': 0, 'window_start': now, 'ignored': False}
+        stats = self.channel_stats[cid]
+        if now - stats['window_start'] > self.SPAM_WINDOW_SECONDS:
+            stats['count'] = 1
+            stats['window_start'] = now
+        else:
+            stats['count'] += 1
+        if not stats['ignored'] and stats['count'] > self.SPAM_THRESHOLD:
+            stats['ignored'] = True
+            channel_name = message.channel.name if hasattr(message.channel, 'name') else 'Unknown'
+            print(f"Marked high-volume channel {cid} ({channel_name}) as spam (rate: {stats['count']} msg/{self.SPAM_WINDOW_SECONDS}s), ignoring future messages.")
+        if stats['ignored']:
+            return
         try:
             guild_id, user_id = str(message.guild.id), str(message.author.id)
             quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
