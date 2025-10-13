@@ -116,7 +116,10 @@ class PoketwoSpawnDetector(commands.Cog):
         self.last_gc = time.time()
 
         cloudinary.config(
-            cloudinary_url=os.getenv("CLOUDINARY_URL")  # Use URL for faster config
+            cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+            api_key=os.getenv("CLOUDINARY_API_KEY"),
+            api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+            secure=True
         )
 
         self.dirty = False
@@ -573,12 +576,12 @@ class PoketwoSpawnDetector(commands.Cog):
             return url
         if message.reference:
             try:
-                ref = await ctx.fetch_message(message.reference.message_id)
+                ref = await ctx.channel.fetch_message(message.reference.message_id)
                 url = self._extract_from_message(ref)
                 if url:
                     return url
                 if ref.reference:
-                    ref2 = await ctx.fetch_message(ref.reference.message_id)
+                    ref2 = await ctx.channel.fetch_message(ref.reference.message_id)
                     return self._extract_from_message(ref2)
             except:
                 pass
