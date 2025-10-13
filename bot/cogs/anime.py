@@ -9,6 +9,7 @@ class Anime(commands.Cog):
         self.mangadex_url = "https://api.mangadex.org"
         self.red = discord.Color.red()
         self.ar = Anime_Recommendation(bot)
+        self.mr = Manga_Recommendation(bot)
 
     async def prompt_query(self, ctx, item):
         prompt = f"{ctx.author.display_name.title()}, enter the `name` of the {item} you're looking for."
@@ -76,6 +77,8 @@ class Anime(commands.Cog):
     @commands.group(name="anime", invoke_without_command=True)
     async def anime_group(self, ctx):
         await ctx.send("Use a subcommand: `search`, `recommend`, or `character`.")
+    
+    
 
     @anime_group.command(name="search")
     async def anime_search(self, ctx, *, query: Optional[str] = None):
@@ -83,23 +86,25 @@ class Anime(commands.Cog):
         if not query: return
         await self.fetch_and_send(ctx, f"{self.api_url}anime?q={query}", query, AnimeView)
 
+   
+    @anime_group.command(name="character")
+    async def anime_character(self, ctx, *, query=None):
+        query = query or await self.prompt_query(ctx, "character")
+        if not query: return
+        await self.fetch_and_send(ctx, f"{self.api_url}characters?q={query}", query, CharacterView)
+    
     @anime_group.command(name="recommend")
     async def anime_recommend(self, ctx):
         d = await self.ar.fetch_random_anime()
         m = await ctx.reply(embed=discord.Embed(description=f'{neko_lurk} Fetching anime...', color=primary_color()), mention_author=False)
         await self.ar.update_anime_embed(m, d)
 
-    @anime_group.command(name="character")
-    async def anime_character(self, ctx, *, query=None):
-        query = query or await self.prompt_query(ctx, "character")
-        if not query: return
-        await self.fetch_and_send(ctx, f"{self.api_url}characters?q={query}", query, CharacterView)
 
     # Manga commands
     @commands.group(name="manga")
     async def manga_group(self, ctx):
         if ctx.invoked_subcommand is None:
-            await ctx.send("Use a subcommand: `search` or `read`.")
+            await ctx.send("Use a subcommand: `search`, `read`, or `recommend`.")
 
     @manga_group.command(name="search")
     async def manga_search(self, ctx, *, query=None):
@@ -128,6 +133,12 @@ class Anime(commands.Cog):
             color=primary_color()
         )
         await ctx.reply(embed=embed, view=view, mention_author=False)
+
+    @manga_group.command(name="recommend")
+    async def manga_recommend(self, ctx):
+        d = await self.mr.fetch_random_manga()
+        m = await ctx.reply(embed=discord.Embed(description=f'{neko_lurk} Fetching manga...', color=primary_color()), mention_author=False)
+        await self.mr.update_manga_embed(m, d)
 
 
 def setup(bot):
