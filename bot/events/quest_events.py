@@ -1,5 +1,4 @@
-import logging, re, traceback, asyncio
-import time
+import logging, re, traceback, asyncio, time
 from fuzzywuzzy import fuzz
 from data.local.const import Quest_Completed_Embed
 from imports.discord_imports import *
@@ -11,20 +10,19 @@ class Quest_Events(commands.Cog):
         self.bot = bot
         self.quest_data = bot.get_cog("Quest_Data")
         self.progress_emoji = "<:anyasus:1244195699331960863>"
-        self.channel_stats = {}  # channel_id: {'count': int, 'window_start': float, 'ignored': bool}
-        self.SPAM_WINDOW_SECONDS = 60  # Time window for tracking message rate
-        self.SPAM_THRESHOLD = 50  # Messages per window to mark as spam
+        self.channel_stats = {}
+        self.SPAM_WINDOW_SECONDS = 60
+        self.SPAM_THRESHOLD = 50
         self.bot.loop.create_task(self._periodic_cleanup())
 
     async def _periodic_cleanup(self):
-        """Clean up inactive channel stats to manage memory."""
         while True:
-            await asyncio.sleep(600)  # Every 10 minutes
+            await asyncio.sleep(600)
             now = time.time()
-            to_remove = [cid for cid, stats in self.channel_stats.items() if now - stats['window_start'] > 1800]  # 30 min inactive
+            to_remove = [cid for cid, stats in self.channel_stats.items() if now - stats['window_start'] > 1800]
             for cid in to_remove:
                 del self.channel_stats[cid]
-            if len(self.channel_stats) > 100:  # Limit total channels tracked
+            if len(self.channel_stats) > 100:
                 recent = {cid: stats for cid, stats in self.channel_stats.items() if now - stats['window_start'] < 3600}
                 self.channel_stats.clear()
                 self.channel_stats.update(recent)
