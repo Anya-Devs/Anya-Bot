@@ -260,10 +260,14 @@ class PoketwoSpawnDetector(commands.Cog):
             image_end = time.time()
             image_time = image_end - image_start
 
+            process_end = time.time()
+
             if not self.testing:
                 embed = discord.Embed()
+                footer_parts = [f"{process_end - overall_start:.2f}s"]
                 if low_conf:
-                    embed.set_footer(text="Low confidence prediction")
+                    footer_parts.insert(0, "Low confidence prediction")
+                embed.set_footer(text=" | ".join(footer_parts))
                 if url:
                     embed.set_image(url=url)
                 await message.channel.send(
