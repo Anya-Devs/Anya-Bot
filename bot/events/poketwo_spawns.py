@@ -543,8 +543,8 @@ class PoketwoSpawnDetector(commands.Cog):
                 if ignored:
                     return
 
-            #if message.author.id != self.TARGET_BOT_ID or ut:
-            #    return
+            if message.author.id != self.TARGET_BOT_ID or ut:
+                return
             for embed in message.embeds:
                 title = embed.title
                 if title and "pokémon has appeared!" in title.lower() and embed.image:
