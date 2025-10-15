@@ -1,0 +1,10 @@
+version: "3.9"
+
+services:
+  app:
+    build: .
+    container_name: my_app
+    env_file:
+      - .github/.env
+    restart: unless-stopped
+    command: python main.py
