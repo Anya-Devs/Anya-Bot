@@ -14,8 +14,6 @@ import string
 from concurrent.futures import ThreadPoolExecutor
 import typing
 
-
-
 class DatabaseManager:    
     def __init__(self, mongo_connect, db_name, bot=None, config=None):
         self.mongoConnect = mongo_connect
@@ -26,7 +24,7 @@ class DatabaseManager:
         # Initialize nested class instances
         self.roles = self.RoleClass(mongo_connect, db_name)
         self.inventory = self.InventoryClass(mongo_connect, db_name)
-        self.tools = self.ToolClass(mongo_connect, db_name, self.config)
+        self.tools = self.ToolClass(mongo_connect, db_name, self.config, self.inventory)
         self.server = self.ServerClass(mongo_connect, db_name)
         self.channels = self.ChannelClass(mongo_connect, db_name, bot, self.config)
         self.balance = self.BalanceClass(mongo_connect, db_name)
@@ -83,111 +81,156 @@ class DatabaseManager:
             return []
 
     class InventoryClass:
-     def __init__(self, mongo_connect, db_name: str):
-        self.mongoConnect = mongo_connect
-        self.DB_NAME = db_name
+        def __init__(self, mongo_connect, db_name: str):
+            self.mongoConnect = mongo_connect
+            self.DB_NAME = db_name
 
-     async def get_user_inventory_count(
-        self, guild_id: str, user_id: str, category: str, item_name: str, context: str = None
-    ) -> int:
-        """Retrieve the count of a specific item in a user's inventory."""
-        try:
-            db = self.mongoConnect[self.DB_NAME]
-            server_collection = db["Servers"]
+        def _nested_get(self, d: dict, keys: list) -> Optional[Union[int, dict]]:
+            """Navigate nested dict using list of keys."""
+            current = d
+            for key in keys:
+                if isinstance(current, dict) and key in current:
+                    current = current[key]
+                else:
+                    return None
+            return current
 
-            user_data = await server_collection.find_one(
-                {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
-                {f"members.{user_id}.inventory.{category}.{item_name}": 1},
-            )
+        async def get_user_inventory_count(
+            self, guild_id: str, user_id: str, category: str, item_name: str
+        ) -> int:
+            """Retrieve the count of a specific item in a user's inventory, supporting nested categories."""
+            try:
+                db = self.mongoConnect[self.DB_NAME]
+                server_collection = db["Servers"]
 
-            if (
-                user_data
-                and "members" in user_data
-                and user_id in user_data["members"]
-                and "inventory" in user_data["members"][user_id]
-                and category in user_data["members"][user_id]["inventory"]
-                and item_name in user_data["members"][user_id]["inventory"][category]
-            ):
-                return user_data["members"][user_id]["inventory"][category].get(item_name, 0)
-
-            # Initialize missing item
-            await server_collection.update_one(
-                {"guild_id": guild_id},
-                {"$set": {f"members.{user_id}.inventory.{category}.{item_name}": 0}},
-                upsert=True,
-            )
-            return 0
-
-        except PyMongoError as e:
-            logger.error(f"Error getting inventory count for {item_name} ({user_id}, {guild_id}): {e}")
-            return 0
-
-     async def add_item_to_inventory(
-        self, guild_id: str, user_id: str, category: str, item_name: str, quantity: int
-        ) -> None:
-        """Add a quantity of an item to a user's inventory."""
-        try:
-            db = self.mongoConnect[self.DB_NAME]
-            server_collection = db["Servers"]
-
-            await server_collection.update_one(
-                {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
-                {"$inc": {f"members.{user_id}.inventory.{category}.{item_name}": quantity}},
-                upsert=True,
-            )
-
-        except PyMongoError as e:
-            logger.error(f"Error adding {quantity} of {item_name} to {user_id} ({guild_id}): {e}")
-            raise e
-
-     async def remove_item_from_inventory(
-        self, guild_id: str, user_id: str, category: str, item_name: str, quantity: int
-        ) -> bool:
-        """Remove a quantity of an item if the user has enough."""
-        try:
-            current_count = await self.get_user_inventory_count(guild_id, user_id, category, item_name)
-            if current_count < quantity:
-                logger.warning(
-                    f"Cannot remove {quantity} of {item_name} from {user_id} in {guild_id}. Only {current_count} available."
+                full_path = f"inventory.{category}.{item_name}"
+                proj_path = f"members.{user_id}.{full_path}"
+                user_data = await server_collection.find_one(
+                    {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
+                    {proj_path: 1},
                 )
+
+                full_parts = full_path.split('.')
+
+                if user_data:
+                    item_value = self._nested_get(
+                        user_data.get("members", {}).get(user_id, {}), full_parts
+                    )
+                    if item_value is not None:
+                        if isinstance(item_value, dict):
+                            return item_value.get('quantity', 0)
+                        else:
+                            return item_value or 0
+
+                # Initialize missing item
+                init_val = {'quantity': 0} if category.endswith('.tools') else 0
+                await server_collection.update_one(
+                    {"guild_id": guild_id},
+                    {"$set": {f"members.{user_id}.{full_path}": init_val}},
+                    upsert=True,
+                )
+                return 0
+
+            except PyMongoError as e:
+                logger.error(f"Error getting inventory count for {item_name} ({user_id}, {guild_id}): {e}")
+                return 0
+
+        async def add_item_to_inventory(
+            self, guild_id: str, user_id: str, category: str, item_name: str, quantity: int
+        ) -> None:
+            """Add a quantity of an item to a user's inventory, supporting nested categories."""
+            try:
+                db = self.mongoConnect[self.DB_NAME]
+                server_collection = db["Servers"]
+
+                full_path = f"members.{user_id}.inventory.{category}.{item_name}"
+                if category.endswith('.tools'):
+                    inc_path = f"{full_path}.quantity"
+                else:
+                    inc_path = full_path
+
+                await server_collection.update_one(
+                    {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
+                    {"$inc": {inc_path: quantity}},
+                    upsert=True,
+                )
+
+            except PyMongoError as e:
+                logger.error(f"Error adding {quantity} of {item_name} to {user_id} ({guild_id}): {e}")
+                raise e
+
+        async def remove_item_from_inventory(
+            self, guild_id: str, user_id: str, category: str, item_name: str, quantity: int
+        ) -> bool:
+            """Remove a quantity of an item if the user has enough, supporting nested categories."""
+            try:
+                current_count = await self.get_user_inventory_count(guild_id, user_id, category, item_name)
+                if current_count < quantity:
+                    logger.warning(
+                        f"Cannot remove {quantity} of {item_name} from {user_id} in {guild_id}. Only {current_count} available."
+                    )
+                    return False
+
+                db = self.mongoConnect[self.DB_NAME]
+                server_collection = db["Servers"]
+
+                full_path = f"members.{user_id}.inventory.{category}.{item_name}"
+                if category.endswith('.tools'):
+                    inc_path = f"{full_path}.quantity"
+                else:
+                    inc_path = full_path
+
+                await server_collection.update_one(
+                    {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
+                    {"$inc": {inc_path: -quantity}},
+                )
+                return True
+
+            except PyMongoError as e:
+                logger.error(f"Error removing {item_name} from {user_id} ({guild_id}): {e}")
                 return False
 
-            db = self.mongoConnect[self.DB_NAME]
-            server_collection = db["Servers"]
+        async def reset_inventory_item(
+            self, guild_id: str, user_id: str, category: str, item_name: str
+        ) -> None:
+            """Reset a specific inventory item to zero, supporting nested categories."""
+            try:
+                db = self.mongoConnect[self.DB_NAME]
+                server_collection = db["Servers"]
 
-            await server_collection.update_one(
-                {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
-                {"$inc": {f"members.{user_id}.inventory.{category}.{item_name}": -quantity}},
-            )
-            return True
+                full_path = f"members.{user_id}.inventory.{category}.{item_name}"
+                if category.endswith('.tools'):
+                    reset_val = {'quantity': 0}
+                else:
+                    reset_val = 0
 
-        except PyMongoError as e:
-            logger.error(f"Error removing {item_name} from {user_id} ({guild_id}): {e}")
-            return False
+                await server_collection.update_one(
+                    {"guild_id": guild_id},
+                    {"$set": {full_path: reset_val}},
+                    upsert=True,
+                )
 
-     async def reset_inventory_item(
-        self, guild_id: str, user_id: str, category: str, item_name: str ) -> None:
-        """Reset a specific inventory item to zero."""
-        try:
-            db = self.mongoConnect[self.DB_NAME]
-            server_collection = db["Servers"]
-
-            await server_collection.update_one(
-                {"guild_id": guild_id},
-                {"$set": {f"members.{user_id}.inventory.{category}.{item_name}": 0}},
-                upsert=True,
-            )
-
-        except PyMongoError as e:
-            logger.error(f"Error resetting {item_name} for {user_id} ({guild_id}): {e}")
-            raise e
+            except PyMongoError as e:
+                logger.error(f"Error resetting {item_name} for {user_id} ({guild_id}): {e}")
+                raise e
     
     class ToolClass:
         """Handles tool-related database operations."""
-        def __init__(self, mongo_connect, db_name, config):
+        def __init__(self, mongo_connect, db_name, config, inventory):
             self.mongoConnect = mongo_connect
             self.DB_NAME = db_name
             self.config = config
+            self.inventory = inventory  # Reference to inventory for common operations
+
+        def _nested_get(self, d: dict, keys: list) -> Optional[Union[int, dict]]:
+            """Navigate nested dict using list of keys."""
+            current = d
+            for key in keys:
+                if isinstance(current, dict) and key in current:
+                    current = current[key]
+                else:
+                    return None
+            return current
 
         async def get_existing_tool_id(
             self, guild_id: str, user_id: str, tool_name: str
@@ -196,179 +239,109 @@ class DatabaseManager:
             try:
                 db = self.mongoConnect[self.DB_NAME]
                 server_collection = db["Servers"]
+                full_path = f"inventory.spytools.tools.{tool_name}"
+                proj_path = f"members.{user_id}.{full_path}"
                 user_data = await server_collection.find_one(
                     {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
-                    {f"members.{user_id}.inventory.tool.{tool_name}": 1},
+                    {proj_path: 1},
                 )
 
-                tool_data = (
-                    user_data.get("members", {})
-                    .get(user_id, {})
-                    .get("inventory", {})
-                    .get("tool", {})
-                    .get(tool_name, {})
+                full_parts = full_path.split('.')
+                tool_data = self._nested_get(
+                    user_data.get("members", {}).get(user_id, {}), full_parts
                 )
-                return tool_data.get("un_tool_id", None)
+                return tool_data.get("un_tool_id", None) if isinstance(tool_data, dict) else None
             except PyMongoError as e:
                 logger.error(f"Error occurred while getting existing tool ID: {e}")
                 return None
 
-        async def get_quantity(
+        async def get_material_quantity(
             self, guild_id: str, user_id: str, material_name: str
         ) -> int:
             """
             Retrieves the quantity of a specific material in a user's inventory.
-            If the material does not exist, returns 0.
+            Uses inventory class for consistency.
             """
-            try:
-                db = self.mongoConnect[self.DB_NAME]
-                server_collection = db["Servers"]
+            return await self.inventory.get_user_inventory_count(
+                guild_id, user_id, "spytools.materials", material_name
+            )
 
-                user_data = await server_collection.find_one(
-                    {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
-                    {f"members.{user_id}.inventory.tool.{material_name}.quantity": 1},
-                )
-
-                quantity = (
-                    user_data.get("members", {})
-                    .get(user_id, {})
-                    .get("inventory", {})
-                    .get("tool", {})
-                    .get(material_name, {})
-                    .get("quantity", 0)
-                )
-                return quantity
-            except PyMongoError as e:
-                logger.error(
-                    f"Error occurred while retrieving quantity for {material_name}: {e}"
-                )
-                raise e
-
-        async def add_tool_to_inventory(
+        async def add_material_to_inventory(
             self, guild_id: str, user_id: str, material_name: str, quantity: int
         ) -> None:
-            try:
-                db = self.mongoConnect[self.DB_NAME]
-                server_collection = db["Servers"]
-
-                await server_collection.update_one(
-                    {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
-                    {
-                        "$inc": {
-                            f"members.{user_id}.inventory.tool.{material_name}.quantity": quantity
-                        }
-                    },
-                    upsert=True,
-                )
-                await self.get_quantity(guild_id, user_id, material_name)
-
-            except PyMongoError as e:
-                logger.error(f"Error occurred while adding item to inventory: {e}")
-                raise e
+            """Adds material to inventory using inventory class."""
+            await self.inventory.add_item_to_inventory(
+                guild_id, user_id, "spytools.materials", material_name, quantity
+            )
 
         async def remove_tool_from_inventory(
             self, guild_id: str, user_id: str, tool_name: str
         ) -> None:
+            """Removes one tool from inventory using inventory class (inc -1)."""
+            current_quantity = await self.inventory.get_user_inventory_count(
+                guild_id, user_id, "spytools.tools", tool_name
+            )
+            if current_quantity > 0:
+                await self.inventory.add_item_to_inventory(
+                    guild_id, user_id, "spytools.tools", tool_name, -1
+                )
+            else:
+                logger.warning(
+                    f"{user_id} does not have the tool `{tool_name}` in their inventory."
+                )
+
+        async def create_un_tool_id(self, guild_id, user_id, tool):
+            """Create a new unique tool ID for the user and tool, preserving existing data."""
+            def generate_short_uuid():
+                return str(int("".join(random.choices(string.digits, k=6))) + 1000)
+
             try:
                 db = self.mongoConnect[self.DB_NAME]
                 server_collection = db["Servers"]
 
-                current_quantity = await self.get_quantity(guild_id, user_id, tool_name)
-
-                if current_quantity > 0:
-                    await server_collection.update_one(
-                        {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
-                        {
-                            "$inc": {
-                                f"members.{user_id}.inventory.tool.{tool_name}.quantity": -1
-                            }
-                        },
-                        upsert=True,
-                    )
-                else:
-                    logger.warning(
-                        f"{user_id} does not have the tool `{tool_name}` in their inventory."
-                    )
-                    await server_collection.update_one(
-                        {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
-                        {
-                            "$set": {
-                                f"members.{user_id}.inventory.tool.{tool_name}.quantity": 0
-                            }
-                        },
-                        upsert=True,
-                    )
-
-            except PyMongoError as e:
-                logger.error(
-                    f"Error occurred while removing tool from inventory: {e}")
-                raise e
-
-        async def create_un_tool_id(self, guild_id, user_id, tool):
-            """Create a new unique tool ID for the user and tool."""
-
-            def generate_short_uuid():
-                return str(int("".join(random.choices(string.digits, k=6))) + 1000)
-
-            db = self.mongoConnect[self.DB_NAME]
-            server_collection = db["Servers"]
-
-            try:
-                un_tool_id = generate_short_uuid()
-                tool_data = {"un_tool_id": un_tool_id}
-
-                result = await server_collection.update_one(
+                # Fetch current tool data
+                full_path = f"inventory.spytools.tools.{tool}"
+                proj_path = f"members.{user_id}.{full_path}"
+                user_data = await server_collection.find_one(
                     {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
-                    {"$set": {f"members.{user_id}.inventory.tool.{tool}": tool_data}},
-                    upsert=True,  
+                    {proj_path: 1},
                 )
 
-                logger.debug(
-                    f"Generated new un_tool_id: {un_tool_id} for tool '{tool}'")
-                logger.debug(f"Database update result: {result.raw_result}")
+                full_parts = full_path.split('.')
+                tool_data = self._nested_get(
+                    user_data.get("members", {}).get(user_id, {}), full_parts
+                ) or {}
 
-                return un_tool_id
+                if not isinstance(tool_data, dict):
+                    tool_data = {}
+
+                if 'un_tool_id' not in tool_data:
+                    un_tool_id = generate_short_uuid()
+                    tool_data['un_tool_id'] = un_tool_id
+
+                    set_path = f"members.{user_id}.{full_path}"
+                    await server_collection.update_one(
+                        {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
+                        {"$set": {set_path: tool_data}},
+                        upsert=True,
+                    )
+
+                    logger.debug(
+                        f"Generated/updated un_tool_id: {un_tool_id} for tool '{tool}'"
+                    )
+                    return un_tool_id
+                else:
+                    return tool_data['un_tool_id']
+
             except Exception as e:
                 logger.error(
                     f"Error in create_un_tool_id for tool '{tool}' (guild: {guild_id}, user: {user_id}): {e}"
                 )
-                raise  
+                raise
 
         async def get_un_tool_id(self, guild_id, user_id, tool):
             """Fetch the unique tool ID for the user and tool."""
-            db = self.mongoConnect[self.DB_NAME]
-            server_collection = db["Servers"]
-
-            user_tool_data = await server_collection.find_one(
-                {
-                    "guild_id": guild_id,
-                    f"members.{user_id}.inventory.tool.{tool}": {"$exists": True},
-                },
-                {f"members.{user_id}.inventory.tool.{tool}": 1},
-            )
-
-            if user_tool_data:
-                try:
-                    tool_data = user_tool_data["members"][user_id]["inventory"]["tool"].get(
-                        tool
-                    )
-
-                    if isinstance(tool_data, dict) and "un_tool_id" in tool_data:
-                        return tool_data["un_tool_id"]
-
-                    logger.error(
-                        f"Tool {tool} does not have an 'un_tool_id' or is in an unexpected format."
-                    )
-                    return None
-
-                except KeyError as e:
-                    logger.error(
-                        f"KeyError: Missing key in user_tool_data for {guild_id} and {user_id}: {e}"
-                    )
-                    return None
-            else:
-                logger.error(f"Tool {tool} does not exist in the inventory.")
-                return None
+            return await self.get_existing_tool_id(guild_id, user_id, tool)
 
     class ServerClass:
         """Handles server-related database operations."""
@@ -736,10 +709,10 @@ class DatabaseManager:
                 guild_doc = await server_collection.find_one({"guild_id": guild_id})
                 if guild_doc:
                     return guild_doc.get(
-                        "quest_limit", 25
+                        "quest_limit", self.config.default_quest_limit
                     )  
                 else:
-                    return 25  
+                    return self.config.default_quest_limit  
             except PyMongoError as e:
                 logger.error(f"Error occurred while getting quest limit: {e}")
                 raise e
@@ -1062,117 +1035,117 @@ class DatabaseManager:
                 return False
 
         async def add_new_quest(self, guild_id, message_author, action="send", method=None, chance=50):
-         logger.debug(
-            f"Attempting to add new quest for guild_id: {guild_id}, "
-            f"message_author: {message_author}, action: {action}, method: {method}, chance: {chance}"
-         )
-         try:
-            user_id = str(message_author.id)
-            logger.debug(f"User ID: {user_id}")
-            
-            # Determine method if not provided
-            if method is None:
-                method = random.choice(["message", "reaction", "emoji"])
-                logger.debug(f"Method chosen: {method}")
-            
-            # Set times range based on method
-            if method == "message":
-                min_times = self.config.min_times_message
-                max_times = self.config.max_times_message
-            elif method == "emoji":
-                min_times = self.config.min_times_emoji
-                max_times = self.config.max_times_emoji
-            else:  # reaction
-                min_times = self.config.min_times_reaction
-                max_times = self.config.max_times_reaction
-            
-            times = random.randint(min_times, max_times)
-            logger.debug(f"Random times selected: {times}")
-            
-            # Base reward calculation
-            reward = random.randint(
-                self.config.min_reward_per_time, 
-                self.config.max_reward_per_time
-            ) * times
-
-            # Apply booster if method is boosted
-            if method in self.config.booster:
-                boost_value = self.config.booster[method]
-                reward = int(reward * boost_value)
-                logger.debug(
-                    f"Applied booster for method '{method}': x{boost_value}, new reward: {reward}"
-                )
-                 
-            # Random chance gating
-            if random.randint(1, 100) > self.config.add_quest_chance:
-                logger.debug("Random chance check failed. No quest will be created.")
-                return None
-            
-            quest_limit = await self.get_quest_limit(guild_id)
-            existing_quests = await self.find_quests_by_user_and_server(user_id, guild_id)
-            if existing_quests is None:
-                existing_quests = []
-            if len(existing_quests) >= quest_limit:
-                logger.debug("User has reached the quest limit. No quest will be created.")
-                return None
-            
-            fallback_channel = (
-                discord.utils.get(message_author.guild.text_channels, name="general")
-                if message_author.guild
-                else None
-            )
-            channel_id = await self.main_manager.channels.get_random_channel_for_guild(
-                guild_id, fallback_channel=fallback_channel
-            )
-            if not channel_id:
-                message = "No redirected channels found for this guild. Please use the command to set redirect channels first."
-                logger.error(message)
-                await message_author.send(message)
-                return None
-            
-            # Generate unique quest content
-            while True:
-                if method == "message":
-                    content = await self.generate_random_quest_content(self.bot, message_author, guild_id)
-                else:
-                    content = await self.generate_random_reaction_content(guild_id)
-                if content is None:
-                    logger.error("Failed to generate random quest content.")
-                    return None
-                content_exists = any(quest["content"] == content for quest in existing_quests)
-                if not content_exists:
-                    break
-            
-            logger.debug(f"Generated quest content: {content}")
-            latest_quest_id = await self.get_latest_quest_id(guild_id, user_id)
-            new_quest_id = 1 if latest_quest_id is None else latest_quest_id + 1
-            quest_data = {
-                "quest_id": new_quest_id,
-                "action": action,
-                "method": method,
-                "channel_id": channel_id,
-                "times": times,
-                "content": content,
-                "reward": reward,
-                "progress": 0,
-            }
             logger.debug(
-                f"Creating quest for user_id: {user_id}, guild_id: {guild_id}, quest_data: {quest_data}"
+                f"Attempting to add new quest for guild_id: {guild_id}, "
+                f"message_author: {message_author}, action: {action}, method: {method}, chance: {chance}"
             )
-            if await self.insert_quest_existing_path(guild_id, user_id, quest_data):
-                logger.debug(
-                    f"Quest created for user_id: {user_id}, guild_id: {guild_id}, quest_data: {quest_data}"
+            try:
+                user_id = str(message_author.id)
+                logger.debug(f"User ID: {user_id}")
+                
+                # Determine method if not provided
+                if method is None:
+                    method = random.choice(["message", "reaction", "emoji"])
+                    logger.debug(f"Method chosen: {method}")
+                
+                # Set times range based on method
+                if method == "message":
+                    min_times = self.config.min_times_message
+                    max_times = self.config.max_times_message
+                elif method == "emoji":
+                    min_times = self.config.min_times_emoji
+                    max_times = self.config.max_times_emoji
+                else:  # reaction
+                    min_times = self.config.min_times_reaction
+                    max_times = self.config.max_times_reaction
+                
+                times = random.randint(min_times, max_times)
+                logger.debug(f"Random times selected: {times}")
+                
+                # Base reward calculation
+                reward = random.randint(
+                    self.config.min_reward_per_time, 
+                    self.config.max_reward_per_time
+                ) * times
+
+                # Apply booster if method is boosted
+                if method in self.config.booster:
+                    boost_value = self.config.booster[method]
+                    reward = int(reward * boost_value)
+                    logger.debug(
+                        f"Applied booster for method '{method}': x{boost_value}, new reward: {reward}"
+                    )
+                     
+                # Random chance gating
+                if random.randint(1, 100) > self.config.add_quest_chance:
+                    logger.debug("Random chance check failed. No quest will be created.")
+                    return None
+                
+                quest_limit = await self.get_quest_limit(guild_id)
+                existing_quests = await self.find_quests_by_user_and_server(user_id, guild_id)
+                if existing_quests is None:
+                    existing_quests = []
+                if len(existing_quests) >= quest_limit:
+                    logger.debug("User has reached the quest limit. No quest will be created.")
+                    return None
+                
+                fallback_channel = (
+                    discord.utils.get(message_author.guild.text_channels, name="general")
+                    if message_author.guild
+                    else None
                 )
-                return new_quest_id
-            else:
-                logger.debug(
-                    f"Failed to create quest for user_id: {user_id}, guild_id: {guild_id} "
-                    "because the user path does not exist."
+                channel_id = await self.main_manager.channels.get_random_channel_for_guild(
+                    guild_id, fallback_channel=fallback_channel
                 )
+                if not channel_id:
+                    message = "No redirected channels found for this guild. Please use the command to set redirect channels first."
+                    logger.error(message)
+                    await message_author.send(message)
+                    return None
+                
+                # Generate unique quest content
+                while True:
+                    if method == "message":
+                        content = await self.generate_random_quest_content(self.bot, message_author, guild_id)
+                    else:
+                        content = await self.generate_random_reaction_content(guild_id)
+                    if content is None:
+                        logger.error("Failed to generate random quest content.")
+                        return None
+                    content_exists = any(quest["content"] == content for quest in existing_quests)
+                    if not content_exists:
+                        break
+                
+                logger.debug(f"Generated quest content: {content}")
+                latest_quest_id = await self.get_latest_quest_id(guild_id, user_id)
+                new_quest_id = 1 if latest_quest_id is None else latest_quest_id + 1
+                quest_data = {
+                    "quest_id": new_quest_id,
+                    "action": action,
+                    "method": method,
+                    "channel_id": channel_id,
+                    "times": times,
+                    "content": content,
+                    "reward": reward,
+                    "progress": 0,
+                }
+                logger.debug(
+                    f"Creating quest for user_id: {user_id}, guild_id: {guild_id}, quest_data: {quest_data}"
+                )
+                if await self.insert_quest_existing_path(guild_id, user_id, quest_data):
+                    logger.debug(
+                        f"Quest created for user_id: {user_id}, guild_id: {guild_id}, quest_data: {quest_data}"
+                    )
+                    return new_quest_id
+                else:
+                    logger.debug(
+                        f"Failed to create quest for user_id: {user_id}, guild_id: {guild_id} "
+                        "because the user path does not exist."
+                    )
+                    return None
+            except Exception as e:
+                logger.error(f"Error occurred while adding new quest: {e}", exc_info=True)
                 return None
-         except Exception as e:
-            logger.error(f"Error occurred while adding new quest: {e}", exc_info=True)
-            return None
 
         async def delete_all_quests(self, guild_id, message_author):
             logger.debug(
@@ -1361,4 +1334,3 @@ class DatabaseManager:
                     await interaction.send(f"An error occurred: {str(error)}")
                 except Exception as e:
                     logger.error(f"Failed to send error message: {e}")
-
