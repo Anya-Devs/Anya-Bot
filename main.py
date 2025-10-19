@@ -38,13 +38,19 @@ def patch_discord_gateway(env_gateway="wss://gateway.discord.gg/"):
 
 patch_discord_gateway()
 
+class GuildUserBucket(commands.BucketType):
+    def get_bucket(self, message):
+        if message.guild is None:
+            return f"dm:{message.author.id}"
+        return f"{message.guild.id}:{message.author.id}"
+
 class Config:
     PORT = int(os.environ.get("PORT", 5000))
     USE_PRESENCE = os.environ.get("USE_PRESENCE_INTENTS", "0").strip().lower() not in ("0", "false", "no")
     COOLDOWN = [
         'rate_limit_count', 1,
         'per_seconds', 5,
-        'type', commands.BucketType.user
+        'type', GuildUserBucket
     ]
     SERVER_SHARD_MAPPING = {}
     SHARD_POOL_SIZE = 100
@@ -214,7 +220,7 @@ class ClusteredBot(commands.AutoShardedBot):
                                 leaf.label = f"[green]□ {mod_name}.py[/green]"
                                 leaf.add(f"[cyan]→[/cyan] [bold white]{obj.__name__}[/bold white]")
                                 for cmd in cog_instance.get_commands():
-                                    cmd._buckets = commands.CooldownMapping.from_cooldown(rate, per, commands.BucketType.user)
+                                    cmd._buckets = commands.CooldownMapping.from_cooldown(rate, per, bucket_type)
                             except Exception as e:
                                 leaf.label = f"[red]□ {mod_name}.py[/red]"
                                 leaf.add(f"[red]Instantiation Error: {type(e).__name__}: {e}[/red]")
