@@ -40,7 +40,7 @@ class PoketwoSpawnDetector(commands.Cog):
     MAX_DYNAMIC_CACHE_SIZE = 2000
     MAX_STATIC_CACHE_SIZE = 10000
     MAX_PING_CACHE_SIZE = 500
-    WORKER_COUNT = 4  # Balanced for mixed I/O and CPU workloads
+    WORKER_COUNT = 4  # Reduced for cloud envs like Render.com
     BATCH_SIZE = 20  # Increased batch size for generation
     PERIODIC_SAVE_INTERVAL = 300  # Increased to reduce I/O
     SPAM_WINDOW_SECONDS = 60
@@ -201,13 +201,13 @@ class PoketwoSpawnDetector(commands.Cog):
             except Exception as e:
                 logger.error(f"Queue get error: {type(e).__name__}: {e}")
                 traceback.print_exc()
-                await asyncio.sleep(0)  # Minimal sleep for immediate retry
+                await asyncio.sleep(0.1)  # Reduced sleep
 
     async def _process_spawn(self, message: discord.Message, image_url: str) -> None:
         overall_start = time.perf_counter()
         try:
             pred_start = time.perf_counter()
-            # Run prediction in thread executor to avoid pickling issues
+            # Run prediction in executor to avoid blocking event loop
             def predict_sync():
                 return self._predict_pokemon(image_url)
             raw_name, conf = await self.bot.loop.run_in_executor(self.thread_executor, predict_sync)
@@ -296,7 +296,7 @@ class PoketwoSpawnDetector(commands.Cog):
             overall_end = time.perf_counter()
             overall_time = overall_end - overall_start
 
-            print(
+            logger.info(
                 f"Spawn Processing Times - Prediction: {pred_time:.2f}s | "
                 f"Pings: {ping_time:.2f}s | "
                 f"Image Preparation: {image_time:.2f}s | "
@@ -316,14 +316,10 @@ class PoketwoSpawnDetector(commands.Cog):
     def _get_special_roles(self, server_config: dict, base_name: str, rare: list, regional: list) -> list:
         if not server_config:
             return []
-        special_roles = []
-        rare_role = server_config.get("rare_role")
-        if rare_role and any(r in base_name for r in rare):
-            special_roles.append(f"<@&{rare_role}>")
-        regional_role = server_config.get("regional_role")
-        if regional_role and any(r in base_name for r in regional):
-            special_roles.append(f"<@&{regional_role}>")
-        return special_roles
+        return (
+            [f"<@&{server_config['rare_role']}>" for r in rare if r in base_name and server_config.get("rare_role")]
+            + [f"<@&{server_config['regional_role']}>" for r in regional if r in base_name and server_config.get("regional_role")]
+        )
 
     def _handle_memory_error(self, message: discord.Message) -> None:
         logger.error("MemoryError: Clearing dynamic caches")
@@ -467,7 +463,7 @@ class PoketwoSpawnDetector(commands.Cog):
         if not stats['ignored'] and stats['count'] > self.SPAM_THRESHOLD:
             stats['ignored'] = True
             channel_name = message.channel.name if hasattr(message.channel, 'name') else 'Unknown'
-            logger.warning(f"Marked high-volume channel {cid} ({channel_name}) as spam (rate: {stats['count']} msg/{self.SPAM_WINDOW_SECONDS}s), ignoring future messages.")
+            print(f"Marked high-volume channel {cid} ({channel_name}) as spam (rate: {stats['count']} msg/{self.SPAM_WINDOW_SECONDS}s), ignoring future messages.")
         if stats['ignored']:
             return
 
@@ -603,7 +599,7 @@ class PoketwoSpawnDetector(commands.Cog):
                 current_ram = get_ram()
                 increase = current_ram - initial_ram
                 elapsed = time.time() - start_time
-                logger.info(f"After {i} simulated spawns (elapsed {elapsed:.2f} seconds), RAM: {current_ram} MB, increase: {increase} MB, current delay max: {delay_max:.2f} seconds")
+                print(f"After {i} simulated spawns (elapsed {elapsed:.2f} seconds), RAM: {current_ram} MB, increase: {increase} MB, current delay max: {delay_max:.2f} seconds")
 
     @commands.command(name="pressure_test", hidden=True)
     @commands.is_owner()
@@ -652,7 +648,7 @@ class PoketwoSpawnDetector(commands.Cog):
             return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024  # in MB
 
         final_ram = get_ram()
-        logger.info(f"Pressure test stopped. Final RAM: {final_ram} MB")
+        print(f"Pressure test stopped. Final RAM: {final_ram} MB")
         await ctx.send("Pressure test stopped. Check logs for final RAM usage and processing times.")
 
     def cog_unload(self) -> None:
