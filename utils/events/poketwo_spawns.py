@@ -395,11 +395,10 @@ class PokemonSpawnView(View):
 
     CSV_PATH = "data/commands/pokemon/pokemon_full_data.csv"
 
-    def __init__(self, slug, pokemon_utils, pokemon_data=None):
+    def __init__(self, slug, pokemonutils, pokemon_data=None):
         super().__init__(timeout=None)
         self.slug = slug
-        self.prefix = prefix
-        self.pokemon_utils = pokemon_utils
+        self.pokemonutils = pokemonutils
 
         with open("data/commands/pokemon/pokemon_emojis/_pokemon_types.json", "r", encoding="utf-8") as f:
             self.type_emojis = json.load(f)
@@ -459,10 +458,10 @@ class PokemonSpawnView(View):
         elif gender_rate == 0:
             return "♂️ Male only"
         else:
-            female_ratio = (8 - gender_rate) / 8
-            male_ratio = gender_rate / 8
-            male_percentage = int(female_ratio * 100)
-            female_percentage = int(male_ratio * 100)
+            female_ratio = gender_rate / 8
+            male_ratio = (8 - gender_rate) / 8
+            male_percentage = int(male_ratio * 100)
+            female_percentage = int(female_ratio * 100)
             if female_percentage == 100:
                 return "♀️ Female only"
             elif male_percentage == 100:
@@ -540,7 +539,6 @@ class PokemonSpawnView(View):
             )
             return False
         return True
-
 
    
 
