@@ -533,7 +533,7 @@ class PoketwoSpawnDetector(commands.Cog):
         await ctx.defer()
         try:
             import csv
-            async with aiofiles.open(self.pokemonutils.description_file, "r", encoding="utf-8") as f:
+            async with aiofiles.open(self.pokemonutils.pokemon_description_file, "r", encoding="utf-8") as f:
                 data = await f.read()
             reader = list(csv.DictReader(data.splitlines()))
             work_items = [
