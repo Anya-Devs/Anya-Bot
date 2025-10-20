@@ -9,6 +9,14 @@ from utils.cogs.quest import *
 
 
 
+import discord
+from discord.ext import commands
+import json
+import logging
+from io import BytesIO
+from datetime import datetime
+logger = logging.getLogger(__name__)
+
 class Quest(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -17,12 +25,12 @@ class Quest(commands.Cog):
         self.shop_data = self.load_shop_data()
 
     def load_shop_data(self):
-     try:
-        with open(self.shop_file, "r", encoding="utf-8") as f:
-            return json.load(f)
-     except Exception as e:
-        logger.error(f"Error loading shop data: {e}")
-        return {}
+        try:
+            with open(self.shop_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading shop data: {e}")
+            return {}
 
     def get_tool_emoji(self, tool_name):
         """Fetches the emoji for a given tool name."""
@@ -188,110 +196,131 @@ class Quest(commands.Cog):
 
     @commands.command(name="profile", aliases=["pf"])
     async def profile(self, ctx, member: discord.Member = None):
-     if member is None:
-        member = ctx.author
+        if member is None:
+            member = ctx.author
 
-     user_id = member.id
-     guild_id = ctx.guild.id
-     balance = await self.quest_data.get_balance(user_id, guild_id)
+        user_id = member.id
+        guild_id = ctx.guild.id
+        user_id_str = str(user_id)
+        guild_id_str = str(guild_id)
 
-     db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
-     server_collection = db["Servers"]
-     doc = await server_collection.find_one({"guild_id": guild_id})
-     if not doc:
-        await ctx.reply("No server data found.")
-        return
-
-     member_data = doc.get("members", {}).get(str(user_id), {})
-     profile = member_data.get("profile", {})
-     age = profile.get("age", "Not set")
-     sexuality = profile.get("sexuality", "Not set")
-     bio = profile.get("bio", "No bio set.")
-     stories = profile.get("stories", [])
-
-     stella_points = balance  # Using the fetched balance
-
-     view = ProfileView(ctx, member, age, sexuality, bio, stories, stella_points, self.quest_data)
-     await view.start(ctx)
-
-    @commands.command(name="inventory", aliases=["inv"])
-    async def inventory(self, ctx):
-     try:
-        guild_id = str(ctx.guild.id)
-        user_id = str(ctx.author.id)
-
-        db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
-        server_collection = db["Servers"]
-
-        user_data = await server_collection.find_one(
-            {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
-            {f"members.{user_id}.inventory"},
-        )
-
-        inventory = (
-            user_data.get("members", {})
-            .get(user_id, {})
-            .get("inventory", {})
-        )
-
-        if not inventory:
+        user_exists = await self.quest_data.find_user_in_server(user_id_str, guild_id_str)
+        if not user_exists:
             await ctx.reply(
-                f"{ctx.author.mention}, your inventory is empty! Start collecting items to see them here.",
-                mention_author=False,
+                f"You need to start your quest first with `{ctx.prefix}quest` before viewing your profile.",
+                mention_author=False
             )
             return
 
-        # Create inventory view with category selection
-        inventory_view = InventoryView(self.quest_data, guild_id, user_id, ctx.author)
-        await inventory_view.start(ctx)
+        try:
+            balance = await self.quest_data.get_balance(user_id_str, guild_id_str)
+        except AttributeError:
+            # Fallback in case get_balance still fails due to NoneType
+            balance = 0
+            logger.warning(f"Balance fetch failed for user {user_id_str} in guild {guild_id_str}, defaulting to 0")
 
-     except Exception as e:
-        await ctx.reply(
-            f"An error occurred while fetching your inventory: {e}",
-            mention_author=False,
-        )
-        logger.error(f"Error in inventory command: {e}")
+        db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+        server_collection = db["Servers"]
+        doc = await server_collection.find_one({"guild_id": guild_id_str})
+        if not doc:
+            await ctx.reply("No server data found.")
+            return
 
+        member_data = doc.get("members", {}).get(user_id_str, {})
+        profile = member_data.get("profile", {})
+        age = profile.get("age", "Not set")
+        sexuality = profile.get("sexuality", "Not set")
+        bio = profile.get("bio", "No bio set.")
+        stories = profile.get("stories", [])
 
+        stella_points = balance  # Using the fetched balance
+
+        view = ProfileView(ctx, member, age, sexuality, bio, stories, stella_points, self.quest_data)
+        await view.start(ctx)
+
+    @commands.command(name="inventory", aliases=["inv"])
+    async def inventory(self, ctx):
+        try:
+            guild_id = str(ctx.guild.id)
+            user_id = str(ctx.author.id)
+
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_collection = db["Servers"]
+
+            user_data = await server_collection.find_one(
+                {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
+                {f"members.{user_id}.inventory"},
+            )
+
+            if not user_data:
+                await ctx.reply(
+                    f"{ctx.author.mention}, you need to start your quest first with `{ctx.prefix}quest` before viewing your inventory.",
+                    mention_author=False,
+                )
+                return
+
+            inventory = (
+                user_data.get("members", {})
+                .get(user_id, {})
+                .get("inventory", {})
+            )
+
+            if not inventory:
+                await ctx.reply(
+                    f"{ctx.author.mention}, your inventory is empty! Start collecting items to see them here.",
+                    mention_author=False,
+                )
+                return
+
+            # Create inventory view with category selection
+            inventory_view = InventoryView(self.quest_data, guild_id, user_id, ctx.author)
+            await inventory_view.start(ctx)
+
+        except Exception as e:
+            await ctx.reply(
+                f"An error occurred while fetching your inventory: {e}",
+                mention_author=False,
+            )
+            logger.error(f"Error in inventory command: {e}")
 
     @commands.command(name="balance", aliases=["bal", "points", "stars","stp"])
     async def balance(
         self, ctx, method=None, amount: int = None, member: discord.Member = None
     ):
-        user_id = str(ctx.author.id)
         guild_id = str(ctx.guild.id)
-        if member is None:
-            member = ctx.author
+        target_member = member if member else ctx.author
+        target_id = str(target_member.id)
 
         try:
             if method == "add":
                 if ctx.author.id in [1030285330739363880, 1124389055598170182]:
-                    await self.quest_data.add_balance(str(member.id), guild_id, amount)
+                    await self.quest_data.add_balance(target_id, guild_id, amount)
                     amount_with_commas = "{:,}".format(amount)
                     await ctx.send(
-                        f":white_check_mark: Successfully added {amount_with_commas} balance to {member.display_name}'s account."
+                        f":white_check_mark: Successfully added {amount_with_commas} balance to {target_member.display_name}'s account."
                     )
                 else:
                     await ctx.send(
                         "You don't have permission to use this command to add balance to other users."
                     )
             else:
-                if member is None and amount is None:
-                    await self.quest_data.initialize_balance(user_id, guild_id)
-                balance = await self.quest_data.get_balance(user_id, guild_id)
+                # View balance
+                if target_id == str(ctx.author.id) and amount is None:
+                    await self.quest_data.initialize_balance(target_id, guild_id)
+                balance = await self.quest_data.get_balance(target_id, guild_id)
                 balance_with_commas = "{:,}".format(balance)
 
                 embed = discord.Embed(
-                    description=f"-# {ctx.author.mention}'s balance",
+                    description=f"-# {target_member.mention}'s balance",
                     timestamp=datetime.now(),
                 )
-                embed.set_thumbnail(url=ctx.author.avatar)
+                embed.set_thumbnail(url=target_member.avatar.url if target_member.avatar else target_member.default_avatar.url)
                 embed.add_field(name="Stars", value=None, inline=True)
                 embed.add_field(
                     name="Points", value=balance_with_commas, inline=True)
                 embed.add_field(name="Class Ranking",
                                 value=f"`#{None}`", inline=False)
-                embed.set_footer(icon_url=self.bot.user.avatar)
+                embed.set_footer(icon_url=self.bot.user.avatar.url)
                 await ctx.reply(embed=embed, mention_author=False)
 
         except Exception as e:
@@ -316,6 +345,7 @@ class Quest(commands.Cog):
         return shop_data
 
 
+        
 class Quest_Slash(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
