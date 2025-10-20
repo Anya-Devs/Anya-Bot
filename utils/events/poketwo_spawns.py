@@ -787,7 +787,7 @@ class PokemonImageBuilder:
         try:
             poke_img, _ = self.fetch_pokemon_image(pokemon_name.lower().replace(" ", "-"))
         except FileNotFoundError as e:
-            print(f"Pokémon image missing: {e}")
+            #print(f"Pokémon image missing: {e}")
             return None
         type_colors = self.get_type_colors(types)
         bg_frames, durations, is_gif = self.prepare_background_frames(type_colors, bg_url)

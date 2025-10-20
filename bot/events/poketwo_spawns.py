@@ -437,7 +437,7 @@ class PoketwoSpawnDetector(commands.Cog):
             self._cleanup_temp_file(temp_path)
             return url
         except Exception as e:
-            logger.error(f"Image create/upload failed for {base_name}: {e}")
+            #logger.error(f"Image create/upload failed for {base_name}: {e}")
             self._cleanup_temp_file(temp_path)
             return None
 
