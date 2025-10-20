@@ -1418,7 +1418,6 @@ class PokemonTypeSelect(discord.ui.View):
                         type_lines.append("\n".join(row_text))
                     
                     embed.description = f"\n".join(type_lines)
-                    embed.set_thumbnail(url=user.avatar.url)
 
                     
                 else:

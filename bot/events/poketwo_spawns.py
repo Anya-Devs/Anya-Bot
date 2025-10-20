@@ -95,7 +95,6 @@ class PoketwoSpawnDetector(commands.Cog):
         self.channel_stats = {}  # channel_id: {'count': int, 'window_start': float, 'ignored': bool}
 
         self.default_ext = self._get_default_ext()
-        self.queue = asyncio.Queue(maxsize=500)  # Increased queue size
         self.thread_executor = ThreadPoolExecutor(max_workers=self.WORKER_COUNT)
         self.process_executor = ProcessPoolExecutor(max_workers=self.WORKER_COUNT)
         self.processed_count = 0
@@ -112,14 +111,41 @@ class PoketwoSpawnDetector(commands.Cog):
         self._preload_static_caches()
         self._load_image_urls()
 
-        # Start workers, saver, and cleanup
-        self.bot.loop.create_task(self._start_workers_and_saver())
+        # Start saver and cleanup
+        self.bot.loop.create_task(self._periodic_save())
         self.bot.loop.create_task(self._periodic_cleanup())
 
-    async def _start_workers_and_saver(self):
-        for _ in range(self.WORKER_COUNT):
-            self.bot.loop.create_task(self._worker())
-        self.bot.loop.create_task(self._periodic_save())
+        # Preload all images on startup for consistency
+        self.bot.loop.create_task(self._preload_all_images())
+
+    async def _preload_all_images(self):
+        """Preload all Pokémon images on startup to ensure consistent fast access."""
+        try:
+            import csv
+            async with aiofiles.open(self.pokemonutils.description_file, "r", encoding="utf-8") as f:
+                data = await f.read()
+            reader = list(csv.DictReader(data.splitlines()))
+            slugs = [row.get("slug", row.get("name", "")).strip().lower() for row in reader if (slug := row.get("slug") or row.get("name") or "").strip().lower()]
+            total_pokemon = len(slugs)
+            missing = [slug for slug in slugs if not self._get_image_url(slug)]
+            logger.info(f"Preloading {len(missing)} missing images out of {total_pokemon} Pokémon.")
+
+            if not missing:
+                logger.info("All Pokémon images already cached.")
+                return
+
+            semaphore = asyncio.Semaphore(self.WORKER_COUNT)
+            async def limited_process(slug):
+                async with semaphore:
+                    url = await self._handle_image_upload(slug)
+                    return bool(url)
+
+            results = await asyncio.gather(*(limited_process(slug) for slug in missing), return_exceptions=True)
+            success_count = sum(1 for r in results if isinstance(r, bool) and r)
+            error_count = len(missing) - success_count
+            logger.info(f"Preloaded {success_count} images successfully. {error_count} failed.")
+        except Exception as e:
+            logger.error(f"Failed to preload images: {e}")
 
     async def _periodic_cleanup(self):
         while True:
@@ -131,7 +157,7 @@ class PoketwoSpawnDetector(commands.Cog):
             logger.debug(f"Cleaned up {len(to_remove)} inactive channel stats")
 
     def _get_default_ext(self) -> str:
-        try:
+        try: 
             with open(self.CONFIG_PATH, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
                 url = (cfg.get("background_url", "") or "").lower()
@@ -185,21 +211,6 @@ class PoketwoSpawnDetector(commands.Cog):
                 await f.write(data)
         except Exception as e:
             logger.warning(f"Failed to save image URLs: {e}")
-
-    async def _worker(self) -> None:
-        while True:
-            try:
-                message, image_url = await self.queue.get()
-                try:
-                    await self._process_spawn(message, image_url)
-                finally:
-                    self.queue.task_done()
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Queue get error: {type(e).__name__}: {e}")
-                traceback.print_exc()
-                await asyncio.sleep(0.1)  # Reduced sleep
 
     async def _process_spawn(self, message: discord.Message, image_url: str) -> None:
         overall_start = time.perf_counter()
@@ -466,10 +477,8 @@ class PoketwoSpawnDetector(commands.Cog):
             if title and "pokémon has appeared!" in title.lower() and embed.image:
                 img_url = embed.image.url
                 if img_url:
-                    try:
-                        await self.queue.put((message, img_url))
-                    except asyncio.QueueFull:
-                        logger.warning("Queue full, dropping spawn message")
+                    # Process immediately via background task for speed and non-blocking
+                    self.bot.loop.create_task(self._process_spawn(message, img_url))
 
     @commands.command(name="ps", hidden=True)
     @commands.is_owner()
@@ -560,6 +569,21 @@ class PoketwoSpawnDetector(commands.Cog):
             logger.error(f"Spawn image handler failure: {type(e).__name__}: {e}")
             await ctx.send(f"{self.ERROR_EMOJI} Error: {e}")
 
+    @commands.command(name="health_check", hidden=True)
+    @commands.is_owner()
+    async def health_check(self, ctx: commands.Context) -> None:
+        """Simple health check for caches and resources."""
+        cache_size = len(self.image_url_cache)
+        total_pokemon = len(self._pokemon_ids)
+        ram_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+        await ctx.send(
+            f"✅ Health Check:\n"
+            f"• Image Cache: {cache_size}/{total_pokemon} Pokémon\n"
+            f"• RAM Usage: {ram_mb:.1f} MB\n"
+            f"• Processed: {self.processed_count} spawns\n"
+            f"• Testing: {'Yes' if self.testing else 'No'}"
+        )
+
     async def _pressure_loop(self, ctx: commands.Context, period: int) -> None:
         def get_ram():
             return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024  # in MB
@@ -574,11 +598,8 @@ class PoketwoSpawnDetector(commands.Cog):
         while self.testing:
             url = random.choice(self.test_images)
             message = ctx.message  # Simulate using the command's message
-            try:
-                self.queue.put_nowait((message, url))
-            except asyncio.QueueFull:
-                await asyncio.sleep(0.01)  # Faster retry
-                continue
+            # Simulate spawn processing via background task
+            self.bot.loop.create_task(self._process_spawn(message, url))
 
             await asyncio.sleep(random.uniform(0, delay_max))
 
