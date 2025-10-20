@@ -1334,3 +1334,11 @@ class DatabaseManager:
                     await interaction.send(f"An error occurred: {str(error)}")
                 except Exception as e:
                     logger.error(f"Failed to send error message: {e}")
+
+
+
+
+
+
+
+                    

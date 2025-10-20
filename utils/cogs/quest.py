@@ -1055,9 +1055,472 @@ class Quest_Data(commands.Cog):
 
 
 
+class ProfileView(View):
+    def __init__(self, ctx, member, age, sexuality, bio, stories, stella_points, quest_data):
+        super().__init__(timeout=300)
+        self.ctx = ctx
+        self.member = member
+        self.age = age
+        self.sexuality = sexuality
+        self.bio = bio
+        self.stories = stories
+        self.stella_points = stella_points
+        self.quest_data = quest_data
+        self.current_page = 0
+        self.total_pages = max(1, 1 + len(stories))
+        self.message = None
+        self.update_buttons()
 
+    async def generate_page_image(self, page):
+        if page == 0:
+            # Bio page - no cost
+            return None, ""
+        else:
+            story_index = page - 1
+            if story_index >= len(self.stories):
+                return None, "No story available."
+            # Story page - cost 1000 stella
+            cost = 1000
+            if self.stella_points < cost:
+                raise ValueError(f"Insufficient Stella Points. Need {cost} to view this story page.")
+            # Deduct points
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_collection = db["Servers"]
+            await server_collection.update_one(
+                {"guild_id": self.ctx.guild.id, f"members.{self.member.id}": {"$exists": True}},
+                {"$inc": {f"members.{self.member.id}.stella_points": -cost}}
+            )
+            self.stella_points -= cost
+            return None, ""
 
+    def generate_embed(self, page):
+        now = datetime.now()
+        delta = now - self.member.joined_at
+        years = delta.days // 365
+        months = (delta.days % 365) // 30
+        duration = f"{years} years, {months} months" if years or months else "Recently joined"
+        
+        if page == 0:
+            embed = discord.Embed(
+                title=f"{self.member.display_name}'s Profile",
+                color=primary_color(),
+                timestamp=now,
+            )
+            embed.add_field(name="Name", value=self.member.display_name, inline=True)
+            embed.add_field(name="Age", value=str(self.age), inline=True)
+            embed.add_field(name="Member Since", value=duration, inline=True)
+            embed.add_field(name="Sexuality", value=self.sexuality, inline=True)
+            embed.add_field(name="About Me", value=self.bio, inline=False)
+        else:
+            story_index = page - 1
+            if story_index < len(self.stories):
+                story = self.stories[story_index]
+                embed = discord.Embed(
+                    title=f"{self.member.display_name}'s Life Story - Page {page + 1}",
+                    color=primary_color(),
+                    timestamp=now,
+                )
+                embed.add_field(name="Story", value=story[:1024], inline=False)
+            else:
+                embed = discord.Embed(
+                    title="End of Stories",
+                    description="No more stories to display.",
+                    color=primary_color(),
+                    timestamp=now,
+                )
+        
+        embed.set_thumbnail(url=self.member.avatar.url if self.member.avatar else None)
+        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} | Stella Points: {self.stella_points:,}")
+        return embed
 
+    def update_buttons(self):
+        self.clear_items()
+        if self.current_page > 0:
+            self.add_item(self.PrevButton(self))
+        self.add_item(self.CustomizeButton(self))
+        if self.current_page < self.total_pages - 1:
+            self.add_item(self.NextButton(self))
+
+    class PrevButton(Button):
+        def __init__(self, view):
+            super().__init__(emoji='◀️', style=discord.ButtonStyle.secondary)
+
+        async def callback(self, interaction: discord.Interaction):
+            if interaction.user.id != self.view.member.id and interaction.user.id != self.view.ctx.author.id:
+                await interaction.response.send_message("You can only navigate profiles you invoked or own.", ephemeral=True)
+                return
+            self.view.current_page -= 1
+            await self._update_page(interaction)
+
+        async def _update_page(self, interaction):
+            try:
+                await self.view.generate_page_image(self.view.current_page)
+                embed = self.view.generate_embed(self.view.current_page)
+                self.view.update_buttons()
+                kwargs = {"embed": embed, "view": self.view}
+                await interaction.response.edit_message(**kwargs)
+            except ValueError as ve:
+                await interaction.response.send_message(str(ve), ephemeral=True)
+            except Exception as e:
+                traceback.print_exc()
+                await interaction.response.send_message(f"Error updating page: {e}", ephemeral=True)
+
+    class NextButton(Button):
+        def __init__(self, view):
+            super().__init__(emoji='▶️', style=discord.ButtonStyle.secondary)
+
+        async def callback(self, interaction: discord.Interaction):
+            if interaction.user.id != self.view.member.id and interaction.user.id != self.view.ctx.author.id:
+                await interaction.response.send_message("You can only navigate profiles you invoked or own.", ephemeral=True)
+                return
+            self.view.current_page += 1
+            await self._update_page(interaction)
+
+        async def _update_page(self, interaction):
+            try:
+                await self.view.generate_page_image(self.view.current_page)
+                embed = self.view.generate_embed(self.view.current_page)
+                self.view.update_buttons()
+                kwargs = {"embed": embed, "view": self.view}
+                await interaction.response.edit_message(**kwargs)
+            except ValueError as ve:
+                await interaction.response.send_message(str(ve), ephemeral=True)
+                self.view.current_page -= 1  # Revert
+            except Exception as e:
+                traceback.print_exc()
+                await interaction.response.send_message(f"Error updating page: {e}", ephemeral=True)
+                self.view.current_page -= 1  # Revert
+
+    class CustomizeButton(Button):
+        def __init__(self, view):
+            super().__init__(label="Customize", style=discord.ButtonStyle.primary)
+
+        async def callback(self, interaction: discord.Interaction):
+            if interaction.user.id != self.view.member.id:
+                await interaction.response.send_message("Only the profile owner can customize this profile.", ephemeral=True)
+                return
+            customize_embed = discord.Embed(
+                title="Customize Profile",
+                description="Select an option to edit:",
+                color=primary_color(),
+            )
+            view = self.view.CustomizeSelectView(self.view)
+            await interaction.response.send_message(embed=customize_embed, view=view, ephemeral=True)
+
+    class CustomizeSelectView(View):
+        def __init__(self, profile_view):
+            super().__init__(timeout=300)
+            self.profile_view = profile_view
+            options = [
+                discord.SelectOption(label="Edit Age", emoji="📅"),
+                discord.SelectOption(label="Edit Sexuality", emoji="❤️"),
+                discord.SelectOption(label="Edit Bio", emoji="📝"),
+                discord.SelectOption(label="Manage Life Stories", emoji="📖"),
+            ]
+            select = discord.ui.Select(placeholder="Choose what to edit", options=options)
+            select.callback = self.select_callback
+            self.add_item(select)
+
+        async def select_callback(self, interaction: discord.Interaction):
+            choice = interaction.values[0]
+            if choice == "Edit Age":
+                modal = self.profile_view.EditAgeModal(self.profile_view)
+            elif choice == "Edit Sexuality":
+                modal = self.profile_view.EditSexualityModal(self.profile_view)
+            elif choice == "Edit Bio":
+                modal = self.profile_view.EditBioModal(self.profile_view)
+            elif choice == "Manage Life Stories":
+                # Prompt for action: Add or Edit
+                stories_embed = discord.Embed(
+                    title="Manage Life Stories",
+                    description=f"You have {len(self.profile_view.stories)} stories.\nSelect action:",
+                    color=primary_color(),
+                )
+                options = [
+                    discord.SelectOption(label="Add New Story", emoji="➕", value="add"),
+                    discord.SelectOption(label="Edit Existing Story", emoji="✏️", value="edit") if self.profile_view.stories else None,
+                ]
+                options = [opt for opt in options if opt is not None]
+                story_action_select = discord.ui.Select(placeholder="Choose action", options=options, max_values=1)
+                story_action_select.callback = self.story_action_callback
+                story_view = View(timeout=300)
+                story_view.add_item(story_action_select)
+                await interaction.response.edit_message(embed=stories_embed, view=story_view)
+                return
+            await interaction.response.send_modal(modal)
+
+        async def story_action_callback(self, interaction: discord.Interaction):
+            value = interaction.values[0]
+            if value == "add":
+                modal = self.profile_view.AddStoryModal(self.profile_view)
+                await interaction.response.send_modal(modal)
+            elif value == "edit":
+                # Prompt for story number
+                num_stories = len(self.profile_view.stories)
+                if num_stories == 0:
+                    await interaction.response.send_message("No stories to edit.", ephemeral=True)
+                    return
+                edit_story_modal = self.profile_view.EditStoryNumberModal(self.profile_view)
+                await interaction.response.send_modal(edit_story_modal)
+
+    class EditStoryNumberModal(Modal):
+        def __init__(self, profile_view):
+            super().__init__(title="Edit Story Number")
+            self.profile_view = profile_view
+            num_stories = len(self.profile_view.stories)
+            self.story_input = TextInput(
+                label="Story Number",
+                placeholder=f"Enter story number (1-{num_stories})",
+                style=discord.TextStyle.short,
+                max_length=3,
+            )
+            self.add_item(self.story_input)
+
+        async def on_submit(self, interaction: discord.Interaction):
+            try:
+                story_num = int(self.story_input.value)
+                num_stories = len(self.profile_view.stories)
+                if 1 <= story_num <= num_stories:
+                    index = story_num - 1
+                    modal = self.profile_view.EditStoryModal(self.profile_view, index)
+                    await interaction.response.send_modal(modal)
+                else:
+                    await interaction.response.send_message(f"Invalid story number. Must be between 1 and {num_stories}.", ephemeral=True)
+            except ValueError:
+                await interaction.response.send_message("Please enter a valid number.", ephemeral=True)
+
+    class EditAgeModal(Modal):
+        def __init__(self, profile_view):
+            super().__init__(title="Edit Age")
+            self.profile_view = profile_view
+            self.age_input = TextInput(
+                label="Age",
+                placeholder="Enter your age (number)",
+                style=discord.TextStyle.short,
+                max_length=3,
+                default=str(self.profile_view.age) if self.profile_view.age != "Not set" else "",
+            )
+            self.add_item(self.age_input)
+
+        async def on_submit(self, interaction: discord.Interaction):
+            try:
+                age = int(self.age_input.value)
+                db = self.profile_view.quest_data.mongoConnect[self.profile_view.quest_data.DB_NAME]
+                server_collection = db["Servers"]
+                await server_collection.update_one(
+                    {"guild_id": self.profile_view.ctx.guild.id},
+                    {"$set": {f"members.{self.profile_view.member.id}.profile.age": age}},
+                    upsert=True,
+                )
+                self.profile_view.age = age
+                await self._update_profile(interaction)
+                await interaction.response.send_message("Age updated successfully!", ephemeral=True)
+            except ValueError:
+                await interaction.response.send_message("Please enter a valid number for age.", ephemeral=True)
+            except Exception as e:
+                traceback.print_exc()
+                await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
+
+        async def _update_profile(self, interaction):
+            try:
+                await self.profile_view.generate_page_image(self.profile_view.current_page)
+                embed = self.profile_view.generate_embed(self.profile_view.current_page)
+                self.profile_view.update_buttons()
+                kwargs = {"embed": embed, "view": self.profile_view}
+                await self.profile_view.message.edit(**kwargs)
+            except Exception as e:
+                traceback.print_exc()
+
+    class EditSexualityModal(Modal):
+        def __init__(self, profile_view):
+            super().__init__(title="Edit Sexuality")
+            self.profile_view = profile_view
+            self.sexuality_input = TextInput(
+                label="Sexuality",
+                placeholder="Enter your sexuality",
+                style=discord.TextStyle.short,
+                max_length=50,
+                default=self.profile_view.sexuality if self.profile_view.sexuality != "Not set" else "",
+            )
+            self.add_item(self.sexuality_input)
+
+        async def on_submit(self, interaction: discord.Interaction):
+            try:
+                sexuality = self.sexuality_input.value.strip() or "Not set"
+                db = self.profile_view.quest_data.mongoConnect[self.profile_view.quest_data.DB_NAME]
+                server_collection = db["Servers"]
+                await server_collection.update_one(
+                    {"guild_id": self.profile_view.ctx.guild.id},
+                    {"$set": {f"members.{self.profile_view.member.id}.profile.sexuality": sexuality}},
+                    upsert=True,
+                )
+                self.profile_view.sexuality = sexuality
+                await self._update_profile(interaction)
+                await interaction.response.send_message("Sexuality updated successfully!", ephemeral=True)
+            except Exception as e:
+                traceback.print_exc()
+                await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
+
+        async def _update_profile(self, interaction):
+            try:
+                await self.profile_view.generate_page_image(self.profile_view.current_page)
+                embed = self.profile_view.generate_embed(self.profile_view.current_page)
+                self.profile_view.update_buttons()
+                kwargs = {"embed": embed, "view": self.profile_view}
+                await self.profile_view.message.edit(**kwargs)
+            except Exception as e:
+                traceback.print_exc()
+
+    class EditBioModal(Modal):
+        def __init__(self, profile_view):
+            super().__init__(title="Edit Bio")
+            self.profile_view = profile_view
+            self.bio_input = TextInput(
+                label="Bio",
+                placeholder="Tell us a little about yourself...",
+                style=discord.TextStyle.paragraph,
+                max_length=1024,
+                default=self.profile_view.bio if self.profile_view.bio != "No bio set." else "",
+            )
+            self.add_item(self.bio_input)
+
+        async def on_submit(self, interaction: discord.Interaction):
+            try:
+                bio = self.bio_input.value.strip() or "No bio set."
+                db = self.profile_view.quest_data.mongoConnect[self.profile_view.quest_data.DB_NAME]
+                server_collection = db["Servers"]
+                await server_collection.update_one(
+                    {"guild_id": self.profile_view.ctx.guild.id},
+                    {"$set": {f"members.{self.profile_view.member.id}.profile.bio": bio}},
+                    upsert=True,
+                )
+                self.profile_view.bio = bio
+                await self._update_profile(interaction)
+                await interaction.response.send_message("Bio updated successfully!", ephemeral=True)
+            except Exception as e:
+                traceback.print_exc()
+                await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
+
+        async def _update_profile(self, interaction):
+            try:
+                await self.profile_view.generate_page_image(self.profile_view.current_page)
+                embed = self.profile_view.generate_embed(self.profile_view.current_page)
+                self.profile_view.update_buttons()
+                kwargs = {"embed": embed, "view": self.profile_view}
+                await self.profile_view.message.edit(**kwargs)
+            except Exception as e:
+                traceback.print_exc()
+
+    class AddStoryModal(Modal):
+        def __init__(self, profile_view):
+            super().__init__(title="Add Life Story")
+            self.profile_view = profile_view
+            self.story_input = TextInput(
+                label="Story",
+                placeholder="Share a story from your life...",
+                style=discord.TextStyle.paragraph,
+                max_length=2000,
+            )
+            self.add_item(self.story_input)
+
+        async def on_submit(self, interaction: discord.Interaction):
+            try:
+                story = self.story_input.value.strip()
+                if not story:
+                    await interaction.response.send_message("Story cannot be empty.", ephemeral=True)
+                    return
+                db = self.profile_view.quest_data.mongoConnect[self.profile_view.quest_data.DB_NAME]
+                server_collection = db["Servers"]
+                await server_collection.update_one(
+                    {"guild_id": self.profile_view.ctx.guild.id},
+                    {"$push": {f"members.{self.profile_view.member.id}.profile.stories": story}},
+                    upsert=True,
+                )
+                self.profile_view.stories.append(story)
+                self.profile_view.total_pages = max(1, 1 + len(self.profile_view.stories))
+                await self._update_profile(interaction)
+                await interaction.response.send_message("Life story added successfully!", ephemeral=True)
+            except Exception as e:
+                traceback.print_exc()
+                await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
+
+        async def _update_profile(self, interaction):
+            try:
+                await self.profile_view.generate_page_image(self.profile_view.current_page)
+                embed = self.profile_view.generate_embed(self.profile_view.current_page)
+                self.profile_view.update_buttons()
+                kwargs = {"embed": embed, "view": self.profile_view}
+                await self.profile_view.message.edit(**kwargs)
+            except Exception as e:
+                traceback.print_exc()
+
+    class EditStoryModal(Modal):
+        def __init__(self, profile_view, story_index):
+            super().__init__(title=f"Edit Life Story {story_index + 1}")
+            self.profile_view = profile_view
+            self.story_index = story_index
+            current_story = self.profile_view.stories[story_index]
+            self.story_input = TextInput(
+                label="Story",
+                placeholder="Edit your story...",
+                style=discord.TextStyle.paragraph,
+                max_length=2000,
+                default=current_story,
+            )
+            self.add_item(self.story_input)
+
+        async def on_submit(self, interaction: discord.Interaction):
+            try:
+                story = self.story_input.value.strip()
+                if not story:
+                    await interaction.response.send_message("Story cannot be empty.", ephemeral=True)
+                    return
+                db = self.profile_view.quest_data.mongoConnect[self.profile_view.quest_data.DB_NAME]
+                server_collection = db["Servers"]
+                await server_collection.update_one(
+                    {"guild_id": self.profile_view.ctx.guild.id},
+                    {"$set": {f"members.{self.profile_view.member.id}.profile.stories.{self.story_index}": story}},
+                    upsert=True,
+                )
+                self.profile_view.stories[self.story_index] = story
+                await self._update_profile(interaction)
+                await interaction.response.send_message("Life story updated successfully!", ephemeral=True)
+            except Exception as e:
+                traceback.print_exc()
+                await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
+
+        async def _update_profile(self, interaction):
+            try:
+                await self.profile_view.generate_page_image(self.profile_view.current_page)
+                embed = self.profile_view.generate_embed(self.profile_view.current_page)
+                self.profile_view.update_buttons()
+                kwargs = {"embed": embed, "view": self.profile_view}
+                await self.profile_view.message.edit(**kwargs)
+            except Exception as e:
+                traceback.print_exc()
+
+    async def start(self, ctx):
+        try:
+            await self.generate_page_image(self.current_page)
+            embed = self.generate_embed(self.current_page)
+            kwargs = {"embed": embed, "view": self}
+            self.message = await ctx.reply(**kwargs)
+        except ValueError as ve:
+            error_embed = discord.Embed(
+                title="Insufficient Points",
+                description=str(ve),
+                color=0xff0000,
+            )
+            await ctx.reply(embed=error_embed)
+        except Exception as e:
+            traceback.print_exc()
+            error_embed = discord.Embed(
+                title="Error",
+                description=f"An error occurred while starting profile: {e}",
+                color=0xff0000,
+            )
+            await ctx.reply(embed=error_embed)
+ 
 
 #----------------------------------------------------
 
@@ -1575,7 +2038,7 @@ class PaginationButton(discord.ui.Button):
                 f"An error occurred while navigating: {e}", ephemeral=True
             )
 
-# Removed duplicate/unused ProfileCustomizationSelect classes
+
 
 #----------------------------------------------------------
 
@@ -1622,10 +2085,10 @@ class ShopConfig:
         
         # Materials
         "materials": "🛠️",
-        "red_indicator": "❌",
-        "yellow_indicator": "⚠️",
-        "green_indicator": "✅",
-        
+        "red_indicator": "<:red:1261639413943762944>",
+        "yellow_indicator": "<:yellow:1261639412253724774>",
+        "green_indicator": "<:green:1261639410181476443>",
+
         # Gacha
         "gacha": "🎲"
     }

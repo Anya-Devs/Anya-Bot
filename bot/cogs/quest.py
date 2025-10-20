@@ -184,8 +184,36 @@ class Quest(commands.Cog):
         embed.add_field(name="Roles", value=roles_list, inline=False)
 
         await ctx.reply(embed=embed, mention_author=False)
-        
-        
+    
+
+    @commands.command(name="profile", aliases=["pf"])
+    async def profile(self, ctx, member: discord.Member = None):
+     if member is None:
+        member = ctx.author
+
+     user_id = member.id
+     guild_id = ctx.guild.id
+     balance = await self.quest_data.get_balance(user_id, guild_id)
+
+     db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+     server_collection = db["Servers"]
+     doc = await server_collection.find_one({"guild_id": guild_id})
+     if not doc:
+        await ctx.reply("No server data found.")
+        return
+
+     member_data = doc.get("members", {}).get(str(user_id), {})
+     profile = member_data.get("profile", {})
+     age = profile.get("age", "Not set")
+     sexuality = profile.get("sexuality", "Not set")
+     bio = profile.get("bio", "No bio set.")
+     stories = profile.get("stories", [])
+
+     stella_points = balance  # Using the fetched balance
+
+     view = ProfileView(ctx, member, age, sexuality, bio, stories, stella_points, self.quest_data)
+     await view.start(ctx)
+
     @commands.command(name="inventory", aliases=["inv"])
     async def inventory(self, ctx):
      try:

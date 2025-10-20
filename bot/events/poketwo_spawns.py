@@ -7,7 +7,7 @@ import asyncio
 import logging
 import traceback
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-
+ 
 from motor.motor_asyncio import AsyncIOMotorClient
 import aiohttp
 import aiofiles
@@ -39,7 +39,6 @@ class PoketwoSpawnDetector(commands.Cog):
     TARGET_BOT_ID = 716390085896962058
     MAX_DYNAMIC_CACHE_SIZE = 2000
     MAX_STATIC_CACHE_SIZE = 10000
-    MAX_PING_CACHE_SIZE = 500
     WORKER_COUNT = 4  # Reduced for cloud envs like Render.com
     BATCH_SIZE = 20  # Increased batch size for generation
     PERIODIC_SAVE_INTERVAL = 300  # Increased to reduce I/O
@@ -88,7 +87,6 @@ class PoketwoSpawnDetector(commands.Cog):
         self.base_cache = lru_cache(maxsize=self.MAX_DYNAMIC_CACHE_SIZE)(self._get_base_name)
         self.server_cache = self._get_server_config
         self.server_config_cache = OrderedDict()
-        self.ping_cache = OrderedDict()  # (guild_id, base_name): (shiny_collect, type_pings, quest_pings)
         self.desc_cache = {}  # Static, preloaded
         self.type_cache = {}  # Static, preloaded
         self.alt_cache = {}  # Static, preloaded
@@ -230,20 +228,13 @@ class PoketwoSpawnDetector(commands.Cog):
             desc, dex = desc_data[:2]
             dex = self._pokemon_ids.get(base_name, dex)
 
-            key = (sid, base_name)
             ping_start = time.perf_counter()
-            if key not in self.ping_cache:
-                # Parallelize ping fetches
-                shiny_collect, type_pings, quest_pings = await asyncio.gather(
-                    self.pokemonutils.get_ping_users(message.guild, base_name),
-                    self.pokemonutils.get_type_ping_users(message.guild, base_name),
-                    self.pokemonutils.get_quest_ping_users(message.guild, base_name),
-                )
-                self.ping_cache[key] = (shiny_collect, type_pings, quest_pings)
-                if len(self.ping_cache) > self.MAX_PING_CACHE_SIZE:
-                    self.ping_cache.popitem(last=False)
-            else:
-                shiny_collect, type_pings, quest_pings = self.ping_cache[key]
+            # Always fetch fresh pings to respect removals
+            shiny_collect, type_pings, quest_pings = await asyncio.gather(
+                self.pokemonutils.get_ping_users(message.guild, base_name),
+                self.pokemonutils.get_type_ping_users(message.guild, base_name),
+                self.pokemonutils.get_quest_ping_users(message.guild, base_name),
+            )
             ping_end = time.perf_counter()
             ping_time = ping_end - ping_start
 
@@ -273,6 +264,7 @@ class PoketwoSpawnDetector(commands.Cog):
                 if url:
                     embed = discord.Embed()
                     embed.set_image(url=url)
+                    embed.set_footer(text="Predicted in {:.2f}s".format(pred_time+image_time))
                     await message.channel.send(
                         content=ping_msg,
                         embed=embed,

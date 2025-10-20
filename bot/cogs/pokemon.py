@@ -94,7 +94,7 @@ class PoketwoCommands(commands.Cog):
 
         # Files & Managers
         self.pokemon_names_file = "data/commands/pokemon/pokemon_names.csv"
-        self.pokemon_types_file = "data/commands/commands/pokemon/pokemon_types.csv"
+        self.pokemon_types_file = "data/commands/pokemon/pokemon_types.csv"
         self.pokemon_rarity_file = "data/commands/pokemon/pokemon_rarity.csv"
         self.embed_default_color = primary_color()
         self.RESULTS_PER_PAGE = 10

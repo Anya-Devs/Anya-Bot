@@ -273,14 +273,17 @@ class PokemonUtils:
         return "", fallback_id, {}
 
     def get_pokemon_types(self, slug):
-        row = self.get_pokemon_row(slug)
+        data = self.load_full_pokemon_data()
+        row = data.get(slug.lower(), {})
         if not row:
             return []
         types = []
-        if row.get("type.0"):
-            types.append(row["type.0"].strip().lower())
-        if row.get("type.1") and row["type.1"].strip():
-            types.append(row["type.1"].strip().lower())
+        for i in range(3):  
+            t_key = f"type.{i}"
+            if t := row.get(t_key):
+                t = t.strip().lower()
+                if t:
+                    types.append(t)
         return types
 
     def get_pokemon_region(self, slug):

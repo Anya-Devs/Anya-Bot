@@ -1,0 +1,71 @@
+{
+    "template": "data/commands/quest/bio.png",
+    "fonts": {
+        "header_font": "data/commands/help/menu/initial/style/assets/font/valentine.ttf",
+        "body_font": "data/commands/help/menu/initial/style/assets/font/arial.ttf"
+    },
+    "fields": {
+        "header": {
+            "text": "bio",
+            "x": 50,
+            "y": 50,
+            "font_size": 48,
+            "color": "#000000",
+            "font": "header_font"
+        },
+        "name": {
+            "text": "{name}",
+            "x": 50,
+            "y": 120,
+            "font_size": 32,
+            "color": "#000000",
+            "font": "body_font"
+        },
+        "age": {
+            "text": "Age: {age}",
+            "x": 50,
+            "y": 170,
+            "font_size": 24,
+            "color": "#000000",
+            "font": "body_font"
+        },
+        "sexuality": {
+            "text": "Sexuality: {sex}",
+            "x": 50,
+            "y": 220,
+            "font_size": 24,
+            "color": "#000000",
+            "font": "body_font"
+        },
+        "tis": {
+            "text": "Time in Server: {tis}",
+            "x": 50,
+            "y": 270,
+            "font_size": 24,
+            "color": "#000000",
+            "font": "body_font"
+        },
+        "bio_text": {
+            "text": "{bio}",
+            "x": 50,
+            "y": 350,
+            "font_size": 20,
+            "color": "#ffff00",
+            "max_width": 700,
+            "max_lines": 10,
+            "font": "body_font"
+        }
+    },
+    "avatar": {
+        "x": 500,
+        "y": 50,
+        "size": 200
+    },
+    "overlay": {
+        "map": {
+            "#252525": "{image/color}",
+            "#000000": "#1a1a1a"
+        }
+    },
+    "output_size": [800, 600]
+}
