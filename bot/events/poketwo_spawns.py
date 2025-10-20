@@ -122,7 +122,7 @@ class PoketwoSpawnDetector(commands.Cog):
         """Preload all Pokémon images on startup to ensure consistent fast access."""
         try:
             import csv
-            async with aiofiles.open(self.pokemonutils.description_file, "r", encoding="utf-8") as f:
+            async with aiofiles.open(self.pokemonutils.pokemon_description_file, "r", encoding="utf-8") as f:
                 data = await f.read()
             reader = list(csv.DictReader(data.splitlines()))
             slugs = [row.get("slug", row.get("name", "")).strip().lower() for row in reader if (slug := row.get("slug") or row.get("name") or "").strip().lower()]
