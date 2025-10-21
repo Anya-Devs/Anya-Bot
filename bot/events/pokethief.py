@@ -220,7 +220,7 @@ class EventGate(commands.Cog):
                     "Nice job, <@{user_id}>! You're one step closer to finding a shiny.",
                     "Keep hunting, <@{user_id}>! That shiny is waiting for you.",
                     "You're making progress, <@{user_id}>! Stay determined.",
-                    "Almost there, <@{user_id}>! One step closer to the shiny Pokémon."
+                    "Almost there, <@{user_id}>! One step closer to the shiny Pokémon.",
                     "Best of luck on your shiny hunt, <@{user_id}>!"
                 ]
                 embed = Embed(
