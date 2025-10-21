@@ -70,8 +70,6 @@ class Pokemon(commands.Cog):
             await ctx.send(f"Failed to parse JSON for `{pid}`.")
 
 
-
-
 class PoketwoCommands(commands.Cog):
     """PokéTwo-like commands with .pt command group."""
 
@@ -100,13 +98,15 @@ class PoketwoCommands(commands.Cog):
         try:
             self.mongo_sh = MongoShHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
             self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
-        except:
+        except Exception as e:
+            logger.error(f"Failed to initialize MongoDB: {e}")
             self.mongo = None
 
         try:
             self.pe = Pokemon_Emojis(bot)
             self.ph = PokemonNameHelper()
-        except:
+        except Exception as e:
+            logger.error(f"Failed to initialize Pokemon Emojis/NameHelper: {e}")
             self.pe = None
             self.ph = None
 
@@ -145,6 +145,7 @@ class PoketwoCommands(commands.Cog):
                         for p in row["types"].strip('"').split(','):
                             types.add(p.strip().lower())
         except FileNotFoundError:
+            logger.warning(f"Pokemon types file not found: {self.pokemon_types_file}")
             types = {"normal", "fire", "water", "electric", "grass", "ice", "fighting", "poison", "ground",
                      "flying", "psychic", "bug", "rock", "ghost", "dragon", "dark", "steel", "fairy"}
         return sorted(types)
@@ -154,6 +155,7 @@ class PoketwoCommands(commands.Cog):
 
     async def get_server_config(self, guild_id: int) -> dict:
         if not self.mongo:
+            logger.warning("MongoDB not initialized, returning default config")
             return {
                 "images_enabled": True,
                 "buttons_enabled": True,
@@ -176,6 +178,7 @@ class PoketwoCommands(commands.Cog):
             "quest_enabled": True
         }
         config.update({k: config.get(k, v) for k, v in defaults.items()})
+        logger.debug(f"Retrieved server config for guild {guild_id}: {config}")
         return config
 
     async def show_help(self, ctx, topic: str = None):
@@ -192,6 +195,7 @@ class PoketwoCommands(commands.Cog):
     @commands.cooldown(1, 5, commands.BucketType.user)
     @pt.command(name="help")
     async def pt_help(self, ctx, topic: str = None):
+        # Assuming pt_help_description is defined elsewhere
         description = pt_help_description.format(*[ctx.prefix] * pt_help_description.count("{}"))
         embed = discord.Embed(title="How to Use (.pt)", description=description, color=self.embed_default_color)
 
@@ -303,9 +307,13 @@ class PoketwoCommands(commands.Cog):
             config.pop("rare_role", None)
             msg = f"{self.success_emoji} Rare Pokémon role removed."
 
-        await self.mongo.db[self.server_config_collection].update_one(
+        result = await self.mongo.db[self.server_config_collection].update_one(
             {"guild_id": guild_id}, {"$set": config}, upsert=True
         )
+        if result.modified_count or result.upserted_id:
+            logger.info(f"Updated rare role for guild {guild_id}: {config}")
+        else:
+            logger.warning(f"Failed to update rare role for guild {guild_id}")
         await ctx.reply(msg, mention_author=False)
 
     @config_ping.command(name="regional")
@@ -322,9 +330,13 @@ class PoketwoCommands(commands.Cog):
             config.pop("regional_role", None)
             msg = f"{self.success_emoji} Regional Pokémon role removed."
 
-        await self.mongo.db[self.server_config_collection].update_one(
+        result = await self.mongo.db[self.server_config_collection].update_one(
             {"guild_id": guild_id}, {"$set": config}, upsert=True
         )
+        if result.modified_count or result.upserted_id:
+            logger.info(f"Updated regional role for guild {guild_id}: {config}")
+        else:
+            logger.warning(f"Failed to update regional role for guild {guild_id}")
         await ctx.reply(msg, mention_author=False)
 
     @config.command(name="toggle")
@@ -345,24 +357,65 @@ class PoketwoCommands(commands.Cog):
         updates = {}
 
         if feature == "all":
-            new_state = not config.get("rare_enabled", True)
+            # Check if any notification feature is enabled to determine the new state
+            notification_keys = ["rare_enabled", "regional_enabled", "cl_enabled", "sh_enabled", "type_enabled", "quest_enabled"]
+            any_enabled = any(config.get(key, True) for key in notification_keys)
+            new_state = not any_enabled
             for f in ["rare", "regional", "cl", "sh", "type", "quest"]:
                 updates[f"{f}_enabled"] = new_state
         else:
             key = f"{feature}_enabled"
             updates[key] = not config.get(key, True)
 
-        await self.mongo.db[self.server_config_collection].update_one(
+        result = await self.mongo.db[self.server_config_collection].update_one(
             {"guild_id": guild_id}, {"$set": updates}, upsert=True
         )
 
+        # Refresh config to reflect changes
         config = await self.get_server_config(guild_id)
-        feature_name = feature.title() if feature != "cl" else "Collection"
-        if feature == "all":
-            msg = f"{self.success_emoji} All notification pings {'enabled' if new_state else 'disabled'}."
+        
+        # Create the updated configuration embed
+        rare_role = ctx.guild.get_role(config.get("rare_role"))
+        regional_role = ctx.guild.get_role(config.get("regional_role"))
+        embed = discord.Embed(
+            title="Pokétwo Server Configuration",
+            description="Current settings for spawns and notifications.",
+            color=self.embed_default_color
+        )
+        embed.add_field(
+            name="Spawn Settings",
+            value=(
+                f"- Images Enabled: `{'✅' if config.get('images_enabled', True) else '❌'}`\n"
+                f"- Buttons Enabled: `{'✅' if config.get('buttons_enabled', True) else '❌'}`"
+            ),
+            inline=False
+        )
+        embed.add_field(
+            name="Notification Settings",
+            value=(
+                f"- Rare Pokémon: `{'✅' if config.get('rare_enabled', True) else '❌'}` ({rare_role.mention if rare_role else 'Not set'})\n"
+                f"- Regional Pokémon: `{'✅' if config.get('regional_enabled', True) else '❌'}` ({regional_role.mention if regional_role else 'Not set'})\n"
+                f"- Collection Pings: `{'✅' if config.get('cl_enabled', True) else '❌'}`\n"
+                f"- Shiny Pings: `{'✅' if config.get('sh_enabled', True) else '❌'}`\n"
+                f"- Type Pings: `{'✅' if config.get('type_enabled', True) else '❌'}`\n"
+                f"- Quest Pings: `{'✅' if config.get('quest_enabled', True) else '❌'}`"
+            ),
+            inline=False
+        )
+
+        # Verify the update was successful and send the embed
+        if result.modified_count or result.upserted_id:
+            logger.info(f"Toggled feature(s) for guild {guild_id}: {updates}")
+            feature_name = feature.title() if feature != "cl" else "Collection"
+            if feature == "all":
+                embed.set_footer(text=f"All notification pings {'enabled' if new_state else 'disabled'}.")
+            else:
+                embed.set_footer(text=f"{feature_name} {'enabled' if config[key] else 'disabled'}.")
         else:
-            msg = f"{self.success_emoji} {feature_name} {'enabled' if config[key] else 'disabled'}."
-        await ctx.reply(msg, mention_author=False)
+            logger.error(f"Failed to toggle feature {feature} for guild {guild_id}")
+            embed.set_footer(text=f"Failed to toggle {feature_name}. Please try again.")
+
+        await ctx.reply(embed=embed, mention_author=False)
 
     # -------------------
     # Type Ping
@@ -373,7 +426,8 @@ class PoketwoCommands(commands.Cog):
         try:
             current_types_data = await self.mongo.db["type_ping_types"].find({"user_id": user_id}).to_list(None)
             current_types = [entry["type"] for entry in current_types_data]
-        except:
+        except Exception as e:
+            logger.error(f"Failed to fetch type pings for user {user_id}: {e}")
             current_types = []
 
         view = PokemonTypeSelect(self.bot, user_id, "type_ping", self.mongo, self.pokemon_types, current_types)
@@ -390,7 +444,8 @@ class PoketwoCommands(commands.Cog):
         try:
             current_regions_data = await self.mongo.db[self.quest_collection].find_one({"user_id": user_id})
             current_regions = current_regions_data.get("regions", []) if current_regions_data else []
-        except:
+        except Exception as e:
+            logger.error(f"Failed to fetch quest pings for user {user_id}: {e}")
             current_regions = []
 
         available_regions = sorted(list(self.load_quest_regions()))
@@ -430,6 +485,7 @@ class PoketwoCommands(commands.Cog):
             flags = self.flag_parser.parse_flags_from_string(pokemon or "")
             await self.collection_handler.handle_collection(ctx, self.shiny_collection, action, pokemon=pokemon, flags_obj=flags, max_one=True)
         except Exception as e:
+            logger.error(f"Error in shiny_hunt command: {e}")
             await ctx.reply(embed=discord.Embed(description=f"❌ Error: {e}", color=self.embed_default_color))
 
     # -------------------
@@ -493,7 +549,6 @@ class PoketwoCommands(commands.Cog):
         guild_id = ctx.guild.id
         await self.mongo_sh.remove_shiny_log_channel(guild_id)
         await ctx.reply("✅ Shiny log channel removed.", mention_author=False)
-
 
 def setup(bot):
     bot.add_cog(Pokemon(bot))

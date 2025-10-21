@@ -7,7 +7,7 @@ import asyncio
 import logging
 import traceback
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
- 
+
 from motor.motor_asyncio import AsyncIOMotorClient
 import aiohttp
 import aiofiles
@@ -27,9 +27,7 @@ import random
 import time
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 logger = logging.getLogger(__name__)
-
 
 class PoketwoSpawnDetector(commands.Cog):
     TARGET_BOT_ID = 716390085896962058
@@ -80,8 +78,6 @@ class PoketwoSpawnDetector(commands.Cog):
         self._pokemon_ids = self.pokemonutils.load_pokemon_ids()
 
         self.base_cache = lru_cache(maxsize=self.MAX_DYNAMIC_CACHE_SIZE)(self._get_base_name)
-        self.server_cache = self._get_server_config
-        self.server_config_cache = OrderedDict()
         self.desc_cache = {}
         self.type_cache = {}
         self.alt_cache = {}
@@ -109,6 +105,11 @@ class PoketwoSpawnDetector(commands.Cog):
         self.bot.loop.create_task(self._periodic_save())
         self.bot.loop.create_task(self._periodic_cleanup())
         self.bot.loop.create_task(self._preload_all_images())
+
+    @commands.Cog.listener()
+    async def on_config_update(self, guild_id: int, updated_keys: dict):
+        """Handle configuration updates from PoketwoCommands."""
+        logger.debug(f"Received config update for guild {guild_id}: {updated_keys}")
 
     async def _preload_all_images(self):
         try:
@@ -223,7 +224,7 @@ class PoketwoSpawnDetector(commands.Cog):
                 return
 
             sid = message.guild.id
-            server_config = await self.server_cache(sid)
+            server_config = await self._get_server_config(sid)
 
             fetch_shiny = server_config.get("sh_enabled", True) or server_config.get("cl_enabled", True)
             fetch_type = server_config.get("type_enabled", True)
@@ -379,14 +380,30 @@ class PoketwoSpawnDetector(commands.Cog):
         return base
 
     async def _get_server_config(self, sid: int) -> dict:
-        if sid in self.server_config_cache:
-            self.server_config_cache.move_to_end(sid)
-            return self.server_config_cache[sid]
-        config = await self.pokemonutils.get_server_config(sid)
-        self.server_config_cache[sid] = config or {}
-        if len(self.server_config_cache) > self.MAX_DYNAMIC_CACHE_SIZE:
-            self.server_config_cache.popitem(last=False)
-        return self.server_config_cache[sid]
+        try:
+            config = await self.pokemonutils.get_server_config(sid)
+            return config or {
+                "images_enabled": True,
+                "buttons_enabled": True,
+                "rare_enabled": True,
+                "regional_enabled": True,
+                "cl_enabled": True,
+                "sh_enabled": True,
+                "type_enabled": True,
+                "quest_enabled": True
+            }
+        except Exception as e:
+            logger.error(f"Failed to fetch server config for guild {sid}: {e}")
+            return {
+                "images_enabled": True,
+                "buttons_enabled": True,
+                "rare_enabled": True,
+                "regional_enabled": True,
+                "cl_enabled": True,
+                "sh_enabled": True,
+                "type_enabled": True,
+                "quest_enabled": True
+            }
 
     async def _handle_image_upload(self, base_name: str) -> str | None:
         ext = self.default_ext
@@ -473,7 +490,7 @@ class PoketwoSpawnDetector(commands.Cog):
         if not stats['ignored'] and stats['count'] > self.SPAM_THRESHOLD:
             stats['ignored'] = True
             channel_name = message.channel.name if hasattr(message.channel, 'name') else 'Unknown'
-            print(f"Marked high-volume channel {cid} ({channel_name}) as spam (rate: {stats['count']} msg/{self.SPAM_WINDOW_SECONDS}s), ignoring future messages.")
+            logger.info(f"Marked high-volume channel {cid} ({channel_name}) as spam (rate: {stats['count']} msg/{self.SPAM_WINDOW_SECONDS}s), ignoring future messages.")
         if stats['ignored']:
             return
 
@@ -615,7 +632,7 @@ class PoketwoSpawnDetector(commands.Cog):
                 current_ram = get_ram()
                 increase = current_ram - initial_ram
                 elapsed = time.time() - start_time
-                print(f"After {i} simulated spawns (elapsed {elapsed:.2f} seconds), RAM: {current_ram} MB, increase: {increase} MB, current delay max: {delay_max:.2f} seconds")
+                logger.info(f"After {i} simulated spawns (elapsed {elapsed:.2f} seconds), RAM: {current_ram} MB, increase: {increase} MB, current delay max: {delay_max:.2f} seconds")
 
     @commands.command(name="pressure_test", hidden=True)
     @commands.is_owner()
@@ -663,7 +680,7 @@ class PoketwoSpawnDetector(commands.Cog):
             return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
 
         final_ram = get_ram()
-        print(f"Pressure test stopped. Final RAM: {final_ram} MB")
+        logger.info(f"Pressure test stopped. Final RAM: {final_ram} MB")
         await ctx.send("Pressure test stopped. Check logs for final RAM usage and processing times.")
 
     def cog_unload(self) -> None:
