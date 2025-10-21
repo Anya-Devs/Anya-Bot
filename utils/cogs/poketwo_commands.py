@@ -18,16 +18,20 @@ pt_help_description = (
     "- `{}pt sh remove` (remove shiny hunt)\n"
     "- `{}pt sh` (view shiny hunt)\n\n"
     
-    "Type Ping  | {}pt tp\n"
+    "Type Ping | {}pt tp\n"
     "- Pokémon ping types like fire, water, or grass.\n\n"
     
     "Quest Ping | {}pt qp\n"
     "- Pokémon ping region types like Kanto, Alola, Galar, etc.\n\n"
     
-    "Special    | {}pt special\n"
-    "- Assign special roles for rare or regional Pokémon. Requires Manage Server permission.\n\n"
+    "Configuration | {}pt config\n"
+    "- `{}pt config` (view server settings: images, buttons, notifications)\n"
+    "- `{}pt config toggle [images | buttons | rare | regional | cl | sh | type | quest | all]` (toggle features or notifications)\n"
+    "- `{}pt config ping rare <@role>` (set rare Pokémon ping role)\n"
+    "- `{}pt config regional <@role>` (set regional Pokémon ping role)\n"
+    "- Requires Manage Server permission.\n\n"
     
-    "Starboard  | {}pt starboard\n"
+    "Starboard | {}pt starboard\n"
     "- Configure starboard settings. Requires Manage Channel permission.\n\n"
     
     "Shiny Protection | {}pt shinychannel\n"
@@ -37,8 +41,8 @@ pt_help_description = (
     "- `{}pt sc log remove` (remove logging)\n"
     "- `{}pt sc log` (view current log channel)\n"
 )
-
 MAX_POKEMON, CHUNK_SIZE, RESULTS_PER_PAGE, MIN_SIMILARITY_RATIO  = 50, 15, 10, 0.65
+
 
 
 class PokemonDataManager:
