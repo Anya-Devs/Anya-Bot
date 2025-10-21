@@ -8,39 +8,40 @@ from data.local.const import *
 
 pt_help_description = (
     "Collection | {}pt cl\n"
-    "- `{}pt cl add eevee, pikachu, vulpix` (add Pokémon | 50 max)\n"
-    "- `{}pt cl remove eevee, vulpix` (remove Pokémon)\n"
+    "- `{}pt cl add (eevee, pikachu, vulpix)` (add Pokémon | 50 max)\n"
+    "- `{}pt cl remove (eevee, vulpix)` (remove Pokémon)\n"
     "- `{}pt cl` (view collection)\n"
     "- `{}pt cl clear` (clear collection)\n\n"
     
     "Shiny Hunt | {}pt sh\n"
-    "- `{}pt sh alolan vulpix` (set shiny hunt)\n"
+    "- `{}pt sh (alolan vulpix)` (set shiny hunt)\n"
     "- `{}pt sh remove` (remove shiny hunt)\n"
     "- `{}pt sh` (view shiny hunt)\n\n"
     
     "Type Ping | {}pt tp\n"
-    "- Pokémon ping types like fire, water, or grass.\n\n"
+    "- Ping Pokémon types (fire, water, grass, etc.)\n\n"
     
     "Quest Ping | {}pt qp\n"
-    "- Pokémon ping region types like Kanto, Alola, Galar, etc.\n\n"
+    "- Ping Pokémon region types (Kanto, Alola, Galar, etc.)\n\n"
     
     "Configuration | {}pt config\n"
-    "- `{}pt config` (view server settings: images, buttons, notifications)\n"
-    "- `{}pt config toggle [images | buttons | rare | regional | cl | sh | type | quest | all]` (toggle features or notifications)\n"
-    "- `{}pt config ping rare <@role>` (set rare Pokémon ping role)\n"
-    "- `{}pt config regional <@role>` (set regional Pokémon ping role)\n"
-    "- Requires Manage Server permission.\n\n"
+    "- `{}pt config` (view settings)\n"
+    "- `{}pt config toggle (images, buttons, rare, regional, cl, sh, type, quest, all)` (toggle features)\n"
+    "- `{}pt config ping rare <@role>` (set rare ping role)\n"
+    "- `{}pt config regional <@role>` (set regional ping role)\n"
+    "- Requires Manage Server.\n\n"
     
     "Starboard | {}pt starboard\n"
-    "- Configure starboard settings. Requires Manage Channel permission.\n\n"
+    "- Configure starboard settings (Manage Channel required)\n\n"
     
     "Shiny Protection | {}pt shinychannel\n"
-    "- `{}pt sc` (view current shiny hunt channels)\n"
-    "- `{}pt sc <#channel>` (protect a channel for shiny hunts)\n"
-    "- `{}pt sc log <#channel>` (set a channel to log shiny catches)\n"
-    "- `{}pt sc log remove` (remove logging)\n"
-    "- `{}pt sc log` (view current log channel)\n"
+    "- `{}pt sc` (view shiny hunt channels)\n"
+    "- `{}pt sc <#channel>` (protect shiny channel)\n"
+    "- `{}pt sc log <#channel>` (set log channel)\n"
+    "- `{}pt sc log remove` (remove log)\n"
+    "- `{}pt sc log` (view log channel)\n"
 )
+
 MAX_POKEMON, CHUNK_SIZE, RESULTS_PER_PAGE, MIN_SIMILARITY_RATIO  = 50, 15, 10, 0.65
 
 

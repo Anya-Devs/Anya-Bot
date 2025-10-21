@@ -245,23 +245,24 @@ class PoketwoCommands(commands.Cog):
         embed.add_field(
             name="Spawn Settings",
             value=(
-                f"**Images Enabled**: {'✅' if config.get('images_enabled', True) else '❌'}\n"
-                f"**Buttons Enabled**: {'✅' if config.get('buttons_enabled', True) else '❌'}"
+                f"- Images Enabled: `{'✅' if config.get('images_enabled', True) else '❌'}`\n"
+                f"- Buttons Enabled: `{'✅' if config.get('buttons_enabled', True) else '❌'}`"
             ),
             inline=False
         )
         embed.add_field(
             name="Notification Settings",
             value=(
-                f"**Rare Pokémon**: {'✅' if config.get('rare_enabled', True) else '❌'} ({rare_role.mention if rare_role else 'Not set'})\n"
-                f"**Regional Pokémon**: {'✅' if config.get('regional_enabled', True) else '❌'} ({regional_role.mention if regional_role else 'Not set'})\n"
-                f"**Collection Pings**: {'✅' if config.get('cl_enabled', True) else '❌'}\n"
-                f"**Shiny Pings**: {'✅' if config.get('sh_enabled', True) else '❌'}\n"
-                f"**Type Pings**: {'✅' if config.get('type_enabled', True) else '❌'}\n"
-                f"**Quest Pings**: {'✅' if config.get('quest_enabled', True) else '❌'}"
+                f"- Rare Pokémon: `{'✅' if config.get('rare_enabled', True) else '❌'}` ({rare_role.mention if rare_role else 'Not set'})\n"
+                f"- Regional Pokémon: `{'✅' if config.get('regional_enabled', True) else '❌'}` ({regional_role.mention if regional_role else 'Not set'})\n"
+                f"- Collection Pings: `{'✅' if config.get('cl_enabled', True) else '❌'}`\n"
+                f"- Shiny Pings: `{'✅' if config.get('sh_enabled', True) else '❌'}`\n"
+                f"- Type Pings: `{'✅' if config.get('type_enabled', True) else '❌'}`\n"
+                f"- Quest Pings: `{'✅' if config.get('quest_enabled', True) else '❌'}`"
             ),
             inline=False
         )
+        
         await ctx.reply(embed=embed, mention_author=False)
 
     @config.group(name="ping", invoke_without_command=True)
