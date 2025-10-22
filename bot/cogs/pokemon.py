@@ -181,6 +181,37 @@ class PoketwoCommands(commands.Cog):
         logger.debug(f"Retrieved server config for guild {guild_id}: {config}")
         return config
 
+    def create_config_embed(self, config: dict, guild: discord.Guild) -> discord.Embed:
+        rare_role = guild.get_role(config.get("rare_role"))
+        regional_role = guild.get_role(config.get("regional_role"))
+
+        embed = discord.Embed(
+            title="Pokétwo Server Configuration",
+            description="Current settings for spawns and notifications.",
+            color=self.embed_default_color
+        )
+        embed.add_field(
+            name="Spawn Settings",
+            value=(
+                f"- Images Enabled: `{'✅' if config.get('images_enabled', True) else '❌'}`\n"
+                f"- Buttons Enabled: `{'✅' if config.get('buttons_enabled', True) else '❌'}`"
+            ),
+            inline=False
+        )
+        embed.add_field(
+            name="Notification Settings",
+            value=(
+                f"- Rare Pokémon: `{'✅' if config.get('rare_enabled', True) else '❌'}` ({rare_role.mention if rare_role else 'Not set'})\n"
+                f"- Regional Pokémon: `{'✅' if config.get('regional_enabled', True) else '❌'}` ({regional_role.mention if regional_role else 'Not set'})\n"
+                f"- Collection Pings: `{'✅' if config.get('cl_enabled', True) else '❌'}`\n"
+                f"- Shiny Pings: `{'✅' if config.get('sh_enabled', True) else '❌'}`\n"
+                f"- Type Pings: `{'✅' if config.get('type_enabled', True) else '❌'}`\n"
+                f"- Quest Pings: `{'✅' if config.get('quest_enabled', True) else '❌'}`"
+            ),
+            inline=False
+        )
+        return embed
+
     async def show_help(self, ctx, topic: str = None):
         await self.pt_help(ctx, topic)
 
@@ -238,184 +269,9 @@ class PoketwoCommands(commands.Cog):
         """View current server configuration."""
         guild_id = ctx.guild.id
         config = await self.get_server_config(guild_id)
-        rare_role = ctx.guild.get_role(config.get("rare_role"))
-        regional_role = ctx.guild.get_role(config.get("regional_role"))
-
-        embed = discord.Embed(
-            title="Pokétwo Server Configuration",
-            description="Current settings for spawns and notifications.",
-            color=self.embed_default_color
-        )
-        embed.add_field(
-            name="Spawn Settings",
-            value=(
-                f"- Images Enabled: `{'✅' if config.get('images_enabled', True) else '❌'}`\n"
-                f"- Buttons Enabled: `{'✅' if config.get('buttons_enabled', True) else '❌'}`"
-            ),
-            inline=False
-        )
-        embed.add_field(
-            name="Notification Settings",
-            value=(
-                f"- Rare Pokémon: `{'✅' if config.get('rare_enabled', True) else '❌'}` ({rare_role.mention if rare_role else 'Not set'})\n"
-                f"- Regional Pokémon: `{'✅' if config.get('regional_enabled', True) else '❌'}` ({regional_role.mention if regional_role else 'Not set'})\n"
-                f"- Collection Pings: `{'✅' if config.get('cl_enabled', True) else '❌'}`\n"
-                f"- Shiny Pings: `{'✅' if config.get('sh_enabled', True) else '❌'}`\n"
-                f"- Type Pings: `{'✅' if config.get('type_enabled', True) else '❌'}`\n"
-                f"- Quest Pings: `{'✅' if config.get('quest_enabled', True) else '❌'}`"
-            ),
-            inline=False
-        )
-        
-        await ctx.reply(embed=embed, mention_author=False)
-
-    @config.group(name="ping", invoke_without_command=True)
-    @commands.has_permissions(manage_guild=True)
-    async def config_ping(self, ctx):
-        """Manage ping roles for rare and regional Pokémon."""
-        guild_id = ctx.guild.id
-        config = await self.get_server_config(guild_id)
-        rare_role = ctx.guild.get_role(config.get("rare_role"))
-        regional_role = ctx.guild.get_role(config.get("regional_role"))
-
-        embed = discord.Embed(
-            title="Pokétwo Ping Configuration",
-            description="Current rare and regional Pokémon ping roles.",
-            color=self.embed_default_color
-        )
-        embed.add_field(
-            name="Current Roles",
-            value=(
-                f"**Rare Pokémon**: {rare_role.mention if rare_role else 'Not set'}\n"
-                f"**Regional Pokémon**: {regional_role.mention if regional_role else 'Not set'}"
-            ),
-            inline=False
-        )
-        await ctx.reply(embed=embed, mention_author=False)
-
-    @config_ping.command(name="rare")
-    @commands.has_permissions(manage_guild=True)
-    async def config_ping_rare(self, ctx, role: discord.Role = None):
-        """Set or remove the rare Pokémon ping role."""
-        guild_id = ctx.guild.id
-        config = await self.get_server_config(guild_id)
-
-        if role:
-            config["rare_role"] = role.id
-            msg = f"{self.success_emoji} Rare Pokémon role set to {role.mention}."
-        else:
-            config.pop("rare_role", None)
-            msg = f"{self.success_emoji} Rare Pokémon role removed."
-
-        result = await self.mongo.db[self.server_config_collection].update_one(
-            {"guild_id": guild_id}, {"$set": config}, upsert=True
-        )
-        if result.modified_count or result.upserted_id:
-            logger.info(f"Updated rare role for guild {guild_id}: {config}")
-        else:
-            logger.warning(f"Failed to update rare role for guild {guild_id}")
-        await ctx.reply(msg, mention_author=False)
-
-    @config_ping.command(name="regional")
-    @commands.has_permissions(manage_guild=True)
-    async def config_ping_regional(self, ctx, role: discord.Role = None):
-        """Set or remove the regional Pokémon ping role."""
-        guild_id = ctx.guild.id
-        config = await self.get_server_config(guild_id)
-
-        if role:
-            config["regional_role"] = role.id
-            msg = f"{self.success_emoji} Regional Pokémon role set to {role.mention}."
-        else:
-            config.pop("regional_role", None)
-            msg = f"{self.success_emoji} Regional Pokémon role removed."
-
-        result = await self.mongo.db[self.server_config_collection].update_one(
-            {"guild_id": guild_id}, {"$set": config}, upsert=True
-        )
-        if result.modified_count or result.upserted_id:
-            logger.info(f"Updated regional role for guild {guild_id}: {config}")
-        else:
-            logger.warning(f"Failed to update regional role for guild {guild_id}")
-        await ctx.reply(msg, mention_author=False)
-
-    @config.command(name="toggle")
-    @commands.has_permissions(manage_guild=True)
-    async def config_toggle(self, ctx, feature: str):
-        """Toggle images, buttons, or notification types."""
-        guild_id = ctx.guild.id
-        feature = feature.lower()
-        valid_features = {"images", "buttons", "rare", "regional", "cl", "sh", "type", "quest", "all"}
-
-        if feature not in valid_features:
-            return await ctx.reply(
-                f"{self.error_emoji} Invalid feature. Use one of: {', '.join(valid_features)}",
-                mention_author=False
-            )
-
-        config = await self.get_server_config(guild_id)
-        updates = {}
-
-        if feature == "all":
-            # Check if any notification feature is enabled to determine the new state
-            notification_keys = ["rare_enabled", "regional_enabled", "cl_enabled", "sh_enabled", "type_enabled", "quest_enabled"]
-            any_enabled = any(config.get(key, True) for key in notification_keys)
-            new_state = not any_enabled
-            for f in ["rare", "regional", "cl", "sh", "type", "quest"]:
-                updates[f"{f}_enabled"] = new_state
-        else:
-            key = f"{feature}_enabled"
-            updates[key] = not config.get(key, True)
-
-        result = await self.mongo.db[self.server_config_collection].update_one(
-            {"guild_id": guild_id}, {"$set": updates}, upsert=True
-        )
-
-        # Refresh config to reflect changes
-        config = await self.get_server_config(guild_id)
-        
-        # Create the updated configuration embed
-        rare_role = ctx.guild.get_role(config.get("rare_role"))
-        regional_role = ctx.guild.get_role(config.get("regional_role"))
-        embed = discord.Embed(
-            title="Pokétwo Server Configuration",
-            description="Current settings for spawns and notifications.",
-            color=self.embed_default_color
-        )
-        embed.add_field(
-            name="Spawn Settings",
-            value=(
-                f"- Images Enabled: `{'✅' if config.get('images_enabled', True) else '❌'}`\n"
-                f"- Buttons Enabled: `{'✅' if config.get('buttons_enabled', True) else '❌'}`"
-            ),
-            inline=False
-        )
-        embed.add_field(
-            name="Notification Settings",
-            value=(
-                f"- Rare Pokémon: `{'✅' if config.get('rare_enabled', True) else '❌'}` ({rare_role.mention if rare_role else 'Not set'})\n"
-                f"- Regional Pokémon: `{'✅' if config.get('regional_enabled', True) else '❌'}` ({regional_role.mention if regional_role else 'Not set'})\n"
-                f"- Collection Pings: `{'✅' if config.get('cl_enabled', True) else '❌'}`\n"
-                f"- Shiny Pings: `{'✅' if config.get('sh_enabled', True) else '❌'}`\n"
-                f"- Type Pings: `{'✅' if config.get('type_enabled', True) else '❌'}`\n"
-                f"- Quest Pings: `{'✅' if config.get('quest_enabled', True) else '❌'}`"
-            ),
-            inline=False
-        )
-
-        # Verify the update was successful and send the embed
-        if result.modified_count or result.upserted_id:
-            logger.info(f"Toggled feature(s) for guild {guild_id}: {updates}")
-            feature_name = feature.title() if feature != "cl" else "Collection"
-            if feature == "all":
-                embed.set_footer(text=f"All notification pings {'enabled' if new_state else 'disabled'}.")
-            else:
-                embed.set_footer(text=f"{feature_name} {'enabled' if config[key] else 'disabled'}.")
-        else:
-            logger.error(f"Failed to toggle feature {feature} for guild {guild_id}")
-            embed.set_footer(text=f"Failed to toggle {feature_name}. Please try again.")
-
-        await ctx.reply(embed=embed, mention_author=False)
+        embed = self.create_config_embed(config, ctx.guild)
+        view = ConfigView(self, guild_id, self.mongo, config)
+        await ctx.reply(embed=embed, view=view, mention_author=False)
 
     # -------------------
     # Type Ping
@@ -549,6 +405,9 @@ class PoketwoCommands(commands.Cog):
         guild_id = ctx.guild.id
         await self.mongo_sh.remove_shiny_log_channel(guild_id)
         await ctx.reply("✅ Shiny log channel removed.", mention_author=False)
+
+
+
 
 def setup(bot):
     bot.add_cog(Pokemon(bot))

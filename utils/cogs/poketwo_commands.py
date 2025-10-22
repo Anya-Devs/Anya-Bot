@@ -19,24 +19,22 @@ pt_help_description = (
     "- `{}pt sh` (view shiny hunt)\n\n"
     
     "Type Ping | {}pt tp\n"
-    "- Ping Pokémon types (fire, water, grass, etc.)\n\n"
+    "- Manage pings for Pokémon types (fire, water, grass, etc.)\n\n"
     
     "Quest Ping | {}pt qp\n"
-    "- Ping Pokémon region types (Kanto, Alola, Galar, etc.)\n\n"
+    "- Manage pings for Pokémon regions (Kanto, Alola, Galar, etc.)\n\n"
     
     "Configuration | {}pt config\n"
-    "- `{}pt config` (view settings)\n"
-    "- `{}pt config toggle (images, buttons, rare, regional, cl, sh, type, quest, all)` (toggle features)\n"
-    "- `{}pt config ping rare <@role>` (set rare ping role)\n"
-    "- `{}pt config regional <@role>` (set regional ping role)\n"
-    "- Requires Manage Server.\n\n"
+    "- Opens interactive menu to toggle features & set rare/regional roles.\n"
+    "- Use the select menus to enable/disable spawn options or assign roles.\n"
+    "- Requires Manage Server permission.\n\n"
     
     "Starboard | {}pt starboard\n"
     "- Configure starboard settings (Manage Channel required)\n\n"
     
     "Shiny Protection | {}pt shinychannel\n"
-    "- `{}pt sc` (view shiny hunt channels)\n"
-    "- `{}pt sc <#channel>` (protect shiny channel)\n"
+    "- `{}pt sc` (view protected channels)\n"
+    "- `{}pt sc <#channel>` (set protected channel)\n"
     "- `{}pt sc log <#channel>` (set log channel)\n"
     "- `{}pt sc log remove` (remove log)\n"
     "- `{}pt sc log` (view log channel)\n"
@@ -1263,7 +1261,84 @@ class ServerConfigView(discord.ui.View):
 
 
 
+class ConfigToggleSelect(discord.ui.Select):
+    def __init__(self, config: dict):
+        options = [
+            discord.SelectOption(label="Images", value="images", emoji="✅" if config.get("images_enabled", True) else "❌"),
+            discord.SelectOption(label="Buttons", value="buttons", emoji="✅" if config.get("buttons_enabled", True) else "❌"),
+            discord.SelectOption(label="Rare", value="rare", emoji="✅" if config.get("rare_enabled", True) else "❌"),
+            discord.SelectOption(label="Regional", value="regional", emoji="✅" if config.get("regional_enabled", True) else "❌"),
+            discord.SelectOption(label="Collection", value="cl", emoji="✅" if config.get("cl_enabled", True) else "❌"),
+            discord.SelectOption(label="Shiny", value="sh", emoji="✅" if config.get("sh_enabled", True) else "❌"),
+            discord.SelectOption(label="Type", value="type", emoji="✅" if config.get("type_enabled", True) else "❌"),
+            discord.SelectOption(label="Quest", value="quest", emoji="✅" if config.get("quest_enabled", True) else "❌"),
+        ]
+        super().__init__(placeholder="Toggle a feature", min_values=1, max_values=1, options=options)
 
+    async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("You lack permission to manage server.", ephemeral=True)
+
+        feature = self.values[0]
+        key = f"{feature}_enabled"
+        new_value = not self.view.config.get(key, True)
+        updates = {key: new_value}
+
+        await self.view.mongo.db[self.view.server_config_collection].update_one(
+            {"guild_id": self.view.guild_id}, {"$set": updates}, upsert=True
+        )
+
+        self.view.config.update(updates)
+
+        for option in self.options:
+            if option.value == feature:
+                option.emoji = "✅" if new_value else "❌"
+                break
+
+        embed = self.view.cog.create_config_embed(self.view.config, interaction.guild)
+        await interaction.response.edit_message(embed=embed, view=self.view)
+
+class RoleSelect(discord.ui.RoleSelect):
+    def __init__(self):
+        super().__init__(placeholder="Select roles...", min_values=1, max_values=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.manage_roles:
+            return await interaction.response.send_message("You lack permission.", ephemeral=True)
+
+        updates = {}
+        for i, role in enumerate(self.values):
+            # Assign first role as rare_role, second as regional_role if two are selected
+            key = "rare_role" if i == 0 else "regional_role"
+            updates[key] = role.id
+
+        await self.view.mongo.db[self.view.server_config_collection].update_one(
+            {"guild_id": self.view.guild_id}, {"$set": updates}, upsert=True
+        )
+
+        self.view.config.update(updates)
+
+        embed = self.view.cog.create_config_embed(self.view.config, interaction.guild)
+        await interaction.response.edit_message(embed=embed, view=self.view)
+        
+
+class ConfigView(discord.ui.View):
+    def __init__(self, cog, guild_id: int, mongo, config: dict):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.guild_id = guild_id
+        self.mongo = mongo
+        self.config = config.copy()
+        self.server_config_collection = cog.server_config_collection
+
+        toggle_select = ConfigToggleSelect(self.config)
+        self.add_item(toggle_select)
+
+     
+
+        role_select = RoleSelect()
+        role_select.row = 2
+        self.add_item(role_select)
 
 
 
