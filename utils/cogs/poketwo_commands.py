@@ -1355,7 +1355,7 @@ class TR_Embed_Config:
     error_color = 0xFF4757
 
     def get_title(self, selection_type: str, is_afk: bool = False):
-        base = "<:gear:1430580748682793041>" if not is_afk else ""
+        base = "<:gear:1430580748682793041>" if not is_afk else ":zzz:"
         return f"{base} | {selection_type.title()} Ping"
 
     def get_afk_description(self, selection_type: str):
