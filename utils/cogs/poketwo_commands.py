@@ -1347,7 +1347,7 @@ class ConfigView(discord.ui.View):
 
 
 class TR_Embed_Config:
-    bullet_format = "{emoji_str} {item}"
+    bullet_format = "- {emoji_str} {item}"
     row_separator = "\n"
     group_size = 3
     primary_color = primary_color()
