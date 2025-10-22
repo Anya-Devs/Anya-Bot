@@ -14,6 +14,7 @@ from utils.cogs.ticket import setup_persistent_views
 from utils.cogs.fun import setup_persistent_views_fun
 from art import text2art
 from bot.token import get_bot_token as ut
+from concurrent.futures import ProcessPoolExecutor
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 load_dotenv(dotenv_path=os.path.join(".github", ".env"))
@@ -96,6 +97,7 @@ class ClusteredBot(commands.AutoShardedBot):
         self.cog_cache = {}
         self.server_shards = {}
         self._gc_task = None
+        self.executor = ProcessPoolExecutor(max_workers=os.cpu_count() or 4)  # Use multiple CPU cores for processing
 
     async def setup_hook(self):
         await self._import_cogs()
@@ -113,7 +115,7 @@ class ClusteredBot(commands.AutoShardedBot):
         art_str = ""
         try:
             art = AvatarToTextArt(getattr(self.user, "avatar", None))
-            await asyncio.wait_for(asyncio.to_thread(art.create_art), timeout=3)
+            await asyncio.wait_for(self.loop.run_in_executor(self.executor, art.create_art), timeout=3)
             art_str = art.get_colored_ascii_art()
         except: pass
         banner = "\n\n\n" + (art_str + "\n" if art_str else "")
@@ -180,6 +182,7 @@ class ClusteredBot(commands.AutoShardedBot):
             await asyncio.sleep(0)
         if self.http_session and not self.http_session.closed:
             await self.http_session.close()
+        self.executor.shutdown(wait=True)
         await super().close()
 
     async def _import_cogs(self):
