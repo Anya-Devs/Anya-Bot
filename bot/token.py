@@ -2,7 +2,7 @@ import os
 from motor.motor_asyncio import AsyncIOMotorClient
 from data.local.const import bot_config
 
-use_test_bot = 1
+use_test_bot = 0
 
 prefix = bot_config[use_test_bot]["prefix"]
 token_flavor = bot_config[use_test_bot]["token_key"]
