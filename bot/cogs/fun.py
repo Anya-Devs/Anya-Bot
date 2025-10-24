@@ -38,8 +38,13 @@ class Fun(commands.Cog):
                 actions = list(data.get("phrases", {}).get("self", {}).keys())
                 for act in actions:
                     async def cmd(ctx, user: Union[discord.Member, Literal["everyone"]] = None, *, txt=""):
-                        embed, msg = await self.fun_cmd.action_command(ctx, user or ctx.author, txt)
-                        await (ctx.reply(msg, mention_author=False) if not embed else ctx.send(embed=embed))
+                        embed, msg, view = await self.fun_cmd.action_command(ctx, user or ctx.author, txt)
+                        await ctx.reply(
+                            content=msg if not embed else None,
+                            embed=embed,
+                            view=view,
+                            mention_author=False
+                        )
                     cmd.__name__ = act
                     command = commands.Command(cmd, name=act)
                     self._dynamic_commands.append(command)

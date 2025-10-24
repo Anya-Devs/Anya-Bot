@@ -10,8 +10,7 @@ from imports.discord_imports import *
 from imports.log_imports import *
 from data.local.const import *
 from utils.cogs.quest import *
- 
-
+  
 class Fun_Commands:
     def __init__(self):
         self._8ball_file = "data/commands/fun/8ball-responses.txt"
@@ -45,7 +44,7 @@ class Fun_Commands:
 
         plain = "[no_embed]" in phrase
         phrase = phrase.replace("[no_embed]", "").strip()
-        msg = f"{phrase.format(user=ctx.author.display_name,target=target)} {emote} {extra}".strip()
+        msg = f"{phrase.format(user=ctx.author.display_name,target=target)} {extra}".strip() # {emote}
 
         sid, aid = str(ctx.guild.id), str(ctx.author.id)
 
@@ -67,7 +66,66 @@ class Fun_Commands:
         received = doc.get("members", {}).get(action, {}).get("intake", {}).get(aid, 0)
 
         embed = None if plain else discord.Embed(title=msg, color=primary_color()).set_image(url=gif).set_footer(text=f"Sent: {sent} | Received: {received}")
-        return embed, msg
+
+        view = None
+        if isinstance(user, discord.Member) and user != ctx.author and not user.bot:
+            view = ActionBackView(self, ctx, action, user, extra)
+
+        return embed, msg, view
+
+
+class ActionBackView(discord.ui.View):
+    def __init__(self, fun, ctx, action, target, extra):
+        super().__init__(timeout=None)
+        self.fun = fun
+        self.ctx = ctx
+        self.action = action
+        self.target = target
+        self.extra = extra
+
+    @discord.ui.button(label="Do it back", style=discord.ButtonStyle.primary)
+    async def do_it_back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.target:
+            await interaction.response.send_message("Only the recipient can do this back!", ephemeral=True)
+            return
+
+        async with aiohttp.ClientSession() as s:
+            gif = (await (await s.get(self.fun.action_api.format(self.action))).json())["url"]
+        emote = next((e for e, acts in self.fun.emotes.items() if self.action in acts), "")
+
+        target_name = self.ctx.author.display_name
+        phrase = self.fun.phrases["other"].get(self.action, f"{self.action}s")
+        plain = "[no_embed]" in phrase
+        phrase = phrase.replace("[no_embed]", "").strip()
+        msg_back = f"{phrase.format(user=interaction.user.display_name, target=target_name)} {self.extra}".strip()
+
+        sid = str(interaction.guild.id)
+        aid = str(interaction.user.id)
+
+        await self.fun.mongo.update_one(
+            {"server_id": sid},
+            {"$inc": {f"members.{self.action}.intake.{self.ctx.author.id}": 1}},
+            upsert=True
+        )
+
+        await self.fun.mongo.update_one(
+            {"server_id": sid},
+            {"$inc": {f"members.{self.action}.outtake.{aid}": 1}},
+            upsert=True
+        )
+
+        doc = await self.fun.mongo.find_one({"server_id": sid}) or {}
+        sent = doc.get("members", {}).get(self.action, {}).get("outtake", {}).get(aid, 0)
+        received = doc.get("members", {}).get(self.action, {}).get("intake", {}).get(aid, 0)
+
+        embed_back = None if plain else discord.Embed(title=msg_back, color=primary_color()).set_image(url=gif).set_footer(text=f"Sent: {sent} | Received: {received}")
+
+        await interaction.message.reply(content=msg_back if plain else None, embed=embed_back)
+
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+        self.stop()
+        
 
 
 # ---------------- Mini Games ---------------- #
