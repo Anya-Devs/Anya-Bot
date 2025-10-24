@@ -193,48 +193,34 @@ class Quest(commands.Cog):
 
     @commands.command(name="profile", aliases=["pf"])
     async def profile(self, ctx, member: discord.Member = None):
-        if member is None:
-            member = ctx.author
+     if member is None:
+        member = ctx.author
 
-        user_id = member.id
-        guild_id = ctx.guild.id
-        user_id_str = str(user_id)
-        guild_id_str = str(guild_id)
+     user_id = member.id
+     guild_id = ctx.guild.id
+     user_id_str = str(user_id)
+     guild_id_str = str(guild_id)
 
-        user_exists = await self.quest_data.find_user_in_server(user_id_str, guild_id_str)
-        if not user_exists:
-            await ctx.reply(
-                f"You need to start your quest first with `{ctx.prefix}quest` before viewing your profile.",
-                mention_author=False
-            )
-            return
+     user_exists = await self.quest_data.find_user_in_server(user_id_str, guild_id_str)
+     if not user_exists:
+        await ctx.reply(
+            f"You need to start your quest first with `{ctx.prefix}quest` before viewing your profile.",
+            mention_author=False
+        )
+        return
 
-        try:
-            balance = await self.quest_data.get_balance(user_id_str, guild_id_str)
-        except AttributeError:
-            # Fallback in case get_balance still fails due to NoneType
-            balance = 0
-            logger.warning(f"Balance fetch failed for user {user_id_str} in guild {guild_id_str}, defaulting to 0")
+     try:
+        balance = await self.quest_data.get_balance(user_id_str, guild_id_str)
+     except AttributeError:
+        # Fallback in case get_balance still fails due to NoneType
+        balance = 0
+        logger.warning(f"Balance fetch failed for user {user_id_str} in guild {guild_id_str}, defaulting to 0")
 
-        db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
-        server_collection = db["Servers"]
-        doc = await server_collection.find_one({"guild_id": guild_id_str})
-        if not doc:
-            await ctx.reply("No server data found.")
-            return
+     stella_points = balance  # Using the fetched balance
 
-        member_data = doc.get("members", {}).get(user_id_str, {})
-        profile = member_data.get("profile", {})
-        age = profile.get("age", "Not set")
-        sexuality = profile.get("sexuality", "Not set")
-        bio = profile.get("bio", "No bio set.")
-        stories = profile.get("stories", [])
-
-        stella_points = balance  # Using the fetched balance
-
-        view = ProfileView(ctx, member, age, sexuality, bio, stories, stella_points, self.quest_data)
-        await view.start(ctx)
-
+     view = ProfileView(ctx, member, stella_points, self.quest_data)
+     await view.start(ctx)
+     
     @commands.command(name="inventory", aliases=["inv"])
     async def inventory(self, ctx):
         try:
