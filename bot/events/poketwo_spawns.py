@@ -279,7 +279,7 @@ class PoketwoSpawnDetector(commands.Cog):
 
             if not self.testing:
                 if url and server_config.get("images_enabled", True):
-                    embed = discord.Embed()
+                    embed = discord.Embed(color=int("131416", 16))
                     embed.set_image(url=url)
                     #embed.set_footer(text="Predicted in {:.2f}s".format(pred_time + image_time))
                     await message.channel.send(
