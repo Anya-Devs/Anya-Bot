@@ -16,7 +16,6 @@ import logging
 from io import BytesIO
 from datetime import datetime
 logger = logging.getLogger(__name__)
-
 class Quest(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -38,7 +37,7 @@ class Quest(commands.Cog):
             for item in items:
                 if item["name"].lower() == tool_name.lower():
                     return item.get("emoji", "")
-        return ""  
+        return ""
 
     @commands.command(name="redirect")
     async def redirect(self, ctx, *channel_mentions: discord.TextChannel):
@@ -50,13 +49,12 @@ class Quest(commands.Cog):
                 "You need the `Manage Channels` permission or the `Anya Manager` role to use this command.",
                 mention_author=False,
             )
-            return  
+            return
 
         try:
             guild_id = str(ctx.guild.id)
             channel_ids = [str(channel.id) for channel in channel_mentions]
 
-            
             if await self.quest_data.store_channels_for_guild(guild_id, channel_ids):
                 await ctx.reply(
                     f"Now redirecting missions to {', '.join([channel.mention for channel in channel_mentions])}",
@@ -192,7 +190,6 @@ class Quest(commands.Cog):
         embed.add_field(name="Roles", value=roles_list, inline=False)
 
         await ctx.reply(embed=embed, mention_author=False)
-    
 
     @commands.command(name="profile", aliases=["pf"])
     async def profile(self, ctx, member: discord.Member = None):
@@ -283,7 +280,7 @@ class Quest(commands.Cog):
             )
             logger.error(f"Error in inventory command: {e}")
 
-    @commands.command(name="balance", aliases=["bal", "points", "stars","stp"])
+    @commands.command(name="balance", aliases=["bal", "points", "stars", "stp"])
     async def balance(
         self, ctx, method=None, amount: int = None, member: discord.Member = None
     ):
@@ -343,8 +340,6 @@ class Quest(commands.Cog):
         with open(filename, "r", encoding="utf-8") as file:
             shop_data = json.load(file)
         return shop_data
-
-
         
 class Quest_Slash(commands.Cog):
     def __init__(self, bot):

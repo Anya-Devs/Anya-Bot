@@ -1356,7 +1356,7 @@ class TR_Embed_Config:
 
     def get_title(self, selection_type: str, is_afk: bool = False):
         base = "<:gear:1430580748682793041>" if not is_afk else ":zzz:"
-        return f"{base} | {selection_type.title()} Ping"
+        return f"{selection_type.title()} Ping"
 
     def get_afk_description(self, selection_type: str):
         return (
@@ -1368,19 +1368,19 @@ class TR_Embed_Config:
     def get_no_selection_description(self, selection_type: str):
         return (
             f"### No {selection_type.title()}s Selected\n"
-            f"Select Pokémon {selection_type}s from the dropdown below to receive spawn notifications."
+            #f"Select Pokémon {selection_type}s from the dropdown below to receive spawn notifications."
         )
 
-    def get_how_it_works_field(self, selection_type: str):
-        return {
-            "name": "How it works",
-            "value": (
-                f"• Choose {selection_type}s from the dropdown menu\n"
-                f"• Get pinged when those {selection_type}s spawn\n"
-                "• Use AFK mode to temporarily pause pings"
-            ),
-            "inline": False
-        }
+    #def get_how_it_works_field(self, selection_type: str):
+    #    return {
+    #        "name": "How it works",
+    #        "value": (
+    #            f"• Choose {selection_type}s from the dropdown menu\n"
+    #            f"• Get pinged when those {selection_type}s spawn\n"
+    #            "• Use AFK mode to temporarily pause pings"
+    #        ),
+    #        "inline": False
+    #    }
 
     def get_footer_text(self, status_message: str | None = None):
         default = "Use the dropdown to select multiple items at once."
@@ -1447,6 +1447,7 @@ class TR_Embed_Config:
     def get_timeout_status(self):
         return "⏰ This interface has expired due to inactivity."
 
+        
 class PokemonTypeSelect(discord.ui.View):
     def __init__(self, bot, user_id: int, collection_type: str, mongo_helper,
                  pokemon_types: list[str], current_types: list[str] | None = None, status=None):
@@ -1555,21 +1556,21 @@ class PokemonTypeSelect(discord.ui.View):
         except Exception:
             print("Error in refresh_view:\n", traceback.format_exc())
 
-    async def _create_embed(self, ctx=None, status_message=None):
+    async def _create_embed(self, ctx=None, status_message=None, user=None):
         try:
+            if user is None:
+                if ctx:
+                    if hasattr(ctx, "author"):
+                        user = ctx.author
+                    elif hasattr(ctx, "user"):
+                        user = ctx.user
+
             afk_data = await self.afk_collection.find_one({"user_id": self.user_id})
             afk_on = bool(afk_data)
 
             title = self.config.get_title("type", is_afk=afk_on)
             color = self.config.afk_color if afk_on else self.config.primary_color
             embed = discord.Embed(title=title, color=color)
-
-            user = None
-            if ctx:
-                if hasattr(ctx, "author"):
-                    user = ctx.author
-                elif hasattr(ctx, "user"):
-                    user = ctx.user
 
             if user and getattr(user, "avatar", None):
                 embed.set_thumbnail(url=user.avatar.url)
@@ -1580,21 +1581,23 @@ class PokemonTypeSelect(discord.ui.View):
                 if count > 0:
                     embed.add_field(**self.config.get_afk_saved_field(count, "type"))
             else:
-                if self.current_types:
-                    type_lines = []
-                    sorted_types = sorted(self.current_types)
-                    for i in range(0, len(sorted_types), self.config.group_size):
-                        row_types = sorted_types[i:i + self.config.group_size]
-                        row_text = []
-                        for pt in row_types:
-                            emoji = self._get_emoji_by_name(pt)
-                            emoji_str = str(emoji) if emoji else "🔹"
-                            row_text.append(self.config.bullet_format.format(emoji_str=emoji_str, item=pt.title()))
-                        type_lines.append("\n".join(row_text))
-                    embed.description = "\n".join(type_lines)
-                else:
-                    embed.description = self.config.get_no_selection_description("type")
-                    embed.add_field(**self.config.get_how_it_works_field("type"))
+                type_lines = []
+                sorted_types = sorted(self.pokemon_types)
+                for i in range(0, len(sorted_types), self.config.group_size):
+                    row_types = sorted_types[i:i + self.config.group_size]
+                    row_text = []
+                    for pt in row_types:
+                        selected = pt in self.current_types
+                        mark = "`✅`" if selected else "`❌`"
+                        emoji = self._get_emoji_by_name(pt)
+                        emoji_str = str(emoji) if emoji else "🔹"
+                        row_text.append(f"- {mark} {emoji_str} {pt.title()}")
+                    type_lines.append("\n".join(row_text))
+                embed.description = "\n".join(type_lines)
+
+                if not self.current_types:
+                    embed.description = self.config.get_no_selection_description("type") + "\n\n" + embed.description
+                    #embed.add_field(**self.config.get_how_it_works_field("type"))
 
             footer_text = self.config.get_footer_text(status_message)
             embed.set_footer(
@@ -1711,10 +1714,11 @@ class PokemonTypeSelect(discord.ui.View):
 
     async def on_timeout(self):
         try:
+            user = await self.bot.fetch_user(self.user_id)
             for item in self.children:
                 item.disabled = True
             if self.message:
-                embed = await self._create_embed(status_message=self.config.get_timeout_status())
+                embed = await self._create_embed(status_message=self.config.get_timeout_status(), user=user)
                 await self.message.edit(embed=embed, view=self)
             self.stop()
         except Exception:
@@ -1837,16 +1841,17 @@ class PokemonRegionSelect(discord.ui.View):
         except Exception:
             print("Error in refresh_view:\n", traceback.format_exc())
 
-    async def _create_embed(self, ctx=None, status_message=None):
+    async def _create_embed(self, ctx=None, status_message=None, user=None):
         try:
+            if user is None:
+                user = getattr(ctx, "user", None) or getattr(ctx, "author", None)
+
             afk_data = await self.afk_collection.find_one({"user_id": self.user_id})
             afk_on = bool(afk_data)
 
             title = self.config.get_title("region", is_afk=afk_on)
             color = self.config.afk_color if afk_on else self.config.primary_color
             embed = discord.Embed(title=title, color=color)
-
-            user = getattr(ctx, "user", None) or getattr(ctx, "author", None)
 
             if user and getattr(user, "avatar", None):
                 embed.set_thumbnail(url=user.avatar.url)
@@ -1857,21 +1862,23 @@ class PokemonRegionSelect(discord.ui.View):
                 if count > 0:
                     embed.add_field(**self.config.get_afk_saved_field(count, "region"))
             else:
-                if self.current_regions:
-                    lines = []
-                    sorted_regions = sorted(self.current_regions)
-                    for i in range(0, len(sorted_regions), self.config.group_size):
-                        row = sorted_regions[i:i + self.config.group_size]
-                        row_text = []
-                        for r in row:
-                            emoji = self._get_emoji_by_name(r)
-                            emoji_str = str(emoji) if emoji else "🔹"
-                            row_text.append(self.config.bullet_format.format(emoji_str=emoji_str, item=r.title()))
-                        lines.append("\n".join(row_text))
-                    embed.description = "\n".join(lines)
-                else:
-                    embed.description = self.config.get_no_selection_description("region")
-                    embed.add_field(**self.config.get_how_it_works_field("region"))
+                lines = []
+                sorted_regions = sorted(self.pokemon_regions)
+                for i in range(0, len(sorted_regions), self.config.group_size):
+                    row = sorted_regions[i:i + self.config.group_size]
+                    row_text = []
+                    for r in row:
+                        selected = r in self.current_regions
+                        mark = "`✅`" if selected else "`❌`"
+                        emoji = self._get_emoji_by_name(r)
+                        emoji_str = str(emoji) if emoji else "🔹"
+                        row_text.append(f"- {mark} {emoji_str} {r.title()}")
+                    lines.append("\n".join(row_text))
+                embed.description = "\n".join(lines)
+
+                if not self.current_regions:
+                    embed.description = self.config.get_no_selection_description("region") + "\n\n" + embed.description
+                    #embed.add_field(**self.config.get_how_it_works_field("region"))
 
             footer_text = self.config.get_footer_text(status_message or self.status_message)
             embed.set_footer(
@@ -1977,10 +1984,11 @@ class PokemonRegionSelect(discord.ui.View):
 
     async def on_timeout(self):
         try:
+            user = await self.bot.fetch_user(self.user_id)
             for item in self.children:
                 item.disabled = True
             if self.message:
-                embed = await self._create_embed(status_message=self.config.get_timeout_status())
+                embed = await self._create_embed(status_message=self.config.get_timeout_status(), user=user)
                 await self.message.edit(embed=embed, view=self)
             self.stop()
         except Exception:
@@ -1996,5 +2004,3 @@ class PokemonRegionSelect(discord.ui.View):
         valid_regions = {r.lower() for r in self.pokemon_regions}
         parts = [p.strip().lower() for p in user_input.replace(',', ' ').split()]
         return {r for r in parts if r in valid_regions and r != "hisui"}       
-     
-     
