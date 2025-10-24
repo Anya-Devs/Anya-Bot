@@ -1436,7 +1436,7 @@ class TR_Embed_Config:
         }
 
     def get_afk_off_status(self, count: int, selection_type: str):
-        return f"👁️ AFK mode disabled! Restored {count} saved {selection_type}(s)."
+        return f"AFK mode disabled - Restored {count} saved {selection_type}(s)."
 
     def get_afk_on_status(self, count: int, selection_type: str):
         return f"😴 AFK mode enabled. {count} {selection_type}(s) saved."
@@ -1539,7 +1539,7 @@ class PokemonTypeSelect(discord.ui.View):
     def add_afk_button(self, afk_on: bool):
         label = "AFK Mode (ON)" if afk_on else "AFK Mode (OFF)"
         style = discord.ButtonStyle.success if afk_on else discord.ButtonStyle.secondary
-        emoji = "😴" if afk_on else "👁️"
+        emoji = "😴" if afk_on else "💤"
         afk_button = discord.ui.Button(label=label, style=style, emoji=emoji)
         afk_button.callback = self.afk_toggle_callback
         self.add_item(afk_button)
@@ -1824,7 +1824,7 @@ class PokemonRegionSelect(discord.ui.View):
     def add_afk_button(self, afk_on: bool):
         label = "AFK Mode (ON)" if afk_on else "AFK Mode (OFF)"
         style = discord.ButtonStyle.success if afk_on else discord.ButtonStyle.secondary
-        emoji = "😴" if afk_on else "👁️"
+        emoji = "😴" if afk_on else "💤"
         afk_button = discord.ui.Button(label=label, style=style, emoji=emoji)
         afk_button.callback = self.afk_toggle_callback
         self.add_item(afk_button)
@@ -1878,7 +1878,7 @@ class PokemonRegionSelect(discord.ui.View):
 
                 if not self.current_regions:
                     embed.description = self.config.get_no_selection_description("region") + "\n\n" + embed.description
-                    #embed.add_field(**self.config.get_how_it_works_field("region"))
+                    embed.add_field(**self.config.get_how_it_works_field("region"))
 
             footer_text = self.config.get_footer_text(status_message or self.status_message)
             embed.set_footer(
