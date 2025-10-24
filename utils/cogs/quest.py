@@ -1060,7 +1060,7 @@ class Quest_Data(commands.Cog):
 
 
 EMBED_CONFIG = {
-    "primary_color": 0x1E90FF,  # Default color
+    "primary_color": int("131416", 16),  # Default color
     "error_color": 0xFF0000,
     "profile_title": "{display_name}'s Profile",
     "story_title": "{display_name}'s Life Story - Page {page}",
@@ -1430,6 +1430,26 @@ class ProfileView(View):
                     traceback.print_exc()
                     await interaction.response.send_message("An error occurred while opening the modal.", ephemeral=True)
 
+    class BackToBioButton(Button):
+        def __init__(self, profile_view):
+            super().__init__(label="← Bio", style=discord.ButtonStyle.secondary)
+            self.profile_view = profile_view
+
+        async def callback(self, interaction: discord.Interaction):
+            logger.info(f"BackToBioButton clicked by user {interaction.user.id}")
+            if interaction.user.id != self.profile_view.member.id and interaction.user.id != self.profile_view.ctx.author.id:
+                logger.warning(f"Unauthorized back to bio attempt by user {interaction.user.id}")
+                await interaction.response.send_message("You can only navigate profiles you invoked or own.", ephemeral=True)
+                return
+            self.profile_view.current_page = 0
+            try:
+                await self.profile_view._update_page(interaction)
+                logger.info(f"Navigated back to bio page for user {interaction.user.id}")
+            except Exception as e:
+                logger.error(f"Error in BackToBioButton callback for user {interaction.user.id}: {e}")
+                traceback.print_exc()
+                await interaction.response.send_message("An error occurred while navigating back to bio.", ephemeral=True)
+
     class NavigationButton(Button):
         def __init__(self, profile_view, direction: str, disabled: bool = False):
             emoji = '◀️' if direction == 'prev' else '▶️'
@@ -1693,90 +1713,93 @@ class ProfileView(View):
             raise
 
     def generate_embeds(self, page):
-        try:
-            logger.debug(f"Generating embeds for page {page} for member {self.member.id}")
-            now = datetime.now(timezone.utc)
-            delta = now - self.member.joined_at
-            years = delta.days // 365
-            months = (delta.days % 365) // 30
-            duration = f"{years} years, {months} months" if years or months else "Recently joined"
-            
-            if page == 0:
-                embed = discord.Embed(
-                    title=EMBED_CONFIG["profile_title"].format(display_name=self.member.display_name),
+     try:
+        logger.debug(f"Generating embeds for page {page} for member {self.member.id}")
+        now = datetime.now(timezone.utc)
+        delta = now - self.member.joined_at
+        years = delta.days // 365
+        months = (delta.days % 365) // 30
+        duration = f"{years} years, {months} months" if years or months else "Recently joined"
+        
+        if page == 0:
+            embed = discord.Embed(
+                title=EMBED_CONFIG["profile_title"].format(display_name=self.member.display_name),
+                color=EMBED_CONFIG["primary_color"],
+                timestamp=now,
+            )
+            fields = EMBED_CONFIG["fields"]["bio_page"]
+            field_values = {
+                "display_name": self.member.display_name,
+                "age": str(self.age) if self.age != "Not set" else "Not set",
+                "duration": duration,
+                "sexuality": self.sexuality if self.sexuality != "Not set" else "Not set",
+                "bio": self.bio if self.bio != "No bio set." else "No bio set.",
+            }
+            for field in fields:
+                embed.add_field(
+                    name=field["name"],
+                    value=field_values[field["key"]] or "Not set",
+                    inline=field["inline"],
+                )
+            if self.banner_url:
+                embed.set_image(url=self.banner_url)
+            embed.set_thumbnail(url=self.member.avatar.url if self.member.avatar else None)
+            footer_text = EMBED_CONFIG["footer"]["bio"].format(stella_points=self.stella_points)
+            embed.set_footer(text=footer_text)
+            logger.debug(f"Generated bio page embed for member {self.member.id}")
+            return [embed]
+        else:
+            story_index = page - 1
+            if story_index < len(self.stories):
+                story = self.stories[story_index]
+                main_embed = discord.Embed(
+                    title=EMBED_CONFIG["story_title"].format(display_name=self.member.display_name, page=page, title=story['title']),
+                    description=story['content'][:4000] or "No content.",
                     color=EMBED_CONFIG["primary_color"],
                     timestamp=now,
                 )
-                fields = EMBED_CONFIG["fields"]["bio_page"]
-                field_values = {
-                    "display_name": self.member.display_name,
-                    "age": str(self.age) if self.age != "Not set" else "Not set",
-                    "duration": duration,
-                    "sexuality": self.sexuality if self.sexuality != "Not set" else "Not set",
-                    "bio": self.bio if self.bio != "No bio set." else "No bio set.",
-                }
-                for field in fields:
-                    embed.add_field(
-                        name=field["name"],
-                        value=field_values[field["key"]] or "Not set",
-                        inline=field["inline"],
-                    )
-                if self.banner_url:
-                    embed.set_image(url=self.banner_url)
-                embed.set_thumbnail(url=self.member.avatar.url if self.member.avatar else None)
-                footer_text = EMBED_CONFIG["footer"]["bio"].format(stella_points=self.stella_points)
-                embed.set_footer(text=footer_text)
-                logger.debug(f"Generated bio page embed for member {self.member.id}")
-                return [embed]
+                footer_text = EMBED_CONFIG["footer"]["story"].format(page=page, stella_points=self.stella_points)
+                main_embed.set_footer(text=footer_text)
+                main_embed.set_thumbnail(url=self.member.avatar.url if self.member.avatar else None)
+                embeds = [main_embed]
+                image_urls = story.get('image_urls', [])
+                if image_urls:
+                    main_embed.set_image(url=image_urls[0])
+                    for url in image_urls[1:]:
+                        img_embed = discord.Embed(color=EMBED_CONFIG["primary_color"]).set_image(url=url)
+                        embeds.append(img_embed)
+                logger.debug(f"Generated {len(embeds)} embeds for story page {page}, story_index={story_index}")
+                return embeds
             else:
-                story_index = page - 1
-                if story_index < len(self.stories):
-                    story = self.stories[story_index]
-                    main_embed = discord.Embed(
-                        title=EMBED_CONFIG["story_title"].format(display_name=self.member.display_name, chapter=page, title=story['title']),
-                        description=story['content'][:4000] or "No content.",
-                        color=EMBED_CONFIG["primary_color"],
-                        timestamp=now,
-                    )
-                    footer_text = EMBED_CONFIG["footer"]["story"].format(chapter=page, stella_points=self.stella_points)
-                    main_embed.set_footer(text=footer_text)
-                    main_embed.set_thumbnail(url=self.member.avatar.url if self.member.avatar else None)
-                    embeds = [main_embed]
-                    image_urls = story.get('image_urls', [])
-                    if image_urls:
-                        main_embed.set_image(url=image_urls[0])
-                        for url in image_urls[1:]:
-                            img_embed = discord.Embed(color=EMBED_CONFIG["primary_color"]).set_image(url=url)
-                            embeds.append(img_embed)
-                    logger.debug(f"Generated {len(embeds)} embeds for story page {page}, story_index={story_index}")
-                    return embeds
-                else:
-                    embed = discord.Embed(
-                        title=EMBED_CONFIG["end_of_stories_title"],
-                        description=EMBED_CONFIG["end_of_stories_desc"],
-                        color=EMBED_CONFIG["primary_color"],
-                        timestamp=now,
-                    )
-                    footer_text = EMBED_CONFIG["footer"]["story"].format(chapter=page, stella_points=self.stella_points)
-                    embed.set_footer(text=footer_text)
-                    logger.debug(f"Generated end-of-stories embed for page {page}")
-                    return [embed]
-        except Exception as e:
-            logger.error(f"Error in generate_embeds for member {self.member.id}: {e}")
-            traceback.print_exc()
-            fallback_embed = discord.Embed(
-                title=EMBED_CONFIG["error_title"],
-                description=EMBED_CONFIG["error_desc"],
-                color=EMBED_CONFIG["error_color"],
-                timestamp=datetime.now(timezone.utc),
-            )
-            return [fallback_embed]
-
+                embed = discord.Embed(
+                    title=EMBED_CONFIG["end_of_stories_title"],
+                    description=EMBED_CONFIG["end_of_stories_desc"],
+                    color=EMBED_CONFIG["primary_color"],
+                    timestamp=now,
+                )
+                footer_text = EMBED_CONFIG["footer"]["story"].format(page=page, stella_points=self.stella_points)
+                embed.set_footer(text=footer_text)
+                logger.debug(f"Generated end-of-stories embed for page {page}")
+                return [embed]
+     except Exception as e:
+        logger.error(f"Error in generate_embeds for member {self.member.id}: {e}")
+        traceback.print_exc()
+        fallback_embed = discord.Embed(
+            title=EMBED_CONFIG["error_title"],
+            description=EMBED_CONFIG["error_desc"],
+            color=EMBED_CONFIG["error_color"],
+            timestamp=datetime.now(timezone.utc),
+        )
+        return [fallback_embed]
+     
     def update_buttons(self):
         try:
             logger.info(f"Updating buttons: current_page={self.current_page}, total_pages={self.total_pages}, member={self.member.id}")
             self.clear_items()
             logger.debug("Cleared existing items from view")
+            if self.current_page > 0:
+                self.add_item(self.BackToBioButton(self))
+                logger.debug("Added BackToBioButton")
             self.add_item(self.CustomizeButton(self))
             logger.debug("Added CustomizeButton")
             self.add_item(self.StoriesButton(self))
@@ -1917,9 +1940,6 @@ class ProfileView(View):
                 color=EMBED_CONFIG["error_color"],
             )
             await ctx.reply(embed=error_embed)
-
-
-
 
 
 

@@ -193,34 +193,40 @@ class Quest(commands.Cog):
 
     @commands.command(name="profile", aliases=["pf"])
     async def profile(self, ctx, member: discord.Member = None):
-     if member is None:
-        member = ctx.author
+     member = member or ctx.author
 
-     user_id = member.id
-     guild_id = ctx.guild.id
-     user_id_str = str(user_id)
-     guild_id_str = str(guild_id)
+     user_id = str(member.id)
+     guild_id = str(ctx.guild.id)
 
-     user_exists = await self.quest_data.find_user_in_server(user_id_str, guild_id_str)
+     # Check if the target member has started their quest
+     user_exists = await self.quest_data.find_user_in_server(user_id, guild_id)
      if not user_exists:
         await ctx.reply(
-            f"You need to start your quest first with `{ctx.prefix}quest` before viewing your profile.",
+          f"{'You' if member == ctx.author else member.mention} need to start a quest first using `{ctx.prefix}quest` before viewing this profile."
             mention_author=False
         )
         return
 
+     # If the author is viewing someone else’s profile, ensure *they* exist too
+     if member != ctx.author:
+        author_exists = await self.quest_data.find_user_in_server(str(ctx.author.id), guild_id)
+        if not author_exists:
+            await ctx.reply(
+                f"You need to start your quest first with `{ctx.prefix}quest` before viewing others’ profiles.",
+                mention_author=False
+            )
+            return
+
      try:
-        balance = await self.quest_data.get_balance(user_id_str, guild_id_str)
+        balance = await self.quest_data.get_balance(user_id, guild_id)
      except AttributeError:
-        # Fallback in case get_balance still fails due to NoneType
         balance = 0
-        logger.warning(f"Balance fetch failed for user {user_id_str} in guild {guild_id_str}, defaulting to 0")
+        logger.warning(f"Balance fetch failed for user {user_id} in guild {guild_id}, defaulting to 0")
 
-     stella_points = balance  # Using the fetched balance
-
+     stella_points = balance
      view = ProfileView(ctx, member, stella_points, self.quest_data)
      await view.start(ctx)
-     
+
     @commands.command(name="inventory", aliases=["inv"])
     async def inventory(self, ctx):
         try:
