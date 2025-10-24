@@ -1878,7 +1878,7 @@ class PokemonRegionSelect(discord.ui.View):
 
                 if not self.current_regions:
                     embed.description = self.config.get_no_selection_description("region") + "\n\n" + embed.description
-                    embed.add_field(**self.config.get_how_it_works_field("region"))
+                    #embed.add_field(**self.config.get_how_it_works_field("region"))
 
             footer_text = self.config.get_footer_text(status_message or self.status_message)
             embed.set_footer(
