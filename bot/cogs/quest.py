@@ -202,7 +202,7 @@ class Quest(commands.Cog):
      user_exists = await self.quest_data.find_user_in_server(user_id, guild_id)
      if not user_exists:
         await ctx.reply(
-          f"{'You' if member == ctx.author else member.mention} need to start a quest first using `{ctx.prefix}quest` before viewing this profile."
+          f"{'You' if member == ctx.author else member.mention} need to start a quest first using `{ctx.prefix}quest` before viewing this profile.",
             mention_author=False
         )
         return
