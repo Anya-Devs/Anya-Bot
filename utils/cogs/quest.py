@@ -1100,8 +1100,7 @@ _URL_RE = re.compile(
     r"([:/?#][^\s]*)?$", re.IGNORECASE
 )
 
-
-
+#-------------------
 class ProfileView(View):
     class ProfileEditModal(Modal):
         def __init__(
@@ -1452,8 +1451,8 @@ class ProfileView(View):
 
     class NavigationButton(Button):
         def __init__(self, profile_view, direction: str, disabled: bool = False):
-            emoji = '◀️' if direction == 'prev' else '▶️'
-            super().__init__(emoji=emoji, style=discord.ButtonStyle.secondary, disabled=disabled)
+            emoji = '◀' if direction == 'prev' else '▶'
+            super().__init__(label=emoji, style=discord.ButtonStyle.secondary, disabled=disabled)
             self.profile_view = profile_view
             self.direction = direction
             logger.debug(f"Initialized NavigationButton: direction={direction}, disabled={disabled}")
@@ -1716,10 +1715,6 @@ class ProfileView(View):
      try:
         logger.debug(f"Generating embeds for page {page} for member {self.member.id}")
         now = datetime.now(timezone.utc)
-        delta = now - self.member.joined_at
-        years = delta.days // 365
-        months = (delta.days % 365) // 30
-        duration = f"{years} years, {months} months" if years or months else "Recently joined"
         
         if page == 0:
             embed = discord.Embed(
@@ -1728,6 +1723,7 @@ class ProfileView(View):
                 timestamp=now,
             )
             fields = EMBED_CONFIG["fields"]["bio_page"]
+            duration = timestamp_gen(int(self.member.joined_at.timestamp()))
             field_values = {
                 "display_name": self.member.display_name,
                 "age": str(self.age) if self.age != "Not set" else "Not set",
@@ -1753,7 +1749,7 @@ class ProfileView(View):
             if story_index < len(self.stories):
                 story = self.stories[story_index]
                 main_embed = discord.Embed(
-                    title=EMBED_CONFIG["story_title"].format(display_name=self.member.display_name, page=page, title=story['title']),
+                    title=f"{self.member.display_name}'s Chapter {page}: {story['title']}",
                     description=story['content'][:4000] or "No content.",
                     color=EMBED_CONFIG["primary_color"],
                     timestamp=now,
@@ -1940,9 +1936,6 @@ class ProfileView(View):
                 color=EMBED_CONFIG["error_color"],
             )
             await ctx.reply(embed=error_embed)
-
-
-
 
 
 
