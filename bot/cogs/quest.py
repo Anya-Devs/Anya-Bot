@@ -194,38 +194,21 @@ class Quest(commands.Cog):
     @commands.command(name="profile", aliases=["pf"])
     async def profile(self, ctx, member: discord.Member = None):
      member = member or ctx.author
+     g, u, a = str(ctx.guild.id), str(member.id), str(ctx.author.id)
 
-     user_id = str(member.id)
-     guild_id = str(ctx.guild.id)
+     if not await self.quest_data.find_user_in_server(a, g):
+        return await ctx.reply(f"You need to start your quest first using `{ctx.prefix}quest` before viewing profiles.", mention_author=False)
 
-     # Check if the target member has started their quest
-     user_exists = await self.quest_data.find_user_in_server(user_id, guild_id)
-     if not user_exists:
-        await ctx.reply(
-          f"{'You' if member == ctx.author else member.mention} need to start a quest first using `{ctx.prefix}quest` before viewing this profile.\n-# Requested by {ctx.author}",
-            mention_author=False
-        )
-        return
-
-     # If the author is viewing someone else’s profile, ensure *they* exist too
-     if member != ctx.author:
-        author_exists = await self.quest_data.find_user_in_server(str(ctx.author.id), guild_id)
-        if not author_exists:
-            await ctx.reply(
-                f"You need to start your quest first with `{ctx.prefix}quest` before viewing others’ profiles.",
-                mention_author=False
-            )
-            return
+     if not await self.quest_data.find_user_in_server(u, g):
+        return await ctx.reply(f"{'You' if member == ctx.author else member.mention} need to start a quest first using `{ctx.prefix}quest` before viewing this profile.\n-# Requested by {ctx.author}", mention_author=False)
 
      try:
-        balance = await self.quest_data.get_balance(user_id, guild_id)
+        balance = await self.quest_data.get_balance(u, g)
      except AttributeError:
         balance = 0
-        logger.warning(f"Balance fetch failed for user {user_id} in guild {guild_id}, defaulting to 0")
+        logger.warning(f"Balance fetch failed for user {u} in guild {g}, defaulting to 0")
 
-     stella_points = balance
-     view = ProfileView(ctx, member, stella_points, self.quest_data)
-     await view.start(ctx)
+     await ProfileView(ctx, member, balance, self.quest_data).start(ctx)
 
     @commands.command(name="inventory", aliases=["inv"])
     async def inventory(self, ctx):

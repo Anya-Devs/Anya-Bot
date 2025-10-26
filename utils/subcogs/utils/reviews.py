@@ -62,7 +62,6 @@ class Review_View(discord.ui.View):
             self.add_item(CancelButton(ctx_message))
 
 
-
 class ReviewButton(discord.ui.Button):
     def __init__(self, mode: str, modal_cls, ctx_message, target):
         super().__init__(
@@ -72,14 +71,14 @@ class ReviewButton(discord.ui.Button):
         self.mode = mode
         self.modal_cls = modal_cls
         self.ctx_message = ctx_message
-        self.target = target  
+        self.target = target
 
     async def callback(self, interaction: discord.Interaction):
         if self.ctx_message:
             try:
                 await self.ctx_message.delete()
             except:
-                pass  
+                pass
 
         target_member = self.target if self.target else interaction.user
 
@@ -144,34 +143,70 @@ class MongoManager:
      field = "upvotes" if up else "downvotes"
      await self.collection.update_one({"_id": ObjectId(review_id)}, {"$inc": {field: 1}})
 
-# ────────────────────────────────────────────────
-#  Select-menu + Paginator
-# ────────────────────────────────────────────────
-class ReviewUserSelect(discord.ui.Select):
-    def __init__(self, reviews, member, mongo, guild):
-        options = []
-        self.reviews = reviews
-        self.member = member
-        self.mongo = mongo
-        self.guild = guild
+    async def get_leaderboard_data(self, guild_id, min_reviews=1, limit=200):
+        prior_avg = 3.5
+        prior_weight = 2
+        pipeline = [
+            {"$match": {"guild_id": guild_id}},
+            {"$group": {
+                "_id": "$target_id",
+                "total_stars": {"$sum": "$stars"},
+                "review_count": {"$sum": 1}
+            }},
+            {"$match": {"review_count": {"$gte": min_reviews}}},
+            {"$addFields": {
+                "avg": {"$divide": ["$total_stars", "$review_count"]},
+                "weighted": {
+                    "$divide": [
+                        {"$add": [
+                            "$total_stars",
+                            prior_avg * prior_weight
+                        ]},
+                        {"$add": ["$review_count", prior_weight]}
+                    ]
+                }
+            }},
+            {"$sort": {"weighted": -1}},
+            {"$limit": limit},
+            {"$project": {"avg": 1, "review_count": 1, "_id": 1}}
+        ]
+        cursor = self.collection.aggregate(pipeline)
+        data = await cursor.to_list(None)
+        return [(doc["_id"], doc["avg"], doc["review_count"]) for doc in data]
 
-        for r in reviews:
-            reviewer = guild.get_member(int(r["reviewer_id"]))
-            if reviewer:
-                options.append(discord.SelectOption(
-                    label=reviewer.display_name,
-                    value=str(r["_id"])  # use review id, not reviewer id
-                ))
+
+# ────────────────────────────────────────────────
+#  NEW: Leaderboard-style comment select menu
+# ────────────────────────────────────────────────
+class CommenterSelectMenu(discord.ui.Select):
+    def __init__(self, reviews, guild, mongo, guild_id):
+        self.reviews = reviews
+        self.guild = guild
+        self.mongo = mongo
+        self.guild_id = guild_id
+
+        options = []
+        for review in reviews:
+            reviewer = guild.get_member(int(review["reviewer_id"]))
+            reviewer_name = reviewer.name if reviewer else f"User_{review['reviewer_id']}"
+            comment_preview = review["review"][:40]
+
+            options.append(discord.SelectOption(
+                label=f"{reviewer_name} | {comment_preview}",
+                value=str(review["_id"])
+            ))
 
         super().__init__(
-            placeholder="Select a reviewer to see their review…",
-            min_values=1, max_values=1, options=options
+            placeholder="Select a commenter to read their review...",
+            min_values=1,
+            max_values=1,
+            options=options
         )
 
     async def callback(self, interaction: discord.Interaction):
         review_id = ObjectId(self.values[0])
         review = await self.mongo.collection.find_one(
-            {"_id": review_id, "guild_id": str(interaction.guild.id)}
+            {"_id": review_id, "guild_id": self.guild_id}
         )
         if not review:
             await interaction.response.send_message("Review not found.", ephemeral=True)
@@ -181,30 +216,121 @@ class ReviewUserSelect(discord.ui.Select):
         star_txt = "⭐" * review["stars"]
 
         emb = discord.Embed(
-            title=f"Review by {reviewer.display_name}" if reviewer else "Review",
+            title=f"Review by {reviewer.name if reviewer else 'Unknown User'}",
             description=f"{star_txt}\n\n{review['review']}",
             color=primary_color()
         )
         if reviewer:
             emb.set_thumbnail(url=reviewer.display_avatar.url)
-        emb.set_footer(text=f"👍 {review.get('upvotes', 0)} | 👎 {review.get('downvotes', 0)}",
-                       icon_url=interaction.user.display_avatar.url)
+        emb.set_footer(
+            text=f"👍 {review.get('upvotes', 0)} | 👎 {review.get('downvotes', 0)}",
+            icon_url=interaction.user.display_avatar.url
+        )
 
         # Vote buttons
         view = discord.ui.View()
-        btn_up = VoteButton(review["_id"], True, self.mongo, str(interaction.guild.id))
-        btn_down = VoteButton(review["_id"], False, self.mongo, str(interaction.guild.id))
+        btn_up = VoteButton(review["_id"], True, self.mongo, self.guild_id)
+        btn_down = VoteButton(review["_id"], False, self.mongo, self.guild_id)
 
         user_vote = review.get("votes", {}).get(str(interaction.user.id))
         if user_vote == "up":
             btn_up.style = discord.ButtonStyle.green
         elif user_vote == "down":
             btn_down.style = discord.ButtonStyle.red
+
         view.add_item(btn_up)
         view.add_item(btn_down)
 
         await interaction.response.send_message(embed=emb, view=view, ephemeral=True)
 
+
+# ────────────────────────────────────────────────
+#  NEW: Comments pagination view (25 per page)
+# ────────────────────────────────────────────────
+class CommentsPaginationView(discord.ui.View):
+    def __init__(self, reviews, member, mongo, guild_id, guild):
+        super().__init__(timeout=180)
+        self.reviews = reviews
+        self.member = member
+        self.mongo = mongo
+        self.guild_id = guild_id
+        self.guild = guild
+        self.current_page = 0
+        self.per_page = 25
+        self.total_pages = (len(reviews) + self.per_page - 1) // self.per_page
+
+        self.update_components()
+
+    def update_components(self):
+        self.clear_items()
+
+        # Get current page reviews
+        start_idx = self.current_page * self.per_page
+        end_idx = min(start_idx + self.per_page, len(self.reviews))
+        page_reviews = self.reviews[start_idx:end_idx]
+
+        # Add select menu for commenters on this page
+        select = CommenterSelectMenu(page_reviews, self.guild, self.mongo, self.guild_id)
+        self.add_item(select)
+
+        # Add navigation buttons if multiple pages
+        if self.total_pages > 1:
+            prev_btn = discord.ui.Button(
+                label="<",
+                style=discord.ButtonStyle.primary,
+                disabled=self.current_page == 0,
+                row=1
+            )
+            prev_btn.callback = self.prev_page
+            self.add_item(prev_btn)
+
+            next_btn = discord.ui.Button(
+                label=">",
+                style=discord.ButtonStyle.primary,
+                disabled=self.current_page >= self.total_pages - 1,
+                row=1
+            )
+            next_btn.callback = self.next_page
+            self.add_item(next_btn)
+
+    async def prev_page(self, interaction: discord.Interaction):
+        self.current_page = max(0, self.current_page - 1)
+        self.update_components()
+        emb = self.build_embed()
+        await interaction.response.edit_message(embed=emb, view=self)
+
+    async def next_page(self, interaction: discord.Interaction):
+        self.current_page = min(self.total_pages - 1, self.current_page + 1)
+        self.update_components()
+        emb = self.build_embed()
+        await interaction.response.edit_message(embed=emb, view=self)
+
+    def build_embed(self):
+        avg = sum(r["stars"] for r in self.reviews) / len(self.reviews) if self.reviews else 0
+
+        # Build list of commenters on this page
+        start_idx = self.current_page * self.per_page
+        end_idx = min(start_idx + self.per_page, len(self.reviews))
+        page_reviews = self.reviews[start_idx:end_idx]
+
+        commenter_list = []
+        for review in page_reviews:
+            reviewer = self.guild.get_member(int(review["reviewer_id"]))
+            reviewer_name = reviewer.name if reviewer else f"User_{review['reviewer_id']}"
+            commenter_list.append(f"• {reviewer_name}")
+
+        emb = discord.Embed(
+            title=f"{self.member.display_name}'s Reviews",
+            description=(
+                f"⭐ **{avg:.2f}** average from **{len(self.reviews)}** review(s).\n\n"
+                f"**Commenters on this page:**\n" + "\n".join(commenter_list)
+            ),
+            color=primary_color()
+        )
+        emb.set_thumbnail(url=self.member.avatar.url)
+        emb.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} | Select a commenter below to read")
+
+        return emb
 
 
 class Review_Select:
@@ -219,40 +345,11 @@ class Review_Select:
             emb.set_thumbnail(url=member.avatar.url)
             return emb, None
 
-        avg = await mongo.get_average_rating(str(member.id), str(ctx.guild.id))
-        emb = discord.Embed(
-            title=f"{member.display_name}'s Reviews",
-            description=f"⭐ **{avg:.2f}** average from **{len(reviews)}** review(s).",
-            color=primary_color()
-        )
-        emb.set_thumbnail(url=member.avatar.url)
-
-        view = discord.ui.View()
-        chunk_size = 5
-        review_chunks = [reviews[i:i + chunk_size] for i in range(0, len(reviews), chunk_size)]
-
-        for i, chunk in enumerate(review_chunks):
-            select = ReviewUserSelect(chunk, member, mongo, ctx.guild)
-            select.placeholder = f"Review Options | Part {i + 1}"
-            view.add_item(select)
-
-        if len(reviews) > 25:
-            view.add_item(OtherReviewsButton(reviews, member, mongo, str(ctx.guild.id)))
+        # Use new pagination view with embed + select menu
+        view = CommentsPaginationView(reviews, member, mongo, str(ctx.guild.id), ctx.guild)
+        emb = view.build_embed()
 
         return emb, view
-
-
-class OtherReviewsButton(discord.ui.Button):
-    def __init__(self, reviews, member, mongo, guild_id):
-        super().__init__(label="See All Reviews", style=discord.ButtonStyle.blurple)
-        self.reviews = reviews
-        self.member = member
-        self.mongo = mongo
-        self.guild_id = guild_id
-
-    async def callback(self, interaction: discord.Interaction):
-        view = Review_PaginatorView(self.reviews, self.member, interaction.user)
-        await view.start(interaction)
 
 
 class VoteButton(discord.ui.Button):
@@ -304,7 +401,7 @@ class VoteButton(discord.ui.Button):
         star_txt = "⭐" * review["stars"]
 
         emb = discord.Embed(
-            title=f"Review by {reviewer.display_name}" if reviewer else "Review",
+            title=f"Review by {reviewer.name if reviewer else 'Unknown User'}",
             description=f"{star_txt}\n\n{review['review']}",
             color=primary_color()
         )
@@ -325,121 +422,6 @@ class VoteButton(discord.ui.Button):
         view.add_item(btn_down)
 
         await interaction.response.edit_message(embed=emb, view=view)
-        
-        
-             
-class Review_Paginator:
-    async def start(self, ctx, reviews, member):
-        pages = self._build_pages(member, reviews)
-        if not pages:
-            await ctx.send("No reviews found.")
-            return
-        view = PaginatorView(pages, ctx.author)
-        view.message = await ctx.send(embed=pages[0], view=view)
-
-    def _build_pages(self, member, reviews):
-        pages = []
-        for rev in reviews:
-            emb = discord.Embed(
-                title=f"Review for {member.display_name}",
-                description=rev["review"],
-                color=primary_color()
-            ).set_footer(
-                text=f"👍 {rev['upvotes']} | 👎 {rev['downvotes']}"
-            )
-            pages.append(emb)
-        return pages
-
-
-class Review_PaginatorView(discord.ui.View):
-    def __init__(self, reviews, member, owner, mongo, guild_id):
-        super().__init__(timeout=60)
-        self.reviews = reviews
-        self.member = member
-        self.owner = owner
-        self.mongo = mongo
-        self.guild_id = guild_id
-        self.current = 0
-        self.message = None
-
-    def build_page(self, review, user: discord.Member):
-        reviewer = user.guild.get_member(int(review["reviewer_id"]))
-        star_txt = "⭐" * review["stars"]
-
-        emb = discord.Embed(
-            title=f"Review by {reviewer.display_name}" if reviewer else "Review",
-            description=f"{star_txt}\n\n{review['review']}",
-            color=primary_color()
-        )
-        if reviewer:
-            emb.set_thumbnail(url=reviewer.display_avatar.url)
-        emb.set_footer(text=f"👍 {review.get('upvotes', 0)} | 👎 {review.get('downvotes', 0)}")
-
-        view = discord.ui.View()
-        btn_up = VoteButton(review["_id"], True, self.mongo, self.guild_id)
-        btn_down = VoteButton(review["_id"], False, self.mongo, self.guild_id)
-        user_vote = review.get("votes", {}).get(str(user.id))
-        if user_vote == "up":
-            btn_up.style = discord.ButtonStyle.green
-        elif user_vote == "down":
-            btn_down.style = discord.ButtonStyle.red
-        view.add_item(btn_up)
-        view.add_item(btn_down)
-
-        return emb, view
-
-    async def start(self, interaction):
-        emb, view = self.build_page(self.reviews[0], interaction.user)
-        self.message = await interaction.response.send_message(embed=emb, view=view, ephemeral=True)
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return interaction.user.id == self.owner.id
-
-    @discord.ui.button(emoji="⬅️", style=discord.ButtonStyle.blurple)
-    async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current = max(self.current - 1, 0)
-        emb, view = self.build_page(self.reviews[self.current], interaction.user)
-        await interaction.response.edit_message(embed=emb, view=view)
-
-    @discord.ui.button(emoji="➡️", style=discord.ButtonStyle.blurple)
-    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current = min(self.current + 1, len(self.reviews) - 1)
-        emb, view = self.build_page(self.reviews[self.current], interaction.user)
-        await interaction.response.edit_message(embed=emb, view=view)
-
-    async def on_timeout(self):
-        for child in self.children:
-            child.disabled = True
-        if self.message:
-            await self.message.edit(view=self)
-
-
-class PaginatorView(discord.ui.View):
-    def __init__(self, pages, owner):
-        super().__init__(timeout=60)
-        self.pages = pages
-        self.owner = owner
-        self.current = 0
-        self.message = None
-        
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return interaction.user.id == self.owner.id
-
-    @discord.ui.button(emoji="⬅️", style=discord.ButtonStyle.blurple)
-    async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current = max(self.current - 1, 0)
-        await interaction.response.edit_message(embed=self.pages[self.current])
-
-    @discord.ui.button(emoji="➡️", style=discord.ButtonStyle.blurple)
-    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current = min(self.current + 1, len(self.pages) - 1)
-        await interaction.response.edit_message(embed=self.pages[self.current])
-
-    async def on_timeout(self):
-        for child in self.children:
-            child.disabled = True
-        if self.message:
-            await self.message.edit(view=self)
 
 
 # ────────────────────────────────────────────────
@@ -459,10 +441,10 @@ class Review_Utils:
                 title="Add A Review",
                 description=self.response_template["add"].format(member=member),
                 color=primary_color()
-            ),  
+            ),
             "edit": lambda member: discord.Embed(
                 title="Edit A Review",
-                description=self.response_template["edit"].format(member=member),  
+                description=self.response_template["edit"].format(member=member),
                 color=primary_color()
             )
         }
@@ -532,8 +514,8 @@ class ReviewActions:
             color=discord.Color.red()
         )
         await ctx.reply(embed=emb, ephemeral=True)
-           
-        
+
+
 # ────────────────────────────────────────────────
 #  Modal for add/edit
 # ────────────────────────────────────────────────
@@ -606,3 +588,159 @@ class ReviewModal(ui.Modal):
             pass
 
         await interaction.response.send_message(msg, ephemeral=True)
+
+
+class Review_Paginator:
+    async def start(self, ctx, reviews, member):
+        pages = self._build_pages(member, reviews)
+        if not pages:
+            await ctx.send("No reviews found.")
+            return
+        view = PaginatorView(pages, ctx.author)
+        view.message = await ctx.send(embed=pages[0], view=view)
+
+    def _build_pages(self, member, reviews):
+        pages = []
+        for rev in reviews:
+            emb = discord.Embed(
+                title=f"Review for {member.display_name}",
+                description=rev["review"],
+                color=primary_color()
+            ).set_footer(
+                text=f"👍 {rev['upvotes']} | 👎 {rev['downvotes']}"
+            )
+            pages.append(emb)
+        return pages
+
+
+class PaginatorView(discord.ui.View):
+    def __init__(self, pages, owner):
+        super().__init__(timeout=60)
+        self.pages = pages
+        self.owner = owner
+        self.current = 0
+        self.message = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.id == self.owner.id
+
+    @discord.ui.button(emoji="⬅️", style=discord.ButtonStyle.blurple)
+    async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current = max(self.current - 1, 0)
+        await interaction.response.edit_message(embed=self.pages[self.current])
+
+    @discord.ui.button(emoji="➡️", style=discord.ButtonStyle.blurple)
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current = min(self.current + 1, len(self.pages) - 1)
+        await interaction.response.edit_message(embed=self.pages[self.current])
+
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+        if self.message:
+            await self.message.edit(view=self)
+
+
+class LeaderboardView(discord.ui.View):
+    def __init__(self, cog, pages_data, member_dict, ctx):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.pages_data = pages_data  # list of list of (mid, avg, count)
+        self.member_dict = member_dict
+        self.prefix = ctx.prefix
+        self.members_per_page = 10  # Fixed to 10 per page
+        self.current_page = 0
+        self.total_pages = len(pages_data)
+        self.select_page = discord.ui.Select(placeholder="Go to page...", min_values=1, max_values=1, disabled=True)
+        self.add_item(self.select_page)
+        self.update_select()
+        self.select_page.callback = self.select_page_callback
+
+    @discord.ui.button(label="<", style=discord.ButtonStyle.primary)
+    async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page == 0:
+            return
+        self.current_page -= 1
+        await self.update_message(interaction)
+
+    @discord.ui.button(label=">", style=discord.ButtonStyle.primary)
+    async def next_(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page == self.total_pages - 1:
+            return
+        self.current_page += 1
+        await self.update_message(interaction)
+
+    @discord.ui.button(label="View More", style=discord.ButtonStyle.secondary)
+    async def view_more(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.select_page.disabled = False
+        button.disabled = True
+        await self.update_message(interaction)
+
+    async def select_page_callback(self, interaction: discord.Interaction):
+        page = int(interaction.data['values'][0])
+        self.current_page = page
+        await self.update_message(interaction)
+
+    async def update_message(self, interaction):
+        embed = self.build_embed()
+        self.update_select()
+        self.previous.disabled = self.current_page == 0
+        self.next_.disabled = self.current_page == self.total_pages - 1
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    def update_select(self):
+        options = []
+        # Show options around current page, up to 25
+        start = max(0, self.current_page - 12)
+        end = min(self.total_pages, start + 25)
+        for i in range(start, end):
+            page_data = self.pages_data[i]
+            usernames = []
+            for mid, _, _ in page_data:  # Ignore avg/count for desc
+                member = self.member_dict.get(mid)
+                if member:
+                    usernames.append(member.name)  # Raw username
+                else:
+                    usernames.append(f"Unknown User {mid}")
+            desc = ", ".join(usernames)
+            if len(desc) > 100:
+                desc = desc[:97] + "..."
+            label = f"Page {i + 1}"
+            if i == self.current_page:
+                label += " (current)"
+            options.append(discord.SelectOption(label=label, value=str(i), description=desc))
+        self.select_page.options = options
+
+    def build_embed(self):
+        page_data = self.pages_data[self.current_page]
+        desc_parts = []
+        start_place = self.current_page * self.members_per_page + 1
+        for idx, (mid, avg, count) in enumerate(page_data):
+            place = start_place + idx
+            medal = "🥇" if place == 1 else "🥈" if place == 2 else "🥉" if place == 3 else f"{place}"
+            member = self.member_dict.get(mid)
+            name = member.name if member else str(mid)  # Raw username
+            stars = self.get_stars(avg)
+            desc_parts.append(f"{medal} **{name}** {stars} ({count} reviews)")
+        desc_list = "\n".join(desc_parts)
+
+        flavor_desc = (
+            "✦ The top members shine the brightest. ✦\n\n"
+            f"**Climb the ranks:** `{self.prefix}review @username`\n\n"
+            f"{desc_list}"
+        )
+
+        embed = discord.Embed(
+            title="Review Leaderboard",
+            description=flavor_desc,
+            color=primary_color()
+        )
+        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} | Sorted by weighted average rating")
+        return embed
+
+    def get_stars(self, avg):
+        full_stars = int(avg)
+        remainder = avg - full_stars
+        half_star = "⯪" if remainder >= 0.5 else ""
+        empty_stars = 5 - full_stars - (1 if half_star else 0)
+        return "★" * full_stars + half_star + "☆" * empty_stars
