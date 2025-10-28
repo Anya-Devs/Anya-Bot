@@ -4,6 +4,7 @@ import numpy as np, cv2
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageSequence
 from pilmoji import Pilmoji
 
+
 class PokemonImageBuilder:
     def __init__(self):
         self.config_path = "data/events/poketwo_spawns/image/config.json"
@@ -233,7 +234,7 @@ class PokemonImageBuilder:
             return None
 
         base_width=256; increment_per_char=10; max_width=512
-        self.config["canvas_size"]=(min(base_width+increment_per_char*len(pokemon_name),max_width),self.config.get("canvas_size",(512,512))[1])
+        self.config["canvas_size"]=(min(base_width+increment_per_char*len(pokemon_name),max_width) + 20,self.config.get("canvas_size",(512,512))[1])
         type_colors = self.get_type_colors(types)
         bg_frames, durations, is_gif = self.prepare_background_frames(type_colors, bg_url)
         frames = [self.compose_frame(f, poke_img, pokemon_name, best_name, types) for f in bg_frames]
@@ -250,14 +251,13 @@ class PokemonImageBuilder:
                            append_images=frames[1:], duration=durations, loop=0)
         return path
 
-
 if __name__ == "__main__":
     builder = PokemonImageBuilder()
     try:
         path = builder.create_image(
-            raw_slug="Sneasel",
-            pokemon_name="Sneasel",
-            best_name="{flag_fr} Nyula",
+            raw_slug="Maushold Family Of Three",
+            pokemon_name="Maushold Family Of Three",
+            best_name="{flag_fr} Purmel",
             types=["dark","ice"],
             bg_url=None,
             filename="test.png"
