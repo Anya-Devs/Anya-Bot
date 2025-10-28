@@ -4,6 +4,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime
 from bson import ObjectId
 from data.local.const import primary_color
+import math
 
 class ReviewUtils:
     def __init__(self, mongo):
@@ -144,8 +145,14 @@ class MongoManager:
      await self.collection.update_one({"_id": ObjectId(review_id)}, {"$inc": {field: 1}})
 
     async def get_leaderboard_data(self, guild_id, min_reviews=1, limit=200):
-        prior_avg = 3.5
-        prior_weight = 2
+        """
+        Updated leaderboard scoring that prioritizes users with high vote counts
+        while still considering rating quality.
+        
+        Formula: score = average_rating * (log10(review_count + 1) * 10 + sqrt(review_count) * 0.5)
+        This ensures users with many votes rank higher than users with few votes,
+        even if the latter have slightly higher ratings.
+        """
         pipeline = [
             {"$match": {"guild_id": guild_id}},
             {"$group": {
@@ -156,23 +163,77 @@ class MongoManager:
             {"$match": {"review_count": {"$gte": min_reviews}}},
             {"$addFields": {
                 "avg": {"$divide": ["$total_stars", "$review_count"]},
-                "weighted": {
-                    "$divide": [
+                # New scoring system that heavily weights review count
+                "log_component": {
+                    "$multiply": [
+                        {"$log10": {"$add": ["$review_count", 1]}},
+                        10  # Scale factor to make log more impactful
+                    ]
+                },
+                "sqrt_component": {
+                    "$multiply": [
+                        {"$sqrt": "$review_count"},  # Square root for diminishing returns but still significant impact
+                        0.5  # Weight factor
+                    ]
+                },
+                "score": {
+                    "$multiply": [
+                        {"$divide": ["$total_stars", "$review_count"]},  # average rating
                         {"$add": [
-                            "$total_stars",
-                            prior_avg * prior_weight
-                        ]},
-                        {"$add": ["$review_count", prior_weight]}
+                            {"$multiply": [
+                                {"$log10": {"$add": ["$review_count", 1]}},
+                                10
+                            ]},
+                            {"$multiply": [
+                                {"$sqrt": "$review_count"},
+                                0.5
+                            ]}
+                        ]}
                     ]
                 }
             }},
-            {"$sort": {"weighted": -1}},
+            {"$sort": {"score": -1}},
             {"$limit": limit},
-            {"$project": {"avg": 1, "review_count": 1, "_id": 1}}
+            {"$project": {"avg": 1, "review_count": 1, "score": 1, "_id": 1}}
         ]
-        cursor = self.collection.aggregate(pipeline)
-        data = await cursor.to_list(None)
-        return [(doc["_id"], doc["avg"], doc["review_count"]) for doc in data]
+        
+        try:
+            cursor = self.collection.aggregate(pipeline)
+            data = await cursor.to_list(None)
+            # Always return 4-tuple format: (user_id, avg_rating, review_count, score)
+            return [(doc["_id"], doc["avg"], doc["review_count"], doc["score"]) for doc in data]
+        except Exception as e:
+            print(f"Error in get_leaderboard_data: {e}")
+            # Fallback to simple aggregation if advanced pipeline fails
+            simple_pipeline = [
+                {"$match": {"guild_id": guild_id}},
+                {"$group": {
+                    "_id": "$target_id",
+                    "total_stars": {"$sum": "$stars"},
+                    "review_count": {"$sum": 1}
+                }},
+                {"$match": {"review_count": {"$gte": min_reviews}}},
+                {"$addFields": {
+                    "avg": {"$divide": ["$total_stars", "$review_count"]}
+                }},
+                {"$sort": {"avg": -1}},
+                {"$limit": limit}
+            ]
+            cursor = self.collection.aggregate(simple_pipeline)
+            data = await cursor.to_list(None)
+            # Calculate score in Python if MongoDB aggregation fails
+            result = []
+            for doc in data:
+                avg = doc["avg"]
+                count = doc["review_count"]
+                # Calculate score using Python math functions
+                log_comp = math.log10(count + 1) * 10
+                sqrt_comp = math.sqrt(count) * 0.5
+                score = avg * (log_comp + sqrt_comp)
+                result.append((doc["_id"], avg, count, score))
+            # Sort by score descending
+            result.sort(key=lambda x: x[3], reverse=True)
+            return result[:limit]
 
 
 # ────────────────────────────────────────────────
@@ -641,106 +702,229 @@ class PaginatorView(discord.ui.View):
             await self.message.edit(view=self)
 
 
+# ────────────────────────────────────────────────
+#  MODIFIED: LeaderboardView with new requirements
+# ────────────────────────────────────────────────
 class LeaderboardView(discord.ui.View):
-    def __init__(self, cog, pages_data, member_dict, ctx):
+    def __init__(self, cog, pages_data, member_dict, ctx, per_page=6):
         super().__init__(timeout=300)
         self.cog = cog
-        self.pages_data = pages_data  # list of list of (mid, avg, count)
+        self.pages_data = pages_data
         self.member_dict = member_dict
         self.prefix = ctx.prefix
-        self.members_per_page = 10  # Fixed to 10 per page
+        self.per_page = per_page
         self.current_page = 0
         self.total_pages = len(pages_data)
-        self.select_page = discord.ui.Select(placeholder="Go to page...", min_values=1, max_values=1, disabled=True)
-        self.add_item(self.select_page)
-        self.update_select()
-        self.select_page.callback = self.select_page_callback
+        self.view_more_clicked = False
 
-    @discord.ui.button(label="<", style=discord.ButtonStyle.primary)
-    async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.current_page == 0:
+        self._normalize_pages_data()
+        self._setup_initial_view()
+
+    def _normalize_pages_data(self):
+        """Normalize pages data to ensure consistent 4-tuple format"""
+        normalized = []
+        for page in self.pages_data:
+            norm_page = []
+            for entry in page:
+                if len(entry) == 4:
+                    norm_page.append(entry)
+                elif len(entry) == 2:
+                    mid, avg = entry
+                    norm_page.append((mid, avg, 1, avg))
+                else:
+                    mid = entry[0]
+                    avg = entry[1] if len(entry) > 1 else 0.0
+                    count = entry[2] if len(entry) > 2 else 1
+                    score = entry[3] if len(entry) > 3 else avg
+                    norm_page.append((mid, avg, count, score))
+            normalized.append(norm_page[:self.per_page])
+        self.pages_data = normalized
+
+    def _setup_initial_view(self):
+        """Setup the initial view with navigation buttons and view more button"""
+        self.clear_items()
+        
+        # Navigation buttons
+        prev_btn = discord.ui.Button(
+            label="<", 
+            style=discord.ButtonStyle.primary,
+            disabled=self.current_page == 0
+        )
+        prev_btn.callback = self.prev_page
+        self.add_item(prev_btn)
+
+        next_btn = discord.ui.Button(
+            label=">", 
+            style=discord.ButtonStyle.primary,
+            disabled=self.current_page >= self.total_pages - 1
+        )
+        next_btn.callback = self.next_page
+        self.add_item(next_btn)
+
+        # View More button
+        view_more_btn = discord.ui.Button(
+            label="View More", 
+            style=discord.ButtonStyle.secondary
+        )
+        view_more_btn.callback = self.view_more
+        self.add_item(view_more_btn)
+
+    def _setup_expanded_view(self):
+        """Setup the expanded view with select menu and navigation"""
+        self.clear_items()
+        
+        # Add select menu for page navigation
+        self.select = discord.ui.Select(
+            placeholder="Go to page...", 
+            min_values=1, 
+            max_values=1
+        )
+        self.select.callback = self.select_callback
+        self._update_select_options()
+        self.add_item(self.select)
+        
+        # Navigation buttons
+        prev_btn = discord.ui.Button(
+            label="<", 
+            style=discord.ButtonStyle.primary,
+            disabled=self.current_page == 0
+        )
+        prev_btn.callback = self.prev_page
+        self.add_item(prev_btn)
+
+        next_btn = discord.ui.Button(
+            label=">", 
+            style=discord.ButtonStyle.primary,
+            disabled=self.current_page >= self.total_pages - 1
+        )
+        next_btn.callback = self.next_page
+        self.add_item(next_btn)
+
+    def _update_select_options(self):
+        """Update select menu options with logical navigation"""
+        if not hasattr(self, 'select'):
             return
-        self.current_page -= 1
-        await self.update_message(interaction)
-
-    @discord.ui.button(label=">", style=discord.ButtonStyle.primary)
-    async def next_(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.current_page == self.total_pages - 1:
-            return
-        self.current_page += 1
-        await self.update_message(interaction)
-
-    @discord.ui.button(label="View More", style=discord.ButtonStyle.secondary)
-    async def view_more(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.select_page.disabled = False
-        button.disabled = True
-        await self.update_message(interaction)
-
-    async def select_page_callback(self, interaction: discord.Interaction):
-        page = int(interaction.data['values'][0])
-        self.current_page = page
-        await self.update_message(interaction)
-
-    async def update_message(self, interaction):
-        embed = self.build_embed()
-        self.update_select()
-        self.previous.disabled = self.current_page == 0
-        self.next_.disabled = self.current_page == self.total_pages - 1
-        await interaction.response.edit_message(embed=embed, view=self)
-
-    def update_select(self):
+            
         options = []
-        # Show options around current page, up to 25
+        # Show a reasonable range of pages around current page
         start = max(0, self.current_page - 12)
         end = min(self.total_pages, start + 25)
+        
+        # Adjust if we're near the end
+        if end - start < 25 and self.total_pages > 25:
+            start = max(0, end - 25)
+        
         for i in range(start, end):
-            page_data = self.pages_data[i]
-            usernames = []
-            for mid, _, _ in page_data:  # Ignore avg/count for desc
-                member = self.member_dict.get(mid)
-                if member:
-                    usernames.append(member.name)  # Raw username
-                else:
-                    usernames.append(f"Unknown User {mid}")
-            desc = ", ".join(usernames)
-            if len(desc) > 100:
+            page = self.pages_data[i]
+            # Create description with member names
+            names = []
+            for mid, _, _, _ in page:
+                member = self.member_dict.get(str(mid))
+                name = member.name if member else f"User_{mid}"
+                names.append(name)
+            
+            desc = ", ".join(names)
+            if len(desc) > 97:
                 desc = desc[:97] + "..."
-            label = f"Page {i + 1}"
+            
+            label = f"Page {i+1}"
             if i == self.current_page:
                 label += " (current)"
-            options.append(discord.SelectOption(label=label, value=str(i), description=desc))
-        self.select_page.options = options
+            
+            options.append(discord.SelectOption(
+                label=label, 
+                value=str(i), 
+                description=desc
+            ))
+        
+        self.select.options = options
+
+    async def prev_page(self, interaction: discord.Interaction):
+        """Handle previous page navigation"""
+        if self.current_page > 0:
+            self.current_page -= 1
+            await self._update_view(interaction)
+
+    async def next_page(self, interaction: discord.Interaction):
+        """Handle next page navigation"""
+        if self.current_page < self.total_pages - 1:
+            self.current_page += 1
+            await self._update_view(interaction)
+
+    async def view_more(self, interaction: discord.Interaction):
+        """Handle view more button click"""
+        self.view_more_clicked = True
+        self._setup_expanded_view()
+        await self._update_view(interaction)
+
+    async def select_callback(self, interaction: discord.Interaction):
+        """Handle select menu page selection"""
+        self.current_page = int(interaction.data['values'][0])
+        self._update_select_options()
+        await self._update_view(interaction)
+
+    async def _update_view(self, interaction: discord.Interaction):
+        """Update the view with current page and proper button states"""
+        embed = self.build_embed()
+        
+        # Update button states
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                if item.label == "<":
+                    item.disabled = self.current_page == 0
+                elif item.label == ">":
+                    item.disabled = self.current_page >= self.total_pages - 1
+        
+        # Update select options if in expanded view
+        if self.view_more_clicked:
+            self._update_select_options()
+        
+        await interaction.response.edit_message(embed=embed, view=self)
 
     def build_embed(self):
-        page_data = self.pages_data[self.current_page]
-        desc_parts = []
-        start_place = self.current_page * self.members_per_page + 1
-        for idx, (mid, avg, count) in enumerate(page_data):
-            place = start_place + idx
-            medal = "🥇" if place == 1 else "🥈" if place == 2 else "🥉" if place == 3 else f"{place}"
-            member = self.member_dict.get(mid)
-            name = member.name if member else str(mid)  # Raw username
-            stars = self.get_stars(avg)
-            desc_parts.append(f"{medal} **{name}** {stars} ({count} reviews)")
-        desc_list = "\n".join(desc_parts)
+     if not self.pages_data or self.current_page >= len(self.pages_data):
+        return discord.Embed(title="Review Leaderboard",description="No reviews yet.\nBe the first to start recognizing others!",color=primary_color())
+     page=self.pages_data[self.current_page];lines=[];start_rank=self.current_page*self.per_page+1
+     for idx,(mid,avg,count,score) in enumerate(page):
+        if count==0:continue
+        rank=start_rank+idx
+        medal="🥇 1st"if rank==1 else"🥈 2nd"if rank==2 else"🥉 3rd"if rank==3 else f"#{rank}"
+        member=self.member_dict.get(str(mid));name=member.name if member else f"<@{mid}>"
+        if avg>0:
+            full=int(avg);half="⯪"if avg%1>=0.5 else"";empty=5-full-(1 if half else 0)
+            stars="★"*full+half+"☆"*empty
+        else:stars="No rating"
+        lines.append(f"{medal} **{name}** — {stars} (`{count}` reviews)")
+     if not lines:return discord.Embed(title="Review Leaderboard",description="No reviews yet. Start sharing feedback to appear here!",color=primary_color())
+     desc="\n".join(lines[:20]); 
+     if len(lines)>20:desc+=f"\n... and {len(lines)-20} more"
+     total_users=sum(len(p)for p in self.pages_data);per_page_text=f"{self.per_page} per page"if not self.view_more_clicked else"25 per page"
+     embed=discord.Embed(title="Review Leaderboard",description=("✦ **The top members shine the brightest.** ✦\n\nThis board ranks members by their *average rating* and *total number of reviews.*\nEach star reflects community feedback — the more you’re reviewed, the higher you climb!\n\n> 💬 Encourage others by leaving honest reviews — help your friends shine!\n\n**Command:** `"+self.prefix+"review @user`\n\n"+desc),color=primary_color())
+     embed.set_footer(text=f"Page {self.current_page+1}/{self.total_pages} | {total_users} ranked • {per_page_text}")
+     return embed
 
-        flavor_desc = (
-            "✦ The top members shine the brightest. ✦\n\n"
-            f"**Climb the ranks:** `{self.prefix}review @username`\n\n"
-            f"{desc_list}"
-        )
 
-        embed = discord.Embed(
-            title="Review Leaderboard",
-            description=flavor_desc,
-            color=primary_color()
-        )
-        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} | Sorted by weighted average rating")
-        return embed
+    @commands.command(name="leaderboard")
+    async def leaderboard(self, ctx):
+        try:
+            mongo = MongoManager()
+            data = await mongo.get_leaderboard_data(str(ctx.guild.id), min_reviews=1, limit=200)
+            
+            if not data:
+                return await ctx.reply(embed=discord.Embed(
+                    title="Review Leaderboard",
+                    description="No reviews found for this server.",
+                    color=primary_color()
+                ), mention_author=False)
 
-    def get_stars(self, avg):
-        full_stars = int(avg)
-        remainder = avg - full_stars
-        half_star = "⯪" if remainder >= 0.5 else ""
-        empty_stars = 5 - full_stars - (1 if half_star else 0)
-        return "★" * full_stars + half_star + "☆" * empty_stars
+            members = {str(m.id): m for m in ctx.guild.members}
+            
+            # Start with 6 per page initially
+            per_page = 6
+            pages = [data[i:i + per_page] for i in range(0, len(data), per_page)]
+            
+            view = LeaderboardView(self, pages, members, ctx, per_page)
+            await ctx.reply(embed=view.build_embed(), view=view, mention_author=False)
+            
+        except Exception as e:
+            await ctx.reply(f"Error loading leaderboard: `{e}`", mention_author=False)

@@ -1,4 +1,5 @@
 from bson import ObjectId
+from itertools import islice
 from datetime import datetime
 from typing import Union, Optional, Literal
 from collections import defaultdict
@@ -88,64 +89,25 @@ class Information(commands.Cog):
         result = await func(ctx, member)
         return result if isinstance(result, tuple) else (result, None)
 
-    @commands.command(name="leaderboard", aliases=["lb"])
+    @commands.command(name="leaderboard")
     async def leaderboard(self, ctx):
-        guild_id = str(ctx.guild.id)
-        reviews_cursor = self.mongo.collection.find({"guild_id": guild_id})
-        reviews = await reviews_cursor.to_list(length=None)
-
-        if not reviews:
-            embed = discord.Embed(
-                title="No Reviews Yet",
-                description="Be the first to leave a review using `{ctx.prefix}reviews @user add`!".format(ctx=ctx),
+     try:
+        mongo = MongoManager()
+        data = await mongo.get_leaderboard_data(str(ctx.guild.id), min_reviews=1, limit=200)
+        if not data:
+            return await ctx.reply(embed=discord.Embed(
+                title="Review Leaderboard",
+                description="No reviews found for this server.",
                 color=primary_color()
-            )
-            await ctx.reply(embed=embed, mention_author=False)
-            return
+            ), mention_author=False)
 
-        target_avgs = defaultdict(list)
-        for rev in reviews:
-            target_id = rev["target_id"]
-            stars = rev.get("stars", 0)
-            if stars > 0:
-                target_avgs[target_id].append(stars)
-
-        member_scores = {}
-        for target_id, star_list in target_avgs.items():
-            avg = sum(star_list) / len(star_list)
-            member_scores[target_id] = round(avg, 1)
-
-        # Fetch all members (excluding bots)
-        try:
-            all_members = await ctx.guild.chunk()
-        except:
-            all_members = [m for m in ctx.guild.members if not m.bot]
-        else:
-            all_members = [m for m in all_members if not m.bot]
-
-        member_dict = {str(m.id): m for m in all_members}
-
-        # Default to 0 for members without reviews
-        scores = {k: member_scores.get(k, 0.0) for k in member_dict.keys()}
-
-        # Sort by score descending
-        sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-
-        # Only show if there are non-zero scores, otherwise it's all zeros
-        if all(score == 0 for _, score in sorted_scores):
-            embed = discord.Embed(
-                title="No Reviews Yet",
-                description="Be the first to leave a review using `{ctx.prefix}reviews @user add`!".format(ctx=ctx),
-                color=primary_color()
-            )
-            await ctx.reply(embed=embed, mention_author=False)
-            return
-
-        pages_data = [sorted_scores[i:i + self.members_per_page] for i in range(0, len(sorted_scores), self.members_per_page)]
-
-        view = LeaderboardView(self, pages_data, member_dict, ctx)
-        embed = view.build_embed()
-        await ctx.reply(embed=embed, view=view, mention_author=False)
+        members = {str(m.id): m for m in ctx.guild.members}
+        per_page = 25
+        pages = [data[i:i + per_page] for i in range(0, len(data), per_page)]
+        view = LeaderboardView(self, pages, members, ctx, per_page)
+        await ctx.reply(embed=view.build_embed(), view=view, mention_author=False)
+     except Exception as e:
+        await ctx.reply(f"Error loading leaderboard: `{e}`", mention_author=False)
 
     @commands.command(name="about", aliases=["info", "details"])
     async def about(self, ctx, args: Union[discord.Member, int, str] = None):
