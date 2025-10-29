@@ -1,14 +1,13 @@
 """
-Optimized Poketwo Spawn Detector with Enhanced Error Handling
+Optimized Poketwo Spawn Detector
 Performance improvements:
 - Batched database queries (3+ queries → 1 query)
 - Server config caching with TTL
 - Warmed-up prediction model
 - Chunked regeneration to prevent DB stacking
 - Debounced spawn processing per channel
-- Optimized connection pooling with retry mechanisms
+- Optimized Cloudinary connection pooling
 - Pre-computed static caches on startup
-- Enhanced error handling for network issues
 """
 
 from functools import lru_cache
@@ -21,8 +20,6 @@ import logging
 import traceback
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from typing import Optional, Tuple, List, Dict, Any
-import time
-import random
 
 from motor.motor_asyncio import AsyncIOMotorClient
 import aiohttp
@@ -31,9 +28,6 @@ import cloudinary
 import cloudinary.uploader
 import requests
 from cachetools import TTLCache
-from urllib3.exceptions import ProtocolError, IncompleteRead
-from requests.exceptions import RequestException, ConnectionError, Timeout, HTTPError
-import urllib3
 
 from imports.discord_imports import *
 from bot.token import use_test_bot as ut
@@ -44,98 +38,11 @@ from utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils, Pokem
 from tqdm.asyncio import tqdm_asyncio
 
 import resource
+import random
+import time
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-# Disable urllib3 warnings for incomplete reads
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-
-class RetryableHTTPSession:
-    """HTTP session with retry logic and better error handling"""
-    
-    def __init__(self, max_retries: int = 3, backoff_factor: float = 0.5):
-        self.max_retries = max_retries
-        self.backoff_factor = backoff_factor
-        self.session = requests.Session()
-        
-        # Configure session with better defaults
-        adapter = requests.adapters.HTTPAdapter(
-            max_retries=urllib3.util.Retry(
-                total=max_retries,
-                backoff_factor=backoff_factor,
-                status_forcelist=[500, 502, 503, 504, 429],
-                allowed_methods=["GET", "POST"]
-            )
-        )
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
-        
-        # Set reasonable timeouts
-        self.session.timeout = (10, 30)  # (connect, read)
-        
-        # Headers to appear more like a regular browser
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-        })
-
-    def get_with_retry(self, url: str, **kwargs) -> requests.Response:
-        """Get URL with retry logic and better error handling"""
-        last_exception = None
-        
-        for attempt in range(self.max_retries + 1):
-            try:
-                # Add jitter to prevent thundering herd
-                if attempt > 0:
-                    delay = self.backoff_factor * (2 ** (attempt - 1)) + random.uniform(0, 1)
-                    time.sleep(delay)
-                
-                logger.debug(f"Attempting to fetch {url} (attempt {attempt + 1}/{self.max_retries + 1})")
-                
-                response = self.session.get(url, stream=True, **kwargs)
-                response.raise_for_status()
-                
-                # Verify we can read the content
-                content = b""
-                chunk_size = 8192
-                max_size = 50 * 1024 * 1024  # 50MB limit
-                
-                for chunk in response.iter_content(chunk_size=chunk_size):
-                    if chunk:
-                        content += chunk
-                        if len(content) > max_size:
-                            raise ValueError(f"Response too large: {len(content)} bytes")
-                
-                # Create a new response object with the complete content
-                response._content = content
-                logger.debug(f"Successfully fetched {url} ({len(content)} bytes)")
-                return response
-                
-            except (ProtocolError, IncompleteRead, ConnectionError, Timeout) as e:
-                last_exception = e
-                logger.warning(f"Network error on attempt {attempt + 1} for {url}: {type(e).__name__}: {e}")
-                
-            except HTTPError as e:
-                if e.response.status_code in [429, 500, 502, 503, 504]:
-                    last_exception = e
-                    logger.warning(f"HTTP error {e.response.status_code} on attempt {attempt + 1} for {url}")
-                else:
-                    # Don't retry for client errors like 404, 403
-                    logger.error(f"Non-retryable HTTP error for {url}: {e}")
-                    raise
-                    
-            except Exception as e:
-                logger.error(f"Unexpected error fetching {url}: {type(e).__name__}: {e}")
-                raise
-        
-        # All retries exhausted
-        logger.error(f"Failed to fetch {url} after {self.max_retries + 1} attempts. Last error: {last_exception}")
-        raise last_exception or RequestException(f"Failed to fetch {url} after {self.max_retries + 1} attempts")
 
 
 class PoketwoSpawnDetector(commands.Cog):
@@ -211,9 +118,6 @@ class PoketwoSpawnDetector(commands.Cog):
         self.error_emoji = self.ERROR_EMOJI
         self.cross_emoji = self.CROSS_EMOJI
 
-        # Enhanced HTTP session with retry logic
-        self.http_session = RetryableHTTPSession(max_retries=3, backoff_factor=0.5)
-
         # Shared aiohttp session with optimized settings
         self.aiohttp_session: Optional[aiohttp.ClientSession] = None
 
@@ -250,7 +154,7 @@ class PoketwoSpawnDetector(commands.Cog):
             logger.info("Warming up prediction model...")
             dummy_url = self.TEST_SPAWN_URLS[0]
             await self.bot.loop.run_in_executor(
-                self.thread_executor,
+                self.thread_executor,  # ← FIXED: Use ThreadPoolExecutor to avoid pickling issues
                 self._predict_pokemon,
                 dummy_url
             )
@@ -486,19 +390,13 @@ class PoketwoSpawnDetector(commands.Cog):
                 self.spawn_semaphores[cid] = asyncio.Semaphore(3)
 
             async with self.spawn_semaphores[cid]:
-                # Predict with enhanced error handling
+                # Predict
                 pred_start = time.perf_counter()
-                try:
-                    raw_name, conf = await self.bot.loop.run_in_executor(
-                        self.thread_executor,
-                        self._predict_pokemon,
-                        image_url
-                    )
-                except Exception as e:
-                    logger.error(f"Prediction failed for {image_url}: {type(e).__name__}: {e}")
-                    # Try to continue with a fallback
-                    raw_name, conf = "unknown", "0%"
-                    
+                raw_name, conf = await self.bot.loop.run_in_executor(
+                    self.thread_executor,  # ← FIXED: Use ThreadPoolExecutor to avoid pickling issues
+                    self._predict_pokemon,
+                    image_url
+                )
                 pred_time = time.perf_counter() - pred_start
 
                 base = self.base_cache(raw_name)
@@ -572,24 +470,25 @@ class PoketwoSpawnDetector(commands.Cog):
 
                     # Send response
                     if not self.testing:
-                        try:
-                            if url and server_config.get("images_enabled", True):
-                                embed = discord.Embed(color=int("131416", 16))
-                                embed.set_image(url=url)
-                                await message.channel.send(
+                        if url and server_config.get("images_enabled", True):
+                            embed = discord.Embed(color=int("131416", 16))
+                            embed.set_image(url=url)
+                            self.bot.loop.create_task(
+                                message.channel.send(
                                     content=ping_msg,
                                     embed=embed,
                                     reference=message,
                                     view=view
                                 )
-                            else:
-                                await message.channel.send(
+                            )
+                        else:
+                            self.bot.loop.create_task(
+                                message.channel.send(
                                     content=ping_msg,
                                     reference=message,
                                     view=view
                                 )
-                        except discord.HTTPException as e:
-                            logger.error(f"Failed to send spawn message: {e}")
+                            )
                     else:
                         logger.info(f"Test spawn processed: {base_name} (skipped send)")
 
@@ -600,7 +499,7 @@ class PoketwoSpawnDetector(commands.Cog):
 
                     overall_time = time.perf_counter() - overall_start
                     logger.info(
-                        f"✅ Spawn: {base_name} | Pred: {pred_time:.2f}s | Config: {config_time:.3f}s | "
+                        f"Spawn: {base_name} | Pred: {pred_time:.2f}s | Config: {config_time:.3f}s | "
                         f"Pings: {ping_time:.2f}s | Image: {image_time:.2f}s | Total: {overall_time:.2f}s"
                     )
         except MemoryError:
@@ -653,19 +552,19 @@ class PoketwoSpawnDetector(commands.Cog):
         )
 
     def _handle_processing_error(self, message: discord.Message, e: Exception) -> None:
-        logger.error(f"❌ Spawn processing error: {type(e).__name__}: {e}")
+        logger.error(f"Spawn processing error: {type(e).__name__}: {e}")
         traceback.print_exc()
         self.bot.loop.create_task(
             message.channel.send(
-                f"{self.error_emoji} Failed to process spawn: {type(e).__name__}",
+                f"{self.error_emoji} Failed to process spawn",
                 reference=message
             )
         )
 
     def _predict_pokemon(self, image_url: str) -> Tuple[str, str]:
-        """Enhanced prediction with better error handling"""
         if not image_url.startswith(('http://', 'https://')):
             # Local file handling (for pressure testing)
+            # Read file content and create a mock response
             try:
                 with open(image_url, 'rb') as f:
                     content = f.read()
@@ -675,21 +574,6 @@ class PoketwoSpawnDetector(commands.Cog):
                         self.content = content
                         self.status_code = 200
                         self.headers = {'Content-Type': 'image/jpeg'}
-                        self.raw = MockRaw(content)
-
-                class MockRaw:
-                    def __init__(self, content):
-                        self._content = content
-                        self._pos = 0
-                    
-                    def read(self, amt=None):
-                        if amt is None:
-                            result = self._content[self._pos:]
-                            self._pos = len(self._content)
-                        else:
-                            result = self._content[self._pos:self._pos + amt]
-                            self._pos += len(result)
-                        return result
 
                 # Temporarily replace requests.get for this call
                 original_get = requests.get
@@ -702,38 +586,7 @@ class PoketwoSpawnDetector(commands.Cog):
                 logger.error(f"Local image not found: {image_url}")
                 return "unknown", "0%"
         else:
-            # Use enhanced HTTP session with retry logic
-            try:
-                # Monkey patch the predictor's image preprocessing to use our enhanced session
-                original_method = self.predictor.preprocess_image_from_url
-                
-                def enhanced_preprocess(url):
-                    try:
-                        response = self.http_session.get_with_retry(url)
-                        # Convert to the format expected by the original method
-                        import numpy as np
-                        arr = np.frombuffer(response.content, np.uint8)
-                        import cv2
-                        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-                        if img is None:
-                            raise ValueError("Failed to decode image")
-                        return img
-                    except Exception as e:
-                        logger.error(f"Enhanced preprocessing failed for {url}: {e}")
-                        # Fallback to original method
-                        return original_method(url)
-                
-                # Temporarily replace the method
-                self.predictor.preprocess_image_from_url = enhanced_preprocess
-                try:
-                    return self.predictor.predict(image_url)
-                finally:
-                    # Restore original method
-                    self.predictor.preprocess_image_from_url = original_method
-                    
-            except Exception as e:
-                logger.error(f"Enhanced prediction failed for {image_url}: {type(e).__name__}: {e}")
-                return "unknown", "0%"
+            return self.predictor.predict(image_url)
 
     def _get_base_name(self, raw_name: str) -> str:
         base = self.pokemon_utils.get_base_pokemon_name(raw_name)
