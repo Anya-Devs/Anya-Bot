@@ -99,8 +99,28 @@ class ClusteredBot(commands.AutoShardedBot):
 
     async def setup_hook(self):
         await self._import_cogs()
-        connector = aiohttp.TCPConnector(limit=Config.SHARD_POOL_SIZE, ttl_dns_cache=300)
-        self.http_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15), connector=connector)
+        # Enhanced connector settings for better stability
+        connector = aiohttp.TCPConnector(
+            limit=Config.SHARD_POOL_SIZE,
+            ttl_dns_cache=300,
+            use_dns_cache=True,
+            keepalive_timeout=60,
+            enable_cleanup_closed=True,
+            force_close=False
+        )
+        # Enhanced timeout settings
+        timeout = aiohttp.ClientTimeout(
+            total=30,
+            connect=10,
+            sock_read=15
+        )
+        self.http_session = aiohttp.ClientSession(
+            timeout=timeout,
+            connector=connector,
+            headers={
+                'User-Agent': 'Discord Bot (https://github.com/discord/discord-api-docs, 1.0)'
+            }
+        )
         self._gc_task = asyncio.create_task(self._run_periodic_gc())
 
     async def _run_periodic_gc(self):
@@ -177,7 +197,10 @@ class ClusteredBot(commands.AutoShardedBot):
     async def close(self):
         if self._gc_task:
             self._gc_task.cancel()
-            await asyncio.sleep(0)
+            try:
+                await self._gc_task
+            except asyncio.CancelledError:
+                pass
         if self.http_session and not self.http_session.closed:
             await self.http_session.close()
         await super().close()
@@ -235,24 +258,54 @@ class BotRunner:
         if not token:
             logger.error("No token found.")
             return
-        await bot.start(token, reconnect=True)
+        try:
+            await bot.start(token, reconnect=True)
+        except Exception as e:
+            logger.error(f"Bot startup failed: {type(e).__name__}: {e}")
+            traceback.print_exc()
+        finally:
+            if not bot.is_closed():
+                await bot.close()
 
     @staticmethod
     def _install_signal_handlers(loop):
-        def _graceful(*_): [t.cancel() for t in asyncio.all_tasks(loop)]
+        def _graceful(*_): 
+            logger.info("Received shutdown signal, gracefully shutting down...")
+            for task in asyncio.all_tasks(loop):
+                task.cancel()
         for sig in (signal.SIGINT, signal.SIGTERM):
-            try: loop.add_signal_handler(sig, _graceful)
-            except NotImplementedError: signal.signal(sig, lambda *_: _graceful())
+            try: 
+                loop.add_signal_handler(sig, _graceful)
+            except NotImplementedError: 
+                signal.signal(sig, lambda *_: _graceful())
 
     @classmethod
     def main(cls):
         gc.collect()
         threading.Thread(target=FlaskServer().run, daemon=True).start()
         loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         cls._install_signal_handlers(loop)
-        loop.run_until_complete(cls._run_bot())
-        loop.run_until_complete(loop.shutdown_asyncgens())
-        loop.close()
+        try:
+            loop.run_until_complete(cls._run_bot())
+        except KeyboardInterrupt:
+            logger.info("Received keyboard interrupt")
+        except Exception as e:
+            logger.error(f"Unexpected error in main loop: {e}")
+            traceback.print_exc()
+        finally:
+            try:
+                # Cancel all remaining tasks
+                pending = asyncio.all_tasks(loop)
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            except Exception as e:
+                logger.error(f"Error during cleanup: {e}")
+            finally:
+                loop.close()
 
 if __name__ == "__main__":
     BotRunner.main()
