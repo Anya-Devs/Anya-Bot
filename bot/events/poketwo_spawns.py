@@ -33,7 +33,7 @@ from imports.discord_imports import *
 from bot.token import use_test_bot as ut
 from bot.cogs.pokemon import PoketwoCommands
 from utils.subcogs.pokemon import MongoHelper
-from submodules.poketwo_autonamer.predict import Prediction
+from data.events.poketwo_spawns.predict import Prediction
 from utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils, PokemonSpawnView
 from tqdm.asyncio import tqdm_asyncio
 
