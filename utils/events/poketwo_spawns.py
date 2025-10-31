@@ -546,6 +546,7 @@ class PokemonSpawnView(View):
    
  
 
+
 class PokemonImageBuilder:
     def __init__(self):
         self.config_path = "data/events/poketwo_spawns/image/config.json"
@@ -631,7 +632,8 @@ class PokemonImageBuilder:
         x, y = pos
         spacing = self.config.get("type_spacing", 40)
         w, h = (self.config.get("type_icon_size", 32),) * 2 if isinstance(self.config.get("type_icon_size", 32), int) else self.config.get("type_icon_size", 32)
-        if len(types) == 1: x += spacing
+        if len(types) == 1:
+            x += spacing
         for t in types:
             emoji_img = self.get_local_emoji_image(self.type_emojis.get(f"{t.lower()}_type", ""))
             if emoji_img:
@@ -639,8 +641,7 @@ class PokemonImageBuilder:
                 canvas.paste(emoji_img, (x, y), emoji_img)
                 x += spacing
 
-    def contain_image(self, img, target_size, bg_color=(0,0,0,0)):
-        """Resize img to fit entirely in target_size, maintaining aspect ratio, centered, with background fill."""
+    def contain_image(self, img, target_size, bg_color=(0, 0, 0, 0)):
         tw, th = target_size
         iw, ih = img.size
         scale = min(tw / iw, th / ih)
@@ -653,18 +654,28 @@ class PokemonImageBuilder:
         return canvas
 
     def get_type_colors(self, types):
-        def lighten(rgb, f=0.45): return tuple(min(int(c + (255 - c) * f), 255) for c in rgb)
+        def lighten(rgb, f=0.45):
+            return tuple(min(int(c + (255 - c) * f), 255) for c in rgb)
         colors = []
         for t in types:
             emoji_img = self.get_local_emoji_image(self.type_emojis.get(f"{t.lower()}_type", ""))
             if emoji_img:
                 with io.BytesIO() as buf:
-                    emoji_img.save(buf, format="PNG"); buf.seek(0)
+                    emoji_img.save(buf, format="PNG")
+                    buf.seek(0)
                     colors.append(lighten(self.get_dominant_color(buf)))
         return colors or [(240, 240, 240)]
 
     def blend_colors(self, colors):
         return tuple(sum(c[i] for c in colors) // len(colors) for i in range(3))
+
+    def resize_and_crop(self, img, target_size):
+        w, h = target_size
+        ratio, target_ratio = img.width / img.height, w / h
+        scale = h / img.height if ratio > target_ratio else w / img.width
+        img = img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS)
+        left, top = (img.width - w) // 2, (img.height - h) // 2
+        return img.crop((left, top, left + w, top + h))
 
     def prepare_background_frames(self, bg_colors, bg_url=None):
         w, h = self.config.get("canvas_size", (512, 512))
@@ -672,8 +683,10 @@ class PokemonImageBuilder:
         transparent = self.config.get("transparent_background", False)
         url = bg_url if bg_url else self.default_bg_url
         frames, durations, is_gif = [], [], False
+
         if transparent:
             return [Image.new("RGBA", (w, h), (0, 0, 0, 0))], [100], False
+
         if url:
             try:
                 if os.path.isfile(url):
@@ -683,8 +696,10 @@ class PokemonImageBuilder:
                     resp = requests.get(url, headers=headers, timeout=10)
                     resp.raise_for_status()
                     bg_img = Image.open(io.BytesIO(resp.content))
+
                 is_gif = getattr(bg_img, "is_animated", False)
-                dom_color = (0, 0, 0, 255)  # fallback
+                dom_color = (0, 0, 0, 255)
+
                 if is_gif:
                     bg_img.seek(0)
                     first_frame = next(ImageSequence.Iterator(bg_img))
@@ -696,7 +711,7 @@ class PokemonImageBuilder:
                     for frame in ImageSequence.Iterator(bg_img):
                         duration = frame.info.get("duration", 40)
                         frame = frame.convert("RGBA")
-                        frame = self.contain_image(frame, (w, h), dom_color)
+                        frame = self.resize_and_crop(frame, (w, h))
                         if blur:
                             frame = frame.filter(ImageFilter.GaussianBlur(8))
                         shader = self.create_shader_layer(frame.size)
@@ -710,7 +725,7 @@ class PokemonImageBuilder:
                     buf.seek(0)
                     dom_color = self.get_dominant_color(buf) + (255,)
                     frame = bg_img.convert("RGBA")
-                    frame = self.contain_image(frame, (w, h), dom_color)
+                    frame = self.resize_and_crop(frame, (w, h))
                     if blur:
                         frame = frame.filter(ImageFilter.GaussianBlur(8))
                     shader = self.create_shader_layer(frame.size)
@@ -718,6 +733,7 @@ class PokemonImageBuilder:
                     return [frame], [100], False
             except Exception as e:
                 print("Background fetch error:", e)
+
         color = self.blend_colors(bg_colors) if len(bg_colors) > 1 else bg_colors[0]
         canvas = Image.new("RGBA", (w, h), color + (255,))
         shader = self.create_shader_layer(canvas.size)
@@ -725,15 +741,6 @@ class PokemonImageBuilder:
         if blur:
             canvas = canvas.filter(ImageFilter.GaussianBlur(8))
         return [canvas], [100], False
-
-    def resize_and_crop(self, img, target_size):
-        # You can remove this if no longer used elsewhere
-        w, h = target_size
-        ratio, target_ratio = img.width / img.height, w / h
-        scale = h / img.height if ratio > target_ratio else w / img.width
-        img = img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS)
-        left, top = (img.width - w) // 2, (img.height - h) // 2
-        return img.crop((left, top, left + w, top + h))
 
     def replace_flag_emojis_with_displacement(self, text):
         parts, last = [], 0
@@ -755,28 +762,36 @@ class PokemonImageBuilder:
             pilmoji.text((x, off_y), part, font=font, fill=fill, stroke_fill=stroke_fill, stroke_width=stroke_width)
             x += width
 
-    def get_scaled_font(self, base_font, text, step=12, shrink=8):
+    # ✅ Updated: now returns (font, y_offset)
+    def get_scaled_font(self, base_font, text, step=12, shrink=10):
         size = max(10, base_font.size - (len(text) // step) * shrink)
         try:
-            return ImageFont.truetype(base_font.path, size)
+            font = ImageFont.truetype(base_font.path, size)
         except Exception:
-            return ImageFont.load_default()
+            font = ImageFont.load_default()
+        shrink_diff = base_font.size - size
+        y_offset = shrink_diff * 0.6
+        return font, int(y_offset)
 
     def compose_frame(self, bg_frame, poke_img, pokemon_name, best_name, types):
         frame = bg_frame.copy()
         poke_img_size = self.config.get("pokemon_image_size", (128, 128))
-        contained_poke = self.contain_image(poke_img, poke_img_size, (0,0,0,0))
+        contained_poke = self.contain_image(poke_img, poke_img_size, (0, 0, 0, 0))
         poke_pos = self.config.get("pokemon_image_position", (50, 50))
         frame.paste(contained_poke, poke_pos, contained_poke)
+
         pilmoji = Pilmoji(frame)
-        scaled = self.get_scaled_font(self.font_header, pokemon_name)
+        font, y_offset = self.get_scaled_font(self.font_header, pokemon_name)
+        name_pos = self.config.get("pokemon_name_position", (50, 10))
+        alt_pos = self.config.get("alt_name_position", (50, 40))
+
         self.draw_text_with_flag_offset(
-            pilmoji, self.config.get("pokemon_name_position", (50, 10)),
-            pokemon_name, scaled, self.config.get("name_color", (0, 0, 0)),
+            pilmoji, (name_pos[0], name_pos[1] + y_offset),
+            pokemon_name, font, self.config.get("name_color", (0, 0, 0)),
             stroke_fill=self.config.get("name_outline_color"),
             stroke_width=self.config.get("name_stroke_width", 0))
         self.draw_text_with_flag_offset(
-            pilmoji, self.config.get("alt_name_position", (50, 40)),
+            pilmoji, alt_pos,
             best_name, self.font_base, self.config.get("alt_color", (0, 0, 0)),
             stroke_fill=self.config.get("alt_outline_color"),
             stroke_width=self.config.get("alt_stroke_width", 0))
@@ -786,9 +801,9 @@ class PokemonImageBuilder:
     def create_image(self, raw_slug, pokemon_name, best_name, types, bg_url=None, filename=None, format="PNG"):
         try:
             poke_img, _ = self.fetch_pokemon_image(pokemon_name.lower().replace(" ", "-"))
-        except FileNotFoundError as e:
-            #print(f"Pokémon image missing: {e}")
+        except FileNotFoundError:
             return None
+
         type_colors = self.get_type_colors(types)
         bg_frames, durations, is_gif = self.prepare_background_frames(type_colors, bg_url)
         frames = [self.compose_frame(f, poke_img, pokemon_name, best_name, types) for f in bg_frames]
@@ -796,12 +811,12 @@ class PokemonImageBuilder:
         path = os.path.join(self.output_dir, f"{raw_slug}.{out_format.lower()}")
         if filename:
             path = os.path.join(self.output_dir, filename)
+
         if len(frames) == 1:
             frames[0].save(path, format=out_format)
         else:
             frames[0].save(path, format=out_format, save_all=True, append_images=frames[1:], duration=durations, loop=0)
         return path
-  
 
 if __name__ == "__main__":
     builder = PokemonImageBuilder()

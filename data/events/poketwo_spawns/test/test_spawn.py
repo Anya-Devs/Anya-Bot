@@ -220,7 +220,7 @@ class PokemonImageBuilder:
             x += width
 
     # ✅ Updated: now returns (font, y_offset)
-    def get_scaled_font(self, base_font, text, step=12, shrink=8):
+    def get_scaled_font(self, base_font, text, step=12, shrink=10):
         size = max(10, base_font.size - (len(text) // step) * shrink)
         try:
             font = ImageFont.truetype(base_font.path, size)
@@ -279,8 +279,8 @@ if __name__ == "__main__":
     builder = PokemonImageBuilder()
     try:
         path = builder.create_image(
-            raw_slug="Rufflet",
-            pokemon_name="Rufflet",
+            raw_slug="basculin-white-striped",
+            pokemon_name="Basculin White Striped",
             best_name="{flag_fr} Purmel",
             types=["ground","ghost"],
             bg_url=None,

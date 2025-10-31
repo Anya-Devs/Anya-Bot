@@ -16,8 +16,8 @@
   "pokemon_image_position": [20, 20],
   "pokemon_image_size": [80, 80],
 
-  "pokemon_name_position": [115, 45],
-  "alt_name_position": [115, 78],
+  "pokemon_name_position": [110, 45],
+  "alt_name_position": [110, 78],
 
   "type_position": [280, 80],
   "type_spacing": 40,
