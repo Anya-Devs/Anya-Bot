@@ -227,7 +227,7 @@ class PoketwoSpawnDetector(commands.Cog):
                 logger.info(f"Chunk {i // self.REGENERATION_CHUNK_SIZE + 1}: {success_count}/{len(chunk)} succeeded")
 
                 if self.dirty:
-                    await self._save_image_urls()
+                    self._save_image_urls()
                     self.dirty = False
 
                 await asyncio.sleep(0.5)  # gentle rate-limit
@@ -321,16 +321,16 @@ class PoketwoSpawnDetector(commands.Cog):
         while True:
             await asyncio.sleep(self.PERIODIC_SAVE_INTERVAL)
             if self.dirty:
-                await self._save_image_urls()
+                self._save_image_urls()
                 self.dirty = False
 
-    async def _save_image_urls(self) -> None:
+    def _save_image_urls(self) -> None:
         """Save image URL cache to disk"""
         try:
             os.makedirs(os.path.dirname(self.IMAGE_URLS_PATH), exist_ok=True)
             data = json.dumps(dict(self.image_url_cache), indent=2, ensure_ascii=False)
-            async with aiofiles.open(self.IMAGE_URLS_PATH, "w", encoding="utf-8") as f:
-                await f.write(data)
+            with open(self.IMAGE_URLS_PATH, "w", encoding="utf-8") as f:
+                f.write(data)
             logger.debug("Saved image URL cache")
         except Exception as e:
             logger.warning(f"Failed to save image URLs: {e}")
@@ -902,7 +902,7 @@ class PoketwoSpawnDetector(commands.Cog):
                         failed_details.append(f"`{slug}`: {detail}")
 
                 if self.dirty:
-                    await self._save_image_urls()
+                    self._save_image_urls()
                     self.dirty = False
                     logger.info(f"Saved progress after chunk {chunk_num}")
 
@@ -924,7 +924,7 @@ class PoketwoSpawnDetector(commands.Cog):
                     await asyncio.sleep(1.0)
 
             if self.dirty:
-                await self._save_image_urls()
+                self._save_image_urls()
                 self.dirty = False
 
             final_embed = discord.Embed(title=f"{action} Complete", colour=discord.Colour.green())
@@ -1071,7 +1071,7 @@ class PoketwoSpawnDetector(commands.Cog):
         if self.aiohttp_session and not self.aiohttp_session.closed:
             self.bot.loop.run_until_complete(self.aiohttp_session.close())
 
-        self.bot.loop.run_until_complete(self._save_image_urls())
+        self._save_image_urls()
         logger.info("PoketwoSpawnDetector cog unloaded")
 
 
