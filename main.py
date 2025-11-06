@@ -1,7 +1,7 @@
-# import asyncio; from data.setup import SetupManager; asyncio.run(SetupManager().run_setup())
+#import asyncio;from data.setup import SetupManager;asyncio.run(SetupManager().run_setup())
 import os, sys, gc, importlib, pkgutil, threading, signal, traceback, asyncio
 from dotenv import load_dotenv
-import aiohttp, discord
+import aiohttp, yarl, discord
 from flask import Flask, send_from_directory
 from rich.console import Console
 from rich.align import Align
@@ -14,13 +14,38 @@ from utils.cogs.ticket import setup_persistent_views
 from utils.cogs.fun import setup_persistent_views_fun
 from art import text2art
 from bot.token import get_bot_token as ut
+
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 load_dotenv(dotenv_path=os.path.join(".github", ".env"))
+
+def patch_discord_gateway(env_gateway="wss://gateway.discord.gg/"):
+    class CustomHTTP(discord.http.HTTPClient):
+        async def get_gateway(self, **_):
+            return f"{env_gateway}?encoding=json&v=10"
+
+        async def get_bot_gateway(self, **_):
+            data = await self.request(discord.http.Route("GET","/gateway/bot"))
+            return data["shards"], f"{env_gateway}?encoding=json&v=10", data.get("session_start_limit", {})
+
+    class CustomWebSocket(discord.gateway.DiscordWebSocket):
+        DEFAULT_GATEWAY = yarl.URL(env_gateway)
+        def is_ratelimited(self): return False
+
+    discord.http.HTTPClient.get_gateway = CustomHTTP.get_gateway
+    discord.http.HTTPClient.get_bot_gateway = CustomHTTP.get_bot_gateway
+    discord.gateway.DiscordWebSocket.DEFAULT_GATEWAY = CustomWebSocket.DEFAULT_GATEWAY
+    discord.gateway.DiscordWebSocket.is_ratelimited = CustomWebSocket.is_ratelimited
+
+patch_discord_gateway()
 
 class Config:
     PORT = int(os.environ.get("PORT", 5000))
     USE_PRESENCE = os.environ.get("USE_PRESENCE_INTENTS", "0").strip().lower() not in ("0", "false", "no")
-    COOLDOWN = [ 'rate_limit_count', 1, 'per_seconds', 5, 'type', commands.BucketType.user ]
+    COOLDOWN = [
+        'rate_limit_count', 1,
+        'per_seconds', 5,
+        'type', commands.BucketType.user
+    ]
     SERVER_SHARD_MAPPING = {}
     SHARD_POOL_SIZE = 100
 
@@ -37,24 +62,17 @@ class FlaskServer:
         self.app = Flask(__name__, static_folder="html")
         self.port = port
         self._setup_routes()
-
     def _setup_routes(self):
         @self.app.route("/")
         def index():
             p = os.path.join(self.app.static_folder, "index.html")
             return send_from_directory(self.app.static_folder, "index.html") if os.path.exists(p) else ("⚠️ index.html not found.", 404)
-
         @self.app.route("/html/<path:filename>")
         def serve_static(filename):
             return send_from_directory(self.app.static_folder, filename)
-        
-        @self.app.route("/health")
-        def health():
-            return "OK", 200
-
     def run(self):
         logger.info(f"Starting Flask server on port {self.port}")
-        self.app.run(host="0.0.0.0", port=self.port, threaded=True, use_reloader=False, debug=False)
+        self.app.run(host="0.0.0.0", port=self.port, threaded=True)
 
 class ClusteredBot(commands.AutoShardedBot):
     def __init__(self):
@@ -108,7 +126,7 @@ class ClusteredBot(commands.AutoShardedBot):
     async def _run_periodic_gc(self):
         while True:
             gc.collect()
-            await asyncio.sleep(300)  # Reduced to every 5 minutes for better memory management
+            await asyncio.sleep(600)
 
     async def on_ready(self):
         term = __import__('shutil').get_terminal_size().columns
@@ -117,8 +135,7 @@ class ClusteredBot(commands.AutoShardedBot):
             art = AvatarToTextArt(getattr(self.user, "avatar", None))
             await asyncio.wait_for(asyncio.to_thread(art.create_art), timeout=3)
             art_str = art.get_colored_ascii_art()
-        except:
-            pass
+        except: pass
         banner = "\n\n\n" + (art_str + "\n" if art_str else "")
         banner += "\033[38;2;88;101;242m" + "Welcome to Discord!".center(term) + "\033[0m\n\033[92m"
         banner += "\n".join(line.center(term) for line in text2art(self.user.name[:11], 'sub-zero').splitlines())
@@ -134,9 +151,6 @@ class ClusteredBot(commands.AutoShardedBot):
         await setup_persistent_views(self)
         for guild in self.guilds:
             await self._configure_server_shards(guild)
-        # Sync global application commands (slash commands, etc.)
-        synced = await self.tree.sync()
-        logger.info(f"Synced {len(synced)} global application commands.")
 
     async def _configure_server_shards(self, guild):
         guild_id = guild.id
@@ -154,10 +168,10 @@ class ClusteredBot(commands.AutoShardedBot):
         guild_id = guild.id
         if guild_id in Config.SERVER_SHARD_MAPPING:
             del Config.SERVER_SHARD_MAPPING[guild_id]
-        if guild_id in self.server_shards:
-            del self.server_shards[guild_id]
-        logger.info(f"Removed shard configuration for guild {guild_id}")
-        await self._rebalance_shards()
+            if guild_id in self.server_shards:
+                del self.server_shards[guild_id]
+            logger.info(f"Removed shard configuration for guild {guild_id}")
+            await self._rebalance_shards()
 
     async def _rebalance_shards(self):
         total_shards = sum(config['shard_count'] for config in Config.SERVER_SHARD_MAPPING.values())
@@ -202,7 +216,7 @@ class ClusteredBot(commands.AutoShardedBot):
                 logger.error(f"Failed to import package {dir_name}", exc_info=True)
                 continue
             for _, mod_name, is_pkg in pkgutil.iter_modules(package.__path__):
-                if is_pkg:
+                if is_pkg: 
                     continue
                 leaf = branch.add(mod_name + ".py")
                 cache_key = f"{dir_name}.{mod_name}"
@@ -213,7 +227,8 @@ class ClusteredBot(commands.AutoShardedBot):
                     mod = importlib.import_module(f"{dir_name}.{mod_name}")
                     cog_found = False
                     for obj in vars(mod).values():
-                        if (isinstance(obj, type) and issubclass(obj, commands.Cog) and obj is not commands.Cog and not self.get_cog(obj.__name__)):
+                        if (isinstance(obj, type) and issubclass(obj, commands.Cog) 
+                                and obj is not commands.Cog and not self.get_cog(obj.__name__)):
                             cog_found = True
                             try:
                                 cog_instance = obj(self)
@@ -243,27 +258,25 @@ class BotRunner:
         if not token:
             logger.error("No token found.")
             return
-        while True:  # Infinite retry loop for stability
-            try:
-                await bot.start(token, reconnect=True)
-            except Exception as e:
-                logger.error(f"Bot startup failed: {type(e).__name__}: {e}")
-                traceback.print_exc()
-                await asyncio.sleep(60)  # Wait 1 minute before retrying
-            finally:
-                if not bot.is_closed():
-                    await bot.close()
+        try:
+            await bot.start(token, reconnect=True)
+        except Exception as e:
+            logger.error(f"Bot startup failed: {type(e).__name__}: {e}")
+            traceback.print_exc()
+        finally:
+            if not bot.is_closed():
+                await bot.close()
 
     @staticmethod
     def _install_signal_handlers(loop):
-        def _graceful(*_):
+        def _graceful(*_): 
             logger.info("Received shutdown signal, gracefully shutting down...")
             for task in asyncio.all_tasks(loop):
                 task.cancel()
         for sig in (signal.SIGINT, signal.SIGTERM):
-            try:
+            try: 
                 loop.add_signal_handler(sig, _graceful)
-            except NotImplementedError:
+            except NotImplementedError: 
                 signal.signal(sig, lambda *_: _graceful())
 
     @classmethod
