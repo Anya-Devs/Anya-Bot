@@ -1,57 +1,55 @@
 # =========================
-# Stage 1: Builder
+# Stage 1: Builder - Install build dependencies
 # =========================
 FROM python:3.12-slim AS builder
-WORKDIR /app
-ENV DEBIAN_FRONTEND=noninteractive
 
-# Install build dependencies
-RUN echo "deb http://deb.debian.org/debian stable main contrib non-free" > /etc/apt/sources.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends git libjemalloc2 && \
+# Install system dependencies for building Python packages
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git gcc python3-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+RUN pip install --no-cache-dir poetry
+
+WORKDIR /app
+COPY pyproject.toml poetry.lock* ./
+
+# Install all dependencies
+RUN poetry config virtualenvs.create false && \
+    poetry install --no-interaction --no-ansi --no-root && \
+    rm -rf /root/.cache/pip/*
+
+# =========================
+# Stage 2: Runtime - Lightweight final image
+# =========================
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install runtime libraries only
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libglib2.0-0 \
+        libsm6 \
+        libxext6 \
+        libxrender1 \
+        libjemalloc2 && \
     rm -rf /var/lib/apt/lists/*
 
 # Use jemalloc for better memory efficiency
 ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
 
-# Install Poetry (no venv)
-RUN pip install --no-cache-dir poetry && \
-    poetry config virtualenvs.create false && \
-    poetry --version
-
-# Copy source
+# Copy installed dependencies and app code
+COPY --from=builder /usr/local /usr/local
 COPY . .
 
-# Run setup script (if present)
+# Run setup script if present
 RUN if [ -f data/setup.py ]; then python data/setup.py; fi
 
-# Install dependencies via Poetry
-RUN if [ -f pyproject.toml ]; then \
-        poetry install --no-root --no-interaction --no-ansi; \
-    else \
-        echo "No pyproject.toml found, skipping Poetry install"; \
-    fi
+# Clean caches and bytecode to reduce image size
+RUN find /usr/local -type d -name '__pycache__' -exec rm -rf {} + && \
+    find /usr/local -name '*.py[co]' -delete && \
+    rm -rf /root/.cache /tmp/*
 
-# =========================
-# Stage 2: Final image
-# =========================
-FROM python:3.12-slim
-WORKDIR /app
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install runtime dependencies
-RUN echo "deb http://deb.debian.org/debian stable main contrib non-free" > /etc/apt/sources.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends libjemalloc2 && \
-    rm -rf /var/lib/apt/lists/*
-
-# Use jemalloc
-ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
-
-# Copy app from builder
-COPY --from=builder /usr/local /usr/local
-COPY --from=builder /app /app
-
-# Load env variables at runtime (not build time)
-# The .env file will be injected using docker-compose
+# Default startup command
 CMD ["python", "main.py"]

@@ -1581,23 +1581,21 @@ class PokemonTypeSelect(discord.ui.View):
                 if count > 0:
                     embed.add_field(**self.config.get_afk_saved_field(count, "type"))
             else:
-                type_lines = []
-                sorted_types = sorted(self.pokemon_types)
-                for i in range(0, len(sorted_types), self.config.group_size):
-                    row_types = sorted_types[i:i + self.config.group_size]
-                    row_text = []
-                    for pt in row_types:
-                        selected = pt in self.current_types
-                        mark = "`✅`" if selected else "`❌`"
-                        emoji = self._get_emoji_by_name(pt)
-                        emoji_str = str(emoji) if emoji else "🔹"
-                        row_text.append(f"- {mark} {emoji_str} {pt.title()}")
-                    type_lines.append("\n".join(row_text))
-                embed.description = "\n".join(type_lines)
-
                 if not self.current_types:
-                    embed.description = self.config.get_no_selection_description("type") + "\n\n" + embed.description
+                    embed.description = self.config.get_no_selection_description("type")
                     #embed.add_field(**self.config.get_how_it_works_field("type"))
+                else:
+                    type_lines = []
+                    sorted_types = sorted(self.current_types)
+                    for i in range(0, len(sorted_types), self.config.group_size):
+                        row_types = sorted_types[i:i + self.config.group_size]
+                        row_text = []
+                        for pt in row_types:
+                            emoji = self._get_emoji_by_name(pt)
+                            emoji_str = str(emoji) if emoji else "🔹"
+                            row_text.append(self.config.bullet_format.format(emoji_str=emoji_str, item=pt.title()))
+                        type_lines.append("\n".join(row_text))
+                    embed.description = "\n".join(type_lines)
 
             footer_text = self.config.get_footer_text(status_message)
             embed.set_footer(
@@ -1862,23 +1860,21 @@ class PokemonRegionSelect(discord.ui.View):
                 if count > 0:
                     embed.add_field(**self.config.get_afk_saved_field(count, "region"))
             else:
-                lines = []
-                sorted_regions = sorted(self.pokemon_regions)
-                for i in range(0, len(sorted_regions), self.config.group_size):
-                    row = sorted_regions[i:i + self.config.group_size]
-                    row_text = []
-                    for r in row:
-                        selected = r in self.current_regions
-                        mark = "`✅`" if selected else "`❌`"
-                        emoji = self._get_emoji_by_name(r)
-                        emoji_str = str(emoji) if emoji else "🔹"
-                        row_text.append(f"- {mark} {emoji_str} {r.title()}")
-                    lines.append("\n".join(row_text))
-                embed.description = "\n".join(lines)
-
                 if not self.current_regions:
-                    embed.description = self.config.get_no_selection_description("region") + "\n\n" + embed.description
+                    embed.description = self.config.get_no_selection_description("region")
                     #embed.add_field(**self.config.get_how_it_works_field("region"))
+                else:
+                    lines = []
+                    sorted_regions = sorted(self.current_regions)
+                    for i in range(0, len(sorted_regions), self.config.group_size):
+                        row = sorted_regions[i:i + self.config.group_size]
+                        row_text = []
+                        for r in row:
+                            emoji = self._get_emoji_by_name(r)
+                            emoji_str = str(emoji) if emoji else "🔹"
+                            row_text.append(self.config.bullet_format.format(emoji_str=emoji_str, item=r.title()))
+                        lines.append("\n".join(row_text))
+                    embed.description = "\n".join(lines)
 
             footer_text = self.config.get_footer_text(status_message or self.status_message)
             embed.set_footer(
@@ -2004,3 +2000,20 @@ class PokemonRegionSelect(discord.ui.View):
         valid_regions = {r.lower() for r in self.pokemon_regions}
         parts = [p.strip().lower() for p in user_input.replace(',', ' ').split()]
         return {r for r in parts if r in valid_regions and r != "hisui"}       
+    
+ 
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    

@@ -37,9 +37,9 @@ from data.events.poketwo_spawns.predict import Prediction
 from utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils, PokemonSpawnView
 from tqdm.asyncio import tqdm_asyncio
 
-import resource
 import random
 import time
+import psutil
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -958,7 +958,7 @@ class PoketwoSpawnDetector(commands.Cog):
     async def health_check(self, ctx: commands.Context) -> None:
         cache_size = len(self.image_url_cache)
         total_pokemon = len(self._pokemon_ids)
-        ram_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+        ram_mb = psutil.Process().memory_info().rss / (1024 * 1024)  # Convert bytes to MB
         config_cache_size = len(self.config_cache)
 
         embed = discord.Embed(title="Health Check", colour=discord.Colour.green())
@@ -976,7 +976,7 @@ class PoketwoSpawnDetector(commands.Cog):
     # --------------------------------------------------------------------- #
     async def _pressure_loop(self, ctx: commands.Context, period: int) -> None:
         def get_ram():
-            return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+            return psutil.Process().memory_info().rss / (1024 * 1024)  # Convert bytes to MB
 
         initial_ram = get_ram()
         logger.info(f"Initial RAM: {initial_ram:.1f} MB")
@@ -1047,7 +1047,7 @@ class PoketwoSpawnDetector(commands.Cog):
             await self.pressure_task
             await asyncio.sleep(0.1)
 
-        final = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+        final = psutil.Process().memory_info().rss / (1024 * 1024)  # Convert bytes to MB
         logger.info(f"Pressure test stopped. Final RAM: {final:.1f} MB")
         await ctx.send(f"Pressure test stopped. Final RAM: {final:.1f} MB")
 
