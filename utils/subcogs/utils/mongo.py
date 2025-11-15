@@ -106,3 +106,21 @@ class MongoShHelper:
     async def get_shiny_ping_phrase(self, guild_id: int) -> str:
         cfg = await self.get_server_config(guild_id)
         return cfg.get("shiny_ping_phrase", "**:sparkles: Shiny Hunt Pings:**")
+
+    # Collection protection methods
+    async def set_collection_channels(self, guild_id: int, channel_ids: list):
+        await self.db.update_one({"guild_id": guild_id}, {"$set": {"collection_channels": channel_ids}}, upsert=True)
+
+    async def get_collection_channels(self, guild_id: int) -> list:
+        cfg = await self.get_server_config(guild_id)
+        return cfg.get("collection_channels", [])
+
+    async def set_collection_log_channel(self, guild_id: int, channel_id: int):
+        await self.db.update_one({"guild_id": guild_id}, {"$set": {"collection_log_channel": channel_id}}, upsert=True)
+
+    async def remove_collection_log_channel(self, guild_id: int):
+        await self.db.update_one({"guild_id": guild_id}, {"$unset": {"collection_log_channel": ""}})
+
+    async def get_collection_log_channel(self, guild_id: int):
+        cfg = await self.get_server_config(guild_id)
+        return cfg.get("collection_log_channel")

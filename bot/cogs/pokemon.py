@@ -212,6 +212,48 @@ class PoketwoCommands(commands.Cog):
         )
         return embed
 
+    async def create_protection_embed(self, guild_id: int, guild: discord.Guild) -> discord.Embed:
+        # Get current protection settings
+        shiny_channels = await self.mongo_sh.get_shiny_channels(guild_id)
+        shiny_log_channel = await self.mongo_sh.get_shiny_log_channel(guild_id)
+        collection_channels = await self.mongo_sh.get_collection_channels(guild_id)
+        collection_log_channel = await self.mongo_sh.get_collection_log_channel(guild_id)
+
+        embed = discord.Embed(
+            title="Protection Configuration",
+            description="Configure shiny and collection protection settings.",
+            color=self.embed_default_color
+        )
+
+        # Shiny protection info
+        shiny_mentions = ", ".join(f"<#{ch_id}>" for ch_id in shiny_channels) if shiny_channels else "None"
+        shiny_log_mention = f"<#{shiny_log_channel}>" if shiny_log_channel else "None"
+        
+        embed.add_field(
+            name="Shiny Protection",
+            value=(
+                f"- Protected Channels:\n{shiny_mentions}\n"
+                f"- Log Channel: {shiny_log_mention}"
+            ),
+            inline=False
+        )
+
+        # Collection protection info
+        collection_mentions = ", ".join(f"<#{ch_id}>" for ch_id in collection_channels) if collection_channels else "None"
+        collection_log_mention = f"<#{collection_log_channel}>" if collection_log_channel else "None"
+        
+        embed.add_field(
+            name="Collection Protection",
+            value=(
+                f"- Protected Channels: {collection_mentions}\n"
+                f"- Log Channel: {collection_log_mention}"
+            ),
+            inline=False
+        )
+
+        embed.set_footer(text="Click the buttons below to configure protection settings.")
+        return embed
+
     async def show_help(self, ctx, topic: str = None):
         await self.pt_help(ctx, topic)
 
@@ -271,6 +313,15 @@ class PoketwoCommands(commands.Cog):
         config = await self.get_server_config(guild_id)
         embed = self.create_config_embed(config, ctx.guild)
         view = ConfigView(self, guild_id, self.mongo, config)
+        await ctx.reply(embed=embed, view=view, mention_author=False)
+
+    @config.command(name="protection", aliases=["p"])
+    @commands.has_permissions(manage_guild=True)
+    async def protection(self, ctx):
+        """Configure shiny and collection protection settings."""
+        guild_id = ctx.guild.id
+        embed = await self.create_protection_embed(guild_id, ctx.guild)
+        view = ProtectionConfigView(ctx.guild, self.mongo_sh)
         await ctx.reply(embed=embed, view=view, mention_author=False)
 
     # -------------------

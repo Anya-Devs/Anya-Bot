@@ -25,19 +25,13 @@ pt_help_description = (
     "- Manage pings for Pokémon regions (Kanto, Alola, Galar, etc.)\n\n"
     
     "Configuration | {}pt config\n"
-    "- Opens interactive menu to toggle features & set rare/regional roles.\n"
+    "- pt config protection - Set shiny/collection protection channels/loggers channels\n"
+    "- pt config protection - Opens interactive menu to toggle features & set rare/regional roles.\n"
     "- Use the select menus to enable/disable spawn options or assign roles.\n"
     "- Requires Manage Server permission.\n\n"
     
     "Starboard | {}pt starboard\n"
     "- Configure starboard settings (Manage Channel required)\n\n"
-    
-    "Shiny Protection | {}pt shinychannel\n"
-    "- `{}pt sc` (view protected channels)\n"
-    "- `{}pt sc <#channel>` (set protected channel)\n"
-    "- `{}pt sc log <#channel>` (set log channel)\n"
-    "- `{}pt sc log remove` (remove log)\n"
-    "- `{}pt sc log` (view log channel)\n"
 )
 
 MAX_POKEMON, CHUNK_SIZE, RESULTS_PER_PAGE, MIN_SIMILARITY_RATIO  = 50, 15, 10, 0.65
@@ -1241,6 +1235,224 @@ class RoleSelect(discord.ui.Select):
             f"✅ {self.role_type.title()} Pokémon role set to {role.mention}",
             ephemeral=True
         )
+
+class ProtectionChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self, guild: discord.Guild, protection_type: str, channel_type: str, mongo_helper, guild_id):
+        self.guild = guild
+        self.protection_type = protection_type  # "shiny" or "collection"
+        self.channel_type = channel_type  # "protected" or "log"
+        self.mongo = mongo_helper
+        self.guild_id = guild_id
+        
+        placeholder = f"Select a channel for {protection_type.title()} {channel_type.title()} (optional)"
+        super().__init__(
+            placeholder=placeholder,
+            min_values=0,
+            max_values=1 if channel_type == "log" else 25,  # Allow multiple for protected channels
+            channel_types=[discord.ChannelType.text]
+        )
+        
+        # Set current values for the select menu - will be updated asynchronously
+        self.default_values = []
+    
+    async def _update_default_values(self):
+        """Update the default values for the select menu based on current settings"""
+        try:
+            if self.channel_type == "log":
+                method_name = f"get_{self.protection_type}_log_channel"
+                channel_id = await getattr(self.mongo, method_name)(self.guild_id)
+                if channel_id:
+                    self.default_values = [str(channel_id)]
+                else:
+                    self.default_values = []
+            else:
+                method_name = f"get_{self.protection_type}_channels"
+                channel_ids = await getattr(self.mongo, method_name)(self.guild_id)
+                self.default_values = [str(ch_id) for ch_id in channel_ids] if channel_ids else []
+        except Exception:
+            self.default_values = []
+
+    async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("You lack permission to manage server.", ephemeral=True)
+
+        if not self.values:
+            # Clear the channel
+            if self.channel_type == "log":
+                method_name = f"remove_{self.protection_type}_log_channel"
+                await getattr(self.mongo, method_name)(self.guild_id)
+                await interaction.response.send_message(
+                    f"❎ Cleared {self.protection_type.title()} log channel.", ephemeral=True
+                )
+            else:
+                method_name = f"set_{self.protection_type}_channels"
+                await getattr(self.mongo, method_name)(self.guild_id, [])
+                await interaction.response.send_message(
+                    f"❎ Cleared {self.protection_type.title()} protected channels.", ephemeral=True
+                )
+        else:
+            if self.channel_type == "log":
+                channel = self.values[0]
+                channel_id = channel.id
+                method_name = f"set_{self.protection_type}_log_channel"
+                await getattr(self.mongo, method_name)(self.guild_id, channel_id)
+                await interaction.response.send_message(
+                    f"✅ {self.protection_type.title()} log channel set to {channel.mention}",
+                    ephemeral=True
+                )
+            else:
+                channel_ids = [channel.id for channel in self.values]
+                method_name = f"set_{self.protection_type}_channels"
+                await getattr(self.mongo, method_name)(self.guild_id, channel_ids)
+                mentions = ", ".join(channel.mention for channel in self.values)
+                await interaction.response.send_message(
+                    f"✅ {self.protection_type.title()} protection enabled in: {mentions}",
+                    ephemeral=True
+                )
+        
+        # Update the embed with current values
+        await self._update_embed(interaction)
+    
+    async def _update_embed(self, interaction: discord.Interaction):
+        """Update the embed with current channel values"""
+        try:
+            # Get current protection settings
+            if self.protection_type == "shiny":
+                channels = await self.mongo.get_shiny_channels(self.guild_id)
+                log_channel = await self.mongo.get_shiny_log_channel(self.guild_id)
+            else:
+                channels = await self.mongo.get_collection_channels(self.guild_id)
+                log_channel = await self.mongo.get_collection_log_channel(self.guild_id)
+            
+            # Create updated embed
+            embed = discord.Embed(
+                title=f"{self.protection_type.title()} Protection",
+                description="Select channels for protection and logging"
+            )
+            
+            # Format channel mentions
+            channel_mentions = ", ".join(f"<#{ch_id}>" for ch_id in channels) if channels else "None"
+            log_mention = f"<#{log_channel}>" if log_channel else "None"
+            
+            embed.add_field(
+                name="⬩ Protected Channels",
+                value=channel_mentions,
+                inline=False
+            )
+            embed.add_field(
+                name="⬩ Log Channel", 
+                value=log_mention,
+                inline=False
+            )
+            
+            # Update the message
+            await interaction.message.edit(embed=embed)
+        except Exception as e:
+            print(f"Error updating embed: {e}")
+
+class ProtectionConfigView(discord.ui.View):
+    def __init__(self, guild: discord.Guild, mongo_helper):
+        super().__init__(timeout=300)
+        self.guild = guild
+        self.mongo_helper = mongo_helper
+        
+        # Add two buttons for shiny and collection configuration
+        self.add_item(ShinyConfigButton(guild, mongo_helper))
+        self.add_item(CollectionConfigButton(guild, mongo_helper))
+
+class ShinyConfigButton(discord.ui.Button):
+    def __init__(self, guild: discord.Guild, mongo_helper):
+        super().__init__(
+            label="Shiny Protection",
+            style=discord.ButtonStyle.gray
+        )
+        self.guild = guild
+        self.mongo_helper = mongo_helper
+    
+    async def callback(self, interaction: discord.Interaction):
+        # Create ephemeral message with shiny protection select menus
+        view = discord.ui.View(timeout=180)
+        protected_select = ProtectionChannelSelect(self.guild, "shiny", "protected", self.mongo_helper, self.guild.id)
+        log_select = ProtectionChannelSelect(self.guild, "shiny", "log", self.mongo_helper, self.guild.id)
+        
+        # Update default values for select menus
+        await protected_select._update_default_values()
+        await log_select._update_default_values()
+        
+        view.add_item(protected_select)
+        view.add_item(log_select)
+        
+        # Get current values for the embed
+        shiny_channels = await self.mongo_helper.get_shiny_channels(self.guild.id)
+        shiny_log_channel = await self.mongo_helper.get_shiny_log_channel(self.guild.id)
+        
+        # Format channel mentions
+        channel_mentions = ", ".join(f"<#{ch_id}>" for ch_id in shiny_channels) if shiny_channels else "None"
+        log_mention = f"<#{shiny_log_channel}>" if shiny_log_channel else "None"
+        
+        embed = discord.Embed(
+            title="Shiny Protection",
+            description="Select channels for shiny protection and logging",
+        )
+        embed.add_field(
+            name="⬩ Protected Channels",
+            value=channel_mentions,
+            inline=False
+        )
+        embed.add_field(
+            name="⬩ Log Channel",
+            value=log_mention,
+            inline=False
+        )
+        
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+class CollectionConfigButton(discord.ui.Button):
+    def __init__(self, guild: discord.Guild, mongo_helper):
+        super().__init__(
+            label="Collection Protection",
+            style=discord.ButtonStyle.gray
+        )
+        self.guild = guild
+        self.mongo_helper = mongo_helper
+    
+    async def callback(self, interaction: discord.Interaction):
+        # Create ephemeral message with collection protection select menus
+        view = discord.ui.View(timeout=180)
+        protected_select = ProtectionChannelSelect(self.guild, "collection", "protected", self.mongo_helper, self.guild.id)
+        log_select = ProtectionChannelSelect(self.guild, "collection", "log", self.mongo_helper, self.guild.id)
+        
+        # Update default values for select menus
+        await protected_select._update_default_values()
+        await log_select._update_default_values()
+        
+        view.add_item(protected_select)
+        view.add_item(log_select)
+        
+        # Get current values for the embed
+        collection_channels = await self.mongo_helper.get_collection_channels(self.guild.id)
+        collection_log_channel = await self.mongo_helper.get_collection_log_channel(self.guild.id)
+        
+        # Format channel mentions
+        channel_mentions = ", ".join(f"<#{ch_id}>" for ch_id in collection_channels) if collection_channels else "None"
+        log_mention = f"<#{collection_log_channel}>" if collection_log_channel else "None"
+        
+        embed = discord.Embed(
+            title="Collection Protection",
+            description="Select channels for collection protection and logging",
+        )
+        embed.add_field(
+            name="⬩ Protected Channels",
+            value=channel_mentions,
+            inline=False
+        )
+        embed.add_field(
+            name="⬩ Log Channel",
+            value=log_mention,
+            inline=False
+        )
+        
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 class ServerConfigView(discord.ui.View):
     def __init__(self, guild: discord.Guild, mongo_helper):

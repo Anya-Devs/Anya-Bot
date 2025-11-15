@@ -248,75 +248,89 @@ class TicketSystem:
 
     # Event Handlers
     async def handle_ticket_creation(self, interaction, ticket_data):
-        # Check if user already has an open ticket
-        if await self.user_has_open_ticket(interaction.guild.id, interaction.user.id):
-            await interaction.response.send_message(
-                "❌ You already have an open ticket! Please close it before opening a new one.",
-                ephemeral=True
+        try:
+            # Check if user already has an open ticket
+            if await self.user_has_open_ticket(interaction.guild.id, interaction.user.id):
+                await interaction.response.send_message(
+                    "❌ You already have an open ticket! Please close it before opening a new one.",
+                    ephemeral=True
+                )
+                return
+
+            # Create private thread for ticket
+            thread = await interaction.channel.create_thread(
+                name=f"Ticket-{interaction.user.name}",
+                type=discord.ChannelType.private_thread
             )
-            return
 
-        # Create private thread for ticket
-        thread = await interaction.channel.create_thread(
-            name=f"Ticket-{interaction.user.name}",
-            type=discord.ChannelType.private_thread
-        )
+            # Get admin mentions
+            owner = interaction.guild.owner
+            admins = [m for m in interaction.guild.members 
+                     if m.guild_permissions.administrator and not m.bot and m != owner]
+            online_admins = [m for m in admins if m.status != discord.Status.offline]
+        
+            selected_admins = [owner] + random.sample(
+                online_admins or admins, min(2, len(online_admins or admins))
+            )
 
-        # Get admin mentions
-        owner = interaction.guild.owner
-        admins = [m for m in interaction.guild.members 
-                 if m.guild_permissions.administrator and not m.bot and m != owner]
-        online_admins = [m for m in admins if m.status != discord.Status.offline]
-        
-        selected_admins = [owner] + random.sample(
-            online_admins or admins, min(2, len(online_admins or admins))
-        )
+            # Send messages to thread
+            embed = discord.Embed.from_dict(ticket_data["embed"])
+            await thread.send(f"<@{interaction.user.id}>", embed=embed)
+            
+            if selected_admins:
+                mentions = ' '.join(m.mention for m in selected_admins)
+                await thread.send(f"> Team members assisting: {mentions}")
 
-        # Send messages to thread
-        embed = discord.Embed.from_dict(ticket_data["embed"])
-        await thread.send(f"<@{interaction.user.id}>", embed=embed)
-        
-        if selected_admins:
-            mentions = ' '.join(m.mention for m in selected_admins)
-            await thread.send(f"> Team members assisting: {mentions}")
-
-        # Add close button
-        close_view = self.create_close_ticket_view(thread.id, ticket_data.get("close_button_data", {}))
-        await thread.send(ticket_data.get("thread_message", "Welcome! A staff member will help you soon."), view=close_view)
-        
-        # Save ticket info including user_id and thread_id with status "open"
-        await self.save_ticket(
-            guild_id=interaction.guild.id,
-            message_id=interaction.message.id,
-            channel_id=interaction.channel.id,
-            embed_data=ticket_data["embed"],
-            button_data=ticket_data["button_data"],
-            thread_message=ticket_data["thread_message"],
-            close_button_data=ticket_data["close_button_data"],
-            ticket_name=ticket_data["ticket_name"],
-            user_id=interaction.user.id,
-            thread_id=thread.id
-        )
-        
-        await interaction.response.send_message(f"✅ Ticket created: {thread.mention}", ephemeral=True)
+            # Add close button
+            close_view = self.create_close_ticket_view(thread.id, ticket_data.get("close_button_data", {}))
+            await thread.send(ticket_data.get("thread_message", "Welcome! A staff member will help you soon."), view=close_view)
+            
+            # Save ticket info including user_id and thread_id with status "open"
+            await self.save_ticket(
+                guild_id=interaction.guild.id,
+                message_id=interaction.message.id,
+                channel_id=interaction.channel.id,
+                embed_data=ticket_data["embed"],
+                button_data=ticket_data["button_data"],
+                thread_message=ticket_data["thread_message"],
+                close_button_data=ticket_data["close_button_data"],
+                ticket_name=ticket_data["ticket_name"],
+                user_id=interaction.user.id,
+                thread_id=thread.id
+            )
+            
+            await interaction.response.send_message(f"✅ Ticket created: {thread.mention}", ephemeral=True)
+        except Exception as e:
+            print(f"❌ Error creating ticket: {e}")
+            try:
+                await interaction.response.send_message("❌ Failed to create ticket.", ephemeral=True)
+            except:
+                pass
 
     async def handle_ticket_close(self, interaction, thread_id):
-        if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(
-                "Only administrators can close tickets.", ephemeral=True
+        try:
+            if not interaction.user.guild_permissions.administrator:
+                return await interaction.response.send_message(
+                    "Only administrators can close tickets.", ephemeral=True
+                )
+            
+            thread = interaction.guild.get_thread(thread_id)
+            if thread:
+                await thread.edit(locked=True, archived=True)
+            
+            # Update ticket status in DB to "closed"
+            await self.collection.update_one(
+                {"thread_id": thread_id},
+                {"$set": {"status": "closed"}}
             )
-        
-        thread = interaction.guild.get_thread(thread_id)
-        if thread:
-            await thread.edit(locked=True, archived=True)
-        
-        # Update ticket status in DB to "closed"
-        await self.collection.update_one(
-            {"thread_id": thread_id},
-            {"$set": {"status": "closed"}}
-        )
-        
-        await interaction.response.send_message("Thread closed.", ephemeral=True)
+            
+            await interaction.response.send_message("Thread closed.", ephemeral=True)
+        except Exception as e:
+            print(f"❌ Error closing ticket {thread_id}: {e}")
+            try:
+                await interaction.response.send_message("❌ Failed to close ticket.", ephemeral=True)
+            except:
+                pass
 
     async def handle_setup_submission(self, interaction, modal):
         try:
@@ -346,16 +360,30 @@ class TicketSystem:
             view = discord.ui.View(timeout=300)
             
             async def show_image_modal(img_interaction):
-                if img_interaction.user.id == interaction.user.id:
-                    await img_interaction.response.send_modal(image_modal)
-                else:
-                    await img_interaction.response.send_message("Not your button!", ephemeral=True)
+                try:
+                    if img_interaction.user.id == interaction.user.id:
+                        await img_interaction.response.send_modal(image_modal)
+                    else:
+                        await img_interaction.response.send_message("Not your button!", ephemeral=True)
+                except Exception as e:
+                    print(f"❌ Error showing image modal: {e}")
+                    try:
+                        await img_interaction.response.send_message("❌ Failed to show image modal.", ephemeral=True)
+                    except:
+                        pass
             
             async def skip_images(skip_interaction):
-                if skip_interaction.user.id == interaction.user.id:
-                    await self.finalize_ticket_setup(skip_interaction, ticket_data, modal.existing_data, modal.channel)
-                else:
-                    await skip_interaction.response.send_message("Not your button!", ephemeral=True)
+                try:
+                    if skip_interaction.user.id == interaction.user.id:
+                        await self.finalize_ticket_setup(skip_interaction, ticket_data, modal.existing_data, modal.channel)
+                    else:
+                        await skip_interaction.response.send_message("Not your button!", ephemeral=True)
+                except Exception as e:
+                    print(f"❌ Error in skip images: {e}")
+                    try:
+                        await skip_interaction.response.send_message("❌ Failed to skip images.", ephemeral=True)
+                    except:
+                        pass
             
             image_btn = discord.ui.Button(label="Set Images", style=discord.ButtonStyle.secondary)
             skip_btn = discord.ui.Button(label="Skip Images", style=discord.ButtonStyle.primary)
@@ -742,17 +770,8 @@ async def setup_persistent_views(bot):
                                     except Exception as e:
                                         print(f"❌ Thread error [{channel.id}]: {e}")
 
-                                    try:
-                                        async for thread in channel.archived_threads():
-                                            await thread.delete()
-                                            await ticket_system.collection.delete_many({"channel_id": thread.id})
-                                            thread_button_count += 1
-                                        async for thread in channel.archived_threads(private=True):
-                                            await thread.delete()
-                                            await ticket_system.collection.delete_many({"channel_id": thread.id})
-                                            thread_button_count += 1
-                                    except Exception as e:
-                                        print(f"❌ Archived thread error [{channel.id}]: {e}")
+                                    # Skip archived threads cleanup to avoid rate limits
+                                    # Archived threads will be cleaned up when accessed or through manual cleanup
                     except Exception as e:
                         print(f"❌ Thread register error [{ticket_name}]: {e}")
             except Exception as e:
