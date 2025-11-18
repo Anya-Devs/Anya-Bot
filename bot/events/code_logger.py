@@ -66,7 +66,7 @@ class Permission(commands.Cog):
         embed = None
         try:
             if isinstance(error, commands.MissingPermissions):
-                missing = ', '.join(error.missing_perms)
+                missing = ', '.join(error.missing_permissions)
                 embed = Embed(
                     title="Missing Permissions",
                     description=f"{ctx.author.mention}, you lack the following permissions:\n`{missing}`",
@@ -75,8 +75,8 @@ class Permission(commands.Cog):
                 self.logger.info(f"User {ctx.author} missing permissions: {missing} in {ctx.guild.name}")
 
             elif isinstance(error, commands.BotMissingPermissions):
-                missing = ', '.join(error.missing_perms)
-                invite = self.generate_invite_link(error.missing_perms)
+                missing = ', '.join(error.missing_permissions)
+                invite = self.generate_invite_link(error.missing_permissions)
                 embed = Embed(
                     title="Bot Missing Permissions",
                     description=f"I lack the following permissions:\n`{missing}`\n[Fix with invite]({invite})",

@@ -321,7 +321,7 @@ class PoketwoCommands(commands.Cog):
         """Configure shiny and collection protection settings."""
         guild_id = ctx.guild.id
         embed = await self.create_protection_embed(guild_id, ctx.guild)
-        view = ProtectionConfigView(ctx.guild, self.mongo_sh)
+        view = ProtectionConfigView(ctx.guild, self.mongo_sh, ctx.author.id)
         await ctx.reply(embed=embed, view=view, mention_author=False)
 
     # -------------------

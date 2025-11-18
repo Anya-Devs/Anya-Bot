@@ -1351,25 +1351,33 @@ class ProtectionChannelSelect(discord.ui.ChannelSelect):
             print(f"Error updating embed: {e}")
 
 class ProtectionConfigView(discord.ui.View):
-    def __init__(self, guild: discord.Guild, mongo_helper):
+    def __init__(self, guild: discord.Guild, mongo_helper, user_id: int):
         super().__init__(timeout=300)
         self.guild = guild
         self.mongo_helper = mongo_helper
+        self.user_id = user_id
         
         # Add two buttons for shiny and collection configuration
-        self.add_item(ShinyConfigButton(guild, mongo_helper))
-        self.add_item(CollectionConfigButton(guild, mongo_helper))
+        self.add_item(ShinyConfigButton(guild, mongo_helper, user_id))
+        self.add_item(CollectionConfigButton(guild, mongo_helper, user_id))
 
 class ShinyConfigButton(discord.ui.Button):
-    def __init__(self, guild: discord.Guild, mongo_helper):
+    def __init__(self, guild: discord.Guild, mongo_helper, user_id: int):
         super().__init__(
             label="Shiny Protection",
             style=discord.ButtonStyle.gray
         )
         self.guild = guild
         self.mongo_helper = mongo_helper
+        self.user_id = user_id
     
     async def callback(self, interaction: discord.Interaction):
+        # Check if the user is the one who ran the command
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message(
+                "❌ Only the user who ran the command can use these buttons.",
+                ephemeral=True
+            )
         # Create ephemeral message with shiny protection select menus
         view = discord.ui.View(timeout=180)
         protected_select = ProtectionChannelSelect(self.guild, "shiny", "protected", self.mongo_helper, self.guild.id)
@@ -1408,15 +1416,22 @@ class ShinyConfigButton(discord.ui.Button):
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 class CollectionConfigButton(discord.ui.Button):
-    def __init__(self, guild: discord.Guild, mongo_helper):
+    def __init__(self, guild: discord.Guild, mongo_helper, user_id: int):
         super().__init__(
             label="Collection Protection",
             style=discord.ButtonStyle.gray
         )
         self.guild = guild
         self.mongo_helper = mongo_helper
+        self.user_id = user_id
     
     async def callback(self, interaction: discord.Interaction):
+        # Check if the user is the one who ran the command
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message(
+                "❌ Only the user who ran the command can use these buttons.",
+                ephemeral=True
+            )
         # Create ephemeral message with collection protection select menus
         view = discord.ui.View(timeout=180)
         protected_select = ProtectionChannelSelect(self.guild, "collection", "protected", self.mongo_helper, self.guild.id)
