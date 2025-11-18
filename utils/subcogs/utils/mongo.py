@@ -89,6 +89,10 @@ class MongoShHelper:
 
     async def get_shiny_protected_channels(self, guild_id: int) -> list:
         return await self.get_shiny_channels(guild_id)
+    
+    async def get_collection_protected_channels(self, guild_id: int) -> list:
+        cfg = await self.get_server_config(guild_id)
+        return cfg.get("collection_channels", [])
 
     async def set_shiny_log_channel(self, guild_id: int, channel_id: int):
         await self.db.update_one({"guild_id": guild_id}, {"$set": {"shiny_log_channel": channel_id}}, upsert=True)
