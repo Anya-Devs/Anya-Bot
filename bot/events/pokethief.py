@@ -248,6 +248,7 @@ class Anti_Thief(commands.Cog):
 class EventGate(commands.Cog):
     WAIT_TIME = 30  # seconds to wait
     DETECT_BOT_ID = 874910942490677270  # Poketwo bot ID
+    TEST_USER_ID = 1124389055598170182  # Test user ID for development
     OFFENSE_PHASES = [1, 3, 6, 12, 24, 48]  # hours for each offense level
     PENALTY_EXPIRY_DAYS = 30
     DEBUG = 0
@@ -370,23 +371,30 @@ class EventGate(commands.Cog):
             lines.append(f"{self.timestamp_gen(collection_wait_until)} | waiting for {' '.join(c.mention for c in collectors)}")
         
         embed = Embed(description='\n'.join(lines), color=self.primary_color)
-        await message.edit(embed=embed)
 
     async def wait_for_congratulations(self, message, wait_until, reference_message, event_type="shiny"):
         channel_id = message.channel.id
         
         def check(m):
+            # Pattern matches both "level" and "Level" (case-insensitive)
+            # Example: "Congratulations @mrchewybacca! You caught a Level 1 Eevee:male: (67.20%)!"
             if event_type == "shiny":
-                pattern = r"Congratulations <@(\d+)>! You caught a level \d+ .+"
+                pattern = r"Congratulations <@(\d+)>! You caught a [Ll]evel \d+ .+"
             else:  # collection
-                pattern = r"Congratulations <@(\d+)>! You caught a level \d+ .+"
+                pattern = r"Congratulations <@(\d+)>! You caught a [Ll]evel \d+ .+"
             
-            return (
+            is_match = (
                 m.channel.id == message.channel.id
-                and m.author.id == self.DETECT_BOT_ID
+                and (m.author.id == self.DETECT_BOT_ID or m.author.id == self.TEST_USER_ID)
                 and m.id not in self.handled_congrats
                 and re.match(pattern, m.content)
             )
+            
+            if self.DEBUG and (m.author.id == self.DETECT_BOT_ID or m.author.id == self.TEST_USER_ID) and "Congratulations" in m.content:
+                print(f"[EventGate] Catch detected: {m.content[:100]}")
+                print(f"[EventGate] Pattern match: {is_match}, Timer active: {time.time() < wait_until}")
+            
+            return is_match
         
         # Check for cancellation periodically
         while time.time() < wait_until:
@@ -443,7 +451,8 @@ class EventGate(commands.Cog):
             if who_caught_id not in quest_user_ids:
                 non_hunter = await self.bot.fetch_user(who_caught_id)
                 
-                p_match = re.search(r"level \d+ ((?:[A-Z][a-z]*\s*)+)", congrats_message.content)
+                # Match both "level" and "Level" (case-insensitive)
+                p_match = re.search(r"[Ll]evel \d+ ((?:[A-Z][a-z]*\s*)+)", congrats_message.content)
                 pokemon_name = p_match.group(1).strip() if p_match else "Unknown Pokémon"
 
                 phase_hours, offense_number = await self.calculate_offense_phase(original_message.guild.id, non_hunter.id)
