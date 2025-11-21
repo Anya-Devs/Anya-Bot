@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  
+  body {
+    @apply bg-dark text-white antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+    background-image: 
+      radial-gradient(circle at 20% 50%, rgba(255, 107, 157, 0.05) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(192, 96, 161, 0.05) 0%, transparent 50%);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Poppins', system-ui, sans-serif;
+    @apply text-white;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary via-secondary to-accent-purple bg-clip-text text-transparent;
+  }
+
+  .bg-gradient-primary {
+    @apply bg-gradient-to-br from-primary to-secondary;
+  }
+
+  .bg-gradient-dark {
+    @apply bg-gradient-to-br from-dark-800 to-dark-700;
+  }
+
+  .border-gradient {
+    border-image: linear-gradient(135deg, #FF6B9D, #C060A1, #FFD700) 1;
+  }
+
+  .card {
+    @apply bg-dark-800 border border-dark-600 rounded-xl shadow-lg;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-300 hover:border-primary hover:shadow-2xl hover:-translate-y-1;
+  }
+
+  .glass-card {
+    @apply bg-dark-800/50 backdrop-blur-md border border-dark-600/50 rounded-xl shadow-xl;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-dark-800;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-primary rounded;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-primary-dark;
+}
+
+/* Selection */
+::selection {
+  @apply bg-primary text-white;
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}

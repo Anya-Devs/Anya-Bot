@@ -1,0 +1,62 @@
+{
+    "emotes": {
+        "<3": [
+            "pat",
+            "cuddle",
+            "kiss",
+            "hug"
+        ],
+        ">:0": [
+            "bite",
+            "lick",
+            "slap"
+        ]
+    },
+    "phrases": {
+        "self": {
+            "pat": "I'll pat you. *pat pat*",
+            "cuddle": "No cuddles! That's embarrassing! [no_embed]",
+            "kiss": "= w = no thanks, thats iky [no_embed]",
+            "hug": "Wrapping you in a warm hug! *hugs* [no_embed]",
+            "bite": "Ouch! That hurts! [no_embed]",
+            "lick": "Ew! That's weird! [no_embed]",
+            "slap": "Witnesses Anya's super slap of justice, taught by Mama! *trips and falls on the floor* Ow... *starts crying quietly* [no_embed]",
+            "cry": "Wipes your tears away for you. Don't be sad! [no_embed]",
+            "slowclap": "Starts clapping slowly for dramatic effect",
+            "wave": "Waves cheerfully",
+            "smug": "Looks smug with a cheeky grin â â‚¬¿ â Ê°áµÊ°â",
+            "dance": "Busts out some fun dance moves!",
+            "happy": "Smiles brightly, feeling happy!"
+        },
+        "other": {
+            "pat": "{user} gives a gentle pat to {target}",
+            "cuddle": "{user} cuddles {target}",
+            "kiss": "{user} kisses {target}, how romantic",
+            "hug": "{user} hugs {target}",
+            "bite": "{user} bites {target}",
+            "lick": "{user} licks {target}",
+            "slap": "{user} slaps {target}",
+            "cry": "{user} is crying",
+            "slowclap": "{user} starts clapping slowly at {target}",
+            "wave": "{user} waves at {target}",
+            "smug": "{user} smugs at {target}",
+            "dance": "{user} is dancing, nice moves!",
+            "happy": "{user} is happy!"
+        },
+        "everyone": {
+            "pat": "{user} gives a gentle pat to the whole server",
+            "cuddle": "{user} cuddles the whole server",
+            "kiss": "{user} gives a kiss to the whole server",
+            "hug": "{user} hugs the whole server",
+            "bite": "{user} bites the whole server",
+            "lick": "{user} licks the whole server",
+            "slap": "{user} slaps the whole server",
+            "cry": "{user} is crying",
+            "slowclap": "{user} starts clapping slowly at everyone",
+            "wave": "{user} waves at the whole server",
+            "smug": "{user} looks smug ;)",
+            "dance": "{user} is dancing, nice moves!",
+            "happy": "{user} is happy!"
+        }
+    }
+}

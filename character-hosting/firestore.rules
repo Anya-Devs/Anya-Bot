@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Characters collection - read public, write admin only
+    match /characters/{characterId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.token.admin == true;
+      
+      // Character images subcollection
+      match /images/{imageId} {
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.token.admin == true;
+      }
+    }
+    
+    // Series collection
+    match /series/{seriesId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.token.admin == true;
+    }
+    
+    // User gacha data
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+      
+      match /collection/{characterId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    
+    // Leaderboard
+    match /leaderboard/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

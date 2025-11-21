@@ -1,0 +1,29 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "characters",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "series", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "characters",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tags", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "rarity", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "leaderboard",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "totalCharacters", "order": "DESCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

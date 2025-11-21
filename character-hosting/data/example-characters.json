@@ -1,0 +1,270 @@
+[
+  {
+    "name": "Anya Forger",
+    "series": "Spy x Family",
+    "aliases": [
+      "Subject 007",
+      "Chihuahua Girl",
+      "Ania Forger",
+      "Anya Folger",
+      "Starlight Anya",
+      "Princess Anya"
+    ],
+    "tags": [
+      "Main Character",
+      "Protagonist",
+      "Eden Academy",
+      "The Forger Family",
+      "Ahoge",
+      "Child-like",
+      "Dress",
+      "Green Eyes",
+      "Hair Ornament",
+      "Medium Length Hair",
+      "Pink Hair",
+      "Telepathy",
+      "Esper"
+    ],
+    "voiceActors": {
+      "english": "Megan Shipman",
+      "japanese": "Atsumi Tanezaki"
+    },
+    "rarity": "SSR",
+    "description": "A young girl with telepathic abilities who was adopted by Loid Forger. She attends Eden Academy as part of Operation Strix.",
+    "affiliation": ["Eden Academy", "The Forger Family"],
+    "role": ["Main Character", "Protagonist"]
+  },
+  {
+    "name": "Loid Forger",
+    "series": "Spy x Family",
+    "aliases": [
+      "Twilight",
+      "Agent Twilight",
+      "Robert"
+    ],
+    "tags": [
+      "Main Character",
+      "Protagonist",
+      "Spy",
+      "Blonde Hair",
+      "Blue Eyes",
+      "Adult",
+      "Tall",
+      "Suit"
+    ],
+    "voiceActors": {
+      "english": "Alex Organ",
+      "japanese": "Takuya Eguchi"
+    },
+    "rarity": "SR",
+    "description": "A master spy known as Twilight who creates a fake family for his mission Operation Strix.",
+    "affiliation": ["WISE", "The Forger Family"],
+    "role": ["Main Character", "Protagonist"]
+  },
+  {
+    "name": "Yor Forger",
+    "series": "Spy x Family",
+    "aliases": [
+      "Thorn Princess",
+      "Yor Briar"
+    ],
+    "tags": [
+      "Main Character",
+      "Protagonist",
+      "Assassin",
+      "Black Hair",
+      "Red Eyes",
+      "Adult",
+      "Tall",
+      "Beautiful"
+    ],
+    "voiceActors": {
+      "english": "Natalie Van Sistine",
+      "japanese": "Saori Hayami"
+    },
+    "rarity": "SR",
+    "description": "An assassin known as the Thorn Princess who becomes Loid's fake wife.",
+    "affiliation": ["Garden", "The Forger Family"],
+    "role": ["Main Character", "Protagonist"]
+  },
+  {
+    "name": "Naruto Uzumaki",
+    "series": "Naruto",
+    "aliases": [
+      "Number One Hyperactive Knucklehead Ninja",
+      "Seventh Hokage",
+      "Child of the Prophecy"
+    ],
+    "tags": [
+      "Main Character",
+      "Protagonist",
+      "Ninja",
+      "Blonde Hair",
+      "Blue Eyes",
+      "Whisker Marks",
+      "Orange Outfit",
+      "Headband"
+    ],
+    "voiceActors": {
+      "english": "Maile Flanagan",
+      "japanese": "Junko Takeuchi"
+    },
+    "rarity": "SSR",
+    "description": "A young ninja who seeks recognition and dreams of becoming the Hokage.",
+    "affiliation": ["Konohagakure", "Team 7"],
+    "role": ["Main Character", "Protagonist"]
+  },
+  {
+    "name": "Goku",
+    "series": "Dragon Ball",
+    "aliases": [
+      "Kakarot",
+      "Son Goku"
+    ],
+    "tags": [
+      "Main Character",
+      "Protagonist",
+      "Saiyan",
+      "Black Hair",
+      "Spiky Hair",
+      "Martial Artist",
+      "Orange Gi",
+      "Tail"
+    ],
+    "voiceActors": {
+      "english": "Sean Schemmel",
+      "japanese": "Masako Nozawa"
+    },
+    "rarity": "SSR",
+    "description": "A Saiyan raised on Earth who becomes its greatest defender.",
+    "affiliation": ["Z Fighters", "Universe 7"],
+    "role": ["Main Character", "Protagonist"]
+  },
+  {
+    "name": "Luffy",
+    "series": "One Piece",
+    "aliases": [
+      "Monkey D. Luffy",
+      "Straw Hat Luffy"
+    ],
+    "tags": [
+      "Main Character",
+      "Protagonist",
+      "Pirate",
+      "Black Hair",
+      "Straw Hat",
+      "Scar",
+      "Red Vest",
+      "Devil Fruit User"
+    ],
+    "voiceActors": {
+      "english": "Colleen Clinkenbeard",
+      "japanese": "Mayumi Tanaka"
+    },
+    "rarity": "SSR",
+    "description": "A pirate captain who dreams of finding the One Piece and becoming Pirate King.",
+    "affiliation": ["Straw Hat Pirates"],
+    "role": ["Main Character", "Protagonist", "Captain"]
+  },
+  {
+    "name": "Mikasa Ackerman",
+    "series": "Attack on Titan",
+    "aliases": [
+      "Humanity's Strongest Soldier (Female)"
+    ],
+    "tags": [
+      "Main Character",
+      "Protagonist",
+      "Soldier",
+      "Black Hair",
+      "Short Hair",
+      "Scarf",
+      "Survey Corps",
+      "Strong"
+    ],
+    "voiceActors": {
+      "english": "Trina Nishimura",
+      "japanese": "Yui Ishikawa"
+    },
+    "rarity": "SR",
+    "description": "A skilled soldier and one of humanity's strongest fighters against the Titans.",
+    "affiliation": ["Survey Corps", "104th Training Corps"],
+    "role": ["Main Character", "Protagonist"]
+  },
+  {
+    "name": "Edward Elric",
+    "series": "Fullmetal Alchemist",
+    "aliases": [
+      "Fullmetal Alchemist",
+      "Ed"
+    ],
+    "tags": [
+      "Main Character",
+      "Protagonist",
+      "Alchemist",
+      "Blonde Hair",
+      "Yellow Eyes",
+      "Automail",
+      "Red Coat",
+      "Short"
+    ],
+    "voiceActors": {
+      "english": "Vic Mignogna",
+      "japanese": "Romi Park"
+    },
+    "rarity": "SR",
+    "description": "A young alchemist searching for the Philosopher's Stone to restore his brother's body.",
+    "affiliation": ["Amestris Military"],
+    "role": ["Main Character", "Protagonist"]
+  },
+  {
+    "name": "Tanjiro Kamado",
+    "series": "Demon Slayer",
+    "aliases": [
+      "Sumihiko Kamado"
+    ],
+    "tags": [
+      "Main Character",
+      "Protagonist",
+      "Demon Slayer",
+      "Red Hair",
+      "Scar",
+      "Earrings",
+      "Kind",
+      "Water Breathing"
+    ],
+    "voiceActors": {
+      "english": "Zach Aguilar",
+      "japanese": "Natsuki Hanae"
+    },
+    "rarity": "SR",
+    "description": "A kind-hearted demon slayer seeking to turn his sister back into a human.",
+    "affiliation": ["Demon Slayer Corps"],
+    "role": ["Main Character", "Protagonist"]
+  },
+  {
+    "name": "Satoru Gojo",
+    "series": "Jujutsu Kaisen",
+    "aliases": [
+      "The Strongest Sorcerer"
+    ],
+    "tags": [
+      "Main Character",
+      "Sorcerer",
+      "White Hair",
+      "Blue Eyes",
+      "Blindfold",
+      "Tall",
+      "Teacher",
+      "Overpowered"
+    ],
+    "voiceActors": {
+      "english": "Kaiji Tang",
+      "japanese": "Yuichi Nakamura"
+    },
+    "rarity": "SSR",
+    "description": "The strongest jujutsu sorcerer and teacher at Tokyo Jujutsu High.",
+    "affiliation": ["Tokyo Jujutsu High"],
+    "role": ["Main Character", "Teacher"]
+  }
+]

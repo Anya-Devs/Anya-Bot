@@ -1,0 +1,441 @@
+{
+  "Ai": {
+    "imagine": {
+      "aliases": [
+        "i"
+      ],
+      "description": "Generates AI images using advanced diffusion models (Animagine XL 4.0) with Naga API. Uses a queue system to prevent spam, processes prompts with custom parameters, and provides full generation config via DM. Supports detailed anime-style image generation with quality settings like high score, absurd resolution, and specific art styles.",
+      "example": ".imagine 1girl, solo, blue archive, long hair, grey hair, red eyes, large breasts, white shirt, collared shirt, long sleeves, halo, v, skirt, outdoors, ruins, standing, sensitive, masterpiece, high score, great score, absurdres",
+      "related_commands": ".vision",
+      "result": "Generates and sends an AI-generated image embed with the prompt and image attachment."
+    },
+    "vision": {
+      "aliases": [
+        "v"
+      ],
+      "description": "Analyzes images using Google Gemini 2.0 vision AI to generate detailed responses. Can automatically detect images from message attachments, referenced messages, or embeds. Provides intelligent analysis and responses based on visual content with contextual information.",
+      "example": ".vision https://i.pinimg.com/736x/32/82/8a/32828a1554ad31ff44c5d4bd948cfdd7.jpg",
+      "related_commands": ".imagine",
+      "result": "Analyzes the provided image and sends a detailed description embed with Gemini AI analysis."
+    }
+  },
+  "Anime": {
+    "anime search": {
+      "aliases": [],
+      "description": "Searches MyAnimeList database for anime titles using Jikan API. Interactive view allows browsing detailed information including synopsis, ratings, episodes, studios, and genres. Supports pagination and direct search queries with fallback to user input prompts.",
+      "example": ".anime search \"Attack on Titan\"",
+      "related_commands": ".anime character,.manga search",
+      "result": "Sample: Shows embed with \"Cowboy Bebop\" info - Rating: 8.75/10, Episodes: 26"
+    },
+    "anime character": {
+      "aliases": [],
+      "description": "Looks up anime characters from MyAnimeList database with detailed profiles, images, and series appearances. Interactive character view shows relationships, voice actors, and character statistics. Supports both direct search and interactive user prompts.",
+      "example": ".anime character \"Mikasa Ackerman\"",
+      "related_commands": ".anime search,.manga search",
+      "result": "Displays character embed with image, description, and series appearances from MyAnimeList."
+    },
+    "anime recommend": {
+      "aliases": [],
+      "description": "Fetches random anime recommendations from curated lists using custom recommendation algorithms. Updates embeds dynamically with full anime information including ratings, genres, and streaming availability. Purely entertainment-based random selection.",
+      "example": ".anime recommend",
+      "related_commands": ".anime search,.manga recommend",
+      "result": "Shows random anime recommendation embed with synopsis, rating, and streaming info."
+    },
+    "manga search": {
+      "aliases": [],
+      "description": "Searches MangaDex API for manga titles with detailed information including chapters, authors, artists, and publication status. Interactive manga view supports browsing series details, reading status, and demographic information. Full database search capabilities.",
+      "example": ".manga search \"One Piece\"",
+      "related_commands": ".anime search,.manga read",
+      "result": "Displays manga embed with chapters, authors, and detailed information from MangaDex."
+    },
+    "manga read": {
+      "aliases": [],
+      "description": "Initiates interactive manga reading session through MangaDex API integration. Provides dropdown selection of available series, chapter navigation, and in-Discord reading experience. Searches across entire MangaDex database for user-specified titles.",
+      "example": ".manga read \"One Piece\" 1056",
+      "related_commands": ".manga search,.anime search",
+      "result": "Initiates interactive reading session with chapter selection and in-Discord manga viewer."
+    },
+    "manga recommend": {
+      "aliases": [],
+      "description": "Generates random manga recommendations using curated selection algorithms. Dynamically updates manga information embeds with complete series details, ratings, genres, and reading statistics. Entertainment-focused random recommendations.",
+      "example": ".manga recommend",
+      "related_commands": ".manga search,.anime recommend",
+      "result": "Shows random manga recommendation with complete series details and reading stats."
+    }
+  },
+  "Fun": {
+    "8ball": {
+      "aliases": [],
+      "description": "Classic magic 8-ball fortune telling game that provides randomized yes/no/maybe answers to user questions. Features decorative 8-ball emoji presentation with formatted responses and user attribution. Pure entertainment with mystical-themed answers.",
+      "example": ".8ball Will I win the lottery tomorrow?",
+      "related_commands": ".qna,.memo",
+      "result": "Sends embed with magic 8-ball answer like 'Yes, definitely!' or 'My sources say no'."
+    },
+    "memo": {
+      "aliases": [],
+      "description": "Memory game that displays an emoji for 2 seconds, then hides it for users to recall and react with the correct emoji. Features 15-second timeout, visual countdown timer, and interactive button-based gameplay. Tests short-term memory and reaction time.",
+      "example": ".memo",
+      "related_commands": ".8ball,.qna",
+      "result": "Shows emoji for 2 seconds, then hides it for user to react with the correct emoji."
+    },
+    "qna": {
+      "aliases": [],
+      "description": "Sets up Q&A channels for server question-and-answer system requiring Manage Channels permission. Creates separate question and answer channels with interactive buttons for answering. Moderators can respond to questions through designated answer channel with persistent view tracking.",
+      "example": ".qna",
+      "related_commands": ".8ball,.memo",
+      "result": "Creates Q&A channels and sends interactive embed for moderators to answer questions."
+    },
+    "riddle setup": {
+      "aliases": [],
+      "description": "Configures riddle answer collection channel requiring administrator permissions. Sets up database storage for riddle answers and establishes dedicated channel for collecting user-submitted riddle solutions. Required setup before posting riddles.",
+      "example": ".riddle setup #riddle-answers",
+      "related_commands": ".riddle post",
+      "result": "Sets up riddle answer collection channel and sends confirmation embed."
+    },
+    "riddle post": {
+      "aliases": [],
+      "description": "Initiates interactive riddle posting through modal interface. Requires pre-configured answer channel. Opens modal dialog for riddle question and answer input, then posts formatted riddle embed with answer collection system. Community riddle submission system.",
+      "example": ".riddle post",
+      "related_commands": ".riddle setup",
+      "result": "Opens modal for riddle input, then posts formatted riddle embed for community answers."
+    }
+  },
+  "CelestialTribute": {
+    "celestial inventory": {
+      "description": "---------- User Subcommands ----------",
+      "example": ".celestial inventory",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "celestial about": {
+      "description": "Execute the celestial about command",
+      "example": ".celestial about",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "celestial tribute": {
+      "description": "Execute the celestial tribute command",
+      "example": ".celestial tribute",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "celestial leaderboard": {
+      "description": "Execute the celestial leaderboard command",
+      "example": ".celestial leaderboard",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "celestial set_time": {
+      "description": "@commands.has_permissions(administrator=True)",
+      "example": ".celestial set_time",
+      "aliases": [],
+      "related_commands": ""
+    }
+  },
+  "Information": {
+    "reviews": {
+      "description": "View or leave reviews for the server",
+      "example": ".reviews",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "leaderboard": {
+      "description": "Show the server leaderboard",
+      "example": ".leaderboard",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "about": {
+      "description": "Get information about the server and bot",
+      "example": ".about",
+      "aliases": [
+        "info",
+        "details"
+      ],
+      "related_commands": ""
+    },
+    "server": {
+      "description": "Display server information and statistics",
+      "example": ".server",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "pfp": {
+      "description": "Get a user's profile picture",
+      "example": ".pfp",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "banner": {
+      "description": "Get a user's banner image",
+      "example": ".banner",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "invite": {
+      "description": "Get the bot's invite link",
+      "example": ".invite",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "perms": {
+      "description": "Check your permissions in the server",
+      "example": ".perms",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "roles": {
+      "description": "List all available roles in the server",
+      "example": ".roles",
+      "aliases": [],
+      "related_commands": ""
+    }
+  },
+  "Moderation": {
+    "log": {
+      "description": "---------------- Mod Log Channel ----------------",
+      "example": ".log",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "ban": {
+      "description": "---------------- Ban ----------------",
+      "example": ".ban",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "unban": {
+      "description": "Unban a user from the server",
+      "example": ".unban",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "timeout": {
+      "description": "---------------- Timeout ----------------",
+      "example": ".timeout",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "untimeout": {
+      "description": "Remove timeout from a user",
+      "example": ".untimeout",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "note": {
+      "description": "---------------- Note-Taker Roles Config ----------------",
+      "example": ".note",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "purge user": {
+      "description": "Execute the purge user command",
+      "example": ".purge user",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "purge bot": {
+      "description": "Execute the purge bot command",
+      "example": ".purge bot",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "notetaker clear": {
+      "description": "Execute the notetaker clear command",
+      "example": ".notetaker clear",
+      "aliases": [],
+      "related_commands": ""
+    }
+  },
+  "Pokemon": {
+    "pokedex": {
+      "description": "Look up Pokemon information",
+      "example": ".pokedex",
+      "aliases": [
+        "dex",
+        "d"
+      ],
+      "related_commands": ""
+    },
+    "pt help": {
+      "description": "Execute the pt help command",
+      "example": ".pt help",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "pt config protection": {
+      "description": "Configure pt  protection settings",
+      "example": ".pt config protection",
+      "aliases": [
+        "p"
+      ],
+      "related_commands": ""
+    },
+    "pt tp": {
+      "description": "-------------------",
+      "example": ".pt tp",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "pt qp": {
+      "description": "-------------------",
+      "example": ".pt qp",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "pt shiny": {
+      "description": "-------------------",
+      "example": ".pt shiny",
+      "aliases": [
+        "sh"
+      ],
+      "related_commands": ""
+    },
+    "pt collection": {
+      "description": "-------------------",
+      "example": ".pt collection",
+      "aliases": [
+        "cl",
+        "col"
+      ],
+      "related_commands": ""
+    },
+    "pt shinychannel log remove": {
+      "description": "Remove or delete pt shinychannel log",
+      "example": ".pt shinychannel log remove",
+      "aliases": [],
+      "related_commands": ""
+    }
+  },
+  "Quest": {
+    "redirect": {
+      "description": "Redirect to a specific quest channel",
+      "example": ".redirect",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "profile": {
+      "description": "View your quest profile",
+      "example": ".profile",
+      "aliases": [
+        "pf"
+      ],
+      "related_commands": ""
+    },
+    "inventory": {
+      "description": "View your quest inventory",
+      "example": ".inventory",
+      "aliases": [
+        "inv"
+      ],
+      "related_commands": ""
+    },
+    "balance": {
+      "description": "Check your quest balance",
+      "example": ".balance",
+      "aliases": [
+        "bal",
+        "points",
+        "stars",
+        "stp"
+      ],
+      "related_commands": ""
+    },
+    "shop": {
+      "description": "Browse the quest shop",
+      "example": ".shop",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "quest roles": {
+      "description": "Execute the quest roles command",
+      "example": ".quest roles",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "quest create": {
+      "description": "Add or create quest",
+      "example": ".quest create",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "quest delete": {
+      "description": "Remove or delete quest",
+      "example": ".quest delete",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "quest removeall": {
+      "description": "Remove or delete quest all",
+      "example": ".quest removeall",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "quest setlimit": {
+      "description": "Configure quest limit settings",
+      "example": ".quest setlimit",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "quest serverquest": {
+      "description": "Execute the quest serverquest command",
+      "example": ".quest serverquest",
+      "aliases": [],
+      "related_commands": ""
+    }
+  },
+  "System": {
+    "memory": {
+      "aliases": [],
+      "description": "Shows current bot memory usage with automatic unit conversion (B/KB/MB/GB). Displays real-time process memory statistics using psutil library. Performance monitoring tool for bot health and resource usage tracking.",
+      "example": ".memory",
+      "related_commands": ".uptime,.ping",
+      "result": "Shows current bot memory usage embed (e.g., '128.5 MB') with real-time statistics."
+    },
+    "ping": {
+      "aliases": [],
+      "description": "Measures and displays Discord API latency with color-coded responses. Shows websocket ping in milliseconds with performance indicators (green/yellow/red). Includes error handling and custom embed formatting with user attribution.",
+      "example": ".ping",
+      "related_commands": ".uptime,.memory",
+      "result": "Shows latency embed with '🏓 Pong! : 45ms' and color-coded response time."
+    },
+    "uptime": {
+      "aliases": [],
+      "description": "Displays bot uptime since startup using monotonic clock for accuracy. Shows elapsed time in human-readable format (years, days, hours, minutes, seconds). Performance tracking and bot availability monitoring.",
+      "example": ".uptime",
+      "related_commands": ".ping,.memory",
+      "result": "Displays bot uptime embed with elapsed time since startup."
+    },
+    "credit": {
+      "aliases": [],
+      "description": "Shows bot credits and developer information loaded from external JSON file. Displays developer names, roles, and project attribution with embedded image. Static information display for project credits and acknowledgments.",
+      "example": ".credit",
+      "related_commands": ".about,.info",
+      "result": "Shows developer credits embed with team information and project details."
+    },
+    "ticket create": {
+      "description": "Subcommands",
+      "example": ".ticket create",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "ticket activate": {
+      "description": "Execute the ticket activate command",
+      "example": ".ticket activate",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "ticket delete": {
+      "description": "Remove or delete ticket",
+      "example": ".ticket delete",
+      "aliases": [],
+      "related_commands": ""
+    },
+    "ticket edit": {
+      "description": "Execute the ticket edit command",
+      "example": ".ticket edit",
+      "aliases": [],
+      "related_commands": ""
+    }
+  }
+}
