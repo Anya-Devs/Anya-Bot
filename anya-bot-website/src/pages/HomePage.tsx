@@ -99,12 +99,6 @@ const HomePage = () => {
       <section className="min-h-screen bg-dark-900 flex flex-col">
         <div className="flex-1 flex flex-col max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="flex-shrink-0 text-center mb-6 pt-12">
-            <h2 className="text-3xl md:text-5xl font-display font-bold text-gradient mb-4">
-              Powerful Features
-            </h2>
-            <p className="text-lg md:text-xl text-gray-400 mb-8">
-              See Anya Bot in action with live command demonstrations
-            </p>
           </div>
 
           <div className="flex-1">

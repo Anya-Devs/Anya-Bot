@@ -1,11 +1,11 @@
 import { Routes, Route } from 'react-router-dom';
-import Navbar from './components/Navbar';
+import Navbar from './components/Navbar.tsx';
 import Footer from './components/Footer.tsx';
-import HomePage from './pages/HomePage';
+import HomePage from './pages/HomePage.tsx';
 import CommandsPage from './pages/CommandsPage.tsx';
 import CharacterDexPage from './pages/CharacterDexPage.tsx';
 import LeaderboardPage from './pages/LeaderboardPage.tsx';
-import { useBotFavicon } from './hooks/useBotFavicon';
+import { useBotFavicon } from './hooks/useBotFavicon.ts';
 
 function App() {
   // Dynamically set favicon from Discord API

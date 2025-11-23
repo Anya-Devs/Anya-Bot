@@ -1,15 +1,19 @@
 {
     "AI": {
         "imagine": {
-            "aliases": ["i"],
-            "description": "Generate anime-styled images using AI (Model: animagine-xl-4.0). Provide detailed prompts for best results.",
-            "example": "{}imagine 1girl, solo, long hair, blue eyes, school uniform, outdoors, cherry blossoms, masterpiece",
+            "aliases": [
+                "i"
+            ],
+            "description": "Generate AI anime-styled images using prompts. Model: animagine-xl-4.0",
+            "example": "{}imagine 1girl, solo, long hair, blue eyes, school uniform, outdoors, masterpiece",
             "related_commands": "{}vision"
         },
         "vision": {
-            "aliases": ["v"],
-            "description": "Analyze images using AI vision (Gemini 2.0). Attach an image or reply to a message with an image, or provide an image URL.",
-            "example": "{}vision [attach image or provide URL]",
+            "aliases": [
+                "v"
+            ],
+            "description": "Generate a vision-based response using an image and optional prompt via Gemini 2.0 model. Can analyze images from attachments, replies, or URLs.",
+            "example": "{}vision [attach image]\n{}vision https://example.com/image.jpg",
             "related_commands": "{}imagine"
         }
     },
@@ -113,9 +117,9 @@
     "Mini_Games": {
         "memo": {
             "aliases": [],
-            "description": "Play an emoji memory matching game. Find matching pairs of emojis within the time limit.",
+            "description": "No description provided.",
             "example": "{}memo",
-            "related_commands": "{}8ball"
+            "related_commands": "Provide related commands"
         }
     },
     "Memo_Data": {},
@@ -182,7 +186,7 @@
             "related_commands": "pt special"
         }
     },
-    "Pokemon": {
+ "Pokemon": {
         "predict": {
             "aliases": [],
             "description": "No description provided.",
@@ -220,47 +224,56 @@
                 "dex",
                 "d"
             ],
-            "description": "Display detailed Pokémon information including stats, types, abilities, and sprites. Supports shiny and regional forms.",
-            "example": "{}pokedex pikachu\n{}pokedex shiny eevee\n{}pokedex alolan vulpix",
-            "related_commands": "{}pt"
+            "description": "Displays Pok\u00e9mon dex info.",
+            "example": "{}pokedex",
+            "related_commands": "Provide related commands"
         }
     },
     "Quest": {
         "redirect": {
             "aliases": [],
-            "description": "Set channels where quest/mission notifications will be redirected. Requires Manage Channels permission or Anya Manager role.",
-            "example": "{}redirect #quest-channel",
-            "related_commands": "{}quest"
+            "description": "No description provided.",
+            "example": "{}redirect",
+            "related_commands": "Provide related commands"
         },
         "quest": {
-            "aliases": ["q"],
-            "description": "Start or view your current quest/mission. Use 'quest newbie' for tutorial.",
-            "example": "{}quest\n{}quest newbie",
-            "related_commands": "{}inventory, {}balance, {}shop"
+            "aliases": [
+                "q"
+            ],
+            "description": "No description provided.",
+            "example": "{}quest",
+            "related_commands": "Provide related commands"
         },
         "quest_roles": {
             "aliases": [],
-            "description": "Admin command to set or list roles that can be randomly assigned as quest rewards.",
+            "description": "Command for admins to set or list roles that a target can get randomly.",
             "example": "{}quest_roles",
-            "related_commands": "{}quest"
+            "related_commands": "Provide related commands"
         },
         "inventory": {
-            "aliases": ["inv"],
-            "description": "View your quest tool inventory and collected items.",
+            "aliases": [
+                "inv"
+            ],
+            "description": "Displays the user's tool inventory.",
             "example": "{}inventory",
-            "related_commands": "{}balance, {}shop"
+            "related_commands": "Provide related commands"
         },
         "balance": {
-            "aliases": ["bal", "points", "stars", "stp"],
-            "description": "Check your current quest points/stars balance.",
+            "aliases": [
+                "bal",
+                "points",
+                "stars",
+                "stp"
+            ],
+            "description": "No description provided.",
             "example": "{}balance",
-            "related_commands": "{}shop, {}quest"
+            "related_commands": "Provide related commands"
         },
         "shop": {
             "aliases": [],
-            "description": "Browse and purchase quest tools and items using your points.",
+            "description": "No description provided.",
             "example": "{}shop",
-            "related_commands": "{}balance, {}inventory"
+            "related_commands": "Provide related commands"
         },
         "Quest_Slash": {},
         "Sync": {},
@@ -309,87 +322,87 @@
     "Fun": {
         "8ball": {
             "aliases": [],
-            "description": "Ask the magic 8-ball a yes/no question and receive a random answer.",
-            "example": "{}8ball Will I win the lottery?",
-            "related_commands": "{}memo"
+            "description": "No description provided.",
+            "example": "{}8ball",
+            "related_commands": "Provide related commands"
         },
         "pat": {
             "aliases": [],
-            "description": "Pat someone (or yourself) with a cute anime GIF.",
-            "example": "{}pat @user",
-            "related_commands": "{}hug, {}cuddle"
+            "description": "No description provided.",
+            "example": "{}pat",
+            "related_commands": "Provide related commands"
         },
         "cuddle": {
             "aliases": [],
-            "description": "Cuddle someone (or yourself) with a cute anime GIF.",
-            "example": "{}cuddle @user",
-            "related_commands": "{}hug, {}pat"
+            "description": "No description provided.",
+            "example": "{}cuddle",
+            "related_commands": "Provide related commands"
         },
         "bite": {
             "aliases": [],
-            "description": "Bite someone (or yourself) with an anime GIF.",
-            "example": "{}bite @user",
-            "related_commands": "{}slap, {}lick"
+            "description": "No description provided.",
+            "example": "{}bite",
+            "related_commands": "Provide related commands"
         },
         "kiss": {
             "aliases": [],
-            "description": "Kiss someone (or yourself) with a cute anime GIF.",
-            "example": "{}kiss @user",
-            "related_commands": "{}hug, {}cuddle"
+            "description": "No description provided.",
+            "example": "{}kiss",
+            "related_commands": "Provide related commands"
         },
         "lick": {
             "aliases": [],
-            "description": "Lick someone (or yourself) with an anime GIF.",
-            "example": "{}lick @user",
-            "related_commands": "{}bite, {}kiss"
+            "description": "No description provided.",
+            "example": "{}lick",
+            "related_commands": "Provide related commands"
         },
         "hug": {
             "aliases": [],
-            "description": "Hug someone (or yourself) with a warm anime GIF.",
-            "example": "{}hug @user",
-            "related_commands": "{}cuddle, {}pat"
+            "description": "No description provided.",
+            "example": "{}hug",
+            "related_commands": "Provide related commands"
         },
         "cry": {
             "aliases": [],
-            "description": "Express sadness with a crying anime GIF.",
+            "description": "No description provided.",
             "example": "{}cry",
-            "related_commands": "{}happy, {}wave"
+            "related_commands": "Provide related commands"
         },
         "wave": {
             "aliases": [],
-            "description": "Wave at someone (or everyone) with an anime GIF.",
-            "example": "{}wave @user",
-            "related_commands": "{}happy, {}dance"
+            "description": "No description provided.",
+            "example": "{}wave",
+            "related_commands": "Provide related commands"
         },
         "slowclap": {
             "aliases": [],
-            "description": "Give a slow clap with an anime GIF.",
+            "description": "No description provided.",
             "example": "{}slowclap",
-            "related_commands": "{}smug, {}dance"
+            "related_commands": "Provide related commands"
         },
         "smug": {
             "aliases": [],
-            "description": "Show off your smug face with an anime GIF.",
+            "description": "No description provided.",
             "example": "{}smug",
-            "related_commands": "{}slowclap, {}happy"
+            "related_commands": "Provide related commands"
         },
         "dance": {
             "aliases": [],
-            "description": "Dance with an anime GIF.",
+            "description": "No description provided.",
             "example": "{}dance",
-            "related_commands": "{}happy, {}wave"
+            "related_commands": "Provide related commands"
         },
         "happy": {
             "aliases": [],
-            "description": "Express happiness with a cheerful anime GIF.",
+            "description": "No description provided.",
             "example": "{}happy",
-            "related_commands": "{}dance, {}wave"
+            "related_commands": "Provide related commands"
         },
         "slap": {
             "aliases": [],
-            "description": "Slap someone (or yourself) with an anime GIF.",
-            "example": "{}slap @user",
-            "related_commands": "{}bite, {}pat"
+            "description": "No description provided.",
+            "example": "{}slap",
+            "related_commands": "Provide related commands"
         }
     },
     "Quest_Slash": {},

@@ -386,20 +386,6 @@ class Pokemon_Commands:
 
 
 
-class CustomIdSensor:
-    def __init__(self):
-        self.used_ids = set()
-
-    def register(self, base: str) -> str:
-        if base not in self.used_ids:
-            self.used_ids.add(base)
-            return base
-        i = 1
-        while f"{base}_{i}" in self.used_ids:
-            i += 1
-        new_id = f"{base}_{i}"
-        self.used_ids.add(new_id)
-        return new_id
 
 class PokeSelect(discord.ui.Select):
     def __init__(self, pokemon_forms, default_image_url, alt_names, pokemon_shiny, gender, bot, selected_index=None, custom_id="Select_Pokemon_Form"):
@@ -1138,7 +1124,6 @@ class RegionFlagMapping:
             "ky": "🇰🇬",
         }
 
-import traceback
 
 class StatsView(discord.ui.View):
     def __init__(self, color=None, strength_weakness_text=None, thumbnail_url=None, footer=None, footer_text=None, pokemon_data=None):
@@ -1430,4 +1415,17 @@ class StatsView(discord.ui.View):
 
 
 
-        
+class CustomIdSensor:
+    def __init__(self):
+        self.used_ids = set()
+
+    def register(self, base: str) -> str:
+        if base not in self.used_ids:
+            self.used_ids.add(base)
+            return base
+        i = 1
+        while f"{base}_{i}" in self.used_ids:
+            i += 1
+        new_id = f"{base}_{i}"
+        self.used_ids.add(new_id)
+        return new_id

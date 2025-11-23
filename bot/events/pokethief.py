@@ -28,7 +28,7 @@ db = mongo_client["Commands"]["pokemon"]
 
 
 class Anti_Thief(commands.Cog):
-    BOT_IDS = {874910942490677270, 1234247716243112100, 854233015475109888, 1250128097941000223}
+    BOT_IDS = {716390085896962058, 874910942490677270, 1234247716243112100, 854233015475109888, 1250128097941000223}
     IGNORE_CHANNEL_KEYWORD = 'incense'
     DEBUG = 0  # Set to 1 to enable debug prints, 0 to disable
 
@@ -247,7 +247,7 @@ class Anti_Thief(commands.Cog):
 
 class EventGate(commands.Cog):
     WAIT_TIME = 30  # seconds to wait
-    DETECT_BOT_ID = 874910942490677270  # Poketwo bot ID
+    DETECT_BOT_ID = 716390085896962058  # Poketwo bot ID
     TEST_USER_ID = 1124389055598170182  # Test user ID for development
     OFFENSE_PHASES = [1, 3, 6, 12, 24, 48]  # hours for each offense level
     PENALTY_EXPIRY_DAYS = 30

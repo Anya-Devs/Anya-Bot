@@ -125,7 +125,14 @@ class LayoutElements {
         <button class="cta">${config.hero.buttonText}</button>
         <a href="${botConfig.inviteLink}" target="_blank" class="cta">${config.hero.inviteText}</a>
       </div>
+      <div id="bot-stats" class="bot-stats">
+        <div class="stat-loading">Loading bot statistics...</div>
+      </div>
     `;
+
+    // Fetch and display bot stats
+    LayoutElements.fetchBotStats();
+
     return hero;
   }
 
@@ -149,6 +156,48 @@ class LayoutElements {
     footer.className = "footer";
     footer.innerHTML = `<p>${config.footer}</p>`;
     return footer;
+  }
+
+  static async fetchBotStats() {
+    const statsContainer = document.getElementById('bot-stats');
+    if (!statsContainer) return;
+
+    try {
+      // Try to fetch from local server first, fallback to production
+      const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:3001/api/bot-stats/stats'
+        : '/api/bot-stats/stats';
+
+      const response = await fetch(apiUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Format numbers with commas
+      const formatNumber = (num) => new Intl.NumberFormat().format(num);
+
+      statsContainer.innerHTML = `
+        <div class="stats-display">
+          <div class="stat-item">
+            <span class="stat-number">${formatNumber(data.totalServers)}</span>
+            <span class="stat-label">Servers</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-number">${formatNumber(data.totalMembers)}</span>
+            <span class="stat-label">Members</span>
+          </div>
+        </div>
+      `;
+    } catch (error) {
+      console.warn('Failed to fetch bot stats:', error);
+      statsContainer.innerHTML = `
+        <div class="stats-error">
+          <span>Unable to load statistics</span>
+        </div>
+      `;
+    }
   }
 }
 
