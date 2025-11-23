@@ -5,6 +5,7 @@ import DiscordMessage from './DiscordMessage';
 import BotAvatar from './BotAvatar';
 import { BOT_CONFIG } from '../config/bot';
 import { pokemonPredictor } from '../utils/pokemon/pokemon_predictor';
+import { SAMPLE_SPAWN_IMAGE_URL } from '../utils/pokemon/model_config';
 import { getRegionEmoji } from '../utils/emojiUtils';
 
 // ---------------------------------------------------------------------------
@@ -123,7 +124,7 @@ const featureDemos: FeatureDemo[] = [
       title: 'A wild pokémon has appeared!',
       description: 'Guess the pokémon and type `@Pokétwo#8236 catch <pokémon>` to catch it!',
       color: '#FF6B9D',
-      image: 'https://server.poketwo.io/image?time=day',
+      image: SAMPLE_SPAWN_IMAGE_URL,
     },
   },
   {
@@ -332,7 +333,7 @@ const SlidingFeatures: React.FC = () => {
       setPokemonImageUrl('');
       return;
     }
-    const url = customSpawnUrl || 'https://server.poketwo.io/image?time=day';
+    const url = customSpawnUrl || SAMPLE_SPAWN_IMAGE_URL;
     setCachedSpawnImageUrl(url);
     if (!customSpawnUrl) {
       predictAndSet(url);
@@ -418,7 +419,6 @@ const SlidingFeatures: React.FC = () => {
     const species = pokemon.species;
     const id = pokemon.id;
     const name = pokemon.name.replace('-', ' ').toLowerCase();
-    const speciesName = species.name.replace('-', ' ');
 
     // Get flavor text (English)
     const pokemonDescription = species.flavor_text_entries?.find(
@@ -637,7 +637,7 @@ const SlidingFeatures: React.FC = () => {
                           title: 'A wild pokémon has appeared!',
                           description: 'Guess the pokémon and type `@Pokétwo#8236 catch <pokémon>` to catch it!',
                           color: '#FF6B9D',
-                          image: cachedSpawnImageUrl || 'https://server.poketwo.io/image?time=day',
+                          image: cachedSpawnImageUrl || SAMPLE_SPAWN_IMAGE_URL,
                         }}
                         timestamp={getCurrentTimestamp()}
                       />

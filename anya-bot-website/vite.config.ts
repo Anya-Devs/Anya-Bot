@@ -1,25 +1,44 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath, URL } from 'url';
 import path from 'path';
 
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   optimizeDeps: {
+    esbuildOptions: {
+      target: 'es2020',
+      supported: { bigint: true },
+      // Add this to handle .wasm files
+      loader: {
+        '.wasm': 'file'
+      }
+    },
     include: ['onnxruntime-web']
   },
   build: {
+    target: 'es2020',
     outDir: 'dist',
     sourcemap: true,
+    // Ensure wasm files are not inlined and keep their original names
+    assetsInlineLimit: 0,
     rollupOptions: {
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'firebase-vendor': ['firebase/app', 'firebase/firestore', 'firebase/storage'],
+        },
+        // Handle wasm files with their original names
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name?.endsWith('.wasm')) {
+            return 'assets/[name][extname]';
+          }
+          return 'assets/[name]-[hash][extname]';
         },
       },
     },
@@ -27,12 +46,13 @@ export default defineConfig({
   server: {
     port: 3001,
     open: true,
+    headers: {
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+      'Cross-Origin-Opener-Policy': 'same-origin',
+    },
     fs: {
       // Allow serving files from one level up to the project root
       allow: ['..']
-    },
-    mimeTypes: {
-      'application/octet-stream': ['.onnx']
     },
     proxy: {
       // Top.gg API

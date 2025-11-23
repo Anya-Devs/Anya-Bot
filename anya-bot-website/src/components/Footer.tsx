@@ -12,7 +12,14 @@ const Footer = () => {
   });
 
   useEffect(() => {
-    fetchBotStats().then(setStats);
+    fetchBotStats().then(stats => {
+      setStats({
+        servers: String(stats.servers),
+        users: String(stats.users),
+        commands: String(stats.commands),
+        uptime: stats.uptime,
+      });
+    });
   }, []);
 
   return (

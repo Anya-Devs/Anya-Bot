@@ -1,5 +1,15 @@
 import * as ort from 'onnxruntime-web';
-import { ONNX_PATH, LABELS_PATH, MODEL_CONFIG } from './model_config.js';
+import { ONNX_PATH, LABELS_PATH, MODEL_CONFIG, WASM_PATH, WORKER_PATH } from './model_config.js';
+
+// Configure ONNX Runtime to use WebAssembly with the correct paths
+ort.env.wasm.wasmPaths = {
+  'ort-wasm-simd-threaded.wasm': WASM_PATH,
+  'ort-wasm-simd-threaded.worker.js': WORKER_PATH
+};
+
+// Enable WebAssembly with single thread to avoid cross-origin isolation issues
+ort.env.wasm.numThreads = 1; // Start with 1 thread for now
+ort.env.wasm.simd = true;
 
 /**
  * @typedef {Object} PokemonPrediction

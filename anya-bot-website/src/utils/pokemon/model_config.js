@@ -2,6 +2,13 @@
 export const ONNX_PATH = "/models/pokemon/pokemon_cnn_v2.onnx";
 export const LABELS_PATH = "/models/pokemon/labels_v2.json";
 
+// Sample Poketwo spawn image URL for testing predictions
+export const SAMPLE_SPAWN_IMAGE_URL = "https://icon2.cleanpng.com/lnd/20241122/we/895df96693b91a439e96dcfbc5870b.webp";
+
+// WebAssembly configuration - using CDN for better reliability
+export const WASM_PATH = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.15.1/dist/ort-wasm-simd-threaded.wasm';
+export const WORKER_PATH = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.15.1/dist/ort-wasm-simd-threaded.worker.js';
+
 // Model configuration constants
 export const MODEL_CONFIG = {
   inputShape: [1, 3, 224, 224], // Batch size, channels, height, width
