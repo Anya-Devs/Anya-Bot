@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/download-avatar.js",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "start": "vite"
+    "start": "vite",
+    "setup:token": "node scripts/setup-token.js"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
@@ -23,6 +25,7 @@
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
+    "mongodb": "^6.12.0",
     "@types/node": "^20.19.25",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",

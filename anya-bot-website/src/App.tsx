@@ -3,8 +3,8 @@ import Navbar from './components/Navbar.tsx';
 import Footer from './components/Footer.tsx';
 import HomePage from './pages/HomePage.tsx';
 import CommandsPage from './pages/CommandsPage.tsx';
-import CharacterDexPage from './pages/CharacterDexPage.tsx';
-import LeaderboardPage from './pages/LeaderboardPage.tsx';
+import UpdatesPage from './pages/UpdatesPage.tsx';
+import ContactPage from './pages/ContactPage.tsx';
 import { useBotFavicon } from './hooks/useBotFavicon.ts';
 
 function App() {
@@ -18,8 +18,8 @@ function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/commands" element={<CommandsPage />} />
-          <Route path="/dex" element={<CharacterDexPage />} />
-          <Route path="/leaderboard" element={<LeaderboardPage />} />
+          <Route path="/updates" element={<UpdatesPage />} />
+          <Route path="/contact" element={<ContactPage />} />
         </Routes>
       </main>
       <Footer />

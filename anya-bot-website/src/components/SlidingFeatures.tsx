@@ -489,9 +489,9 @@ const SlidingFeatures: React.FC = () => {
     const weight = (pokemon.weight / 10).toFixed(1);
 
     // Build footer text with new lines
-    let footerText = `Height: ${height}m • Weight: ${weight}kg\n\n${gender}`;
+    let footerText = `Height: ${height}m • Weight: ${weight}kg\n${gender}`;
     if (rarity) {
-      footerText = `${rarity}\n\n${footerText}`;
+      footerText = `${rarity}\n${footerText}`;
     }
     footerText += `\nPokédex • Source: PokeAPI`;
 
@@ -503,7 +503,6 @@ const SlidingFeatures: React.FC = () => {
       description: pokemonDescription,
       color: '#FF6B9D',
       image: pokemon.sprites.other['official-artwork'].front_default,
-      thumbnail: imageThumb,
       fields: [{
         name: 'Region',
         value: regionDisplay,
@@ -513,7 +512,10 @@ const SlidingFeatures: React.FC = () => {
         value: altNamesStr,
         inline: true,
       }],
-      footer: footerText,
+      footer: {
+        text: footerText,
+        icon_url: imageThumb,
+      },
     };
   };
 
@@ -647,9 +649,13 @@ const SlidingFeatures: React.FC = () => {
                           avatar={<BotAvatar />}
                           isBot
                           embed={{
-                            color: '#FF6B9D',
                             image: pokemonImageUrl,
-                            footer: 'Anya Bot • Pokémon Detection',
+                          }}
+                          components={{
+                            buttons: [
+                              { label: 'View Reviews', style: 'link', url: '#' },
+                              { label: 'Recommend', style: 'primary' }
+                            ]
                           }}
                           timestamp={getCurrentTimestamp()}
                         />

@@ -1,4 +1,4 @@
-import { Hash, Users, Pin, Search, Inbox, HelpCircle } from 'lucide-react';
+import { Hash, Users, Search, Inbox, HelpCircle } from 'lucide-react';
 import { ReactNode } from 'react';
 
 interface DiscordChannelProps {
@@ -16,33 +16,33 @@ const DiscordChannel = ({
   flexibleHeight = false
 }: DiscordChannelProps) => {
   return (
-    <div className={`bg-[#36393f] rounded-2xl overflow-hidden shadow-2xl border-2 border-light-200 ${className}`}>
+    <div className={`bg-[#313338] rounded-lg overflow-hidden shadow-2xl ${className}`}>
       {/* Channel Header */}
-      <div className="bg-[#36393f] border-b border-[#202225] px-4 py-3 flex items-center justify-between">
+      <div className="bg-[#313338] border-b border-[#3f4147] h-12 px-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Hash className="w-5 h-5 text-gray-400" />
-          <span className="font-semibold text-white">{channelName}</span>
-          <div className="h-4 w-px bg-gray-600 mx-2" />
-          <span className="text-sm text-gray-400">Bot command showcase</span>
+          <Hash className="w-5 h-5 text-[#80848e]" />
+          <span className="font-semibold text-[#f2f3f5]">{channelName}</span>
+          <div className="h-6 w-px bg-[#3f4147] mx-3" />
+          <span className="text-sm text-[#949ba4]">Bot command showcase</span>
         </div>
         <div className="flex items-center gap-4">
-          <Users className="w-5 h-5 text-gray-400 hover:text-gray-300 cursor-pointer" />
-          <Pin className="w-5 h-5 text-gray-400 hover:text-gray-300 cursor-pointer" />
-          <Search className="w-5 h-5 text-gray-400 hover:text-gray-300 cursor-pointer" />
-          <Inbox className="w-5 h-5 text-gray-400 hover:text-gray-300 cursor-pointer" />
-          <HelpCircle className="w-5 h-5 text-gray-400 hover:text-gray-300 cursor-pointer" />
+          <Hash className="w-5 h-5 text-[#b5bac1] hover:text-[#dbdee1] cursor-pointer transition-colors" />
+          <Users className="w-5 h-5 text-[#b5bac1] hover:text-[#dbdee1] cursor-pointer transition-colors" />
+          <Search className="w-5 h-5 text-[#b5bac1] hover:text-[#dbdee1] cursor-pointer transition-colors" />
+          <Inbox className="w-5 h-5 text-[#b5bac1] hover:text-[#dbdee1] cursor-pointer transition-colors" />
+          <HelpCircle className="w-5 h-5 text-[#b5bac1] hover:text-[#dbdee1] cursor-pointer transition-colors" />
         </div>
       </div>
 
       {/* Channel Content */}
-      <div className={`bg-[#36393f] ${flexibleHeight ? '' : 'min-h-[400px] max-h-[600px] overflow-y-auto'}`}>
+      <div className={`bg-[#313338] ${flexibleHeight ? '' : 'min-h-[400px] max-h-[600px] overflow-y-auto'}`}>
         {children}
       </div>
 
       {/* Message Input (Disabled) */}
-      <div className="bg-[#36393f] border-t border-[#202225] p-4">
-        <div className="bg-[#40444b] rounded-lg px-4 py-3 text-gray-500 cursor-not-allowed">
-          Message #{channelName}
+      <div className="bg-[#313338] px-4 pb-6 pt-1">
+        <div className="bg-[#383a40] rounded-lg px-4 py-[11px] text-[#6d6f78] flex items-center gap-4">
+          <span className="text-base">Message #{channelName}</span>
         </div>
       </div>
     </div>

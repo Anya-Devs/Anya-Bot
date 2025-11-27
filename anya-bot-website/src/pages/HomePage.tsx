@@ -3,14 +3,16 @@ import { Sparkles, Zap, ArrowRight } from 'lucide-react';
 import { BOT_CONFIG } from '../config/bot';
 import BotAvatar from '../components/BotAvatar';
 import SlidingFeatures from '../components/SlidingFeatures';
+import FeatureShowcase from '../components/FeatureShowcase';
+import DeveloperNotes from '../components/DeveloperNotes';
+import AnimatedSection from '../components/AnimatedSection';
 import { fetchBotStats } from '../services/botStatsService';
 
 const HomePage = () => {
   const [stats, setStats] = useState({
     servers: 'Loading...',
     users: 'Loading...',
-    commands: 'Loading...',
-    uptime: 'Loading...'
+    commands: 'Loading...'
   });
 
   useEffect(() => {
@@ -19,8 +21,7 @@ const HomePage = () => {
       setStats({
         servers: String(newStats.servers),
         users: String(newStats.users),
-        commands: String(newStats.commands),
-        uptime: newStats.uptime
+        commands: String(newStats.commands)
       });
     });
   }, []);
@@ -34,8 +35,9 @@ const HomePage = () => {
             {/* Bot Icon/Mascot */}
             <div className="flex justify-center lg:justify-end">
               <div className="relative w-64 h-64 md:w-80 md:h-80">
-                <div className="absolute inset-0 bg-gradient-primary rounded-full blur-3xl opacity-20 animate-pulse"></div>
-                <div className="relative w-full h-full bg-dark-800 rounded-full shadow-2xl flex items-center justify-center border-4 border-primary/30 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-primary rounded-full blur-3xl opacity-30 animate-pulse"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-accent-purple/20 to-accent-cyan/20 rounded-full blur-2xl opacity-40 animate-pulse" style={{ animationDelay: '1s' }}></div>
+                <div className="relative w-full h-full bg-gradient-to-br from-dark-800 to-dark-700 rounded-full shadow-2xl flex items-center justify-center border-4 border-primary/40 overflow-hidden ring-4 ring-primary/10">
                   <BotAvatar 
                     className="w-full h-full object-cover"
                     size={512}
@@ -81,31 +83,46 @@ const HomePage = () => {
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            {Object.entries(stats)
-              .filter(([key]) => key !== 'lastUpdated') // Filter out Date object
-              .map(([key, value]) => (
-              <div key={key} className="card p-4 md:p-6 text-center hover:scale-105 transition-transform">
-                <div className="text-2xl md:text-4xl font-bold text-gradient mb-2">{value}</div>
-                <div className="text-xs md:text-sm text-gray-400 capitalize">{key}</div>
+          {/* Stats - Table-like centered display */}
+          <AnimatedSection animation="fade-in-up" delay={200}>
+            <div className="mt-16 flex justify-center">
+              <div className="inline-flex items-center bg-dark-800/80 backdrop-blur-sm border border-dark-600 rounded-2xl overflow-hidden divide-x divide-dark-600">
+                {Object.entries(stats)
+                  .filter(([key]) => key !== 'lastUpdated')
+                  .map(([key, value], idx) => (
+                  <div 
+                    key={key} 
+                    className="group px-8 md:px-12 py-6 text-center hover:bg-dark-700/50 transition-colors cursor-default"
+                    style={{ animationDelay: `${idx * 100}ms` }}
+                  >
+                    <div className="text-3xl md:text-5xl font-bold text-gradient mb-1">{value}</div>
+                    <div className="text-xs md:text-sm text-gray-400 capitalize font-medium tracking-wide">{key}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          </AnimatedSection>
         </div>
       </section>
 
-      {/* Features Section - Full View Discord Style */}
-      <section className="min-h-screen bg-dark-900 flex flex-col">
-        <div className="flex-1 flex flex-col max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-          <div className="flex-shrink-0 text-center mb-6 pt-12">
-          </div>
+      {/* Feature Showcase - Scroll Reveal */}
+      <FeatureShowcase />
 
-          <div className="flex-1">
-            <SlidingFeatures />
+      {/* Interactive Demo Section */}
+      <section className="py-16 bg-dark-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl md:text-4xl font-display font-bold text-white mb-3">
+              <span className="text-gradient">Try It Live</span>
+            </h2>
+            <p className="text-gray-400">See Anya Bot in action with interactive command demos</p>
           </div>
+          <SlidingFeatures />
         </div>
       </section>
+
+      {/* Developer Notes Section */}
+      <DeveloperNotes />
 
       {/* CTA Section */}
       <section className="py-12 md:py-20 bg-dark-900">

@@ -47,14 +47,67 @@ export default defineConfig({
     port: 3001,
     open: true,
     headers: {
-      'Cross-Origin-Embedder-Policy': 'require-corp',
-      'Cross-Origin-Opener-Policy': 'same-origin',
+      // Removed COEP/COOP headers to allow Discord CDN images
+      // 'Cross-Origin-Embedder-Policy': 'require-corp',
+      // 'Cross-Origin-Opener-Policy': 'same-origin',
     },
     fs: {
       // Allow serving files from one level up to the project root
       allow: ['..']
     },
+    // Configure MIME types for WASM files
+    middlewareMode: false,
     proxy: {
+      // Bot Stats API - local dev proxy with mock data
+      '/api/bot-stats': {
+        target: 'http://localhost:5001',
+        changeOrigin: true,
+        bypass: async (req, res) => {
+          if (req.method !== 'GET') return;
+          
+          const token = process.env.VITE_DISCORD_BOT_TOKEN;
+          
+          // If token available, try real Discord API
+          if (token) {
+            try {
+              const discordRes = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
+                headers: { 'Authorization': `Bot ${token}` }
+              });
+              
+              if (discordRes.ok) {
+                const guilds = await discordRes.json();
+                const users = guilds.reduce((sum: number, g: any) => sum + (g.approximate_member_count || 0), 0);
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                  servers: guilds.length,
+                  users: users || guilds.length * 500,
+                  commands: 50,
+                  status: 'online',
+                  lastUpdated: new Date().toISOString(),
+                  cached: false,
+                  source: 'local-dev'
+                }));
+                return;
+              }
+            } catch (e) {
+              console.log('Local dev: Discord API failed, using mock data');
+            }
+          }
+          
+          // Fallback to mock data
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            servers: 150,
+            users: 75000,
+            commands: 50,
+            status: 'online',
+            lastUpdated: new Date().toISOString(),
+            cached: true,
+            mock: true
+          }));
+        }
+      },
       // Top.gg API
       '/api/topgg': {
         target: 'https://top.gg',

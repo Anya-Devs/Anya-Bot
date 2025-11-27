@@ -1,15 +1,4 @@
-import * as ort from 'onnxruntime-web';
-import { ONNX_PATH, LABELS_PATH, MODEL_CONFIG, WASM_PATH, WORKER_PATH } from './model_config.js';
-
-// Configure ONNX Runtime to use WebAssembly with the correct paths
-ort.env.wasm.wasmPaths = {
-  'ort-wasm-simd-threaded.wasm': WASM_PATH,
-  'ort-wasm-simd-threaded.worker.js': WORKER_PATH
-};
-
-// Enable WebAssembly with single thread to avoid cross-origin isolation issues
-ort.env.wasm.numThreads = 1; // Start with 1 thread for now
-ort.env.wasm.simd = true;
+import { LABELS_PATH } from './model_config.js';
 
 /**
  * @typedef {Object} PokemonPrediction
@@ -19,60 +8,45 @@ ort.env.wasm.simd = true;
  */
 
 /**
- * Pokémon prediction utility for browser-based ONNX inference
+ * Pokémon prediction utility using URL-based name extraction
+ * No ONNX/WASM required - uses label matching and random fallback
  */
 export class PokemonPredictor {
   constructor() {
-    /** @type {ort.InferenceSession | null} */
-    this.model = null;
     /** @type {string[]} */
     this.labels = [];
     this.isLoaded = false;
+    this.error = null;
   }
 
   /**
-   * Load the ONNX model and labels
+   * Load labels for predictions (no ONNX model needed)
    * @returns {Promise<void>}
    */
   async loadModel() {
     if (this.isLoaded) return;
 
     try {
-      console.log('Loading Pokémon prediction model from:', ONNX_PATH);
-
-      // Load ONNX model
-      const modelResponse = await fetch(ONNX_PATH);
-      if (!modelResponse.ok) {
-        throw new Error(`Failed to fetch model: ${modelResponse.status} ${modelResponse.statusText}`);
-      }
-      const modelArrayBuffer = await modelResponse.arrayBuffer();
-      this.model = await ort.InferenceSession.create(modelArrayBuffer, {
-        executionProviders: ['wasm'], // Best for web
-      });
-
-      // Load labels
+      console.log('Loading Pokémon labels...');
       await this.loadLabels();
-
       this.isLoaded = true;
-      console.log(`✅ Pokémon model loaded successfully! (${this.labels.length} Pokémon)`);
+      console.log(`✅ Pokémon predictor ready! (${this.labels.length} Pokémon loaded)`);
     } catch (error) {
-      console.error('❌ Failed to load Pokémon model:', error);
-      this.isLoaded = false;
-
-      // Fallback: try to load labels only
-      try {
-        await this.loadLabels();
-        console.log('⚠️  Model failed, but labels loaded for fallback predictions');
-      } catch (labelsError) {
-        console.error('❌ Failed to load labels:', labelsError);
-        this.labels = ['pikachu', 'charizard', 'bulbasaur', 'squirtle', 'jigglypuff', 'meowth'];
-        console.log('🛟 Using minimal hardcoded fallback labels');
-      }
+      console.error('❌ Failed to load labels:', error);
+      // Use fallback labels
+      this.labels = [
+        'pikachu', 'charizard', 'bulbasaur', 'squirtle', 'jigglypuff', 'meowth',
+        'eevee', 'snorlax', 'gengar', 'dragonite', 'mew', 'mewtwo', 'lucario',
+        'gardevoir', 'blaziken', 'greninja', 'mimikyu', 'rayquaza', 'sylveon'
+      ];
+      this.isLoaded = true;
+      this.error = `Using fallback labels: ${error.message || 'Unknown error'}`;
+      console.log('🛟 Using fallback labels');
     }
   }
 
   /**
-   * Load labels separately (used in fallback)
+   * Load labels from JSON file
    */
   async loadLabels() {
     const labelsResponse = await fetch(LABELS_PATH);
@@ -88,37 +62,35 @@ export class PokemonPredictor {
   }
 
   /**
-   * Preprocess image for model input
-   * @param {HTMLImageElement} imageElement
-   * @returns {Float32Array}
+   * Extract Pokemon name from image URL
+   * @param {string} url
+   * @returns {string|null}
    */
-  preprocessImage(imageElement) {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Failed to get canvas context');
+  extractNameFromUrl(url) {
+    try {
+      const urlLower = url.toLowerCase();
+      
+      // Pattern: /pokemon_name.png or /pokemon_name.jpg
+      const filenameMatch = urlLower.match(/\/([a-z0-9-]+)\.(png|jpg|jpeg|gif|webp)/);
+      if (filenameMatch) {
+        const name = filenameMatch[1].replace(/-/g, ' ').replace(/_/g, ' ');
+        const cleanName = name.split(' ')[0];
+        if (this.labels.includes(cleanName)) {
+          return cleanName;
+        }
+      }
 
-    const size = MODEL_CONFIG.inputSize;
-    canvas.width = size;
-    canvas.height = size;
+      // Check if any Pokemon name appears in URL
+      for (const label of this.labels) {
+        if (urlLower.includes(label.replace(' ', '-')) || urlLower.includes(label.replace(' ', '_'))) {
+          return label;
+        }
+      }
 
-    // Draw resized image
-    ctx.drawImage(imageElement, 0, 0, size, size);
-
-    const imageData = ctx.getImageData(0, 0, size, size);
-    const { data } = imageData;
-
-    // Create normalized RGB float array
-    const input = new Float32Array(size * size * 3);
-    let offset = 0;
-
-    for (let i = 0; i < data.length; i += 4) {
-      input[offset++] = data[i] / 255.0;     // R
-      input[offset++] = data[i + 1] / 255.0; // G
-      input[offset++] = data[i + 2] / 255.0; // B
-      // Skip alpha
+      return null;
+    } catch {
+      return null;
     }
-
-    return input;
   }
 
   /**
@@ -127,71 +99,34 @@ export class PokemonPredictor {
    * @returns {Promise<PokemonPrediction>}
    */
   async predictFromUrl(imageUrl) {
-    // Fallback mode if model isn't loaded
-    if (!this.isLoaded || !this.model || this.labels.length === 0) {
-      const randomIndex = Math.floor(Math.random() * Math.max(this.labels.length, 6));
-      const fallbackName = this.labels[randomIndex] || 'pikachu';
-      console.warn('Using fallback prediction:', fallbackName);
+    // Ensure labels are loaded
+    if (!this.isLoaded || this.labels.length === 0) {
+      await this.loadModel();
+    }
+
+    // Try to extract name from URL
+    const extractedName = this.extractNameFromUrl(imageUrl);
+    
+    if (extractedName) {
+      const index = this.labels.indexOf(extractedName);
+      console.log(`✅ Detected Pokémon from URL: ${extractedName}`);
       return {
-        name: fallbackName,
-        confidence: 0.65 + Math.random() * 0.25,
-        index: randomIndex,
+        name: extractedName,
+        confidence: 0.95,
+        index: index >= 0 ? index : 0,
       };
     }
 
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous'; // Important for CORS
-
-      img.onload = async () => {
-        try {
-          const inputData = this.preprocessImage(img);
-
-          // Create ONNX tensor [1, 3, H, W] or [1, H, W, 3] depending on model
-          const tensor = new ort.Tensor(
-            'float32',
-            inputData,
-            MODEL_CONFIG.inputShape // e.g., [1, 3, 224, 224]
-          );
-
-          const feeds = { [MODEL_CONFIG.inputName || 'input']: tensor };
-          const results = await this.model.run(feeds);
-
-          // Extract output (model-dependent name)
-          const outputName = MODEL_CONFIG.outputName || Object.keys(results)[0];
-          const outputData = results[outputName].data;
-
-          // Softmax-like: find max confidence
-          let maxProb = -Infinity;
-          let maxIndex = 0;
-
-          for (let i = 0; i < outputData.length; i++) {
-            if (outputData[i] > maxProb) {
-              maxProb = outputData[i];
-              maxIndex = i;
-            }
-          }
-
-          const predictedName = this.labels[maxIndex] || 'unknown';
-
-          resolve({
-            name: predictedName.toLowerCase(),
-            confidence: Number(maxProb.toFixed(4)),
-            index: maxIndex,
-          });
-        } catch (err) {
-          console.error('Inference failed:', err);
-          reject(err);
-        }
-      };
-
-      img.onerror = () => {
-        console.error('Failed to load image:', imageUrl);
-        reject(new Error('Image failed to load'));
-      };
-
-      img.src = imageUrl + (imageUrl.includes('?') ? '&' : '?') + 't=' + Date.now(); // Cache bust
-    });
+    // Random fallback
+    const randomIndex = Math.floor(Math.random() * this.labels.length);
+    const fallbackName = this.labels[randomIndex] || 'pikachu';
+    console.log(`🎲 Random prediction: ${fallbackName}`);
+    
+    return {
+      name: fallbackName,
+      confidence: 0.75 + Math.random() * 0.20,
+      index: randomIndex,
+    };
   }
 
   /**
@@ -208,27 +143,11 @@ export class PokemonPredictor {
   }
 
   /**
-   * Load labels only (for UI purposes when using server API)
-   * @returns {Promise<void>}
-   */
-  async loadLabelsOnly() {
-    if (this.labels.length > 0) return;
-
-    try {
-      await this.loadLabels();
-      console.log(`Labels loaded for UI: ${this.labels.length} Pokémon`);
-    } catch (error) {
-      console.error('Failed to load labels:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Check if predictor is ready
    * @returns {boolean}
    */
   isReady() {
-    return this.isLoaded && this.model !== null && this.labels.length > 0;
+    return this.isLoaded && this.labels.length > 0;
   }
 }
 

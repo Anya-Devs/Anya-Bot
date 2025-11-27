@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Home, Terminal, Sparkles, MessageCircle } from 'lucide-react';
 import { BOT_CONFIG } from '../config/bot';
 import BotAvatar from './BotAvatar';
 
@@ -18,16 +18,16 @@ const Navbar = () => {
   }, []);
 
   const navLinks = [
-    { name: 'Home', path: '/' },
-    { name: 'Commands', path: '/commands' },
-    { name: 'Character Dex', path: '/dex' },
-    { name: 'Leaderboard', path: '/leaderboard' },
+    { name: 'Home', path: '/', icon: Home },
+    { name: 'Commands', path: '/commands', icon: Terminal },
+    { name: 'Updates', path: '/updates', icon: Sparkles },
+    { name: 'Contact', path: '/contact', icon: MessageCircle },
   ];
 
   return (
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? 'bg-dark-800/95 backdrop-blur-md shadow-lg border-b border-primary/20' : 'bg-transparent'
+        scrolled ? 'bg-dark-800/95 backdrop-blur-xl shadow-2xl border-b border-primary/30' : 'bg-transparent'
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -47,19 +47,23 @@ const Navbar = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-1">
-            {navLinks.map((link) => (
-              <Link
-                key={link.path}
-                to={link.path}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                  location.pathname === link.path
-                    ? 'text-primary bg-primary/10'
-                    : 'text-gray-300 hover:text-primary hover:bg-primary/5'
-                }`}
-              >
-                {link.name}
-              </Link>
-            ))}
+            {navLinks.map((link) => {
+              const Icon = link.icon;
+              return (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center gap-1.5 ${
+                    location.pathname === link.path
+                      ? 'text-primary bg-primary/10'
+                      : 'text-gray-300 hover:text-primary hover:bg-primary/5'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {link.name}
+                </Link>
+              );
+            })}
           </div>
 
           {/* CTA Button */}
@@ -88,20 +92,24 @@ const Navbar = () => {
       {isOpen && (
         <div className="md:hidden bg-dark-800 border-t border-primary/20 animate-slide-down shadow-lg">
           <div className="px-4 py-4 space-y-2">
-            {navLinks.map((link) => (
-              <Link
-                key={link.path}
-                to={link.path}
-                onClick={() => setIsOpen(false)}
-                className={`block px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                  location.pathname === link.path
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-gray-300 hover:bg-primary/5 hover:text-primary'
-                }`}
-              >
-                {link.name}
-              </Link>
-            ))}
+            {navLinks.map((link) => {
+              const Icon = link.icon;
+              return (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  onClick={() => setIsOpen(false)}
+                  className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                    location.pathname === link.path
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-gray-300 hover:bg-primary/5 hover:text-primary'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {link.name}
+                </Link>
+              );
+            })}
             <a
               href={BOT_CONFIG.inviteLink}
               target="_blank"

@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Compiled output
+lib/
+
+# Environment files
+.env
+.env.local
+
+# IDE
+.idea/
+*.iml

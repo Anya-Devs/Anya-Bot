@@ -8,6 +8,10 @@
     ],
     "rewrites": [
       {
+        "source": "/api/bot-stats",
+        "function": "botStats"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

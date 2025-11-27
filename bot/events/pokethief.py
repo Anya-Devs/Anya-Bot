@@ -249,7 +249,7 @@ class EventGate(commands.Cog):
     WAIT_TIME = 30  # seconds to wait
     DETECT_BOT_ID = 716390085896962058  # Poketwo bot ID
     TEST_USER_ID = 1124389055598170182  # Test user ID for development
-    OFFENSE_PHASES = [1, 3, 6, 12, 24, 48]  # hours for each offense level
+    OFFENSE_PHASES = [3, 6, 12, 24, 48]  # hours for each offense level
     PENALTY_EXPIRY_DAYS = 30
     DEBUG = 0
 
@@ -434,6 +434,10 @@ class EventGate(commands.Cog):
             anti_thief: Anti_Thief = self.bot.get_cog('Anti_Thief')
             channel_id = original_message.channel.id
             hunters = self.channel_hunters.get(channel_id, {})
+            
+            # Initialize both variables as empty lists
+            shiny_hunters = []
+            collectors = []
             
             if event_type == "shiny":
                 shiny_hunters = hunters.get('shiny', [])

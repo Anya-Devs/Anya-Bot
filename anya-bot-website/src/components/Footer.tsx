@@ -1,105 +1,77 @@
-import { useState, useEffect } from 'react';
-import { Heart, Github, MessageCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Heart, Github, MessageCircle, Home, Terminal, Sparkles } from 'lucide-react';
 import { BOT_CONFIG } from '../config/bot';
-import { fetchBotStats } from '../services/botStatsService';
 
 const Footer = () => {
-  const [stats, setStats] = useState({
-    servers: '...',
-    users: '...',
-    commands: '...',
-    uptime: '...'
-  });
-
-  useEffect(() => {
-    fetchBotStats().then(stats => {
-      setStats({
-        servers: String(stats.servers),
-        users: String(stats.users),
-        commands: String(stats.commands),
-        uptime: stats.uptime,
-      });
-    });
-  }, []);
-
   return (
-    <footer className="bg-dark-900 border-t border-primary/20 mt-20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          {/* About */}
-          <div className="col-span-1 md:col-span-2">
-            <h3 className="text-xl font-display font-bold text-gradient mb-4">
-              {BOT_CONFIG.name} 🎀
-            </h3>
-            <p className="text-gray-400 mb-4">
-              {BOT_CONFIG.description}
-            </p>
-            <div className="flex items-center space-x-4">
+    <footer className="relative mt-auto">
+      {/* Gradient fade transition from content */}
+      <div className="h-24 bg-gradient-to-b from-transparent to-dark-950"></div>
+      
+      <div className="bg-dark-950">
+        <div className="max-w-5xl mx-auto px-6 py-12">
+          {/* Main footer content - clean and minimal */}
+          <div className="flex flex-col md:flex-row justify-between items-center gap-8">
+            
+            {/* Brand */}
+            <div className="text-center md:text-left">
+              <h3 className="text-lg font-display font-bold text-white mb-1">
+                {BOT_CONFIG.name}
+              </h3>
+              <p className="text-gray-500 text-sm max-w-xs">
+                Your elegant Discord companion
+              </p>
+            </div>
+
+            {/* Navigation */}
+            <nav className="flex items-center gap-6">
+              <Link to="/" className="text-gray-400 hover:text-white transition-colors flex items-center gap-1.5 text-sm">
+                <Home className="w-4 h-4" /> Home
+              </Link>
+              <Link to="/commands" className="text-gray-400 hover:text-white transition-colors flex items-center gap-1.5 text-sm">
+                <Terminal className="w-4 h-4" /> Commands
+              </Link>
+              <Link to="/updates" className="text-gray-400 hover:text-white transition-colors flex items-center gap-1.5 text-sm">
+                <Sparkles className="w-4 h-4" /> Updates
+              </Link>
+              <Link to="/contact" className="text-gray-400 hover:text-white transition-colors flex items-center gap-1.5 text-sm">
+                <MessageCircle className="w-4 h-4" /> Contact
+              </Link>
+            </nav>
+
+            {/* Social links */}
+            <div className="flex items-center gap-4">
               <a
                 href={BOT_CONFIG.supportServer}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-primary transition-colors"
+                className="p-2 text-gray-500 hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                title="Discord Support"
               >
                 <MessageCircle className="w-5 h-5" />
               </a>
               <a
-                href="https://github.com"
+                href="https://github.com/Anya-Devs"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-primary transition-colors"
+                className="p-2 text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                title="GitHub"
               >
                 <Github className="w-5 h-5" />
               </a>
             </div>
           </div>
 
-          {/* Quick Links */}
-          <div>
-            <h4 className="text-lg font-semibold text-white mb-4">Quick Links</h4>
-            <ul className="space-y-2">
-              <li>
-                <a href="#" className="text-gray-400 hover:text-primary transition-colors">
-                  Documentation
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-gray-400 hover:text-primary transition-colors">
-                  Support
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-gray-400 hover:text-primary transition-colors">
-                  Terms of Service
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-gray-400 hover:text-primary transition-colors">
-                  Privacy Policy
-                </a>
-              </li>
-            </ul>
-          </div>
+          {/* Divider */}
+          <div className="my-8 h-px bg-gradient-to-r from-transparent via-dark-700 to-transparent"></div>
 
-          {/* Stats */}
-          <div>
-            <h4 className="text-lg font-semibold text-white mb-4">Stats ⭐</h4>
-            <ul className="space-y-2 text-gray-400">
-              <li>Servers: <span className="text-primary font-semibold">{stats.servers}</span></li>
-              <li>Users: <span className="text-primary font-semibold">{stats.users}</span></li>
-              <li>Commands: <span className="text-primary font-semibold">{stats.commands}</span></li>
-              <li>Uptime: <span className="text-primary font-semibold">{stats.uptime}</span></li>
-            </ul>
+          {/* Bottom bar */}
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-600">
+            <p className="flex items-center gap-1">
+              Made with <Heart className="w-3.5 h-3.5 text-primary" /> by Anya Devs
+            </p>
+            <p>© {new Date().getFullYear()} {BOT_CONFIG.name}</p>
           </div>
-        </div>
-
-        <div className="mt-8 pt-8 border-t border-primary/20 text-center text-gray-400">
-          <p className="flex items-center justify-center">
-            Made with <Heart className="w-4 h-4 mx-2 text-primary animate-pulse" /> by the Anya Bot Team
-          </p>
-          <p className="mt-2 text-sm">
-            © {new Date().getFullYear()} {BOT_CONFIG.name}. All rights reserved. 🎀
-          </p>
         </div>
       </div>
     </footer>
