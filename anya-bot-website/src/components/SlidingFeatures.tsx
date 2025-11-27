@@ -125,6 +125,10 @@ const featureDemos: FeatureDemo[] = [
       description: 'Guess the pokémon and type `@Pokétwo#8236 catch <pokémon>` to catch it!',
       color: '#FF6B9D',
       image: SAMPLE_SPAWN_IMAGE_URL,
+      buttons: [
+        { label: 'View Spawn', style: 'link', url: '#' },
+        { label: 'Catch', style: 'primary' }
+      ]
     },
   },
   {
@@ -132,7 +136,16 @@ const featureDemos: FeatureDemo[] = [
     title: 'Anime Database',
     description: 'Search through MyAnimeList for detailed anime information.',
     command: '.anime recommend',
-    embed: { title: 'Anime Search Results', description: 'Searching...', color: '#FF6B9D', footer: 'MyAnimeList • Jikan API' },
+    embed: { 
+      title: 'Anime Search Results', 
+      description: 'Searching...', 
+      color: '#FF6B9D', 
+      footer: 'MyAnimeList • Jikan API',
+      buttons: [
+        { label: 'View Reviews', style: 'link', url: '#' },
+        { label: 'Recommend', style: 'primary' }
+      ]
+    },
   },
   {
     id: 'action-commands',
@@ -398,9 +411,13 @@ const SlidingFeatures: React.FC = () => {
     const imageUrl = getImageUrl(anime.images);
     const score = Math.floor(anime.score || 0);
     const bar = '▰'.repeat(score) + '▱'.repeat(10 - score);
+    // Format synopsis with markdown blockquote
+    const synopsis = anime.synopsis 
+      ? anime.synopsis.split('\n').map(line => `> ${line}`).join('\n')
+      : '> *Synopsis not available*';
     return {
       title: anime.title,
-      description: anime.synopsis || '> Synopsis not available',
+      description: synopsis,
       color: '#FF6B9D',
       image: imageUrl,
       fields: [{
@@ -489,7 +506,7 @@ const SlidingFeatures: React.FC = () => {
     const weight = (pokemon.weight / 10).toFixed(1);
 
     // Build footer text with new lines
-    let footerText = `Height: ${height}m • Weight: ${weight}kg\n${gender}`;
+    let footerText = `${gender}\nHeight: ${height}m • Weight: ${weight}kg`;
     if (rarity) {
       footerText = `${rarity}\n${footerText}`;
     }
@@ -528,13 +545,15 @@ const SlidingFeatures: React.FC = () => {
         footer: 'Anya Bot • Roleplay Actions',
       };
     }
-    const phrase = actionData.phrases.other[currentAction].replace('{user}', `@${currentActionUser}`);
+    const phrase = actionData.phrases.other[currentAction]
+      .replace('{user}', 'You')
+      .replace('{target}', `@${currentActionUser}`);
     return {
-      title: `Action: ${currentAction.charAt(0).toUpperCase() + currentAction.slice(1)}`,
-      description: phrase,
+      title: phrase,
+      //description: phrase,
       color: '#FF6B9D',
       image: actionGif,
-      footer: 'Anya Bot • Roleplay Actions',
+      footer: 'Sent: 0 | Received: 0\nAnya Bot • Roleplay Actions',
     };
   };
 
@@ -611,26 +630,7 @@ const SlidingFeatures: React.FC = () => {
                   {currentDemo.id === 'spawn-detect' ? (
                     <>
                       <div className="px-4 py-3 border-b border-dark-700">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={spawnInputValue}
-                            onChange={(e) => setSpawnInputValue(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSpawnUrlSubmit(spawnInputValue)}
-                            placeholder="Enter image URL to test spawn detection..."
-                            className="flex-1 px-3 py-2 bg-dark-800 border border-dark-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary"
-                          />
-                          <button
-                            onClick={() => handleSpawnUrlSubmit(spawnInputValue)}
-                            className="px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg transition-colors"
-                          >
-                            Test
-                          </button>
-                        </div>
-                        <p className="text-xs text-gray-400 mt-1">
-                          Enter any image URL to create a custom spawn and see Anya detect it!
-                        </p>
-                      </div>
+                                      </div>
                       <DiscordMessage
                         username="Pokétwo#8236"
                         avatar={<img src="https://poketwo.net/_next/image?url=%2Fassets%2Flogo.png&w=640&q=100" alt="Pokétwo" className="rounded-full" />}
@@ -649,14 +649,9 @@ const SlidingFeatures: React.FC = () => {
                           avatar={<BotAvatar />}
                           isBot
                           embed={{
-                            image: pokemonImageUrl,
+                            image: "https://res.cloudinary.com/dbgrdkwfv/image/upload/v1761896637/poketwo_spawns/vulpix-alola.png", //pokemonImageUrl,
                           }}
-                          components={{
-                            buttons: [
-                              { label: 'View Reviews', style: 'link', url: '#' },
-                              { label: 'Recommend', style: 'primary' }
-                            ]
-                          }}
+                        
                           timestamp={getCurrentTimestamp()}
                         />
                       )}
@@ -679,6 +674,11 @@ const SlidingFeatures: React.FC = () => {
                             ? { buttons: [
                                 { label: 'Stats', style: 'secondary' },
                                 { label: 'Evolutions', style: 'secondary' }
+                              ] }
+                            : currentDemo.id === 'anime-search'
+                            ? { buttons: [
+                                { label: 'View Reviews', style: 'link', url: '#' },
+                                { label: 'Recommend', style: 'primary' }
                               ] }
                             : currentDemo.id === 'action-commands'
                             ? { buttons: [{ label: 'Do It Back', style: 'primary' }] }

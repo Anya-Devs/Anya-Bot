@@ -9,7 +9,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "start": "vite",
-    "setup:token": "node scripts/setup-token.js"
+    "setup:token": "node scripts/setup-token.js",
+    "sync:commands": "node scripts/sync-commands.js",
+    "sync:commands:apply": "node scripts/sync-commands.js --apply"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",

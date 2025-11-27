@@ -41,7 +41,8 @@ const CommandItem = ({
   isExpanded, 
   onToggle, 
   onCopy, 
-  isCopied 
+  isCopied,
+  isSubcommand = false
 }: { 
   cmdName: string; 
   cmd: BotCommand; 
@@ -49,11 +50,12 @@ const CommandItem = ({
   onToggle: () => void;
   onCopy: () => void;
   isCopied: boolean;
+  isSubcommand?: boolean;
 }) => {
   return (
     <div className={`border rounded-xl transition-all duration-200 ${
       isExpanded ? 'border-primary bg-primary/5' : 'border-dark-600 bg-dark-800/50 hover:border-dark-500'
-    }`}>
+    } ${isSubcommand ? 'ml-4 border-l-2 border-l-primary/30' : ''}`}>
       {/* Command Header - Always Visible */}
       <button
         onClick={onToggle}
@@ -73,8 +75,8 @@ const CommandItem = ({
       {/* Expandable Details */}
       {isExpanded && (
         <div className="px-4 pb-4 space-y-4 animate-fade-in">
-          {/* Description */}
-          <p className="text-gray-300 text-sm">{cmd.description || 'No description available.'}</p>
+          {/* Description - render newlines as line breaks */}
+          <p className="text-gray-300 text-sm whitespace-pre-line">{cmd.description || 'No description available.'}</p>
 
           {/* Usage Example */}
           {cmd.example && (
@@ -113,9 +115,68 @@ const CommandItem = ({
   );
 };
 
+// Command Group Component - groups related commands together
+const CommandGroup = ({
+  groupName,
+  commands,
+  expandedCommand,
+  onToggle,
+  onCopy,
+  copiedCommand
+}: {
+  groupName: string;
+  commands: [string, BotCommand][];
+  expandedCommand: string | null;
+  onToggle: (cmd: string) => void;
+  onCopy: (cmd: string) => void;
+  copiedCommand: string | null;
+}) => {
+  const mainCmd = commands.find(([name]) => name === groupName);
+  const subCmds = commands.filter(([name]) => name !== groupName);
+
+  return (
+    <div className="border border-dark-600 rounded-2xl bg-dark-900/30 overflow-hidden">
+      {/* Group Header */}
+      <div className="px-4 py-3 bg-dark-800/50 border-b border-dark-700 flex items-center gap-2">
+        <Command className="w-4 h-4 text-primary" />
+        <span className="text-sm font-semibold text-white">{groupName}</span>
+        <span className="text-xs text-gray-500">({commands.length} command{commands.length > 1 ? 's' : ''})</span>
+      </div>
+      
+      {/* Commands inside group */}
+      <div className="p-3 space-y-2">
+        {/* Main command first if exists */}
+        {mainCmd && (
+          <CommandItem
+            cmdName={mainCmd[0]}
+            cmd={mainCmd[1]}
+            isExpanded={expandedCommand === mainCmd[0]}
+            onToggle={() => onToggle(mainCmd[0])}
+            onCopy={() => onCopy(mainCmd[0])}
+            isCopied={copiedCommand === mainCmd[0]}
+          />
+        )}
+        {/* Subcommands */}
+        {subCmds.map(([cmdName, cmd]) => (
+          <CommandItem
+            key={cmdName}
+            cmdName={cmdName}
+            cmd={cmd}
+            isExpanded={expandedCommand === cmdName}
+            onToggle={() => onToggle(cmdName)}
+            onCopy={() => onCopy(cmdName)}
+            isCopied={copiedCommand === cmdName}
+            isSubcommand
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const CommandsPage = () => {
   const [commands, setCommands] = useState<CommandsData>({});
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [expandedCommand, setExpandedCommand] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -127,10 +188,6 @@ const CommandsPage = () => {
       .then(res => res.json())
       .then((data: CommandsData) => {
         setCommands(data);
-        const firstCat = Object.keys(data).find(
-          cat => typeof data[cat] === 'object' && Object.keys(data[cat]).length > 0
-        );
-        if (firstCat) setSelectedCategory(firstCat);
         setLoading(false);
       })
       .catch(err => {
@@ -155,10 +212,23 @@ const CommandsPage = () => {
     return categories.reduce((sum, cat) => sum + cat.count, 0);
   }, [categories]);
 
-  // Filtered commands based on search
+  // Filtered commands based on search and category
   const filteredCommands = useMemo(() => {
-    if (!selectedCategory || !commands[selectedCategory]) return [];
-    const categoryCommands = Object.entries(commands[selectedCategory]);
+    let categoryCommands: [string, BotCommand][] = [];
+    
+    if (selectedCategory === 'All') {
+      // Combine all commands from all categories
+      for (const [catName, catCommands] of Object.entries(commands)) {
+        if (typeof catCommands === 'object') {
+          for (const [cmdName, cmd] of Object.entries(catCommands)) {
+            categoryCommands.push([cmdName, cmd]);
+          }
+        }
+      }
+    } else if (commands[selectedCategory]) {
+      categoryCommands = Object.entries(commands[selectedCategory]);
+    }
+    
     if (!searchQuery.trim()) return categoryCommands;
     
     const query = searchQuery.toLowerCase();
@@ -168,6 +238,56 @@ const CommandsPage = () => {
       cmd.aliases?.some(a => a.toLowerCase().includes(query))
     );
   }, [commands, selectedCategory, searchQuery]);
+
+  // Group commands by their prefix (e.g., "pt", "pt help", "pt config" -> grouped under "pt")
+  const groupedCommands = useMemo(() => {
+    const groups: { [key: string]: [string, BotCommand][] } = {};
+    const standalone: [string, BotCommand][] = [];
+
+    // First pass: identify potential group prefixes (only root-level groups)
+    const commandNames = filteredCommands.map(([name]) => name);
+    const groupPrefixes = new Set<string>();
+    
+    commandNames.forEach(name => {
+      // Check if this command has subcommands (other commands start with this name + space)
+      const hasSubcommands = commandNames.some(other => 
+        other !== name && other.startsWith(name + ' ')
+      );
+      if (hasSubcommands) {
+        // Only add if it's not already a subcommand of another group
+        const isSubcommandOfAnother = [...groupPrefixes].some(prefix => 
+          name.startsWith(prefix + ' ')
+        );
+        if (!isSubcommandOfAnother) {
+          groupPrefixes.add(name);
+        }
+      }
+    });
+
+    // Second pass: assign commands to groups or standalone
+    filteredCommands.forEach(([name, cmd]) => {
+      // Find if this command belongs to a group (use the shortest matching prefix)
+      let belongsToGroup: string | null = null;
+      
+      for (const prefix of groupPrefixes) {
+        if (name === prefix || name.startsWith(prefix + ' ')) {
+          belongsToGroup = prefix;
+          break;
+        }
+      }
+
+      if (belongsToGroup) {
+        if (!groups[belongsToGroup]) {
+          groups[belongsToGroup] = [];
+        }
+        groups[belongsToGroup].push([name, cmd]);
+      } else {
+        standalone.push([name, cmd]);
+      }
+    });
+
+    return { groups, standalone };
+  }, [filteredCommands]);
 
   // Copy command to clipboard
   const copyCommand = (cmd: string) => {
@@ -218,6 +338,25 @@ const CommandsPage = () => {
 
         {/* Category Tabs */}
         <div className="flex flex-wrap gap-2 mb-8">
+          {/* All Commands Tab */}
+          <button
+            onClick={() => {
+              setSelectedCategory('All');
+              setExpandedCommand(null);
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+              selectedCategory === 'All' 
+                ? 'bg-gradient-to-r from-primary to-purple-600 text-white' 
+                : 'bg-dark-800 text-gray-400 hover:text-white hover:bg-dark-700'
+            }`}
+          >
+            <Command className="w-4 h-4" />
+            <span className="text-sm font-medium">All</span>
+            <span className={`text-xs px-1.5 py-0.5 rounded ${selectedCategory === 'All' ? 'bg-white/20' : 'bg-dark-700'}`}>
+              {totalCommands}
+            </span>
+          </button>
+          
           {categories.map((cat) => {
             const Icon = cat.icon;
             const isActive = selectedCategory === cat.id;
@@ -227,7 +366,6 @@ const CommandsPage = () => {
                 onClick={() => {
                   setSelectedCategory(cat.id);
                   setExpandedCommand(null);
-                  setSearchQuery('');
                 }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
                   isActive 
@@ -246,24 +384,40 @@ const CommandsPage = () => {
         </div>
 
         {/* Commands List - Clean single column with expandable items */}
-        <div className="max-w-3xl mx-auto space-y-3">
+        <div className="max-w-3xl mx-auto space-y-4">
           {filteredCommands.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
               <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
               <p>No commands found matching "{searchQuery}"</p>
             </div>
           ) : (
-            filteredCommands.map(([cmdName, cmd]) => (
-              <CommandItem
-                key={cmdName}
-                cmdName={cmdName}
-                cmd={cmd}
-                isExpanded={expandedCommand === cmdName}
-                onToggle={() => setExpandedCommand(expandedCommand === cmdName ? null : cmdName)}
-                onCopy={() => copyCommand(cmdName)}
-                isCopied={copiedCommand === cmdName}
-              />
-            ))
+            <>
+              {/* Render grouped commands */}
+              {Object.entries(groupedCommands.groups).map(([groupName, cmds]) => (
+                <CommandGroup
+                  key={groupName}
+                  groupName={groupName}
+                  commands={cmds}
+                  expandedCommand={expandedCommand}
+                  onToggle={(cmd) => setExpandedCommand(expandedCommand === cmd ? null : cmd)}
+                  onCopy={copyCommand}
+                  copiedCommand={copiedCommand}
+                />
+              ))}
+              
+              {/* Render standalone commands */}
+              {groupedCommands.standalone.map(([cmdName, cmd]) => (
+                <CommandItem
+                  key={cmdName}
+                  cmdName={cmdName}
+                  cmd={cmd}
+                  isExpanded={expandedCommand === cmdName}
+                  onToggle={() => setExpandedCommand(expandedCommand === cmdName ? null : cmdName)}
+                  onCopy={() => copyCommand(cmdName)}
+                  isCopied={copiedCommand === cmdName}
+                />
+              ))}
+            </>
           )}
         </div>
       </div>
