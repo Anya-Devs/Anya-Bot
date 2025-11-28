@@ -10,8 +10,12 @@
     "preview": "vite preview",
     "start": "vite",
     "setup:token": "node scripts/setup-token.js",
+    "setup:env": "node scripts/setup-env.js",
     "sync:commands": "node scripts/sync-commands.js",
-    "sync:commands:apply": "node scripts/sync-commands.js --apply"
+    "sync:commands:apply": "node scripts/sync-commands.js --apply",
+    "predeploy": "npm run build",
+    "deploy": "npx firebase deploy --only hosting",
+    "deploy:all": "npm run build && npx firebase deploy --only hosting"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
@@ -27,6 +31,7 @@
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
+    "firebase-tools": "^13.29.1",
     "mongodb": "^6.12.0",
     "@types/node": "^20.19.25",
     "@types/react": "^18.2.43",

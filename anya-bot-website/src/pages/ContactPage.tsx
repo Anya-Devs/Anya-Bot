@@ -1,55 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { 
   MessageCircle, Github, Heart, Mail, ExternalLink,
-  Coffee, Sparkles, Star, Code2, Palette
+  Coffee, Sparkles, Star, Code2
 } from 'lucide-react';
 import { BOT_CONFIG } from '../config/bot';
 
-interface DiscordUser {
-  id: string;
-  username: string;
-  discriminator: string;
-  avatar: string | null;
-  banner_color: string | null;
-  accent_color: number | null;
-}
-
 const DEVELOPER_ID = '1124389055598170182';
+const DEV_AVATAR = '/dev-avatar.png'; // Static developer avatar
+const DEV_USERNAME = 'Senko';
 
 const ContactPage = () => {
-  const [developer, setDeveloper] = useState<DiscordUser | null>(null);
-  const [loading, setLoading] = useState(true);
   const [hovered, setHovered] = useState(false);
-
-  useEffect(() => {
-    // Fetch developer info from Discord API
-    const fetchDeveloper = async () => {
-      try {
-        // Use a Discord avatar/user API endpoint
-        const response = await fetch(`https://discord-lookup-api.vercel.app/api/user/${DEVELOPER_ID}`);
-        if (response.ok) {
-          const data = await response.json();
-          setDeveloper(data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch developer info:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDeveloper();
-  }, []);
-
-  const getAvatarUrl = (user: DiscordUser) => {
-    if (user.avatar) {
-      const ext = user.avatar.startsWith('a_') ? 'gif' : 'png';
-      return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${ext}?size=256`;
-    }
-    // Default avatar
-    const defaultIndex = parseInt(user.discriminator) % 5;
-    return `https://cdn.discordapp.com/embed/avatars/${defaultIndex}.png`;
-  };
 
   const socialLinks = [
     { 
@@ -111,19 +72,11 @@ const ContactPage = () => {
                 <div className={`absolute inset-0 bg-gradient-to-r from-primary to-purple-500 rounded-full blur-xl opacity-30 group-hover:opacity-50 transition-opacity ${
                   hovered ? 'animate-pulse' : ''
                 }`}></div>
-                {loading ? (
-                  <div className="w-32 h-32 rounded-full bg-dark-700 animate-pulse"></div>
-                ) : developer ? (
-                  <img
-                    src={getAvatarUrl(developer)}
-                    alt={developer.username}
-                    className="relative w-32 h-32 rounded-full border-4 border-primary/30 shadow-2xl object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-                ) : (
-                  <div className="w-32 h-32 rounded-full bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center">
-                    <Palette className="w-12 h-12 text-white" />
-                  </div>
-                )}
+                <img
+                  src={DEV_AVATAR}
+                  alt={DEV_USERNAME}
+                  className="relative w-32 h-32 rounded-full border-4 border-primary/30 shadow-2xl object-cover transition-transform duration-300 group-hover:scale-105"
+                />
                 
                 {/* Online indicator */}
                 <div className="absolute bottom-2 right-2 w-6 h-6 bg-green-500 rounded-full border-4 border-dark-800 animate-pulse"></div>
@@ -133,22 +86,22 @@ const ContactPage = () => {
               <div className="flex-1 text-center md:text-left">
                 <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
                   <h3 className="text-2xl font-bold text-white">
-                    {loading ? 'Loading...' : developer?.username || 'Developer'}
+                    {DEV_USERNAME}
                   </h3>
                   <Sparkles className="w-5 h-5 text-yellow-400" />
                 </div>
                 <p className="text-gray-400 mb-4">
-                  Creator of Anya Bot • Full-Stack Developer • Anime Enthusiast 🎌
+                  Creator of Anya Bot • Full-Stack Developer • Silly Lil Guy
                 </p>
                 <div className="flex flex-wrap justify-center md:justify-start gap-2">
                   <span className="px-3 py-1 bg-dark-700 text-gray-300 rounded-lg text-sm flex items-center gap-1">
                     <Star className="w-3 h-3 text-yellow-400" /> Lead Developer
                   </span>
                   <span className="px-3 py-1 bg-dark-700 text-gray-300 rounded-lg text-sm flex items-center gap-1">
-                    <Heart className="w-3 h-3 text-pink-400" /> Anya Fan
+                    <Heart className="w-3 h-3 text-pink-400" /> Self Lover
                   </span>
                   <span className="px-3 py-1 bg-dark-700 text-gray-300 rounded-lg text-sm flex items-center gap-1">
-                    <Coffee className="w-3 h-3 text-amber-400" /> Powered by Coffee
+                    <Coffee className="w-3 h-3 text-amber-400" /> Powered by Fun
                   </span>
                 </div>
 

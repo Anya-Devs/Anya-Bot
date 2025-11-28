@@ -159,18 +159,7 @@ const featureDemos: FeatureDemo[] = [
       footer: 'Anya Bot • Roleplay Actions',
     },
   },
-  {
-    id: 'fun-commands',
-    title: 'Fun & Games',
-    description: 'Enjoy interactive games and entertainment commands.',
-    command: '.8ball Will I become a Pokémon Master?',
-    embed: {
-      title: '8Ball',
-      description: '**Will I become a Pokémon Master?**\nIt is decidedly so!',
-      color: '#FF6B9D',
-      footer: 'Requested by You',
-    },
-  },
+  
 ];
 
 // ---------------------------------------------------------------------------
@@ -184,16 +173,16 @@ const SlidingFeatures: React.FC = () => {
   const [animeData, setAnimeData] = useState<AnimeData | null>(null);
   const [pokemonData, setPokemonData] = useState<PokemonData | null>(null);
   const [actionData, setActionData] = useState<ActionData | null>(null);
+  const [currentAction, setCurrentAction] = useState<string>('');
+  const [currentActionUser, setCurrentActionUser] = useState<string>('');
   const [actionGif, setActionGif] = useState<string>('');
-  const [currentAction, setCurrentAction] = useState<string>('bite');
-  const [currentActionUser, setCurrentActionUser] = useState<string>('senko');
 
-  // Spawn detection demo
-  const [spawnInputValue, setSpawnInputValue] = useState<string>('');
+  // Spawn detection state
   const [customSpawnUrl, setCustomSpawnUrl] = useState<string>('');
   const [cachedSpawnImageUrl, setCachedSpawnImageUrl] = useState<string>('');
   const [predictedPokemon, setPredictedPokemon] = useState<string>('');
-  const [pokemonImageUrl, setPokemonImageUrl] = useState<string>('');
+  const [_spawnInputValue, setSpawnInputValue] = useState<string>('');
+  const [_pokemonImageUrl, setPokemonImageUrl] = useState<string>('');
 
   const users = ['senko', 'anya', 'alex', 'jordan', 'sam', 'taylor', 'morgan', 'casey', 'riley', 'devin'];
   const total = featureDemos.length;
@@ -353,13 +342,14 @@ const SlidingFeatures: React.FC = () => {
     }
   }, [currentFeature, customSpawnUrl, predictAndSet]);
 
-  // Handle manual URL submission
+  // Handle manual URL submission (kept for future input feature)
   const handleSpawnUrlSubmit = (url: string) => {
     if (!url.trim()) return;
     setCustomSpawnUrl(url.trim());
     setSpawnInputValue('');
     predictAndSet(url.trim());
   };
+  void handleSpawnUrlSubmit; // Suppress unused warning
 
   // -----------------------------------------------------------------------
   // Action command demo – random action + GIF

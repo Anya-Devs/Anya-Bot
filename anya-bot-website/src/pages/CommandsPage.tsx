@@ -218,7 +218,7 @@ const CommandsPage = () => {
     
     if (selectedCategory === 'All') {
       // Combine all commands from all categories
-      for (const [catName, catCommands] of Object.entries(commands)) {
+      for (const [, catCommands] of Object.entries(commands)) {
         if (typeof catCommands === 'object') {
           for (const [cmdName, cmd] of Object.entries(catCommands)) {
             categoryCommands.push([cmdName, cmd]);

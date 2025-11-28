@@ -7,7 +7,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Primary pink/magenta for accents - Enhanced vibrancy
+        // Primary pink/magenta - Anya's warmth
         primary: {
           DEFAULT: '#FF6B9D',
           dark: '#E5568A',
@@ -38,14 +38,28 @@ export default {
           800: '#733761',
           900: '#5C2C4E',
         },
-        // Accent colors - More vibrant and polished
+        // SPY x FAMILY Theme Colors
+        spy: {
+          burgundy: '#8B1538',      // Yor's elegant danger
+          wine: '#722F37',          // Deep sophistication
+          rose: '#C41E3A',          // Thorn Princess
+          blush: '#FFB6C1',         // Soft innocence
+          gold: '#D4AF37',          // Elegance & warmth
+          champagne: '#F7E7CE',     // Mission briefings
+          navy: '#1a1b2e',          // Loid's calculated cool
+          midnight: '#0f1019',      // Deep secrets
+          cream: '#FFFDD0',         // Classified docs
+          ivory: '#FFFFF0',         // Paper texture
+        },
+        // Accent colors
         accent: {
           blue: '#4A9EFF',
           purple: '#9D4EDD',
           cyan: '#06FFA5',
-          gold: '#FFD700',
+          gold: '#D4AF37',
           orange: '#FF8C42',
           green: '#00D9A3',
+          rose: '#C41E3A',
         },
         // Dark theme colors - Richer blacks with subtle color tints
         dark: {
@@ -93,6 +107,12 @@ export default {
         'wiggle': 'wiggle 1s ease-in-out infinite',
         'bounce-slow': 'bounceSlow 2s ease-in-out infinite',
         'float': 'float 3s ease-in-out infinite',
+        'shimmer': 'shimmer 2s linear infinite',
+        'pulse-gold': 'pulseGold 2s ease-in-out infinite',
+        'rose-bloom': 'roseBloom 0.8s ease-out',
+        'classified-stamp': 'classifiedStamp 0.5s ease-out',
+        'typewriter': 'typewriter 2s steps(20) forwards',
+        'blink': 'blink 1s step-end infinite',
       },
       keyframes: {
         fadeIn: {
@@ -154,11 +174,46 @@ export default {
           '33%': { transform: 'translateY(-5px) rotate(1deg)' },
           '66%': { transform: 'translateY(-3px) rotate(-1deg)' },
         },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
+        pulseGold: {
+          '0%, 100%': { boxShadow: '0 0 20px rgba(212, 175, 55, 0.3)' },
+          '50%': { boxShadow: '0 0 40px rgba(212, 175, 55, 0.6)' },
+        },
+        roseBloom: {
+          '0%': { transform: 'scale(0) rotate(-180deg)', opacity: '0' },
+          '100%': { transform: 'scale(1) rotate(0deg)', opacity: '1' },
+        },
+        classifiedStamp: {
+          '0%': { transform: 'scale(2) rotate(-15deg)', opacity: '0' },
+          '50%': { transform: 'scale(1.1) rotate(-5deg)', opacity: '1' },
+          '100%': { transform: 'scale(1) rotate(-3deg)', opacity: '1' },
+        },
+        typewriter: {
+          '0%': { width: '0' },
+          '100%': { width: '100%' },
+        },
+        blink: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0' },
+        },
       },
       boxShadow: {
         'pink-glow': '0 0 30px rgba(255, 107, 157, 0.5)',
         'purple-glow': '0 0 30px rgba(192, 96, 161, 0.5)',
         'sharp': '0 2px 8px rgba(0, 0, 0, 0.8)',
+        'gold-glow': '0 0 30px rgba(212, 175, 55, 0.4)',
+        'rose-glow': '0 0 25px rgba(196, 30, 58, 0.3)',
+        'elegant': '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+        'dossier': '0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+      },
+      backgroundImage: {
+        'spy-gradient': 'linear-gradient(135deg, #0f1019 0%, #1a1b2e 50%, #722F37 100%)',
+        'gold-shimmer': 'linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.3), transparent)',
+        'rose-fade': 'linear-gradient(180deg, rgba(196, 30, 58, 0.1) 0%, transparent 100%)',
+        'paper-texture': 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 200 200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noise\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.65\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noise)\' opacity=\'0.05\'/%3E%3C/svg%3E")',
       },
     },
   },
