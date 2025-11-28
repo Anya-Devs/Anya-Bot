@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowRight, Shield, Star, Users, Server, Heart, FileText, Gamepad2, Image, Sparkles } from 'lucide-react';
 import { BOT_CONFIG } from '../config/bot';
+import { SAMPLE_EMBEDS } from '../config/embedTemplates';
 import BotAvatar from '../components/BotAvatar';
 import SlidingFeatures from '../components/SlidingFeatures';
 import DiscordPreviewCard from '../components/DiscordPreviewCard';
@@ -64,18 +65,23 @@ const parseStatValue = (raw: number | string): ParsedStat => {
   return { value, suffix };
 };
 
+// Feature chapters using exact embed templates from bot cogs
 const anyaStory = [
   {
     icon: Heart,
     title: 'Cozy Actions',
     summary: 'Hugs, pats, cuddles, and wholesome interactions. Every action comes with an animated GIF and tracks how many times you\'ve sent and received each action.',
     preview: {
-      command: '.hug @Yor',
-      title: 'Loid hugs Yor',
+      command: SAMPLE_EMBEDS.action.command,
+      // Exact format from utils/cogs/fun.py line 68:
+      // embed = discord.Embed(title=msg, color=primary_color()).set_image(url=gif).set_footer(text=f"Sent: {sent} | Received: {received}")
+      title: SAMPLE_EMBEDS.action.title,
       hasGif: true,
-      gifUrl: 'https://media1.tenor.com/m/DHkpfyzeW2EAAAAC/spy-x-family-anya.gif',
-      embedColor: '#FF6B9D',
-      footer: 'Sent: 42 | Received: 38'
+      gifUrl: SAMPLE_EMBEDS.action.image,
+      embedColor: SAMPLE_EMBEDS.action.color,
+      footer: SAMPLE_EMBEDS.action.footer,
+      userAvatar: SAMPLE_EMBEDS.action.userAvatar,
+      userName: 'Yor'
     }
   },
   {
@@ -84,17 +90,13 @@ const anyaStory = [
     summary: 'Search anime, manga, and characters using live data from MyAnimeList via Jikan API. Get episodes, status, genres, scores, and synopses instantly.',
     preview: {
       command: '.anime search Spy x Family',
-      title: 'Spy x Family',
-      description: 'A spy on an undercover mission gets married and adopts a child as part of his cover. His wife and daughter have secrets of their own, and all three must strive to keep together.',
-      image: 'https://cdn.myanimelist.net/images/anime/1441/122795l.jpg',
-      embedColor: '#FF6B9D',
-      fields: [
-        { name: 'Episodes', value: '`25`', inline: true },
-        { name: 'Status', value: '`Finished Airing`', inline: true },
-        { name: 'Genres', value: '`Action, Comedy, Childcare`', inline: true },
-        { name: ' ', value: '```py\nScore: 8.5 (out of 10)\n▰▰▰▰▰▰▰▰▱▱```', inline: false }
-      ],
-      footer: 'Page 1/25'
+      // Exact format from utils/cogs/anime.py lines 125-148
+      title: SAMPLE_EMBEDS.anime.title,
+      description: SAMPLE_EMBEDS.anime.description,
+      image: SAMPLE_EMBEDS.anime.image,
+      embedColor: SAMPLE_EMBEDS.anime.color,
+      fields: SAMPLE_EMBEDS.anime.fields,
+      footer: SAMPLE_EMBEDS.anime.footer
     }
   },
   {
@@ -103,17 +105,14 @@ const anyaStory = [
     summary: 'Full Pokédex lookups with stats, types, and region data. Plus Pokétwo helper tools: shiny hunt alerts, collection tracking, and spawn protection.',
     preview: {
       command: '.pokedex vulpix',
-      title: '#37 — Vulpix',
-      description: 'At the time of its birth, Vulpix has one white tail. The tail separates into six if this Pokémon receives plenty of love from its Trainer.',
-      thumbnail: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/37.gif',
-      image: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/37.png',
-      embedColor: '#EE8130',
-      fields: [
-        { name: 'Region', value: '🔴 Kanto', inline: true },
-        { name: 'Names', value: '🇯🇵 Rokon\n🇫🇷 Goupix', inline: true }
-      ],
-      footer: 'Height: 0.60 m | Weight: 9.90 kg',
-      footerIcon: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/37.png'
+      // Exact format from utils/cogs/pokemon.py lines 147-224
+      title: SAMPLE_EMBEDS.pokemon.title,
+      description: SAMPLE_EMBEDS.pokemon.description,
+      image: SAMPLE_EMBEDS.pokemon.image,
+      embedColor: SAMPLE_EMBEDS.pokemon.color,
+      fields: SAMPLE_EMBEDS.pokemon.fields,
+      footer: SAMPLE_EMBEDS.pokemon.footer,
+      footerIcon: SAMPLE_EMBEDS.pokemon.footerIcon
     }
   },
   {
@@ -122,10 +121,13 @@ const anyaStory = [
     summary: 'Classic magic 8-ball predictions, emoji memory games, server Q&A channels, and more fun commands to keep your community engaged.',
     preview: {
       command: '.8ball Will Anya pass her exam?',
-      title: '🎱 8Ball',
-      description: '**Will Anya pass her exam?**\n⠀ Without a doubt.',
-      embedColor: '#FF6B9D',
-      footer: 'Requested by Loid'
+      // Exact format from bot/cogs/fun.py lines 21-32:
+      // embed = discord.Embed(title="🎱 8Ball", description=f"**{question}**\n{blank_emoji} {ans}", color=primary_color())
+      // .set_footer(text=f"Requested by {ctx.author}")
+      title: SAMPLE_EMBEDS.eightBall.title,
+      description: SAMPLE_EMBEDS.eightBall.description,
+      embedColor: SAMPLE_EMBEDS.eightBall.color,
+      footer: SAMPLE_EMBEDS.eightBall.footer
     }
   },
   {
@@ -133,11 +135,13 @@ const anyaStory = [
     title: 'AI Art Studio',
     summary: 'Generate anime-styled images using Animagine XL 4.0. Detailed prompts create stunning artwork delivered directly to your Discord channel.',
     preview: {
-      command: '.imagine 1girl, pink hair, green eyes, school uniform, cherry blossoms, masterpiece',
-      title: 'Image Generation',
-      description: '✨ Generating your image...\n\n**Model:** animagine-xl-4.0\n**Resolution:** 1024x1024',
-      embedColor: '#A78BFA',
-      footer: 'Estimated wait: 15-30 seconds'
+      command: '.imagine 1girl, pink hair, green eyes, school uniform, cherry blossoms, masterpiece, high quality, detailed',
+      // Exact format from bot/cogs/ai.py with visual progress bar
+      title: SAMPLE_EMBEDS.imagine.title,
+      description: SAMPLE_EMBEDS.imagine.description,
+      embedColor: SAMPLE_EMBEDS.imagine.color,
+      progress: SAMPLE_EMBEDS.imagine.progress,
+      footer: SAMPLE_EMBEDS.imagine.footer
     }
   }
 ];

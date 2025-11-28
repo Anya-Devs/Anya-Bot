@@ -1,4 +1,5 @@
 import BotAvatar from './BotAvatar';
+import { DiscordText } from '../utils/discordFormatter';
 
 interface DiscordPreviewCardProps {
   title?: string;
@@ -12,6 +13,9 @@ interface DiscordPreviewCardProps {
   footerIcon?: string;
   hasGif?: boolean;
   gifUrl?: string;
+  progress?: number; // 0-100 for visual progress bar
+  userAvatar?: string; // Custom user avatar URL
+  userName?: string; // Custom user name
   className?: string;
 }
 
@@ -31,6 +35,9 @@ const DiscordPreviewCard = ({
   footerIcon,
   hasGif = false,
   gifUrl,
+  progress,
+  userAvatar,
+  userName = 'User',
   className = ''
 }: DiscordPreviewCardProps) => {
   return (
@@ -46,12 +53,20 @@ const DiscordPreviewCard = ({
         {/* User message */}
         {command && (
           <div className="flex gap-4 mb-4 hover:bg-[#2e3035] -mx-4 px-4 py-0.5">
-            <div className="w-10 h-10 rounded-full bg-[#5865f2] flex items-center justify-center text-white font-medium text-sm flex-shrink-0">
-              U
-            </div>
+            {userAvatar ? (
+              <img 
+                src={userAvatar} 
+                alt="" 
+                className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-[#5865f2] flex items-center justify-center text-white font-medium text-sm flex-shrink-0">
+                {userName.charAt(0).toUpperCase()}
+              </div>
+            )}
             <div className="min-w-0">
               <div className="flex items-baseline gap-2">
-                <span className="text-[#f2f3f5] font-medium text-sm hover:underline cursor-pointer">User</span>
+                <span className="text-[#f2f3f5] font-medium text-sm hover:underline cursor-pointer">{userName}</span>
                 <span className="text-[#949ba4] text-xs">Today at 4:20 PM</span>
               </div>
               <div className="text-[#dbdee1] text-[15px] leading-[1.375rem]">{command}</div>
@@ -84,23 +99,29 @@ const DiscordPreviewCard = ({
                   <div className="flex-1 min-w-0">
                     {/* Title */}
                     {title && (
-                      <div className="text-white font-semibold text-base mb-1">{title}</div>
+                      <div className="text-white font-semibold text-base mb-1">
+                        <DiscordText>{title}</DiscordText>
+                      </div>
                     )}
                     
                     {/* Description */}
                     {description && (
-                      <div className="text-[#dbdee1] text-sm leading-[1.125rem] whitespace-pre-wrap mb-2">
-                        {description}
+                      <div className="text-[#dbdee1] text-sm leading-[1.375rem] whitespace-pre-line mb-2">
+                        <DiscordText>{description}</DiscordText>
                       </div>
                     )}
 
                     {/* Fields */}
                     {fields.length > 0 && (
-                      <div className="grid gap-2 mt-2" style={{ gridTemplateColumns: fields.some(f => f.inline !== false) ? 'repeat(3, 1fr)' : '1fr' }}>
+                      <div className="grid gap-2 mt-2" style={{ gridTemplateColumns: fields.some(f => f.inline !== false) ? 'repeat(auto-fill, minmax(150px, 1fr))' : '1fr' }}>
                         {fields.map((field, i) => (
-                          <div key={i} className={field.inline === false ? 'col-span-full' : ''}>
-                            <div className="text-[#dbdee1] font-semibold text-xs mb-0.5">{field.name}</div>
-                            <div className="text-[#dbdee1] text-sm whitespace-pre-wrap">{field.value}</div>
+                          <div key={i} className={field.inline === false ? 'col-span-full' : ''} style={{ minWidth: 0 }}>
+                            <div className="text-white font-semibold text-[0.875rem] leading-[1.125rem] mb-0.5">
+                              <DiscordText>{field.name}</DiscordText>
+                            </div>
+                            <div className="text-[#dbdee1] text-sm leading-[1.125rem] whitespace-pre-line break-words">
+                              <DiscordText>{field.value}</DiscordText>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -135,6 +156,25 @@ const DiscordPreviewCard = ({
                     alt="" 
                     className="mt-3 rounded max-w-full max-h-[300px] object-contain"
                   />
+                )}
+
+                {/* Visual Progress Bar */}
+                {progress !== undefined && (
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[#dbdee1] text-xs font-medium">Progress</span>
+                      <span className="text-[#dbdee1] text-xs">{progress}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-[#1e1f22] rounded-full overflow-hidden">
+                      <div 
+                        className="h-full rounded-full transition-all duration-300"
+                        style={{ 
+                          width: `${progress}%`,
+                          backgroundColor: embedColor
+                        }}
+                      />
+                    </div>
+                  </div>
                 )}
 
                 {/* Footer */}
