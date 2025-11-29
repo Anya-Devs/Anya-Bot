@@ -1,5 +1,5 @@
-// Bot statistics service - uses server-side API to prevent rate limiting
-// All clients share the same cached data from Firebase Functions
+// Bot statistics service - fetches directly from Discord API
+// Uses token from VITE_DISCORD_BOT_TOKEN environment variable
 
 interface BotStats {
   servers: number | string;
@@ -9,20 +9,16 @@ interface BotStats {
   lastUpdated: Date;
 }
 
-interface ServerBotStats {
-  servers: number;
-  users: number;
-  commands: number;
-  status: 'online' | 'offline' | 'idle' | 'unknown';
-  lastUpdated: string;
-  cached?: boolean;
-  cacheAge?: number;
+interface DiscordGuild {
+  id: string;
+  name: string;
+  approximate_member_count?: number;
 }
 
-// Local cache for stats (short TTL since server handles the real caching)
+// Cache for stats to avoid rate limiting
 let statsCache: BotStats | null = null;
 let lastFetchTime: number = 0;
-const LOCAL_CACHE_MS = 30 * 1000; // 30 seconds local cache
+const CACHE_MS = 5 * 60 * 1000; // 5 minutes cache
 
 /**
  * Format large numbers (1000 -> "1K+")
@@ -59,67 +55,73 @@ async function getCommandCount(): Promise<number> {
 }
 
 /**
- * Fetch bot stats from server-side API
- * The server handles rate limiting and caching - all clients share the same data
+ * Fetch bot guilds directly from Discord API
  */
-async function fetchFromServer(): Promise<ServerBotStats | null> {
+async function fetchDiscordGuilds(): Promise<DiscordGuild[]> {
+  const token = import.meta.env?.VITE_DISCORD_BOT_TOKEN;
+  
+  if (!token) {
+    console.warn('VITE_DISCORD_BOT_TOKEN not configured');
+    return [];
+  }
+
   try {
-    // Avoid hammering the dev server with proxy errors when Firebase Functions aren't running locally
-    if (import.meta.env?.DEV && !import.meta.env?.VITE_FUNCTIONS_BASE_URL) {
-      return null;
+    const response = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
+      headers: {
+        'Authorization': `Bot ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.status === 429) {
+      console.warn('Discord API rate limited');
+      return [];
     }
 
-    // Use the Firebase Function endpoint
-    const baseUrl = import.meta.env?.VITE_FUNCTIONS_BASE_URL || '';
-    const response = await fetch(`${baseUrl}/api/bot-stats`);
-    
     if (!response.ok) {
-      // Silently fail - functions may not be deployed
-      return null;
+      console.error(`Discord API error: ${response.status}`);
+      return [];
     }
-    
-    const data = await response.json();
-    console.log(`📊 Bot stats ${data.cached ? '(cached)' : '(fresh)'}`);
-    return data;
+
+    return await response.json();
   } catch (error) {
-    if (!(import.meta.env?.DEV)) {
-      console.warn('bot-stats fetch failed', error);
-    }
-    // Silently fail - expected if functions aren't deployed
-    return null;
+    console.error('Failed to fetch Discord guilds:', error);
+    return [];
   }
 }
 
 /**
  * Main function to fetch bot statistics
- * Uses server-side caching to prevent API spam
+ * Fetches directly from Discord API with caching
  */
 export async function fetchBotStats(): Promise<BotStats> {
-  // Return local cache if still fresh
+  // Return cache if still fresh
   const now = Date.now();
-  if (statsCache && (now - lastFetchTime) < LOCAL_CACHE_MS) {
+  if (statsCache && (now - lastFetchTime) < CACHE_MS) {
     return statsCache;
   }
 
   try {
-    // Try to fetch from server API (shared cache)
-    const serverStats = await fetchFromServer();
+    const guilds = await fetchDiscordGuilds();
     const commandCount = await getCommandCount();
     
     let stats: BotStats;
     
-    if (serverStats) {
+    if (guilds.length > 0) {
+      // Calculate total members from all guilds
+      const totalMembers = guilds.reduce((sum, guild) => sum + (guild.approximate_member_count || 0), 0);
+      
       stats = {
-        servers: formatNumber(serverStats.servers),
-        users: formatNumber(serverStats.users),
+        servers: formatNumber(guilds.length),
+        users: formatNumber(totalMembers),
         commands: commandCount,
-        status: serverStats.status,
-        lastUpdated: new Date(serverStats.lastUpdated)
+        status: 'online',
+        lastUpdated: new Date()
       };
     } else {
-      // Fallback with estimated values when API is unavailable
+      // Fallback when API unavailable or token not configured
       stats = {
-        servers: '150',
+        servers: '150+',
         users: '75K+',
         commands: commandCount,
         status: 'online',
@@ -127,7 +129,7 @@ export async function fetchBotStats(): Promise<BotStats> {
       };
     }
 
-    // Update local cache
+    // Update cache
     statsCache = stats;
     lastFetchTime = now;
 
@@ -135,7 +137,7 @@ export async function fetchBotStats(): Promise<BotStats> {
   } catch {
     // Return fallback values on any error
     return {
-      servers: '150',
+      servers: '150+',
       users: '75K+',
       commands: await getCommandCount(),
       status: 'online',

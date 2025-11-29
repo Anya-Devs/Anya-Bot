@@ -1,3 +1,4 @@
+import { User } from 'lucide-react';
 import BotAvatar from './BotAvatar';
 import { DiscordText } from '../utils/discordFormatter';
 
@@ -60,8 +61,8 @@ const DiscordPreviewCard = ({
                 className="w-10 h-10 rounded-full object-cover flex-shrink-0"
               />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-[#5865f2] flex items-center justify-center text-white font-medium text-sm flex-shrink-0">
-                {userName.charAt(0).toUpperCase()}
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary via-pink-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                <User className="w-6 h-6 text-white drop-shadow-lg" />
               </div>
             )}
             <div className="min-w-0">

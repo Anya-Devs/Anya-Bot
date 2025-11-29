@@ -15,9 +15,12 @@
     "node": "18"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.0",
     "firebase-admin": "^11.11.0",
     "firebase-functions": "^4.5.0",
-    "node-fetch": "^2.7.0"
+    "mongodb": "^6.3.0",
+    "node-fetch": "^2.7.0",
+    "satori": "^0.10.11"
   },
   "devDependencies": {
     "@types/node-fetch": "^2.6.9",

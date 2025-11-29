@@ -54,8 +54,8 @@ router.get('/stats', async (req, res) => {
   try {
     const token = await getBotToken();
 
-    // Fetch bot guilds from Discord API
-    const guildsResponse = await fetch('https://discord.com/api/v10/users/@me/guilds', {
+    // Fetch bot guilds from Discord API with member counts
+    const guildsResponse = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
       headers: {
         'Authorization': `Bot ${token}`,
         'Content-Type': 'application/json',

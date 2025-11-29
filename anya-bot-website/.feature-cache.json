@@ -1,0 +1,183 @@
+{
+  "commands": {
+    "ai": {
+      "commands": [
+        "imagine",
+        "vision_command"
+      ],
+      "lastModified": "2025-11-20T18:45:58.935Z"
+    },
+    "anime": {
+      "commands": [
+        "prompt_query",
+        "fetch_and_send",
+        "anime_group",
+        "anime_search",
+        "anime_character",
+        "anime_recommend",
+        "manga_group",
+        "manga_search",
+        "manga_read",
+        "manga_recommend"
+      ],
+      "lastModified": "2025-11-08T05:00:31.441Z"
+    },
+    "fun": {
+      "commands": [
+        "8ball",
+        "eight_ball",
+        "cmd",
+        "memo",
+        "play_emoji_game",
+        "qna",
+        "riddle_group",
+        "riddle_setup",
+        "riddle_post"
+      ],
+      "lastModified": "2025-11-08T05:00:31.441Z"
+    },
+    "halloween": {
+      "commands": [
+        "cog_check",
+        "celestial",
+        "inventory",
+        "about",
+        "tribute",
+        "leaderboard",
+        "set_event_time"
+      ],
+      "lastModified": "2025-11-08T05:00:31.443Z"
+    },
+    "help": {
+      "commands": [
+        "help"
+      ],
+      "lastModified": "2025-11-08T05:00:31.443Z"
+    },
+    "information": {
+      "commands": [
+        "reviews",
+        "handle_action",
+        "leaderboard",
+        "about",
+        "server",
+        "server_info",
+        "pfp",
+        "banner",
+        "invite",
+        "create_and_send_invite",
+        "perms",
+        "roles",
+        "roles_error"
+      ],
+      "lastModified": "2025-11-20T19:02:56.487Z"
+    },
+    "moderation": {
+      "commands": [
+        "log",
+        "set_log_channel",
+        "purge",
+        "purge_user",
+        "purge_bot",
+        "ban",
+        "unban",
+        "timeout",
+        "untimeout",
+        "notetaker",
+        "clear_notetaker"
+      ],
+      "lastModified": "2025-11-08T05:00:31.445Z"
+    },
+    "pokemon": {
+      "commands": [
+        "pokedex",
+        "show_help",
+        "pt",
+        "pt_help",
+        "hidden_type_ping",
+        "hidden_quest_ping",
+        "hidden_shiny_hunt",
+        "hidden_collection_manage",
+        "config",
+        "protection",
+        "type_ping",
+        "quest_ping",
+        "shiny_hunt",
+        "collection_manage",
+        "shiny_channel",
+        "shiny_log",
+        "remove_log"
+      ],
+      "lastModified": "2025-11-18T00:47:26.682Z"
+    },
+    "quest": {
+      "commands": [
+        "redirect",
+        "quest",
+        "quest_roles",
+        "profile",
+        "inventory",
+        "shop"
+      ],
+      "lastModified": "2025-11-08T05:00:31.447Z"
+    },
+    "sync": {
+      "commands": [
+        "sync",
+        "sync_error"
+      ],
+      "lastModified": "2025-11-08T05:00:31.448Z"
+    },
+    "system": {
+      "commands": [
+        "memory",
+        "ping",
+        "uptime",
+        "credit",
+        "ticket",
+        "ticket_create",
+        "ticket_activate",
+        "ticket_delete",
+        "ticket_edit",
+        "ticket_error"
+      ],
+      "lastModified": "2025-11-08T05:00:31.448Z"
+    }
+  },
+  "features": {
+    "CharacterDexPage": {
+      "lastModified": "2025-11-20T19:29:02.354Z"
+    },
+    "CommandsPage": {
+      "lastModified": "2025-11-27T11:13:14.565Z"
+    },
+    "ContactPage": {
+      "lastModified": "2025-11-29T21:43:29.270Z"
+    },
+    "DashboardPage": {
+      "lastModified": "2025-11-27T07:50:44.456Z"
+    },
+    "HomePage": {
+      "lastModified": "2025-11-29T21:16:31.240Z"
+    },
+    "LeaderboardPage": {
+      "lastModified": "2025-11-19T18:57:17.983Z"
+    },
+    "OgPreviewCommands": {
+      "lastModified": "2025-11-28T03:29:54.875Z"
+    },
+    "OgPreviewContact": {
+      "lastModified": "2025-11-28T03:30:15.392Z"
+    },
+    "OgPreviewHome": {
+      "lastModified": "2025-11-28T03:29:43.464Z"
+    },
+    "OgPreviewUpdates": {
+      "lastModified": "2025-11-28T03:30:04.272Z"
+    },
+    "UpdatesPage": {
+      "lastModified": "2025-11-29T21:20:04.711Z"
+    }
+  },
+  "lastScan": "2025-11-29T21:43:49.378Z"
+}

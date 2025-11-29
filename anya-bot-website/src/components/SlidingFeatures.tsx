@@ -667,8 +667,8 @@ const SlidingFeatures: React.FC = () => {
                               ] }
                             : currentDemo.id === 'anime-search'
                             ? { buttons: [
-                                { label: 'View Reviews', style: 'link', url: '#' },
-                                { label: 'Recommend', style: 'primary' }
+                                { label: 'View Reviews', style: 'link', url: animeData?.trailer?.url || '#' },
+                                { label: 'Recommend', style: 'primary', onClick: fetchRandomAnime }
                               ] }
                             : currentDemo.id === 'action-commands'
                             ? { buttons: [{ label: 'Do It Back', style: 'primary' }] }

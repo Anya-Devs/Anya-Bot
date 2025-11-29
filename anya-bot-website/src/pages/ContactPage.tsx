@@ -23,7 +23,7 @@ const ContactPage = () => {
     { 
       icon: Github, 
       label: 'GitHub', 
-      href: 'https://github.com/Anya-Devs',
+      href: 'https://github.com/Anya-Devs/Anya-Bot',
       color: 'from-gray-600 to-gray-800',
       desc: 'View source code'
     },
@@ -158,7 +158,7 @@ const ContactPage = () => {
           <p className="text-gray-400 mb-4">
             For business inquiries or partnerships, feel free to reach out!
           </p>
-          <p className="text-primary font-mono">support@anya-bot.com</p>
+          <p className="text-primary font-mono">Comming Soon...</p>
         </div>
 
         {/* Fun Footer Message */}

@@ -65,7 +65,7 @@ const parseStatValue = (raw: number | string): ParsedStat => {
   return { value, suffix };
 };
 
-// Feature chapters using exact embed templates from bot cogs
+// Feature sections using exact embed templates from bot cogs
 const anyaStory = [
   {
     icon: Heart,
@@ -300,7 +300,7 @@ const HomePage = () => {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          FEATURE CHAPTERS - Each gets its own section
+          FEATURE SECTIONS - Each gets its own section
       ═══════════════════════════════════════════════════════════════════════ */}
       {anyaStory.map((item, idx) => (
         <section 
@@ -311,9 +311,6 @@ const HomePage = () => {
             <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
               {/* Text side */}
               <div className={`space-y-6 ${idx % 2 === 1 ? 'lg:order-2' : ''}`}>
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium uppercase tracking-wider">
-                  Chapter {idx + 1}
-                </div>
                 <div className="flex items-center gap-4">
                   <div className="p-3 rounded-2xl bg-primary/10 text-primary">
                     <item.icon className="w-7 h-7" />

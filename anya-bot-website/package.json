@@ -13,7 +13,8 @@
     "setup:env": "node scripts/setup-env.js",
     "sync:commands": "node scripts/sync-commands.js",
     "sync:commands:apply": "node scripts/sync-commands.js --apply",
-    "predeploy": "npm run build",
+    "generate:updates": "node scripts/generate-updates.cjs",
+    "predeploy": "npm run generate:updates && npm run build",
     "deploy": "npx firebase deploy --only hosting",
     "deploy:all": "npm run build && npx firebase deploy --only hosting"
   },

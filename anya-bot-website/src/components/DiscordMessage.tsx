@@ -38,7 +38,7 @@ interface DiscordMessageProps {
   content?: string;
   embed?: Embed;
   components?: { 
-    buttons?: { label: string; style?: 'primary' | 'secondary' | 'success' | 'danger' | 'link'; url?: string; emoji?: string }[] 
+    buttons?: { label: string; style?: 'primary' | 'secondary' | 'success' | 'danger' | 'link'; url?: string; emoji?: string; onClick?: () => void }[] 
   };
   isBot?: boolean;
   timestamp?: string;
@@ -276,8 +276,14 @@ const DiscordMessage = ({
                   key={idx}
                   className={`inline-flex items-center justify-center gap-2 px-4 py-[2px] h-8 text-sm font-medium rounded-[3px] transition-colors ${
                     styleClasses[button.style || 'secondary']
-                  } ${button.url ? 'cursor-pointer' : 'cursor-default'}`}
-                  onClick={() => button.url && window.open(button.url, '_blank')}
+                  } ${button.url || button.onClick ? 'cursor-pointer' : 'cursor-default'}`}
+                  onClick={() => {
+                    if (button.url) {
+                      window.open(button.url, '_blank');
+                    } else if (button.onClick) {
+                      button.onClick();
+                    }
+                  }}
                 >
                   {button.emoji && <span>{button.emoji}</span>}
                   <span>{button.label}</span>

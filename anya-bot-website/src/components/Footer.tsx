@@ -58,7 +58,7 @@ const Footer = () => {
                   <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                 </a>
                 <a
-                  href="https://github.com/Anya-Devs"
+                  href="https://github.com/Anya-Devs/Anya-Bot"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-2 sm:p-2.5 text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-all"

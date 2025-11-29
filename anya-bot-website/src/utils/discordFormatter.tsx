@@ -11,9 +11,66 @@ interface PatternDefinition {
 
 /**
  * Formats Discord markdown text into React elements
- * Supports: **bold**, *italic*, __underline__, ~~strikethrough~~, `code`, ```code blocks```, ||spoiler||
+ * Supports: **bold**, *italic*, __underline__, ~~strikethrough~~, `code`, ```code blocks```, ||spoiler||, > blockquote
  */
 export function formatDiscordText(text: string): React.ReactNode[] {
+  if (!text) return [];
+
+  // First, handle blockquotes by processing line by line
+  const lines = text.split('\n');
+  const processedLines: { content: string; isBlockquote: boolean }[] = [];
+  
+  for (const line of lines) {
+    if (line.startsWith('> ')) {
+      processedLines.push({ content: line.substring(2), isBlockquote: true });
+    } else if (line === '>') {
+      processedLines.push({ content: '', isBlockquote: true });
+    } else {
+      processedLines.push({ content: line, isBlockquote: false });
+    }
+  }
+
+  // Group consecutive blockquote lines
+  const groups: { lines: string[]; isBlockquote: boolean }[] = [];
+  for (const line of processedLines) {
+    const lastGroup = groups[groups.length - 1];
+    if (lastGroup && lastGroup.isBlockquote === line.isBlockquote) {
+      lastGroup.lines.push(line.content);
+    } else {
+      groups.push({ lines: [line.content], isBlockquote: line.isBlockquote });
+    }
+  }
+
+  // Process each group
+  const result: React.ReactNode[] = [];
+  let groupKey = 0;
+  
+  for (const group of groups) {
+    const groupText = group.lines.join('\n');
+    if (group.isBlockquote) {
+      result.push(
+        <div 
+          key={`blockquote-${groupKey++}`}
+          className="pl-3 border-l-4 border-[#4e5058] my-1"
+        >
+          {formatInlineMarkdown(groupText)}
+        </div>
+      );
+    } else {
+      const formatted = formatInlineMarkdown(groupText);
+      if (formatted.length > 0) {
+        result.push(<span key={`text-${groupKey++}`}>{formatted}</span>);
+      }
+    }
+  }
+
+  return result.length > 0 ? result : [text];
+}
+
+/**
+ * Formats inline Discord markdown (everything except blockquotes)
+ */
+function formatInlineMarkdown(text: string): React.ReactNode[] {
   if (!text) return [];
 
   const elements: React.ReactNode[] = [];
@@ -95,7 +152,7 @@ export function formatDiscordText(text: string): React.ReactNode[] {
     );
   }
 
-  return elements.length > 0 ? elements : [text];
+  return elements.length > 0 ? elements : [<span key="plain">{text}</span>];
 }
 
 function formatElement(content: string, tag: string, key: number, meta?: Record<string, unknown>): React.ReactNode {

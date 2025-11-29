@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Sparkles, Rocket, Star, Heart, Zap, Gift, 
-  CheckCircle2, Clock, PartyPopper, Wand2
+  CheckCircle2, Clock, PartyPopper, Wand2, LucideIcon
 } from 'lucide-react';
 
 interface Update {
@@ -13,7 +13,19 @@ interface Update {
   highlights: string[];
 }
 
-const updates: Update[] = [
+interface UpcomingFeature {
+  icon: string;
+  title: string;
+  desc: string;
+}
+
+// Icon mapping for JSON data
+const iconMap: Record<string, LucideIcon> = {
+  Wand2, Star, Gift, Heart, Zap, Rocket, Sparkles
+};
+
+// Default data (fallback if JSON fails to load)
+const defaultUpdates: Update[] = [
   {
     version: '2.5.0',
     date: 'Coming Soon',
@@ -21,46 +33,14 @@ const updates: Update[] = [
     description: 'Enhanced AI conversations with better context memory and personality!',
     type: 'upcoming',
     highlights: ['Longer memory', 'Custom personalities', 'Image understanding'],
-  },
-  {
-    version: '2.4.0',
-    date: 'Nov 2024',
-    title: '🎮 Pokémon Detection v2',
-    description: 'Completely revamped spawn detection system with higher accuracy!',
-    type: 'feature',
-    highlights: ['95%+ accuracy', 'Faster detection', 'Shiny alerts'],
-  },
-  {
-    version: '2.3.0',
-    date: 'Oct 2024',
-    title: '🎭 50+ New Actions',
-    description: 'Express yourself with tons of new roleplay actions and GIFs!',
-    type: 'feature',
-    highlights: ['New animations', 'Reaction buttons', 'Custom responses'],
-  },
-  {
-    version: '2.2.0',
-    date: 'Sep 2024',
-    title: '📺 Anime Search Upgrade',
-    description: 'Better anime and manga search with recommendations!',
-    type: 'improvement',
-    highlights: ['MAL integration', 'Seasonal charts', 'Character info'],
-  },
-  {
-    version: '2.1.0',
-    date: 'Aug 2024',
-    title: '🐛 Bug Fixes & Polish',
-    description: 'Squashed bugs and improved overall stability.',
-    type: 'fix',
-    highlights: ['Faster responses', 'Fixed embeds', 'Memory optimization'],
-  },
+  }
 ];
 
-const upcomingFeatures = [
-  { icon: Wand2, title: 'Custom Commands', desc: 'Create your own commands!' },
-  { icon: Star, title: 'Leveling System', desc: 'XP and ranks for your server' },
-  { icon: Gift, title: 'Economy System', desc: 'Virtual currency and shop' },
-  { icon: Heart, title: 'Relationship System', desc: 'Marriage and families' },
+const defaultUpcoming: UpcomingFeature[] = [
+  { icon: 'Wand2', title: 'Custom Commands', desc: 'Create your own commands!' },
+  { icon: 'Star', title: 'Leveling System', desc: 'XP and ranks for your server' },
+  { icon: 'Gift', title: 'Economy System', desc: 'Virtual currency and shop' },
+  { icon: 'Heart', title: 'Relationship System', desc: 'Marriage and families' },
 ];
 
 const typeConfig = {
@@ -71,16 +51,30 @@ const typeConfig = {
 };
 
 const UpdatesPage = () => {
+  const [updates, setUpdates] = useState<Update[]>(defaultUpdates);
+  const [upcomingFeatures, setUpcomingFeatures] = useState<UpcomingFeature[]>(defaultUpcoming);
   const [visibleItems, setVisibleItems] = useState<number[]>([]);
+
+  // Load updates from JSON file
+  useEffect(() => {
+    fetch('/updates.json')
+      .then(res => res.json())
+      .then(data => {
+        if (data.updates) setUpdates(data.updates);
+        if (data.upcomingFeatures) setUpcomingFeatures(data.upcomingFeatures);
+      })
+      .catch(err => console.warn('Failed to load updates.json:', err));
+  }, []);
 
   useEffect(() => {
     // Stagger animation for updates
-    updates.forEach((_, i) => {
+    setVisibleItems([]);
+    updates.forEach((_: Update, i: number) => {
       setTimeout(() => {
         setVisibleItems(prev => [...prev, i]);
       }, i * 150);
     });
-  }, []);
+  }, [updates]);
 
   return (
     <div className="pt-24 pb-20 min-h-screen">
@@ -108,7 +102,7 @@ const UpdatesPage = () => {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {upcomingFeatures.map((feature, i) => {
-              const Icon = feature.icon;
+              const Icon = iconMap[feature.icon] || Star;
               return (
                 <div 
                   key={i}
