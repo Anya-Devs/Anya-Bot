@@ -457,7 +457,37 @@ class PoketwoCommands(commands.Cog):
         await self.mongo_sh.remove_shiny_log_channel(guild_id)
         await ctx.reply("✅ Shiny log channel removed.", mention_author=False)
 
-
+    # -------------------
+    # Starboard Config
+    # -------------------
+    @pt.command(name="starboard", aliases=["sb"])
+    @commands.has_permissions(manage_channels=True)
+    async def starboard_config(self, ctx):
+        """Configure starboard settings for Pokémon catches."""
+        guild_id = ctx.guild.id
+        current_channel = await self.mongo.get_starboard_channel(guild_id)
+        
+        embed = discord.Embed(
+            title="⭐ Starboard Configuration",
+            description=(
+                "Configure the starboard channel where shiny, rare, and regional Pokémon catches will be posted.\n\n"
+                "**Current Channel:** " + (f"<#{current_channel}>" if current_channel else "Not set")
+            ),
+            color=self.embed_default_color
+        )
+        embed.add_field(
+            name="What gets posted?",
+            value=(
+                "• ✨ **Shiny** Pokémon catches\n"
+                "• 🔥 **Rare** Pokémon catches\n"
+                "• 🌍 **Regional** Pokémon catches"
+            ),
+            inline=False
+        )
+        embed.set_footer(text="Select a channel from the dropdown below")
+        
+        view = StarboardConfigView(ctx.guild, self.mongo, ctx.author.id, current_channel)
+        await ctx.reply(embed=embed, view=view, mention_author=False)
 
 
 def setup(bot):

@@ -1689,16 +1689,125 @@ class ConfigView(discord.ui.View):
         toggle_select = ConfigToggleSelect(self.config)
         self.add_item(toggle_select)
 
-     
-
         role_select = RoleSelect()
         role_select.row = 2
         self.add_item(role_select)
 
+class StarboardConfigView(discord.ui.View):
+    """View for configuring starboard channel with a channel select dropdown."""
+    
+    def __init__(self, guild: discord.Guild, mongo_helper, user_id: int, current_channel_id: int = None):
+        super().__init__(timeout=300)
+        self.guild = guild
+        self.mongo = mongo_helper
+        self.user_id = user_id
+        self.current_channel_id = current_channel_id
+        
+        # Add channel select
+        self.add_item(StarboardChannelSelect(current_channel_id))
+        
+        # Add remove button if channel is set
+        if current_channel_id:
+            self.add_item(StarboardRemoveButton())
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ Only the command author can use this.", ephemeral=True)
+            return False
+        return True
 
 
+class StarboardChannelSelect(discord.ui.ChannelSelect):
+    """Channel select dropdown for starboard configuration."""
+    
+    def __init__(self, current_channel_id: int = None):
+        super().__init__(
+            placeholder="⭐ Select a starboard channel...",
+            min_values=1,
+            max_values=1,
+            channel_types=[discord.ChannelType.text]
+        )
+        self.current_channel_id = current_channel_id
+    
+    async def callback(self, interaction: discord.Interaction):
+        selected_channel = self.values[0]
+        view: StarboardConfigView = self.view
+        
+        # Save to database
+        await view.mongo.set_starboard_channel(interaction.guild.id, selected_channel.id)
+        
+        # Update embed
+        embed = discord.Embed(
+            title="⭐ Starboard Configuration",
+            description=(
+                f"Configure the starboard channel where shiny, rare, and regional Pokémon catches will be posted.\n\n"
+                f"**Current Channel:** {selected_channel.mention}"
+            ),
+            color=primary_color()
+        )
+        embed.add_field(
+            name="What gets posted?",
+            value=(
+                "• ✨ **Shiny** Pokémon catches\n"
+                "• 🔥 **Rare** Pokémon catches\n"
+                "• 🌍 **Regional** Pokémon catches"
+            ),
+            inline=False
+        )
+        embed.set_footer(text="✅ Starboard channel updated!")
+        
+        # Update view to show remove button
+        view.current_channel_id = selected_channel.id
+        view.clear_items()
+        view.add_item(StarboardChannelSelect(selected_channel.id))
+        view.add_item(StarboardRemoveButton())
+        
+        await interaction.response.edit_message(embed=embed, view=view)
 
 
+class StarboardRemoveButton(discord.ui.Button):
+    """Button to remove/disable starboard."""
+    
+    def __init__(self):
+        super().__init__(
+            label="Remove Starboard",
+            style=discord.ButtonStyle.danger,
+            emoji="🗑️",
+            row=1
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        view: StarboardConfigView = self.view
+        
+        # Remove from database
+        await view.mongo.set_starboard_channel(interaction.guild.id, None)
+        
+        # Update embed
+        embed = discord.Embed(
+            title="⭐ Starboard Configuration",
+            description=(
+                "Configure the starboard channel where shiny, rare, and regional Pokémon catches will be posted.\n\n"
+                "**Current Channel:** Not set"
+            ),
+            color=primary_color()
+        )
+        embed.add_field(
+            name="What gets posted?",
+            value=(
+                "• ✨ **Shiny** Pokémon catches\n"
+                "• 🔥 **Rare** Pokémon catches\n"
+                "• 🌍 **Regional** Pokémon catches"
+            ),
+            inline=False
+        )
+        embed.set_footer(text="🗑️ Starboard channel removed!")
+        
+        # Update view to remove the button
+        view.current_channel_id = None
+        view.clear_items()
+        view.add_item(StarboardChannelSelect(None))
+        
+        await interaction.response.edit_message(embed=embed, view=view)
 
 
 class TR_Embed_Config:
