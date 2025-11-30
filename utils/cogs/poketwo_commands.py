@@ -1748,9 +1748,9 @@ class StarboardChannelSelect(discord.ui.ChannelSelect):
         embed.add_field(
             name="What gets posted?",
             value=(
-                "• ✨ **Shiny** Pokémon catches\n"
-                "• 🔥 **Rare** Pokémon catches\n"
-                "• 🌍 **Regional** Pokémon catches"
+                "- **Shiny** Poketwo Pokémon catches\n"
+                "- **Rare** Poketwo Pokémon catches\n"
+                "- **Regional** Poketwo Pokémon catches"
             ),
             inline=False
         )
