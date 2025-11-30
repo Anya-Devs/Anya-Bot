@@ -106,9 +106,10 @@
         "collection_manage",
         "shiny_channel",
         "shiny_log",
-        "remove_log"
+        "remove_log",
+        "starboard_config"
       ],
-      "lastModified": "2025-11-18T00:47:26.682Z"
+      "lastModified": "2025-11-29T21:49:01.052Z"
     },
     "quest": {
       "commands": [
@@ -179,5 +180,5 @@
       "lastModified": "2025-11-29T21:20:04.711Z"
     }
   },
-  "lastScan": "2025-11-29T21:43:49.378Z"
+  "lastScan": "2025-11-30T02:21:16.440Z"
 }

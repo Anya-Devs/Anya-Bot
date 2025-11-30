@@ -3,7 +3,7 @@ export const ONNX_PATH = "/models/pokemon/pokemon_cnn_v2.onnx";
 export const LABELS_PATH = "/models/pokemon/labels_v2.json";
 
 // Sample Poketwo spawn image URL for testing predictions
-export const SAMPLE_SPAWN_IMAGE_URL = "https://media.discordapp.net/attachments/1279353553110040596/1443521024543949001/pokemon.png?ex=69295f37&is=69280db7&hm=fdfe1cb142e98348108c710fda2cedcb2adc514b0dc2bc86d380ffd8cb422064&=&format=webp&quality=lossless&width=1152&height=720";
+export const SAMPLE_SPAWN_IMAGE_URL = "/poketwo-spawn.png";
 
 // WebAssembly configuration - using CDN for better reliability
 export const WASM_PATH = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.15.1/dist/ort-wasm-simd-threaded.wasm';
