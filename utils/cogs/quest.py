@@ -119,7 +119,7 @@ class Quest_View(View):
             # Handle empty quests
             if not self.filtered_quests:
                 embed = discord.Embed(
-                    title="🥜 No Quests Found!",
+                    title="No Quests Found!",
                     description="*= w =* You don't have any quests right now.\n\nClick **➕ New Quest** below to get some new missions!",
                     color=discord.Color.from_rgb(255, 182, 193)
                 )
