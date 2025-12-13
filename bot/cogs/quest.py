@@ -121,13 +121,12 @@ class Quest(commands.Cog):
                 else:
                     await ctx.reply(embed=embeds, mention_author=False, file=file)
             else:
-                no_quest_message = "You currently don't have any quest."
-                description = f"```ansi\n\u2753 \033[97m{no_quest_message}```"
-                embed = discord.Embed(description=description, color=discord.Color.yellow())
-
+                # Use Quest_View which handles empty quests and shows New Quest button
+                view = Quest_View(self.bot, [], ctx)
+                embed = await view.generate_messages()
                 await ctx.reply(
                     embed=embed,
-                    view=Quest_Button1(self.bot, ctx),
+                    view=view,
                     mention_author=False,
                 )
 

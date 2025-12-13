@@ -46,25 +46,59 @@ class Quest_View(View):
     def __init__(self, bot, all_quests, ctx, page=0, filtered_quests=None):
         super().__init__(timeout=None)
         self.bot = bot
-        self.all_quests = all_quests
-        self.filtered_quests = filtered_quests if filtered_quests is not None else all_quests
+        self.all_quests = all_quests if all_quests else []
+        self.filtered_quests = filtered_quests if filtered_quests is not None else self.all_quests
         self.ctx = ctx
         self.page = page
-        self.max_pages = (len(self.filtered_quests) + 4) // 5  # ceil division (5 per page)
+        self.quest_data = Quest_Data(bot)
+        
+        # Handle empty quests case
+        if not self.filtered_quests:
+            self.max_pages = 1
+        else:
+            self.max_pages = (len(self.filtered_quests) + 4) // 5  # ceil division (5 per page)
 
         try:
-            self.add_item(Quest_Select_Filter(bot, self.all_quests, ctx))
+            # Only add filter if there are quests
+            if self.all_quests:
+                self.add_item(Quest_Select_Filter(bot, self.all_quests, ctx))
 
-            if self.max_pages > 1:
-                self.add_item(
-                    Quest_Select(bot, self.filtered_quests, ctx, self.max_pages, self.all_quests)
-                )
-            if self.page > 0:
+                if self.max_pages > 1:
+                    self.add_item(
+                        Quest_Select(bot, self.filtered_quests, ctx, self.max_pages, self.all_quests)
+                    )
+                if self.page > 0:
+                    self.add_item(
+                        QuestButton(
+                            "Previous",
+                            discord.ButtonStyle.primary,
+                            "previous",
+                            bot,
+                            self.filtered_quests,
+                            ctx,
+                            self.page,
+                            self.all_quests,
+                        )
+                    )
+                if self.page < self.max_pages - 1:
+                    self.add_item(
+                        QuestButton(
+                            "Next",
+                            discord.ButtonStyle.primary,
+                            "next",
+                            bot,
+                            self.filtered_quests,
+                            ctx,
+                            self.page,
+                            self.all_quests,
+                        )
+                    )
+
                 self.add_item(
                     QuestButton(
-                        "Previous",
-                        discord.ButtonStyle.primary,
-                        "previous",
+                        "Fresh Start",
+                        discord.ButtonStyle.danger,
+                        "fresh_start",
                         bot,
                         self.filtered_quests,
                         ctx,
@@ -72,43 +106,37 @@ class Quest_View(View):
                         self.all_quests,
                     )
                 )
-            if self.page < self.max_pages - 1:
-                self.add_item(
-                    QuestButton(
-                        "Next",
-                        discord.ButtonStyle.primary,
-                        "next",
-                        bot,
-                        self.filtered_quests,
-                        ctx,
-                        self.page,
-                        self.all_quests,
-                    )
-                )
-
-            self.add_item(
-                QuestButton(
-                    "Fresh Start",
-                    discord.ButtonStyle.danger,
-                    "fresh_start",
-                    bot,
-                    self.filtered_quests,
-                    ctx,
-                    self.page,
-                    self.all_quests,
-                )
-            )
+            else:
+                # Only show New Quest button when user has NO quests at all
+                self.add_item(NewQuestButton(bot, ctx))
+            
         except Exception as e:
             print(f"[Quest_View Init Error] {e}")
             traceback.print_exc()
 
     async def generate_messages(self):
         try:
+            # Handle empty quests
+            if not self.filtered_quests:
+                embed = discord.Embed(
+                    title="🥜 No Quests Found!",
+                    description="*= w =* You don't have any quests right now.\n\nClick **➕ New Quest** below to get some new missions!",
+                    color=discord.Color.from_rgb(255, 182, 193)
+                )
+                embed.set_footer(
+                    text=f"{self.ctx.author.display_name}'s quests",
+                    icon_url=self.ctx.author.avatar,
+                )
+                return embed
+            
             start_index = self.page * 5
             index = start_index
-            embed = discord.Embed(color=primary_color())
+            embed = discord.Embed(
+                title="Your Quests",
+                color=primary_color()
+            )
             embed.set_footer(
-                text=f"{self.ctx.author.display_name}'s quests",
+                text=f"{self.ctx.author.display_name}'s quests • Page {self.page + 1}/{self.max_pages}",
                 icon_url=self.ctx.author.avatar,
             )
 
@@ -142,6 +170,8 @@ class Quest_View(View):
 
                 reward_emoji_id = 1247800150479339581
                 reward_emoji = discord.utils.get(self.bot.emojis, id=reward_emoji_id)
+                if not reward_emoji:
+                    reward_emoji = "⭐"
                 instructions_emoji = "📍"
 
                 if channel:
@@ -158,20 +188,18 @@ class Quest_View(View):
                 if not can_view_channel:
                     continue
 
-                # Inspired by leaderboard: #ID - Instruction   bar   percent%
                 message = (
-                    f"#{quest_id} - **{instruction}**\n"
+                    f"**#{quest_id}** - {instruction}\n"
                     f"`{progress}/{times}` {progress_bar} `{percent}%`\n"
-                    f"`•` {instructions_emoji} {channel_link}\n"
-                    f"`└─` {reward_emoji} Reward: `{reward} stp`\n\n"
+                    f"{instructions_emoji} {channel_link} • {reward_emoji} `{reward} stp`\n"
                 )
 
                 embed.add_field(name="", value=message, inline=False)
                 field_count += 1
 
-            file = discord.File("data/images/generated_image.png", filename="image.png")
-            embed.set_image(url=f"attachment://image.png")
-
+            # Keep image on embed during pagination
+            embed.set_image(url="attachment://image.png")
+            
             return embed
 
         except Exception as e:
@@ -297,22 +325,26 @@ class QuestButton(discord.ui.Button):
                 )
                 if success:
                     embed = discord.Embed(
-                        description=f":white_check_mark: All quests have been deleted for you {self.ctx.author.mention}. Starting fresh!",
+                        title="🧹 Fresh Start!",
+                        description=f"All quests have been deleted for you {self.ctx.author.mention}.\n\nClick **➕ New Quest** to get new missions!",
                         color=discord.Color.green(),
                     )
                     self.page = 0
                     self.all_quests = []
                     self.filtered_quests = []
-                    view = None
-                    # Use followup since we deferred
+                    # Show view with New Quest button
+                    view = Quest_View(self.bot, [], self.ctx, 0)
                     await interaction.followup.edit_message(interaction.message.id, embed=embed, view=view, attachments=[])
                     return
                 else:
+                    # No quests to delete - show empty state with New Quest button
                     embed = discord.Embed(
-                        description="You have no quests.", color=discord.Color.red()
+                        title="🥜 No Quests Found!",
+                        description="*Waku waku!* You don't have any quests right now.\n\nClick **➕ New Quest** below to get some new missions!",
+                        color=discord.Color.from_rgb(255, 182, 193)
                     )
-                    view = Quest_View(self.bot, self.all_quests, self.ctx, self.page)
-                    await interaction.followup.edit_message(interaction.message.id, embed=embed, view=view)
+                    view = Quest_View(self.bot, [], self.ctx, 0)
+                    await interaction.followup.edit_message(interaction.message.id, embed=embed, view=view, attachments=[])
                     return
 
             if not embed:
@@ -337,77 +369,85 @@ class QuestButton(discord.ui.Button):
                 await interaction.followup.send(
                     f":x: An error occurred: `{e}`", ephemeral=True
                 )
-class Quest_Button1(discord.ui.View):
+
+
+class NewQuestButton(discord.ui.Button):
+    """Button to create new quests for the user."""
     def __init__(self, bot, ctx):
-        super().__init__()
-        self.ctx = ctx
+        super().__init__(label="New Quest", emoji="➕", style=discord.ButtonStyle.success)
         self.bot = bot
+        self.ctx = ctx
         self.quest_data = Quest_Data(bot)
 
-    async def add_user_to_server(self):
-        logger.debug("Adding user to server.")
+    async def callback(self, interaction: discord.Interaction):
         try:
-            user_id = str(self.ctx.author.id)
-            guild_id = str(self.ctx.guild.id)
-            users_in_server = await self.quest_data.find_users_in_server(guild_id)
-            logger.debug(f"Users in server: {users_in_server}")
+            if interaction.user != self.ctx.author:
+                await interaction.response.send_message(
+                    "This is not your section.", ephemeral=True
+                )
+                return
 
-            if user_id not in users_in_server:
-                await self.quest_data.add_user_to_server(user_id, guild_id)
-                return True
-            else:
-                return False
-        except Exception as e:
-            error_message = "An error occurred while adding user to server."
-            logger.error(f"{error_message}: {e}")
-            traceback.print_exc()
-            await error_custom_embed(
-                self.bot, self.ctx, error_message, title="Add User Error"
-            )
-            return False
-
-    @discord.ui.button(label="New Quest", style=discord.ButtonStyle.success)
-    async def new_quest_button(
-        self, button: discord.ui.Button, interaction: discord.Interaction
-    ):
-        try:
+            # Defer interaction immediately to prevent timeout
+            await interaction.response.defer()
             
             guild_id = str(interaction.guild.id)
             channel_id = await self.quest_data.get_random_channel_for_guild(guild_id)
 
             if not channel_id:
-                
-                await interaction.response.edit_message(
+                await interaction.followup.send(
                     content="No redirected channels found for this guild. Please set redirect channels before creating a new quest.\n"
-                    f"> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `{self.ctx.prefix}redirect <channels>`"
+                    f"> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `{self.ctx.prefix}redirect <channels>`",
+                    ephemeral=True
                 )
                 return  
 
-            
             button_user = interaction.user
-
             
-            await self.quest_data.add_balance(button_user, guild_id, 0)
+            # Initialize balance if needed
+            await self.quest_data.add_balance(str(button_user.id), guild_id, 0)
 
-            
-            for _ in range(50):
-                logger.debug("Adding new quest")
-                await self.quest_data.add_new_quest(guild_id, button_user, chance=100)
+            # Create new quests
+            quests_created = 0
+            for _ in range(10):
+                result = await self.quest_data.add_new_quest(guild_id, button_user, chance=100)
+                if result:
+                    quests_created += 1
 
-            
-            await interaction.response.edit_message(
-                content=f"Successfully created new quests for you, {button_user.mention}!",
-                embed=None,
-                view=None,
-            )
+            if quests_created > 0:
+                # Fetch updated quests and show them
+                user_id = str(button_user.id)
+                quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
+                
+                embed = discord.Embed(
+                    title="🎉 New Quests Created!",
+                    description=f"*Waku waku!* Created **{quests_created}** new quests for you!\n\nUse `{self.ctx.prefix}quest` to view them.",
+                    color=discord.Color.green()
+                )
+                
+                view = Quest_View(self.bot, quests if quests else [], self.ctx, 0)
+                await interaction.followup.edit_message(
+                    message_id=interaction.message.id,
+                    embed=embed,
+                    view=view,
+                    attachments=[]
+                )
+            else:
+                await interaction.followup.send(
+                    "Failed to create new quests. Please try again.",
+                    ephemeral=True
+                )
 
         except Exception as e:
-            error_message = "An error occurred while processing the new quest button."
+            error_message = "An error occurred while creating new quests."
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
-            await error_custom_embed(
-                self.bot, self.ctx, error_message, title="Button Error"
-            )
+            try:
+                await interaction.followup.send(
+                    f":x: {error_message}: `{e}`", ephemeral=True
+                )
+            except:
+                pass
+
 
 class Quest_Button1(discord.ui.View):
     def __init__(self, bot, ctx):
@@ -440,46 +480,61 @@ class Quest_Button1(discord.ui.View):
 
     @discord.ui.button(label="New Quest", emoji="➕", style=discord.ButtonStyle.gray)
     async def new_quest_button(
-        self, button: discord.ui.Button, interaction: discord.Interaction
+        self, interaction: discord.Interaction, button: discord.ui.Button
     ):
         try:
+            # Defer interaction immediately to prevent timeout
+            await interaction.response.defer()
             
-            guild_id = str(button.guild.id)
+            guild_id = str(interaction.guild.id)
             channel_id = await self.quest_data.get_random_channel_for_guild(guild_id)
 
             if not channel_id:
-                
-                await button.response.edit_message(
+                await interaction.followup.send(
                     content="No redirected channels found for this guild. Please set redirect channels before creating a new quest.\n"
-                    f"> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `{self.ctx.prefix}redirect <channels>`"
+                    f"> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `{self.ctx.prefix}redirect <channels>`",
+                    ephemeral=True
                 )
                 return  
 
-            
-            button_user = button.user
+            button_user = interaction.user
+            await self.quest_data.add_balance(str(button_user.id), guild_id, 0)
 
-            
-            await self.quest_data.add_balance(button_user, guild_id, 0)
+            # Create 10 quests (reduced from 50 to prevent timeout)
+            quests_created = 0
+            for _ in range(10):
+                result = await self.quest_data.add_new_quest(guild_id, button_user, chance=100)
+                if result:
+                    quests_created += 1
 
+            # Fetch updated quests
+            user_id = str(button_user.id)
+            quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
             
-            for _ in range(50):
-                logger.debug("Adding new quest")
-                await self.quest_data.add_new_quest(guild_id, button_user, chance=100)
-
+            embed = discord.Embed(
+                title="🎉 New Quests Created!",
+                description=f"*Waku waku!* Created **{quests_created}** new quests for you!\n\nUse `{self.ctx.prefix}quest` to view them.",
+                color=discord.Color.green()
+            )
             
-            await button.response.edit_message(
-                content=f"Successfully created new quests for you, {button_user.mention}!",
-                embed=None,
-                view=None,
+            view = Quest_View(self.bot, quests if quests else [], self.ctx, 0)
+            await interaction.followup.edit_message(
+                message_id=interaction.message.id,
+                embed=embed,
+                view=view,
+                attachments=[]
             )
 
         except Exception as e:
             error_message = "An error occurred while processing the new quest button."
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
-            await error_custom_embed(
-                self.bot, self.ctx, error_message, title="Button Error"
-            )
+            try:
+                await interaction.followup.send(
+                    f":x: {error_message}: `{e}`", ephemeral=True
+                )
+            except:
+                pass
 
 
 class Quest_Button(discord.ui.View):
@@ -513,67 +568,65 @@ class Quest_Button(discord.ui.View):
 
     @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
     async def accept_button(
-        self, button: discord.ui.Button, interaction: discord.Interaction
+        self, interaction: discord.Interaction, button: discord.ui.Button
     ):
-        guild_id = str(button.guild.id)
-        channel_id = await self.quest_data.get_random_channel_for_guild(guild_id)
-        if not channel_id:
-            
-            await button.response.send_message(
-                "No redirected channels found for this guild. Please set redirect channels before creating a new quest.\n"
-                f"> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `{self.ctx.prefix}redirect <channels>`",
-                ephemeral=True,
-            )
-            return  
         try:
+            # Defer immediately to prevent timeout
+            await interaction.response.defer()
+            
+            guild_id = str(interaction.guild.id)
+            channel_id = await self.quest_data.get_random_channel_for_guild(guild_id)
+            if not channel_id:
+                await interaction.followup.send(
+                    "No redirected channels found for this guild. Please set redirect channels before creating a new quest.\n"
+                    f"> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `{self.ctx.prefix}redirect <channels>`",
+                    ephemeral=True,
+                )
+                return  
+
             added = await self.add_user_to_server()
 
             if added:
-                
-                guild_id = str(button.guild.id)
-
-                
                 embed = await QuestEmbed.get_agree_confirmation_embed(
-                    bot=self.bot, user=button.user, prefix=self.ctx.prefix
+                    bot=self.bot, user=interaction.user, prefix=self.ctx.prefix
                 )
-                await button.response.send_message(embed=embed)
-                await button.followup.delete_message(button.message.id)
+                await interaction.followup.send(embed=embed)
+                try:
+                    await interaction.message.delete()
+                except:
+                    pass
 
-                button_user = button.user
-
-                
+                button_user = interaction.user
                 await self.quest_data.add_balance(button_user, guild_id, 0)
 
-                
                 for _ in range(10):
                     logger.debug("Adding new quest")
                     await self.quest_data.add_new_quest(
                         guild_id, button_user, chance=100
                     )
-
             else:
-                
-                await button.response.send_message(
+                await interaction.followup.send(
                     "You are already part of the game!",
                     ephemeral=True,
-                    mention_author=False,
                 )
-                await button.followup.edit_message(button.message.id, view=None)
+                try:
+                    await interaction.message.edit(view=None)
+                except:
+                    pass
         except Exception as e:
             error_message = "An error occurred while processing the accept button."
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
-            await error_custom_embed(
-                self.bot,
-                self.ctx,
-                error_message,
-                title="Button Error",
-                mention_author=False,
-            )
+            try:
+                await interaction.followup.send(
+                    f":x: {error_message}: `{e}`", ephemeral=True
+                )
+            except:
+                pass
 
     @discord.ui.button(label="Decline", style=discord.ButtonStyle.danger)
     async def decline_button(
-        self, button: discord.ui.Button, interaction: discord.Interaction
+        self, interaction: discord.Interaction, button: discord.ui.Button
     ):
         try:
             embed = discord.Embed(
@@ -581,14 +634,17 @@ class Quest_Button(discord.ui.View):
                 description="You have declined the quest.",
                 color=discord.Color.red(),
             )
-            await button.response.edit_message(embed=embed, view=None)
+            await interaction.response.edit_message(embed=embed, view=None)
         except Exception as e:
             error_message = "An error occurred while processing the decline button."
             logger.error(f"{error_message}: {e}")
             traceback.print_exc()
-            await error_custom_embed(
-                self.bot, self.ctx, error_message, title="Button Error"
-            )
+            try:
+                await interaction.response.send_message(
+                    f":x: {error_message}: `{e}`", ephemeral=True
+                )
+            except:
+                pass
 
 
 class ImageGenerator:
