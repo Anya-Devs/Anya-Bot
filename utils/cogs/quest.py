@@ -290,6 +290,8 @@ class QuestButton(discord.ui.Button):
             elif self.custom_id == "next":
                 self.page += 1
             elif self.custom_id == "fresh_start":
+                # Defer first to avoid timeout on long delete operation
+                await interaction.response.defer()
                 success = await self.quest_data.delete_all_quests(
                     self.ctx.guild.id, self.ctx.author
                 )
@@ -302,14 +304,16 @@ class QuestButton(discord.ui.Button):
                     self.all_quests = []
                     self.filtered_quests = []
                     view = None
-                    # Clear attachments
-                    await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+                    # Use followup since we deferred
+                    await interaction.followup.edit_message(interaction.message.id, embed=embed, view=view, attachments=[])
                     return
                 else:
                     embed = discord.Embed(
                         description="You have no quests.", color=discord.Color.red()
                     )
                     view = Quest_View(self.bot, self.all_quests, self.ctx, self.page)
+                    await interaction.followup.edit_message(interaction.message.id, embed=embed, view=view)
+                    return
 
             if not embed:
                 view = Quest_View(self.bot, self.all_quests, self.ctx, self.page, self.filtered_quests)
@@ -964,6 +968,9 @@ class Quest_Data(commands.Cog):
 
     async def initialize_balance(self, user_id: str, guild_id: str):
         return await self.db_manager.balance.initialize_balance(user_id, guild_id)
+
+    async def get_leaderboard(self, guild_id: str, limit: int = 10):
+        return await self.db_manager.balance.get_leaderboard(guild_id, limit)
 
     # -------------------------------
     # Quest methods

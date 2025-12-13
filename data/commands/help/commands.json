@@ -4,12 +4,14 @@
             "aliases": ["i"],
             "description": "Generate anime-styled images using AI (Model: animagine-xl-4.0). Provide detailed prompts for best results.",
             "example": "{}imagine 1girl, solo, long hair, blue eyes, school uniform, outdoors, cherry blossoms, masterpiece",
+            "result": "Generates and sends an anime-style image based on your prompt, such as a detailed illustration of a girl in a school uniform amidst cherry blossoms.",
             "related_commands": "{}vision"
         },
         "vision": {
             "aliases": ["v"],
             "description": "Analyze images using AI vision (Gemini 2.0). Attach an image or reply to a message with an image, or provide an image URL.",
             "example": "{}vision [attach image or provide URL]",
+            "result": "Sends an AI-generated description and analysis of the provided image, detailing what's in it.",
             "related_commands": "{}imagine"
         }
     },
@@ -20,6 +22,7 @@
             ],
             "description": "Fetches a random anime and sends the recommendation.",
             "example": "{}anime_recommend",
+            "result": "Displays an embed with comprehensive information about the specified anime, including synopsis, genres, episodes, rating, and poster image.",
             "related_commands": "{}anime"
         }
     },
@@ -28,12 +31,14 @@
             "aliases": [],
             "description": "Search for information about any anime.",
             "example": "{}anime Spy x Family",
+            "result": "Sends an embed with comprehensive information about the specified anime, including synopsis, genres, episodes, rating, and poster image.",
             "related_commands": "{}character, {}manga"
         },
         "character": {
             "aliases": [],
             "description": "Search for information about any anime character.",
             "example": "{}character Anya Forger",
+            "result": "Provides detailed information about the anime character, including description, anime/manga appearances, and images.",
             "related_commands": "{}anime"
         },
         "manga": {
@@ -52,12 +57,14 @@
             ],
             "description": "Retrieve information about (bot/server/user/invite)",
             "example": "{}about @Anya\n{}about https://discord.gg/vFwPn74mfJ or vFwPn74mfJ, ",
+            "result": "Sends an embed with detailed information about the specified target, including avatar, stats, and links.",
             "related_commands": "{}server, {}pfp"
         },
         "server": {
             "aliases": [],
             "description": "Fetch details about the current server, including server boosts, owner, and member stats.",
             "example": "{}server",
+            "result": "Displays an embed with server information such as member count, boost level, owner, and creation date.",
             "related_commands": "{}server_roles, {}server_emojis"
         },
         "pfp": {
@@ -366,38 +373,46 @@
             "description": "Give a slow clap with an anime GIF.",
             "example": "{}slowclap",
             "related_commands": "{}smug, {}dance"
-        },
-        "smug": {
+        }
+    },
+    "Moderation": {
+        "notes": {
             "aliases": [],
-            "description": "Show off your smug face with an anime GIF.",
-            "example": "{}smug",
-            "related_commands": "{}slowclap, {}happy"
+            "description": "Manage notes for members and note-taker roles. Use without arguments to see all commands, or with a member to view their notes.",
+            "example": "{}notes\n{}notes @user",
+            "result": "Shows a help embed with all notes commands, or displays the specified member's notes with pagination.",
+            "related_commands": "{}notes add, {}notes help, {}notes config"
         },
-        "dance": {
+        "notes add": {
             "aliases": [],
-            "description": "Dance with an anime GIF.",
-            "example": "{}dance",
-            "related_commands": "{}happy, {}wave"
+            "description": "Add a note to a member's record. Only users with note-taker roles can add notes.",
+            "example": "{}notes add @user This is a note about their behavior",
+            "result": "Adds the note to the member's record and confirms with a temporary message.",
+            "related_commands": "{}notes, {}notes config"
         },
-        "happy": {
+        "notes help": {
             "aliases": [],
-            "description": "Express happiness with a cheerful anime GIF.",
-            "example": "{}happy",
-            "related_commands": "{}dance, {}wave"
+            "description": "Show detailed help for all notes commands.",
+            "example": "{}notes help",
+            "result": "Displays a comprehensive help embed explaining all notes subcommands and their usage.",
+            "related_commands": "{}notes"
         },
-        "slap": {
+        "notes config": {
             "aliases": [],
-            "description": "Slap someone (or yourself) with an anime GIF.",
-            "example": "{}slap @user",
-            "related_commands": "{}bite, {}pat"
+            "description": "Configure note-taker roles. Use without arguments to view current roles, or mention roles to add them. Use 'clear' to remove all roles.",
+            "example": "{}notes config\n{}notes config @Moderator @Admin\n{}notes config clear",
+            "result": "Shows or updates the note-taker roles configuration.",
+            "related_commands": "{}notes add"
         }
     },
     "Quest_Slash": {},
     "Sync": {},
     "System": {
         "memory": {
-            "aliases": [],
-            "description": "No description provided.",
+            "aliases": [
+                "mem"
+            ],
+            "description": "Displays the bot's current memory usage.",
             "example": "{}memory",
             "related_commands": "Provide related commands"
         },

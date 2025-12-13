@@ -2,11 +2,13 @@ from bson import ObjectId
 from itertools import islice
 from datetime import datetime
 from typing import Union, Optional, Literal
-from collections import defaultdict
 
 from utils.cogs.information import *
 from utils.subcogs.utils.reviews import *
-from utils.cogs.information import Information_Commands, Information_Embed
+from utils.cogs.information import (
+    Information_Commands, Information_Embed, Information_View,
+    ActivityUtils, ActivityDiscoveryView, format_number
+)
 
 from imports.discord_imports import * 
 from data.local.const import primary_color
@@ -286,6 +288,60 @@ class Information(commands.Cog):
         timestamp=datetime.now()
       )
       await ctx.reply(embed=embed, mention_author=False)
+
+    @commands.command(name="activity", aliases=["playing", "activities"])
+    @commands.guild_only()
+    async def activity_discovery(self, ctx, *, game_name: str = None):
+        """
+        Discover what members are playing and find others with shared interests.
+        Requires Guild Presences Intent for real-time activity tracking.
+        """
+        data = ActivityUtils.collect_activities(ctx.guild)
+        activities_map = data["games"]
+        streamers = data["streamers"]
+        listening = data["listening"]
+        watching = data["watching"]
+        
+        if game_name:
+            matching = [
+                (name, members) for name, members in activities_map.items()
+                if game_name.lower() in name.lower()
+            ]
+            
+            if not matching:
+                embed = discord.Embed(
+                    title="No Players Found",
+                    description=f"No one is currently playing anything matching **{game_name}**.",
+                    color=discord.Color.orange(),
+                    timestamp=datetime.now()
+                )
+                embed.set_footer(text=f"Use {ctx.prefix}activity to see all current activities")
+                return await ctx.reply(embed=embed, mention_author=False)
+            
+            embed = discord.Embed(
+                title=f"{ctx.guild.name} — Players: {game_name}",
+                color=primary_color(),
+                timestamp=datetime.now()
+            )
+            
+            for game, members in sorted(matching, key=lambda x: len(x[1]), reverse=True)[:10]:
+                member_mentions = ", ".join(m.mention for m in members[:8])
+                if len(members) > 8:
+                    member_mentions += f" +{format_number(len(members) - 8)} more"
+                embed.add_field(
+                    name=f"{game[:40]} ({format_number(len(members))})",
+                    value=member_mentions,
+                    inline=False
+                )
+            
+            total = sum(len(m) for _, m in matching)
+            embed.set_footer(text=f"Found {format_number(total)} player(s) across {format_number(len(matching))} game(s)")
+            return await ctx.reply(embed=embed, mention_author=False)
+        
+        view = ActivityDiscoveryView(ctx, activities_map, streamers, listening, watching)
+        embed = view.build_overview_embed()
+        await ctx.reply(embed=embed, view=view, mention_author=False)
+
 
 def setup(bot):
     bot.add_cog(Information(bot))

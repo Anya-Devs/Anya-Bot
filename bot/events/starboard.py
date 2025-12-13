@@ -20,9 +20,9 @@ class StarboardConfig:
             r"Congratulations\s+"
             r"(?:<@!?(\d+)>|@([\w_]+))\s*!"
             r"\s*You caught a Level\s+(\d+)\s+"
-            r"([A-Za-z\s\-]+)"
-            r"(?:<:[a-zA-Z0-9_]+:\d+>)?"
-            r"(?:\s*\([\d\.]+%\))?",
+            r"([A-Za-z0-9\s\-\'\.:]+?)"
+            r"(?::[a-zA-Z0-9_]+:|<:[a-zA-Z0-9_]+:\d+>)"
+            r"\s*\([\d\.]+%\)",
             re.IGNORECASE,
         ),
         "spawn_message_title": r"pokémon has appeared",
@@ -43,7 +43,7 @@ class StarboardConfig:
         "congrats": {
             "title": "<a:tada:1401401635439251587> Congrats!",
             "description_template": (
-                "- {mention}, you've caught a {type_label} **{shiny}{pokemon_name}**!"
+                "{mention}, you've caught a {type_label} **{shiny}{pokemon_name}**!"
                
             ),
             "show_thumbnail": True,
@@ -102,13 +102,27 @@ class StarboardProcessor:
     async def process_message(self, bot, message: discord.Message):
         try:
             shiny = bool(re.search(StarboardConfig.patterns["shiny_indicator"], message.content))
-            sparkle_emoji = "✨"
 
-            first_line = message.content.split("\n", 1)[0]
-            match = StarboardConfig.patterns["congrats_message"].search(first_line)
-            if not match and not shiny:
+            # Process all catch messages in the content
+            matches = list(StarboardConfig.patterns["congrats_message"].finditer(message.content))
+            if not matches and not shiny:
                 return
+            
+            # Fetch spawn message once for all catches
+            spawn_msg, spawn_color = await self.find_spawn_message(bot, message)
+            
+            # Process each catch
+            for match in matches:
+                await self._process_single_catch(bot, message, match, shiny, spawn_msg, spawn_color)
 
+        except Exception as e:
+            print(f"[ERROR] Exception in process_message: {e}")
+            traceback.print_exc()
+
+    async def _process_single_catch(self, bot, message: discord.Message, match, shiny: bool, spawn_msg, spawn_color):
+        try:
+            sparkle_emoji = "✨"
+            
             catcher_id = self._extract_catcher_id(message, match)
             if catcher_id is None:
                 return
@@ -119,7 +133,6 @@ class StarboardProcessor:
             if not (shiny or is_rare or is_regional):
                 return
 
-            spawn_msg, spawn_color = await self.find_spawn_message(bot, message)
             catcher_user = await bot.fetch_user(catcher_id)
             catcher_avatar_url = catcher_user.display_avatar.url if catcher_user else None
             spawn_image_url, spawn_jump_url = self._extract_spawn_info(spawn_msg)
@@ -131,25 +144,29 @@ class StarboardProcessor:
             )
             await self._send_congrats_embed(
                 message, catcher_id, pokemon_name, shiny, is_rare, is_regional,
-                spawn_color, spawn_msg 
-                )
+                spawn_color, spawn_msg
+            )
 
         except Exception as e:
-            print(f"[ERROR] Exception in process_message: {e}")
+            print(f"[ERROR] Exception in _process_single_catch: {e}")
             traceback.print_exc()
 
     def _extract_catcher_id(self, message, match):
-        if message.mentions:
-            return message.mentions[0].id
-        if match:
-            username = match.group(2)
-            if username:
-                username_lower = username.lower()
-                user = discord.utils.find(
-                    lambda m: m.name.lower() == username_lower or m.display_name.lower() == username_lower,
-                    message.guild.members,
-                )
-                return user.id if user else None
+        if not match:
+            return None
+        # Group 1 is user ID from <@!?(\d+)> format
+        user_id = match.group(1)
+        if user_id:
+            return int(user_id)
+        # Group 2 is username from @([\w_]+) format
+        username = match.group(2)
+        if username:
+            username_lower = username.lower()
+            user = discord.utils.find(
+                lambda m: m.name.lower() == username_lower or m.display_name.lower() == username_lower,
+                message.guild.members,
+            )
+            return user.id if user else None
         return None
 
     def _extract_spawn_info(self, spawn_msg):

@@ -614,6 +614,39 @@ class DatabaseManager:
             except PyMongoError as e:
                 logger.error(f"Error occurred while initializing balance: {e}")
 
+        async def get_leaderboard(self, guild_id: str, limit: int = 10):
+            """Get top users by stella_points for a guild."""
+            try:
+                db = self.mongoConnect[self.DB_NAME]
+                server_collection = db["Servers"]
+
+                guild_data = await server_collection.find_one(
+                    {"guild_id": guild_id}, {"members": 1}
+                )
+
+                if not guild_data or "members" not in guild_data:
+                    return []
+
+                members = guild_data.get("members", {})
+                leaderboard = []
+
+                for user_id, user_data in members.items():
+                    stella_points = user_data.get("stella_points", 0)
+                    if stella_points > 0:
+                        leaderboard.append({
+                            "user_id": user_id,
+                            "stella_points": stella_points
+                        })
+
+                # Sort by stella_points descending
+                leaderboard.sort(key=lambda x: x["stella_points"], reverse=True)
+
+                return leaderboard[:limit]
+
+            except PyMongoError as e:
+                logger.error(f"Error occurred while getting leaderboard: {e}")
+                return []
+
     class QuestClass:
         """Handles quest-related database operations."""
         def __init__(self, mongo_connect, db_name, config, bot, main_manager):
@@ -1157,8 +1190,10 @@ class DatabaseManager:
                 db = self.mongoConnect[self.DB_NAME]
                 server_collection = db["Servers"]
 
+                # Check if user has quests first
                 guild_document = await server_collection.find_one(
-                    {"guild_id": str(guild_id)}
+                    {"guild_id": str(guild_id)},
+                    {f"members.{user_id}.quests": 1}
                 )
 
                 if not guild_document:
@@ -1180,25 +1215,22 @@ class DatabaseManager:
                         "No quests found for the user. Nothing to delete.")
                     return False  
 
-                for quest in quests:
-                    quest_id = quest.get("quest_id")
-                    deletion_success = await self.delete_quest(
-                        guild_id, quest_id, message_author
-                    )
-
-                    if deletion_success:
-                        logger.debug(
-                            f"Deleted quest_id: {quest_id} for user_id: {user_id} in guild_id: {guild_id}"
-                        )
-                    else:
-                        logger.warning(
-                            f"Failed to delete quest_id: {quest_id} for user_id: {user_id} in guild_id: {guild_id}"
-                        )
-
-                logger.info(
-                    f"Successfully deleted all quests for user_id: {user_id} in guild_id: {guild_id}"
+                # Bulk delete - set quests to empty array in a single operation
+                result = await server_collection.update_one(
+                    {"guild_id": str(guild_id)},
+                    {"$set": {f"members.{user_id}.quests": []}}
                 )
-                return True  
+
+                if result.modified_count > 0:
+                    logger.info(
+                        f"Successfully deleted all {len(quests)} quests for user_id: {user_id} in guild_id: {guild_id}"
+                    )
+                    return True
+                else:
+                    logger.warning(
+                        f"No quests were deleted for user_id: {user_id} in guild_id: {guild_id}"
+                    )
+                    return False
 
             except Exception as e:
                 logger.error(f"Error occurred while deleting all quests: {e}")

@@ -263,6 +263,34 @@ class Quest(commands.Cog):
         target_member = member if member else ctx.author
         target_id = str(target_member.id)
 
+        # Rank tiers based on stella points
+        RANK_TIERS = [
+            (100000, "⭐ Constellation Master", discord.Color.gold()),
+            (50000, "🌟 Star Guardian", discord.Color.from_rgb(255, 215, 0)),
+            (25000, "✨ Stellar Champion", discord.Color.purple()),
+            (10000, "💫 Cosmic Explorer", discord.Color.blue()),
+            (5000, "🌙 Night Walker", discord.Color.dark_blue()),
+            (2500, "☄️ Comet Chaser", discord.Color.teal()),
+            (1000, "🔮 Star Seeker", discord.Color.dark_teal()),
+            (500, "💎 Crystal Collector", discord.Color.green()),
+            (100, "🌱 Rising Star", discord.Color.dark_green()),
+            (0, "🆕 Newcomer", discord.Color.greyple()),
+        ]
+
+        def get_rank_info(points):
+            for threshold, title, color in RANK_TIERS:
+                if points >= threshold:
+                    return title, color, threshold
+            return "🆕 Newcomer", discord.Color.greyple(), 0
+
+        def get_next_rank(points):
+            for i, (threshold, title, _) in enumerate(RANK_TIERS):
+                if points >= threshold:
+                    if i > 0:
+                        return RANK_TIERS[i-1][0], RANK_TIERS[i-1][1]
+                    return None, None
+            return RANK_TIERS[-2][0], RANK_TIERS[-2][1]
+
         try:
             if method == "add":
                 if ctx.author.id in [1030285330739363880, 1124389055598170182]:
@@ -282,24 +310,144 @@ class Quest(commands.Cog):
                 balance = await self.quest_data.get_balance(target_id, guild_id)
                 balance_with_commas = "{:,}".format(balance)
 
+                # Get rank info
+                rank_title, rank_color, current_threshold = get_rank_info(balance)
+                next_threshold, next_title = get_next_rank(balance)
+
+                # Get server ranking
+                leaderboard = await self.quest_data.get_leaderboard(guild_id, 100)
+                server_rank = None
+                for i, entry in enumerate(leaderboard):
+                    if entry["user_id"] == target_id:
+                        server_rank = i + 1
+                        break
+
                 embed = discord.Embed(
-                    description=f"-# {target_member.mention}'s balance",
+                    color=rank_color,
                     timestamp=datetime.now(),
                 )
+                embed.set_author(
+                    name=f"{target_member.display_name}'s Profile",
+                    icon_url=target_member.avatar.url if target_member.avatar else target_member.default_avatar.url
+                )
                 embed.set_thumbnail(url=target_member.avatar.url if target_member.avatar else target_member.default_avatar.url)
-                embed.add_field(name="Stars", value=None, inline=True)
-                embed.add_field(
-                    name="Points", value=balance_with_commas, inline=True)
-                embed.add_field(name="Class Ranking",
-                                value=f"`#{None}`", inline=False)
-                embed.set_footer(icon_url=self.bot.user.avatar.url)
+                
+                # Main stats
+                embed.add_field(name="⭐ Stella Points", value=f"**{balance_with_commas}**", inline=True)
+                embed.add_field(name="🏆 Server Rank", value=f"**#{server_rank}**" if server_rank else "`Unranked`", inline=True)
+                embed.add_field(name="🎖️ Title", value=f"**{rank_title}**", inline=False)
+
+                # Progress to next rank
+                if next_threshold and next_title:
+                    progress = balance - current_threshold
+                    needed = next_threshold - current_threshold
+                    progress_pct = min(100, int((progress / needed) * 100)) if needed > 0 else 100
+                    points_needed = next_threshold - balance
+                    
+                    # Visual progress bar
+                    filled = int(progress_pct / 10)
+                    bar = "█" * filled + "░" * (10 - filled)
+                    
+                    embed.add_field(
+                        name=f"📈 Progress to {next_title}",
+                        value=f"`{bar}` **{progress_pct}%**\n-# {points_needed:,} points needed",
+                        inline=False
+                    )
+                else:
+                    embed.add_field(
+                        name="🎉 Max Rank Achieved!",
+                        value="You've reached the highest rank!",
+                        inline=False
+                    )
+
+                embed.set_footer(text="Complete quests to earn more stella points!", icon_url=self.bot.user.avatar.url)
                 await ctx.reply(embed=embed, mention_author=False)
 
         except Exception as e:
             logger.error(f"An error occurred in the balance command: {e}")
+            traceback.print_exc()
             await ctx.send(
                 "An error occurred while processing your request. Please try again later."
             )
+
+    @commands.command(name="leaderboard", aliases=["lb", "top", "ranking"])
+    async def leaderboard(self, ctx, limit: int = 10):
+        """Show the stella points leaderboard for this server."""
+        try:
+            guild_id = str(ctx.guild.id)
+            
+            # Cap limit between 1 and 25
+            limit = max(1, min(25, limit))
+            
+            leaderboard_data = await self.quest_data.get_leaderboard(guild_id, limit)
+            
+            if not leaderboard_data:
+                embed = discord.Embed(
+                    description="No users with stella points found yet!\nComplete quests to earn points and appear on the leaderboard.",
+                    color=discord.Color.yellow()
+                )
+                embed.set_author(name=f"{ctx.guild.name} Leaderboard", icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+                await ctx.reply(embed=embed, mention_author=False)
+                return
+            
+            # Build leaderboard embed
+            embed = discord.Embed(
+                title="Stella Points Leaderboard",
+                color=discord.Color.gold(),
+                timestamp=datetime.now()
+            )
+            embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+            
+            # Medal emojis for top 3
+            medals = ["🥇", "🥈", "🥉"]
+            
+            description_lines = []
+            author_rank = None
+            author_points = None
+            
+            for i, entry in enumerate(leaderboard_data):
+                user_id = entry["user_id"]
+                points = entry["stella_points"]
+                
+                # Check if this is the author
+                if user_id == str(ctx.author.id):
+                    author_rank = i + 1
+                    author_points = points
+                
+                # Get medal or number
+                rank_display = medals[i] if i < 3 else f"`#{i + 1}`"
+                
+                # Format points with commas
+                points_formatted = "{:,}".format(points)
+                
+                # Try to get user, fallback to ID if not found
+                try:
+                    member = ctx.guild.get_member(int(user_id))
+                    user_display = member.mention if member else f"<@{user_id}>"
+                except:
+                    user_display = f"<@{user_id}>"
+                
+                description_lines.append(f"{rank_display} {user_display} — **{points_formatted}** ⭐")
+            
+            embed.description = "\n".join(description_lines)
+            
+            # Show author's rank if not in top list
+            if author_rank:
+                embed.set_footer(text=f"Your rank: #{author_rank} • {author_points:,} points", icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
+            else:
+                # Find author's actual rank
+                user_balance = await self.quest_data.get_balance(str(ctx.author.id), guild_id)
+                if user_balance > 0:
+                    embed.set_footer(text=f"Your points: {user_balance:,} ⭐", icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
+                else:
+                    embed.set_footer(text="Complete quests to earn stella points!", icon_url=self.bot.user.avatar.url)
+            
+            await ctx.reply(embed=embed, mention_author=False)
+            
+        except Exception as e:
+            logger.error(f"Error in leaderboard command: {e}")
+            traceback.print_exc()
+            await ctx.send("An error occurred while fetching the leaderboard.")
 
     @commands.command(name="shop")
     async def shop(self, ctx):

@@ -551,6 +551,269 @@ class Information_Embed:
         logging.error(f"get_invite_embed error: {e}")
         return None, None
 
+def format_number(n: int) -> str:
+    """Format number with K, M, B suffixes."""
+    if n >= 1_000_000_000:
+        return f"{n / 1_000_000_000:.1f}B".rstrip('0').rstrip('.')
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M".rstrip('0').rstrip('.')
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}K".rstrip('0').rstrip('.')
+    return str(n)
+
+
+class ActivityUtils:
+    """Utilities for activity discovery requiring Guild Presences Intent."""
+    
+    @staticmethod
+    def collect_activities(guild) -> dict:
+        """Collect all member activities from a guild."""
+        from collections import defaultdict
+        
+        data = {
+            "games": defaultdict(list),
+            "streamers": [],
+            "listening": [],
+            "watching": []
+        }
+        
+        for member in guild.members:
+            if member.bot:
+                continue
+            
+            for activity in member.activities:
+                if activity is None:
+                    continue
+                
+                if isinstance(activity, discord.Streaming):
+                    data["streamers"].append({
+                        "member": member,
+                        "name": activity.name or "Untitled Stream",
+                        "game": activity.game or "Unknown",
+                        "url": activity.url,
+                        "platform": activity.platform or "Unknown"
+                    })
+                elif isinstance(activity, discord.Game):
+                    data["games"][activity.name].append(member)
+                elif isinstance(activity, discord.Activity):
+                    if activity.type == discord.ActivityType.playing:
+                        data["games"][activity.name].append(member)
+                    elif activity.type == discord.ActivityType.listening:
+                        data["listening"].append({"member": member, "name": activity.name})
+                    elif activity.type == discord.ActivityType.watching:
+                        data["watching"].append({"member": member, "name": activity.name})
+                elif isinstance(activity, discord.Spotify):
+                    data["listening"].append({
+                        "member": member,
+                        "name": f"{activity.title} by {activity.artist}",
+                        "spotify": True
+                    })
+        
+        return data
+
+
+class ActivityDiscoveryView(discord.ui.View):
+    """Interactive view for browsing server activities and finding players."""
+    
+    def __init__(self, ctx, activities: dict, streamers: list, listening: list, watching: list):
+        super().__init__(timeout=300)
+        self.ctx = ctx
+        self.activities = activities
+        self.streamers = streamers
+        self.listening = listening
+        self.watching = watching
+        self.current_view = "overview"
+        self.page = 0
+        self.items_per_page = 8
+    
+    def build_overview_embed(self) -> discord.Embed:
+        total_playing = sum(len(members) for members in self.activities.values())
+        unique_games = len(self.activities)
+        
+        embed = discord.Embed(
+            title=f"{self.ctx.guild.name} — Activity",
+            description="Discover what members are playing and find others with shared interests.",
+            color=primary_color(),
+            timestamp=datetime.now()
+        )
+        
+        stats = []
+        if total_playing > 0:
+            stats.append(f"Playing: **{format_number(total_playing)}** across **{format_number(unique_games)}** games")
+        if self.streamers:
+            stats.append(f"Streaming: **{format_number(len(self.streamers))}** live")
+        if self.listening:
+            stats.append(f"Listening: **{format_number(len(self.listening))}** members")
+        if self.watching:
+            stats.append(f"Watching: **{format_number(len(self.watching))}** members")
+        
+        if stats:
+            embed.add_field(name="Current Activity", value="\n".join(stats), inline=False)
+        else:
+            embed.add_field(
+                name="Current Activity",
+                value="No activities detected.\nMembers may have activity status disabled.",
+                inline=False
+            )
+        
+        if self.activities:
+            top_games = sorted(self.activities.items(), key=lambda x: len(x[1]), reverse=True)[:5]
+            games_text = "\n".join(
+                f"`{format_number(len(members))}` {name[:35]}{'...' if len(name) > 35 else ''}" 
+                for name, members in top_games
+            )
+            embed.add_field(name="Top Games", value=games_text or "None", inline=True)
+        
+        if self.streamers:
+            streamers_text = "\n".join(
+                f"{s['member'].mention}" for s in self.streamers[:5]
+            )
+            if len(self.streamers) > 5:
+                streamers_text += f"\n+{format_number(len(self.streamers) - 5)} more"
+            embed.add_field(name="Live Streamers", value=streamers_text, inline=True)
+        
+        embed.set_thumbnail(url=self.ctx.guild.icon.url if self.ctx.guild.icon else None)
+        embed.set_footer(text="Use buttons to explore")
+        return embed
+    
+    def build_games_embed(self) -> discord.Embed:
+        sorted_games = sorted(self.activities.items(), key=lambda x: len(x[1]), reverse=True)
+        total_pages = max(1, (len(sorted_games) + self.items_per_page - 1) // self.items_per_page)
+        self.page = min(self.page, total_pages - 1)
+        
+        start = self.page * self.items_per_page
+        end = start + self.items_per_page
+        page_games = sorted_games[start:end]
+        
+        embed = discord.Embed(
+            title=f"{self.ctx.guild.name} — Games",
+            description="Find members to play with!",
+            color=primary_color(),
+            timestamp=datetime.now()
+        )
+        
+        for game, members in page_games:
+            member_mentions = ", ".join(m.mention for m in members[:5])
+            if len(members) > 5:
+                member_mentions += f" +{format_number(len(members) - 5)} more"
+            embed.add_field(
+                name=f"{game[:45]} ({format_number(len(members))})",
+                value=member_mentions,
+                inline=False
+            )
+        
+        if not page_games:
+            embed.description = "No one is currently playing any games."
+        
+        embed.set_footer(text=f"Page {self.page + 1}/{total_pages} • {format_number(len(sorted_games))} games")
+        return embed
+    
+    def build_streamers_embed(self) -> discord.Embed:
+        embed = discord.Embed(
+            title=f"{self.ctx.guild.name} — Streamers",
+            description="Support community members who are streaming!",
+            color=discord.Color.purple(),
+            timestamp=datetime.now()
+        )
+        
+        for s in self.streamers[:12]:
+            embed.add_field(
+                name=s['member'].display_name,
+                value=f"{s['member'].mention}\n**{s['name'][:30]}**\n[Watch on {s['platform']}]({s['url']})",
+                inline=True
+            )
+        
+        if not self.streamers:
+            embed.description = "No one is currently streaming."
+        elif len(self.streamers) > 12:
+            embed.set_footer(text=f"Showing 12 of {format_number(len(self.streamers))} streamers")
+        
+        return embed
+    
+    def build_listening_embed(self) -> discord.Embed:
+        embed = discord.Embed(
+            title=f"{self.ctx.guild.name} — Listening",
+            description="See what music your community enjoys!",
+            color=discord.Color.green(),
+            timestamp=datetime.now()
+        )
+        
+        for item in self.listening[:12]:
+            prefix = "Spotify" if item.get("spotify") else "Music"
+            embed.add_field(
+                name=item['member'].display_name,
+                value=f"{item['member'].mention}\n{prefix}: {item['name'][:40]}",
+                inline=True
+            )
+        
+        if not self.listening:
+            embed.description = "No one is currently listening to music."
+        elif len(self.listening) > 12:
+            embed.set_footer(text=f"Showing 12 of {format_number(len(self.listening))} listeners")
+        
+        return embed
+
+    @discord.ui.button(label="Overview", style=discord.ButtonStyle.primary, row=0)
+    async def overview_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            return await interaction.response.send_message("This isn't your activity panel.", ephemeral=True)
+        self.current_view = "overview"
+        self.page = 0
+        await interaction.response.edit_message(embed=self.build_overview_embed(), view=self)
+    
+    @discord.ui.button(label="Games", style=discord.ButtonStyle.secondary, row=0)
+    async def games_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            return await interaction.response.send_message("This isn't your activity panel.", ephemeral=True)
+        self.current_view = "games"
+        self.page = 0
+        await interaction.response.edit_message(embed=self.build_games_embed(), view=self)
+    
+    @discord.ui.button(label="Streamers", style=discord.ButtonStyle.secondary, row=0)
+    async def streamers_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            return await interaction.response.send_message("This isn't your activity panel.", ephemeral=True)
+        self.current_view = "streamers"
+        await interaction.response.edit_message(embed=self.build_streamers_embed(), view=self)
+    
+    @discord.ui.button(label="Music", style=discord.ButtonStyle.secondary, row=0)
+    async def music_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            return await interaction.response.send_message("This isn't your activity panel.", ephemeral=True)
+        self.current_view = "listening"
+        await interaction.response.edit_message(embed=self.build_listening_embed(), view=self)
+    
+    @discord.ui.button(emoji="◀️", style=discord.ButtonStyle.gray, row=1)
+    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            return await interaction.response.send_message("This isn't your activity panel.", ephemeral=True)
+        if self.current_view == "games" and self.page > 0:
+            self.page -= 1
+            await interaction.response.edit_message(embed=self.build_games_embed(), view=self)
+        else:
+            await interaction.response.defer()
+    
+    @discord.ui.button(emoji="▶️", style=discord.ButtonStyle.gray, row=1)
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            return await interaction.response.send_message("This isn't your activity panel.", ephemeral=True)
+        if self.current_view == "games":
+            total_pages = max(1, (len(self.activities) + self.items_per_page - 1) // self.items_per_page)
+            if self.page < total_pages - 1:
+                self.page += 1
+                await interaction.response.edit_message(embed=self.build_games_embed(), view=self)
+                return
+        await interaction.response.defer()
+    
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        try:
+            await self.message.edit(view=self)
+        except:
+            pass
+
+
 class RoleLookupView(ui.View):
     def __init__(self, bot):
         super().__init__(timeout=None)

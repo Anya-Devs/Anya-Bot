@@ -63,30 +63,8 @@ class HelpMenu(discord.ui.View):
         items = list(self.cog_commands.items())[start:end]
 
         for cog_name, commands_list in items:
-            normal_cmds = []
-            group_cmds = []
-
-            for cmd in commands_list:
-                if isinstance(cmd, commands.Group):
-                    subs = [f"`{sub.name}`" for sub in cmd.commands if not sub.hidden]
-                    if subs:
-                        group_cmds.append(f"`{cmd.name}` → " + " ".join(subs))
-                    else:
-                        group_cmds.append(f"`{cmd.name}`")
-                else:
-                    normal_cmds.append(f"`{cmd.name}`")
-
-            parts = []
-
-            # Normal commands inline
-            if normal_cmds:
-                parts.append(" ".join(normal_cmds))
-
-            # Group commands stacked with newlines
-            if group_cmds:
-                parts.append("\n".join(group_cmds))
-
-            value = "\n".join(parts) if parts else "No commands."
+            all_cmds = [f"`{cmd.name}`" for cmd in commands_list]
+            value = " ".join(all_cmds) if all_cmds else "No commands."
             embed.add_field(name=cog_name.replace("_", " "), value=value, inline=False)
 
         total_pages = max(1, (len(self.cog_commands) - 1) // self.fields_per_page + 1)
@@ -173,26 +151,7 @@ class Select_Help(discord.ui.Select):
             if not visible_cmds:
                 continue
 
-            single_cmds = []
-            group_cmds = []
-
-            for cmd in visible_cmds:
-                if isinstance(cmd, commands.Group):
-                    subs = [sub.name for sub in cmd.commands if not sub.hidden]
-                    if subs:
-                        group_cmds.append(f"`{cmd.name}` → `{' '.join(subs)}`")
-                    else:
-                        group_cmds.append(f"`{cmd.name}`")
-                else:
-                    single_cmds.append(f"`{cmd.name}`")
-
-            commands_str = ""
-            if single_cmds:
-                commands_str += " ".join(single_cmds)
-            if group_cmds:
-                if commands_str:
-                    commands_str += "\n"
-                commands_str += "\n".join(group_cmds)
+            commands_str = " ".join(f"`{cmd.name}`" for cmd in visible_cmds)
 
             inline = len(self.module_to_cogs[module]) == 1
             fields.append((cog.__class__.__name__.replace("_", " "), commands_str, inline))
@@ -626,6 +585,7 @@ class Sub_Helper:
         description = command_info.get("description", "No description provided.")
         example = command_info.get("example", "No example provided.")
         related = command_info.get("related_commands", "No related commands.")
+        result = command_info.get("result", "No result provided.")
 
         usage = f"{ctx.prefix}{command.qualified_name} {command.signature.replace('[', '<').replace(']', '>').replace('=None', '')}"
 
@@ -640,6 +600,9 @@ class Sub_Helper:
 
 # Example Command(s)
 {example.format(*[self.prefix] * example.count('{}')) if '{}' in example else example}
+
+# Result
+{result}
 
 # Related Command(s)
 {related.format(*[self.prefix] * related.count('{}')) if '{}' in related else related}
