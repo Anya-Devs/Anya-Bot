@@ -263,19 +263,18 @@ class Quest(commands.Cog):
         target_member = member if member else ctx.author
         target_id = str(target_member.id)
 
-        # Rank tiers based on stella points
-        RANK_TIERS = [
-            (100000, "⭐ Constellation Master", discord.Color.gold()),
-            (50000, "🌟 Star Guardian", discord.Color.from_rgb(255, 215, 0)),
-            (25000, "✨ Stellar Champion", discord.Color.purple()),
-            (10000, "💫 Cosmic Explorer", discord.Color.blue()),
-            (5000, "🌙 Night Walker", discord.Color.dark_blue()),
-            (2500, "☄️ Comet Chaser", discord.Color.teal()),
-            (1000, "🔮 Star Seeker", discord.Color.dark_teal()),
-            (500, "💎 Crystal Collector", discord.Color.green()),
-            (100, "🌱 Rising Star", discord.Color.dark_green()),
-            (0, "🆕 Newcomer", discord.Color.greyple()),
-        ]
+       RANK_TIERS = [
+           (100000, "🥜 Peanut Addict", discord.Color.gold()),
+           (50000, "🕵️‍♂️ Master Spy", discord.Color.from_rgb(255, 215, 0)),
+           (25000, "🌟 Imperial Scooter", discord.Color.purple()),
+           (10000, "⭐ Stella Collector", discord.Color.blue()),
+           (5000, "🔮 Telepath", discord.Color.dark_blue()),
+           (2500, "🏫 Eden Student", discord.Color.teal()),
+           (1000, "⚡ Tonitrus Survivor", discord.Color.dark_teal()),
+           (500, "🐶 Bond's Friend", discord.Color.green()),
+           (100, "🥜 Peanut Fan", discord.Color.dark_green()),
+           (0, "🆕 New Forger", discord.Color.greyple()),
+           ]
 
         def get_rank_info(points):
             for threshold, title, color in RANK_TIERS:
@@ -370,8 +369,8 @@ class Quest(commands.Cog):
                 "An error occurred while processing your request. Please try again later."
             )
 
-    @commands.command(name="leaderboard", aliases=["lb", "top", "ranking"])
-    async def leaderboard(self, ctx, limit: int = 10):
+    @quest.command(name="leaderboard", aliases=["lb", "top", "ranking"])
+    async def quest_leaderboard(self, ctx, limit: int = 10):
         """Show the stella points leaderboard for this server."""
         try:
             guild_id = str(ctx.guild.id)
@@ -392,8 +391,9 @@ class Quest(commands.Cog):
             
             # Build leaderboard embed
             embed = discord.Embed(
-                title="Stella Points Leaderboard",
-                color=discord.Color.gold(),
+                title="🥜 Anya's Super Cool Leaderboard",
+                description="*Waku waku! Who has the most stella stars?*\n",
+                color=discord.Color.from_rgb(255, 182, 193),
                 timestamp=datetime.now()
             )
             embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
@@ -401,7 +401,7 @@ class Quest(commands.Cog):
             # Medal emojis for top 3
             medals = ["🥇", "🥈", "🥉"]
             
-            description_lines = []
+            description_lines = ["*Waku waku! Who has the most stella stars?*\n"]
             author_rank = None
             author_points = None
             
