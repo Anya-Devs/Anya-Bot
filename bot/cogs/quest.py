@@ -263,18 +263,19 @@ class Quest(commands.Cog):
         target_member = member if member else ctx.author
         target_id = str(target_member.id)
 
-       RANK_TIERS = [
-           (100000, "🥜 Peanut Addict", discord.Color.gold()),
-           (50000, "🕵️‍♂️ Master Spy", discord.Color.from_rgb(255, 215, 0)),
-           (25000, "🌟 Imperial Scooter", discord.Color.purple()),
-           (10000, "⭐ Stella Collector", discord.Color.blue()),
-           (5000, "🔮 Telepath", discord.Color.dark_blue()),
-           (2500, "🏫 Eden Student", discord.Color.teal()),
-           (1000, "⚡ Tonitrus Survivor", discord.Color.dark_teal()),
-           (500, "🐶 Bond's Friend", discord.Color.green()),
-           (100, "🥜 Peanut Fan", discord.Color.dark_green()),
-           (0, "🆕 New Forger", discord.Color.greyple()),
-           ]
+        # Anya's special rank tiers (Spy x Family themed)
+        RANK_TIERS = [
+            (100000, "🥜 Peanut Addict", discord.Color.gold()),
+            (50000, "🕵️‍♂️ Master Spy", discord.Color.from_rgb(255, 215, 0)),
+            (25000, "🌟 Imperial Scooter", discord.Color.purple()),
+            (10000, "⭐ Stella Collector", discord.Color.blue()),
+            (5000, "🔮 Telepath", discord.Color.dark_blue()),
+            (2500, "🏫 Eden Student", discord.Color.teal()),
+            (1000, "⚡ Tonitrus Survivor", discord.Color.dark_teal()),
+            (500, "🐶 Bond's Friend", discord.Color.green()),
+            (100, "🥜 Peanut Fan", discord.Color.dark_green()),
+            (0, "🆕 New Forger", discord.Color.greyple()),
+        ]
 
         def get_rank_info(points):
             for threshold, title, color in RANK_TIERS:
