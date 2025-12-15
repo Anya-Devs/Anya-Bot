@@ -458,6 +458,84 @@ class Quest(commands.Cog):
         except Exception as e:
             await ctx.send(f"An error occurred while processing the shop: {e}")
 
+    @commands.command(name="cook")
+    async def cook(self, ctx):
+        try:
+            user_id = str(ctx.author.id)
+            guild_id = str(ctx.guild.id)
+
+            if not await self.quest_data.find_user_in_server(user_id, guild_id):
+                return await ctx.reply(
+                    f"You need to start your quest first using `{ctx.prefix}quest` before cooking.",
+                    mention_author=False,
+                )
+
+            # Require at least one Spy x Family character
+            chars_data = []
+            try:
+                with open("data/minigames/spy-x-family/characters.json", "r", encoding="utf-8") as f:
+                    raw = json.load(f)
+                if isinstance(raw, dict):
+                    for k, v in raw.items():
+                        if isinstance(v, dict):
+                            chars_data.append({"id": k, **v})
+            except FileNotFoundError:
+                chars_data = []
+
+            owned_chars = []
+            for c in chars_data:
+                name = c.get("id")
+                if not name:
+                    continue
+                owned = (
+                    await self.quest_data.get_user_inventory_count(guild_id, user_id, "sxf.characters", name)
+                    or 0
+                )
+                if owned > 0:
+                    owned_chars.append(c)
+
+            if not owned_chars:
+                return await ctx.reply(
+                    "You need at least **one Spy x Family character** before you can cook. Buy one in the shop first.",
+                    mention_author=False,
+                )
+
+            # Default to the user's selected character (if set)
+            selected_char_id = None
+            try:
+                doc = await self.quest_data.mongoConnect[self.quest_data.DB_NAME]["Servers"].find_one(
+                    {"guild_id": guild_id},
+                    {f"members.{user_id}.inventory.sxf.selected_character": 1},
+                )
+                bucket = (((doc or {}).get("members") or {}).get(user_id) or {}).get("inventory", {}).get("sxf", {}).get("selected_character", {})
+                if isinstance(bucket, dict):
+                    for k, v in bucket.items():
+                        if isinstance(v, int) and v > 0:
+                            selected_char_id = k
+                            break
+            except Exception:
+                selected_char_id = None
+
+            view = CookingRecipeSelectView(self.bot, self.quest_data, ctx, owned_chars)
+            if selected_char_id and any(c.get("id") == selected_char_id for c in owned_chars):
+                view.selected_char_id = selected_char_id
+                chosen = next((c for c in owned_chars if c.get("id") == selected_char_id), None)
+                view.selected_char_difficulty = str((chosen or {}).get("cooking-difficulty") or "normal").lower()
+            elif owned_chars:
+                # If user hasn't selected a character yet, default to the first owned one.
+                view.selected_char_id = str(owned_chars[0].get("id") or "") or None
+                view.selected_char_difficulty = str((owned_chars[0] or {}).get("cooking-difficulty") or "normal").lower()
+            embed = await view.create_embed()
+            if ctx.author.avatar:
+                embed.set_thumbnail(url=ctx.author.avatar.url)
+            await view.update_view()
+            await ctx.reply(embed=embed, view=view, mention_author=False)
+
+        except Exception as e:
+            logger.error(f"Error in cook command: {e}")
+            traceback.print_exc()
+            await ctx.reply(f"An error occurred while starting cooking: `{e}`", mention_author=False)
+
     @staticmethod
     def read_shop_file(filename):
         with open(filename, "r", encoding="utf-8") as file:
@@ -700,3 +778,711 @@ def setup(bot):
     bot.add_cog(Quest_Data(bot))
     bot.add_cog(Quest(bot))
     bot.add_cog(Quest_Slash(bot))
+
+
+class CookingRecipeSelectView(discord.ui.View):
+    def __init__(self, bot, quest_data, ctx, owned_chars: list[dict]):
+        super().__init__(timeout=120)
+        self.bot = bot
+        self.quest_data = quest_data
+        self.ctx = ctx
+        self.owned_chars = owned_chars or []
+
+        self.selected_char_id: str | None = None
+        self.selected_char_difficulty: str = "normal"
+
+        self._recipes: list[dict] = []
+        self._ingredient_emoji: dict[str, str] = {}
+        self._ingredient_map: dict[str, dict] = {}
+        self._cookable_recipes: list[dict] = []
+
+    def _load_ingredient_emoji(self) -> dict[str, str]:
+        try:
+            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            return {}
+        ingredient_emoji: dict[str, str] = {}
+        if isinstance(data, dict):
+            for group in data.values():
+                if not isinstance(group, dict):
+                    continue
+                for ing_key, item in group.items():
+                    if not isinstance(item, dict):
+                        continue
+                    emoji = item.get("emoji") or "🥕"
+                    ingredient_emoji[str(ing_key).lower()] = emoji
+                    name = item.get("name")
+                    if name:
+                        ingredient_emoji[str(name).lower()] = emoji
+        return ingredient_emoji
+
+    def _load_ingredient_map(self) -> dict[str, dict]:
+        try:
+            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            return {}
+
+        out: dict[str, dict] = {}
+        # ingredients.json is grouped by category at top-level
+        if isinstance(data, dict):
+            for group in data.values():
+                if not isinstance(group, dict):
+                    continue
+                for ing_key, item in group.items():
+                    if not isinstance(item, dict):
+                        continue
+                    out[str(ing_key).lower()] = item
+        return out
+
+    def _ingredient_display_name(self, ing_key: str) -> str:
+        item = (self._ingredient_map or {}).get(str(ing_key).lower())
+        if isinstance(item, dict):
+            nm = item.get("name")
+            if isinstance(nm, str) and nm.strip():
+                return nm.strip()
+        return str(ing_key)
+
+    def _ingredient_inventory_names(self, ing_key: str) -> list[str]:
+        # backward compatible: some inventories stored by key, some by display name
+        names = [str(ing_key).strip()]
+        disp = self._ingredient_display_name(ing_key)
+        if disp and disp not in names:
+            names.append(disp)
+        return [n for n in names if n]
+
+    async def _owned_ingredient_count(self, ing_key: str) -> int:
+        guild_id = str(self.ctx.guild.id)
+        user_id = str(self.ctx.author.id)
+        best = 0
+        for nm in self._ingredient_inventory_names(ing_key):
+            try:
+                c = await self.quest_data.get_user_inventory_count(guild_id, user_id, "sxf.ingredients", nm)
+                if isinstance(c, int) and c > best:
+                    best = c
+            except Exception:
+                continue
+        return best
+
+    def _required_ingredients(self, recipe: dict) -> list[tuple[str, int]]:
+        req = recipe.get("ingredients") or []
+        out: list[tuple[str, int]] = []
+        for ing in req:
+            if isinstance(ing, dict):
+                k = str(ing.get("item") or "").strip()
+                a = int(ing.get("amount") or 1)
+            else:
+                k = str(ing).strip()
+                a = 1
+            if not k:
+                continue
+            out.append((k, max(1, a)))
+        return out
+
+    async def _get_cookable_recipes(self) -> list[dict]:
+        if not self._recipes:
+            self._recipes = self._load_recipes()
+        if not self._ingredient_emoji:
+            self._ingredient_emoji = self._load_ingredient_emoji()
+        if not self._ingredient_map:
+            self._ingredient_map = self._load_ingredient_map()
+
+        cookable: list[dict] = []
+        for r in self._recipes:
+            ok = True
+            for ing_key, amt in self._required_ingredients(r):
+                owned = await self._owned_ingredient_count(ing_key)
+                if owned < amt:
+                    ok = False
+                    break
+            if ok:
+                cookable.append(r)
+
+        self._cookable_recipes = cookable
+        return cookable
+
+    def _load_recipes(self) -> list[dict]:
+        try:
+            with open("data/minigames/spy-x-family/recipes.json", "r", encoding="utf-8") as f:
+                recipes_data = json.load(f)
+        except FileNotFoundError:
+            return []
+
+        flat: list[dict] = []
+        if isinstance(recipes_data, dict):
+            for section_name, section in recipes_data.items():
+                if not isinstance(section, dict):
+                    continue
+                for recipe_id, recipe in section.items():
+                    if not isinstance(recipe, dict):
+                        continue
+                    flat.append({"section": section_name, "id": recipe_id, **recipe})
+
+        flat.sort(key=lambda r: (str(r.get("section") or ""), str(r.get("name") or r.get("id") or "")))
+        return flat
+
+    async def create_embed(self) -> discord.Embed:
+        if not self._recipes:
+            self._recipes = self._load_recipes()
+        if not self._ingredient_emoji:
+            self._ingredient_emoji = self._load_ingredient_emoji()
+        if not self._ingredient_map:
+            self._ingredient_map = self._load_ingredient_map()
+
+        cookable = await self._get_cookable_recipes()
+
+        embed = discord.Embed(
+            title="🍳 Cook a Meal",
+            description="Pick a recipe number. (Showing recipes you can cook right now)",
+            color=discord.Color.from_rgb(255, 182, 193),
+            timestamp=datetime.now(),
+        )
+        try:
+            if getattr(self.ctx.author, "avatar", None):
+                embed.set_thumbnail(url=self.ctx.author.avatar.url)
+        except Exception:
+            pass
+
+        def _diff_full_name(d: str) -> str:
+            d = str(d or "normal").lower()
+            if d == "none":
+                return "None"
+            if d == "easy":
+                return "Easy"
+            if d == "hard":
+                return "Hard"
+            return "Normal"
+
+        # Show current selected character only
+        if self.selected_char_id:
+            chosen = next((c for c in (self.owned_chars or []) if c.get("id") == self.selected_char_id), None)
+            emoji = (chosen or {}).get("emoji") or "👥"
+            diff = _diff_full_name((chosen or {}).get("cooking-difficulty") or self.selected_char_difficulty)
+            embed.add_field(name="Chef", value=f"{emoji} **{self.selected_char_id}**\nDifficulty: **{diff}**", inline=False)
+        else:
+            embed.add_field(name="Chef", value="No character selected. Use `character select <id>` first.", inline=False)
+
+        lines = []
+        for i, r in enumerate((cookable or [])[:10]):
+            name = r.get("name") or r.get("id") or "Unknown"
+            emoji = r.get("emoji") or "🍽️"
+            req = r.get("ingredients") or []
+            preview = []
+            for ing in req[:4]:
+                if isinstance(ing, dict):
+                    ing_key = str(ing.get("item") or "").strip()
+                    amt = int(ing.get("amount") or 1)
+                else:
+                    ing_key = str(ing).strip()
+                    amt = 1
+                if not ing_key:
+                    continue
+                em = self._ingredient_emoji.get(ing_key.lower()) or "🥕"
+                preview.append(f"{em}{amt}x")
+            lines.append(f"`{i+1}.` {emoji} **{name}**  {' '.join(preview)}")
+
+        embed.add_field(
+            name="Recipes",
+            value="\n".join(lines) if lines else "You can't cook anything yet. Buy ingredients in the cooking shop.",
+            inline=False,
+        )
+        return embed
+
+    async def update_view(self):
+        self.clear_items()
+        if not self._recipes:
+            self._recipes = self._load_recipes()
+        if not self._ingredient_map:
+            self._ingredient_map = self._load_ingredient_map()
+
+        cookable = await self._get_cookable_recipes()
+
+        count = min(10, len(cookable or []))
+        for i in range(count):
+            row = 0 if i < 5 else 1
+            btn = discord.ui.Button(
+                style=discord.ButtonStyle.success,
+                label=str(i + 1),
+                custom_id=f"cook_recipe_{i}",
+                row=row,
+            )
+            btn.callback = self.pick_recipe_callback
+            self.add_item(btn)
+
+    async def pick_recipe_callback(self, interaction: discord.Interaction):
+        try:
+            if interaction.user != self.ctx.author:
+                return await interaction.response.send_message("This is not your cooking session.", ephemeral=True)
+
+            if not self.selected_char_id:
+                if interaction.response.is_done():
+                    return await interaction.followup.send("Select a character first with `character select <id>`.", ephemeral=True)
+                return await interaction.response.send_message("Select a character first with `character select <id>`.", ephemeral=True)
+
+            index = int(str(interaction.data["custom_id"]).split("_")[-1])
+
+            # This callback can be slow (inventory checks, building views). Defer to avoid 3s expiry.
+            if not interaction.response.is_done():
+                await interaction.response.defer()
+
+            cookable = await self._get_cookable_recipes()
+            if index < 0 or index >= len(cookable or []):
+                return await interaction.followup.send("Recipe not found.", ephemeral=True)
+
+            recipe = cookable[index]
+            game_view = CookingTimingGameView(
+                self.bot,
+                self.quest_data,
+                self.ctx,
+                recipe,
+                character_id=self.selected_char_id,
+                difficulty=self.selected_char_difficulty,
+            )
+            embed = await game_view.create_intro_embed()
+            await game_view.start_round(interaction, embed)
+
+        except Exception as e:
+            traceback.print_exc()
+            if interaction.response.is_done():
+                await interaction.followup.send(f"Cooking error: `{e}`", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"Cooking error: `{e}`", ephemeral=True)
+
+
+class CookingTimingGameView(discord.ui.View):
+    def __init__(self, bot, quest_data, ctx, recipe: dict, character_id: str, difficulty: str):
+        super().__init__(timeout=180)
+        self.bot = bot
+        self.quest_data = quest_data
+        self.ctx = ctx
+        self.recipe = recipe
+        self.character_id = character_id
+        self.difficulty = str(difficulty or "normal").lower()
+
+        self.round = 0
+        # A short, fun loop: up to 5 rounds, or number of required ingredients if less
+        self.total_rounds = 0
+        self._start_ts: float | None = None
+        self._reaction_times: list[float] = []
+        self._ready = False
+
+        self._correct_count = 0
+        self._target_key: str | None = None
+        self._round_time_limit = 2.0
+
+        self._ingredient_map: dict[str, dict] = {}
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item):
+        logger.error(
+            f"Unhandled view error in {self.__class__.__name__} (user={getattr(interaction.user, 'id', None)} guild={getattr(interaction.guild, 'id', None)}): {error}",
+            exc_info=True,
+        )
+        try:
+            traceback.print_exception(type(error), error, error.__traceback__)
+        except Exception:
+            pass
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send("❌ An error occurred while cooking. Please try again.", ephemeral=True)
+            else:
+                await interaction.response.send_message("❌ An error occurred while cooking. Please try again.", ephemeral=True)
+        except Exception:
+            return
+
+    def _required_ingredients(self) -> list[tuple[str, int]]:
+        req = self.recipe.get("ingredients") or []
+        parsed: list[tuple[str, int]] = []
+        for ing in req:
+            if isinstance(ing, dict):
+                key = str(ing.get("item") or "").strip()
+                amt = int(ing.get("amount") or 1)
+            else:
+                key = str(ing).strip()
+                amt = 1
+            if key:
+                parsed.append((key, max(1, amt)))
+        return parsed
+
+    def _load_ingredient_map(self) -> dict[str, dict]:
+        try:
+            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            return {}
+
+        m: dict[str, dict] = {}
+        if isinstance(data, dict):
+            for group in data.values():
+                if not isinstance(group, dict):
+                    continue
+                for key, item in group.items():
+                    if not isinstance(item, dict):
+                        continue
+                    m[str(key).strip().lower()] = {"key": str(key).strip(), **item}
+        return m
+
+    def _ingredient_display_name(self, ing_key: str) -> str:
+        item = (self._ingredient_map or {}).get(str(ing_key).lower())
+        if not item:
+            return ing_key
+        return item.get("name") or ing_key
+
+    def _ingredient_inventory_names(self, ing_key: str) -> list[str]:
+        # Backward compatibility: old system stored by display name, new stores by key
+        names = [ing_key]
+        display = self._ingredient_display_name(ing_key)
+        if display and display not in names:
+            names.append(display)
+        return names
+
+    async def _owned_ingredient_count(self, ing_key: str) -> int:
+        total = 0
+        for n in self._ingredient_inventory_names(ing_key):
+            total += (
+                await self.quest_data.get_user_inventory_count(
+                    str(self.ctx.guild.id), str(self.ctx.author.id), "sxf.ingredients", n
+                )
+                or 0
+            )
+        return total
+
+    async def _build_requirements_lines(self) -> tuple[bool, list[str]]:
+        if not self._ingredient_map:
+            self._ingredient_map = self._load_ingredient_map()
+
+        can_cook = True
+        lines: list[str] = []
+        for ing_key, amt in self._required_ingredients():
+            owned = await self._owned_ingredient_count(ing_key)
+            if owned < amt:
+                can_cook = False
+            display = self._ingredient_display_name(ing_key)
+            lines.append(f"`{owned}/{amt}` {display}")
+        return can_cook, lines
+
+    async def _consume_ingredients(self) -> tuple[bool, str]:
+        if not self._ingredient_map:
+            self._ingredient_map = self._load_ingredient_map()
+
+        guild_id = str(self.ctx.guild.id)
+        user_id = str(self.ctx.author.id)
+
+        # check first
+        for ing_key, amt in self._required_ingredients():
+            owned = await self._owned_ingredient_count(ing_key)
+            if owned < amt:
+                return False, f"Missing `{self._ingredient_display_name(ing_key)}` x{amt} (you have {owned})."
+
+        # consume using key first, then display name if needed
+        for ing_key, amt in self._required_ingredients():
+            remaining = amt
+            # try key
+            key_owned = await self.quest_data.get_user_inventory_count(guild_id, user_id, "sxf.ingredients", ing_key)
+            key_owned = key_owned or 0
+            use_key = min(key_owned, remaining)
+            if use_key > 0:
+                ok = await self.quest_data.remove_item_from_inventory(guild_id, user_id, "sxf.ingredients", ing_key, use_key)
+                if not ok:
+                    return False, f"Failed to consume `{ing_key}` x{use_key}."
+                remaining -= use_key
+
+            if remaining > 0:
+                display = self._ingredient_display_name(ing_key)
+                if display != ing_key:
+                    ok = await self.quest_data.remove_item_from_inventory(guild_id, user_id, "sxf.ingredients", display, remaining)
+                    if not ok:
+                        return False, f"Failed to consume `{display}` x{remaining}."
+                    remaining = 0
+
+        return True, ""
+
+    async def create_intro_embed(self) -> discord.Embed:
+        name = self.recipe.get("name") or self.recipe.get("id") or "Unknown"
+        emoji = self.recipe.get("emoji") or "🍽️"
+        can_cook, req_lines = await self._build_requirements_lines()
+
+        # difficulty -> button count/time limit
+        btn_count, time_limit = self._difficulty_settings()
+        self._round_time_limit = time_limit
+        self.total_rounds = min(5, max(1, len(self._required_ingredients())))
+
+        embed = discord.Embed(
+            title=f"🍳 Cooking: {emoji} {name}",
+            description=(
+                "Check your ingredients below. When you're ready, press **Start Cooking**.\n"
+                f"Minigame: click the correct ingredient emoji. `buttons:` {btn_count} | `timer:` {time_limit:.1f}s"
+            ),
+            color=discord.Color.from_rgb(255, 182, 193),
+            timestamp=datetime.now(),
+        )
+        try:
+            if getattr(self.ctx.author, "avatar", None):
+                embed.set_thumbnail(url=self.ctx.author.avatar.url)
+        except Exception:
+            pass
+        embed.add_field(
+            name=f"Ingredients ({'READY' if can_cook else 'MISSING'})",
+            value="\n".join(req_lines) if req_lines else "None",
+            inline=False,
+        )
+        embed.add_field(
+            name="Chef",
+            value=f"**{self.character_id}**\nDifficulty: **{self.difficulty.title()}**",
+            inline=False,
+        )
+        return embed
+
+    async def start_round(self, interaction: discord.Interaction, embed: discord.Embed):
+        # Don't consume yet; just block if missing so user can go buy ingredients.
+        can_cook, _lines = await self._build_requirements_lines()
+        if not can_cook:
+            if interaction.response.is_done():
+                return await interaction.followup.send(
+                    "You're missing ingredients for that recipe. Buy them in the cooking shop first.",
+                    ephemeral=True,
+                )
+            return await interaction.response.send_message(
+                "You're missing ingredients for that recipe. Buy them in the cooking shop first.",
+                ephemeral=True,
+            )
+
+        self.clear_items()
+        self.round = 0
+        self._reaction_times = []
+        self._ready = False
+        self._correct_count = 0
+
+        start_button = discord.ui.Button(
+            style=discord.ButtonStyle.primary,
+            label="Start Cooking",
+            custom_id="cook_start",
+            row=0,
+        )
+        start_button.callback = self.begin_callback
+        self.add_item(start_button)
+
+        # Caller may have deferred already; use a safe edit method.
+        try:
+            if interaction.response.is_done():
+                await interaction.edit_original_response(embed=embed, view=self)
+            else:
+                await interaction.response.edit_message(embed=embed, view=self)
+        except discord.NotFound:
+            return
+
+    async def begin_callback(self, interaction: discord.Interaction):
+        try:
+            if interaction.user != self.ctx.author:
+                return await interaction.response.send_message("This is not your cooking session.", ephemeral=True)
+
+            # Consuming ingredients + building the next round can take >3s.
+            if not interaction.response.is_done():
+                await interaction.response.defer()
+
+            ok, msg = await self._consume_ingredients()
+            if not ok:
+                return await interaction.followup.send(msg, ephemeral=True)
+
+            self.round = 0
+            self._reaction_times = []
+            self._correct_count = 0
+            await self._start_next_pick_round(interaction)
+        except Exception as e:
+            logger.error(f"Error in {self.__class__.__name__}.begin_callback: {e}", exc_info=True)
+            try:
+                traceback.print_exc()
+            except Exception:
+                pass
+            try:
+                if interaction.response.is_done():
+                    await interaction.followup.send(f"Cooking error: `{e}`", ephemeral=True)
+                else:
+                    await interaction.response.send_message(f"Cooking error: `{e}`", ephemeral=True)
+            except Exception:
+                return
+
+    def _difficulty_settings(self) -> tuple[int, float]:
+        # button_count (max 10), time limit per round
+        if self.difficulty == "none":
+            return 3, 3.0
+        if self.difficulty == "easy":
+            return 5, 2.2
+        if self.difficulty == "hard":
+            return 10, 1.2
+        # normal
+        return 7, 1.7
+
+    async def _start_next_pick_round(self, interaction: discord.Interaction):
+        # pick a target ingredient from the recipe requirements
+        req = [k for (k, _a) in self._required_ingredients()]
+        if not req:
+            return await self.finish(interaction)
+
+        btn_count, time_limit = self._difficulty_settings()
+        self._round_time_limit = time_limit
+        self._target_key = random.choice(req)
+
+        # build options: target + decoys from all ingredients
+        if not self._ingredient_map:
+            self._ingredient_map = self._load_ingredient_map()
+        pool = [k for k in (self._ingredient_map or {}).keys() if k and k.lower() != self._target_key.lower()]
+        random.shuffle(pool)
+        options = [self._target_key] + pool[: max(0, btn_count - 1)]
+        random.shuffle(options)
+
+        self.clear_items()
+        self._ready = True
+        self._start_ts = asyncio.get_running_loop().time()
+
+        # create emoji-only buttons, max 10 across 2 rows
+        for i, ing_key in enumerate(options[:10]):
+            row = 0 if i < 5 else 1
+            emoji = None
+            try:
+                # Use emoji from ingredients.json if available
+                item = (self._ingredient_map or {}).get(str(ing_key).lower())
+                emoji = (item or {}).get("emoji") if isinstance(item, dict) else None
+            except Exception:
+                emoji = None
+
+            btn = discord.ui.Button(
+                style=discord.ButtonStyle.secondary,
+                label="",
+                emoji=_safe_select_emoji(emoji) or "🥕",
+                custom_id=f"cook_pick_{ing_key}",
+                row=row,
+            )
+            btn.callback = self.pick_callback
+            self.add_item(btn)
+
+        # embed prompt
+        disp = self._ingredient_display_name(self._target_key)
+        embed = discord.Embed(
+            title=f"🍳 Round {self.round + 1}/{self.total_rounds}",
+            description=f"Click: **{disp}**  (time: {time_limit:.1f}s)",
+            color=discord.Color.from_rgb(255, 182, 193),
+            timestamp=datetime.now(),
+        )
+        try:
+            if getattr(self.ctx.author, "avatar", None):
+                embed.set_thumbnail(url=self.ctx.author.avatar.url)
+        except Exception:
+            pass
+
+        # If they don't click in time, auto-fail the round
+        async def _timeout_guard(expected_round: int):
+            await asyncio.sleep(time_limit)
+            if self.round != expected_round:
+                return
+            if not self._ready:
+                return
+            self._ready = False
+            self._start_ts = None
+            self.round += 1
+            if self.round >= self.total_rounds:
+                await self.finish(interaction)
+                return
+            await self._start_next_pick_round(interaction)
+
+        asyncio.create_task(_timeout_guard(self.round))
+
+        try:
+            if interaction.response.is_done():
+                await interaction.edit_original_response(embed=embed, view=self)
+            else:
+                await interaction.response.edit_message(embed=embed, view=self)
+        except discord.NotFound:
+            return
+
+    async def pick_callback(self, interaction: discord.Interaction):
+        if interaction.user != self.ctx.author:
+            return await interaction.response.send_message("This is not your cooking session.", ephemeral=True)
+        if not self._ready or self._start_ts is None or not self._target_key:
+            return await interaction.response.send_message("Too early.", ephemeral=True)
+
+        picked = str(interaction.data["custom_id"]).split("cook_pick_", 1)[-1]
+        now = asyncio.get_running_loop().time()
+        rt = max(0.0, now - self._start_ts)
+
+        self._ready = False
+        self._start_ts = None
+
+        correct = picked.lower() == self._target_key.lower()
+        if correct:
+            self._correct_count += 1
+            self._reaction_times.append(rt)
+
+        self.round += 1
+        if self.round >= self.total_rounds:
+            await self.finish(interaction)
+            return
+
+        # quick feedback, then next
+        title = "✅ Correct" if correct else "❌ Wrong"
+        await interaction.response.edit_message(
+            embed=discord.Embed(
+                title=f"{title} ({rt:.3f}s)",
+                description="Next ingredient...",
+                color=discord.Color.from_rgb(255, 182, 193),
+                timestamp=datetime.now(),
+            ),
+            view=self,
+        )
+        await asyncio.sleep(random.uniform(0.4, 0.9))
+        await self._start_next_pick_round(interaction)
+
+    def _quality_from_performance(self, accuracy: float, avg_rt: float) -> tuple[str, float]:
+        # speed_score 0..1
+        speed_score = max(0.0, min(1.0, 1.0 - (avg_rt / max(0.5, self._round_time_limit))))
+        score = max(0.0, min(1.0, accuracy * 0.7 + speed_score * 0.3))
+
+        if score >= 0.92:
+            return "Perfect", score
+        if score >= 0.78:
+            return "Great", score
+        if score >= 0.60:
+            return "Good", score
+        if score >= 0.40:
+            return "Bad", score
+        return "Burnt", score
+
+    async def finish(self, interaction: discord.Interaction):
+        avg_rt = sum(self._reaction_times) / max(1, len(self._reaction_times)) if self._reaction_times else self._round_time_limit
+        accuracy = self._correct_count / max(1, self.total_rounds)
+        quality, score = self._quality_from_performance(accuracy, avg_rt)
+
+        base_hp = self.recipe.get("hp-restore")
+        if not isinstance(base_hp, int):
+            base_hp = 10
+        hp_final = max(1, int(base_hp * (0.5 + 0.75 * score)))
+
+        # store meal as inventory item (simple for now)
+        guild_id = str(self.ctx.guild.id)
+        user_id = str(self.ctx.author.id)
+        meal_name = self.recipe.get("name") or self.recipe.get("id") or "Meal"
+        item_name = f"{meal_name} [{quality}] +{hp_final}%"
+        await self.quest_data.add_item_to_inventory(guild_id, user_id, "sxf.meals", item_name, 1)
+
+        embed = discord.Embed(
+            title="🍽️ Meal Cooked!",
+            description=(
+                f"**{meal_name}**\n"
+                f"Quality: **{quality}**\n"
+                f"Accuracy: **{int(accuracy*100)}%**\n"
+                f"Avg time: `{avg_rt:.3f}s`\n"
+                f"Meal HP: **+{hp_final}%**"
+            ),
+            color=discord.Color.green(),
+            timestamp=datetime.now(),
+        )
+        embed.add_field(name="Chef", value=f"{self.character_id} (`{self.difficulty}`)", inline=False)
+
+        self.clear_items()
+        try:
+            if interaction.response.is_done():
+                await interaction.edit_original_response(embed=embed, view=None)
+            else:
+                await interaction.response.edit_message(embed=embed, view=None)
+        except discord.NotFound:
+            return

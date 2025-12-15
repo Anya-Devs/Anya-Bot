@@ -1,0 +1,298 @@
+{
+  "dairy": {
+    "butter": {
+      "name": "Butter",
+      "emoji": "🧈",
+      "cost": 15,
+      "description": "Creamy dairy product used for cooking and baking"
+    },
+    "cheddar-cheese": {
+      "name": "Cheddar Cheese",
+      "emoji": "🧀",
+      "cost": 20,
+      "description": "Firm, smooth cheese that melts well"
+    },
+    "parmesan-cheese": {
+      "name": "Parmesan Cheese",
+      "emoji": "🧀",
+      "cost": 30,
+      "description": "Hard, granular cheese with rich, nutty flavor"
+    },
+    "heavy-cream": {
+      "name": "Heavy Cream",
+      "emoji": "🥛",
+      "cost": 25,
+      "description": "High-fat cream used in desserts and sauces"
+    },
+    "eggs": {
+      "name": "Eggs",
+      "emoji": "🥚",
+      "cost": 10,
+      "description": "Versatile protein source used in many recipes"
+    }
+  },
+  "proteins": {
+    "chicken": {
+      "name": "Chicken Breast",
+      "emoji": "🍗",
+      "cost": 25,
+      "description": "Lean white meat, great for various dishes"
+    },
+    "beef-chuck": {
+      "name": "Beef Chuck",
+      "emoji": "🥩",
+      "cost": 30,
+      "description": "Tough but flavorful cut perfect for slow cooking"
+    },
+    "beef-tenderloin": {
+      "name": "Beef Tenderloin",
+      "emoji": "🥩",
+      "cost": 80,
+      "description": "Premium cut known for its tenderness"
+    },
+    "pancetta": {
+      "name": "Pancetta",
+      "emoji": "🥓",
+      "cost": 40,
+      "description": "Italian cured pork belly, similar to bacon"
+    },
+    "prosciutto": {
+      "name": "Prosciutto",
+      "emoji": "🍖",
+      "cost": 60,
+      "description": "Dry-cured Italian ham, thinly sliced"
+    }
+  },
+  "produce": {
+    "onion": {
+      "name": "Yellow Onion",
+      "emoji": "🧅",
+      "cost": 5,
+      "description": "Versatile aromatic vegetable base for many dishes"
+    },
+    "garlic": {
+      "name": "Garlic",
+      "emoji": "🧄",
+      "cost": 8,
+      "description": "Pungent bulb used to add depth of flavor"
+    },
+    "carrots": {
+      "name": "Carrots",
+      "emoji": "🥕",
+      "cost": 7,
+      "description": "Sweet root vegetable, great in soups and stews"
+    },
+    "potatoes": {
+      "name": "Potatoes",
+      "emoji": "🥔",
+      "cost": 6,
+      "description": "Starchy tuber that's a staple in many cuisines"
+    },
+    "tomatoes": {
+      "name": "Tomatoes",
+      "emoji": "🍅",
+      "cost": 10,
+      "description": "Juicy fruit used as a vegetable in cooking"
+    },
+    "broccoli": {
+      "name": "Broccoli",
+      "emoji": "🥦",
+      "cost": 12,
+      "description": "Nutrient-rich green vegetable"
+    },
+    "bell-peppers": {
+      "name": "Bell Peppers",
+      "emoji": "🫑",
+      "cost": 15,
+      "description": "Sweet, crisp peppers available in various colors"
+    },
+    "mushrooms": {
+      "name": "Mushrooms",
+      "emoji": "🍄",
+      "cost": 18,
+      "description": "Earthy fungi that add umami flavor to dishes"
+    },
+    "apples": {
+      "name": "Apples",
+      "emoji": "🍎",
+      "cost": 12,
+      "description": "Sweet and crisp fruit, great for both eating and baking"
+    }
+  },
+  "pantry": {
+    "bread": {
+      "name": "Bread",
+      "emoji": "🍞",
+      "cost": 8,
+      "description": "Staple food made from flour, water, and yeast"
+    },
+    "spaghetti": {
+      "name": "Spaghetti",
+      "emoji": "🍝",
+      "cost": 10,
+      "description": "Long, thin pasta that's a favorite in Italian cuisine"
+    },
+    "pasta": {
+      "name": "Pasta",
+      "emoji": "🍝",
+      "cost": 10,
+      "description": "Versatile Italian staple made from durum wheat"
+    },
+    "rice": {
+      "name": "Rice",
+      "emoji": "🍚",
+      "cost": 12,
+      "description": "Staple grain that's a dietary staple for half the world"
+    },
+    "sugar": {
+      "name": "Sugar",
+      "emoji": "🍬",
+      "cost": 5,
+      "description": "Sweet crystalline substance used in cooking and baking"
+    },
+    "flour": {
+      "name": "All-Purpose Flour",
+      "emoji": "🌾",
+      "cost": 8,
+      "description": "Versatile wheat flour for all types of baking"
+    },
+    "olive-oil": {
+      "name": "Olive Oil",
+      "emoji": "🫒",
+      "cost": 15,
+      "description": "Healthy fat extracted from olives, used in cooking"
+    },
+    "salt": {
+      "name": "Salt",
+      "emoji": "🧂",
+      "cost": 3,
+      "description": "Essential mineral that enhances flavor in all cuisines"
+    },
+    "black-pepper": {
+      "name": "Black Pepper",
+      "emoji": "🌶️",
+      "cost": 8,
+      "description": "Pungent spice made from dried berries, used worldwide"
+    },
+    "cinnamon": {
+      "name": "Cinnamon",
+      "emoji": "🍂",
+      "cost": 10,
+      "description": "Sweet and warm spice used in both sweet and savory dishes"
+    },
+    "vanilla-extract": {
+      "name": "Vanilla Extract",
+      "emoji": "🌼",
+      "cost": 25,
+      "description": "Concentrated vanilla flavoring made from vanilla beans"
+    },
+    "curry-powder": {
+      "name": "Curry Powder",
+      "emoji": "🍛",
+      "cost": 15,
+      "description": "Blend of spices used in Indian cuisine"
+    },
+    "soy-sauce": {
+      "name": "Soy Sauce",
+      "emoji": "🍶",
+      "cost": 12,
+      "description": "Salty, umami-rich sauce made from fermented soybeans"
+    },
+    "mustard": {
+      "name": "Dijon Mustard",
+      "emoji": "🥫",
+      "cost": 12,
+      "description": "Sharp, tangy condiment made from mustard seeds"
+    },
+    "caesar-dressing": {
+      "name": "Caesar Dressing",
+      "emoji": "🥗",
+      "cost": 20,
+      "description": "Creamy dressing with garlic, anchovy, and parmesan"
+    },
+    "lemon-juice": {
+      "name": "Lemon Juice",
+      "emoji": "🍋",
+      "cost": 8,
+      "description": "Tart citrus juice that brightens flavors"
+    },
+    "beef-broth": {
+      "name": "Beef Broth",
+      "emoji": "🍲",
+      "cost": 10,
+      "description": "Flavorful liquid made by simmering beef and vegetables"
+    },
+    "vegetable-broth": {
+      "name": "Vegetable Broth",
+      "emoji": "🍲",
+      "cost": 8,
+      "description": "Flavorful liquid made by simmering vegetables and herbs"
+    },
+    "tomato-paste": {
+      "name": "Tomato Paste",
+      "emoji": "🍅",
+      "cost": 10,
+      "description": "Concentrated tomato flavor in a thick paste"
+    },
+    "coconut-milk": {
+      "name": "Coconut Milk",
+      "emoji": "🥥",
+      "cost": 15,
+      "description": "Creamy liquid extracted from coconut flesh"
+    },
+    "dark-chocolate": {
+      "name": "Dark Chocolate",
+      "emoji": "🍫",
+      "cost": 25,
+      "description": "Rich, bittersweet chocolate with high cocoa content"
+    },
+    "puff-pastry": {
+      "name": "Puff Pastry",
+      "emoji": "🥐",
+      "cost": 20,
+      "description": "Light, flaky pastry that puffs when baked"
+    },
+    "pie-crust": {
+      "name": "Pie Crust",
+      "emoji": "🥧",
+      "cost": 15,
+      "description": "Flaky pastry dough used as the base for pies"
+    },
+    "cannellini-beans": {
+      "name": "Cannellini Beans",
+      "emoji": "🫘",
+      "cost": 10,
+      "description": "Creamy white beans commonly used in Italian cuisine"
+    },
+    "croutons": {
+      "name": "Croutons",
+      "emoji": "🍞",
+      "cost": 8,
+      "description": "Crispy, seasoned bread cubes used in salads and soups"
+    },
+    "snow-peas": {
+      "name": "Snow Peas",
+      "emoji": "🫛",
+      "cost": 15,
+      "description": "Crisp, sweet pea pods often used in Asian cooking"
+    },
+    "zucchini": {
+      "name": "Zucchini",
+      "emoji": "🥒",
+      "cost": 10,
+      "description": "Mild summer squash that's versatile in cooking"
+    },
+    "celery": {
+      "name": "Celery",
+      "emoji": "🥬",
+      "cost": 8,
+      "description": "Crunchy vegetable often used as an aromatic base"
+    },
+    "ginger": {
+      "name": "Fresh Ginger",
+      "emoji": "🫚",
+      "cost": 12,
+      "description": "Spicy, aromatic root used in both sweet and savory dishes"
+    }
+  }
+}

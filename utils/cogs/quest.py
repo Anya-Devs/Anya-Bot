@@ -120,8 +120,7 @@ class Quest_View(View):
             if not self.filtered_quests:
                 embed = discord.Embed(
                     title="No Quests Found!",
-                    description="*= w =* You don't have any quests right now.\n\nClick **➕ New Quest** below to get some new missions!",
-                    color=discord.Color.from_rgb(255, 182, 193)
+                    description="```You don't have any quests right now.```",
                 )
                 embed.set_footer(
                     text=f"{self.ctx.author.display_name}'s quests",
@@ -477,6 +476,76 @@ class Quest_Button1(discord.ui.View):
                 self.bot, self.ctx, error_message, title="Add User Error"
             )
             return False
+
+    @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
+    async def accept_button(
+        self, button: discord.ui.Button, interaction: discord.Interaction
+    ):
+        guild_id = str(interaction.guild.id)
+        channel_id = await self.quest_data.get_random_channel_for_guild(guild_id)
+        if not channel_id:
+            await interaction.response.send_message(
+                "No redirected channels found for this guild. Please set redirect channels before creating a new quest.\n"
+                f"> Ask a member with permission to manage channels or with the Anya Manager role to use the command: `{self.ctx.prefix}redirect <channels>`",
+                ephemeral=True,
+            )
+            return
+
+        try:
+            added = await self.add_user_to_server()
+
+            # If they are brand new to quests in this server, show the agreement prompt first.
+            if added:
+                prompt_embed = await Quest_Prompt.get_embed(self.bot)
+                await interaction.response.send_message(
+                    embed=prompt_embed,
+                    ephemeral=True,
+                )
+                return
+
+            embed = await QuestEmbed.get_agree_confirmation_embed(
+                bot=self.bot, user=interaction.user, prefix=self.ctx.prefix
+            )
+            await interaction.response.send_message(embed=embed)
+            await interaction.followup.delete_message(interaction.message.id)
+
+            button_user = interaction.user
+            await self.quest_data.add_balance(str(button_user.id), guild_id, 0)
+
+            for _ in range(10):
+                logger.debug("Adding new quest")
+                await self.quest_data.add_new_quest(guild_id, button_user, chance=100)
+
+        except Exception as e:
+            error_message = "An error occurred while processing the accept button."
+            logger.error(f"{error_message}: {e}")
+            traceback.print_exc()
+            await error_custom_embed(
+                self.bot,
+                self.ctx,
+                error_message,
+                title="Button Error",
+                mention_author=False,
+            )
+
+    @discord.ui.button(label="Decline", style=discord.ButtonStyle.danger)
+    async def decline_button(
+        self, button: discord.ui.Button, interaction: discord.Interaction
+    ):
+        try:
+            embed = discord.Embed(
+                title="Quest Canceled",
+                description="You have declined the quest.",
+                color=discord.Color.red(),
+            )
+            await interaction.response.edit_message(embed=embed, view=None)
+        except Exception as e:
+            error_message = "An error occurred while processing the decline button."
+            logger.error(f"{error_message}: {e}")
+            traceback.print_exc()
+            await error_custom_embed(
+                self.bot, self.ctx, error_message, title="Button Error"
+            )
 
     @discord.ui.button(label="New Quest", emoji="➕", style=discord.ButtonStyle.gray)
     async def new_quest_button(
@@ -2557,8 +2626,8 @@ class ShopConfig:
         "default_family": "❔",
         
         # Status indicators
-        "owned": "✅",
-        "can_purchase": "💰",
+        "owned": "",
+        "can_purchase": "",
         "insufficient": "❌",
         "warning": "⚠️",
         "success": "✅",
@@ -2624,14 +2693,8 @@ class ShopConfig:
                 {
                     "emoji": EMOJIS["spy_tools"],
                     "label": "Spy Tools",
-                    "description": "Tools for espionage and tactical operations",
+                    "description": "Craft and use tools to prank and interact",
                     "value": "spy_tools"
-                },
-                {
-                    "emoji": EMOJIS["profile_customization"],
-                    "label": "Profile Customization",
-                    "description": "Backgrounds, fonts, and decorative items",
-                    "value": "profile_customization"
                 },
                 {
                     "emoji": EMOJIS["gacha_games"],
@@ -2640,10 +2703,10 @@ class ShopConfig:
                     "value": "gacha_games"
                 },
                 {
-                    "emoji": EMOJIS["pokemon_spawns"],
-                    "label": "Poketwo Spawns",
-                    "description": "Poketwo decorations and spawn layout",
-                    "value": "pokemon_spawns"
+                    "emoji": "🥜",
+                    "label": "Spy x Family",
+                    "description": "Characters, ingredients, and recipes",
+                    "value": "spy_x_family"
                 }
             ]
         },
@@ -2865,12 +2928,10 @@ class ShopCategorySelect(discord.ui.Select):
             
             if category == "spy_tools":
                 await self.show_spy_tools(interaction)
-            elif category == "profile_customization":
-                await self.show_profile_customization(interaction)
             elif category == "gacha_games":
                 await self.show_gacha_games(interaction)
-            elif category == "pokemon_spawns":
-                await self.show_pokemon_spawns(interaction)
+            elif category == "spy_x_family":
+                await self.show_spy_x_family(interaction)
 
         except Exception as e:
             await ShopView.handle_error(interaction, e)
@@ -2894,30 +2955,6 @@ class ShopCategorySelect(discord.ui.Select):
             "Select a spy tool to view details and purchase materials"
         )
         embed.set_image(url=ShopConfig.SHOP_IMAGES["spy_tools"])
-        
-        view = discord.ui.View()
-        view.add_item(select)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-    async def show_profile_customization(self, interaction: discord.Interaction):
-        profile_data = self.shop_data.get("ProfileCustomization", {})
-        if not profile_data:
-            error_embed = ShopConfig.create_info_embed(
-                f"{ShopConfig.EMOJIS['info']} No Items",
-                ShopConfig.ERROR_MESSAGES["no_items_available"]
-            )
-            await interaction.response.send_message(embed=error_embed, ephemeral=True)
-            return
-
-        select = ProfileFamilySelect(
-            self.shop_data, self.quest_data, self.user_id, self.guild_id
-        )
-        
-        embed = ShopConfig.create_shop_embed(
-            f"{ShopConfig.EMOJIS['profile_customization']} Profile Customization Shop",
-            "Customize your profile with backgrounds, fonts, and items"
-        )
-        embed.set_image(url=ShopConfig.SHOP_IMAGES["profile_customization"])
         
         view = discord.ui.View()
         view.add_item(select)
@@ -2947,6 +2984,1551 @@ class ShopCategorySelect(discord.ui.Select):
         await gacha_view.update_view()
         await interaction.response.send_message(embed=embed, view=gacha_view, ephemeral=True)
 
+    async def show_spy_x_family(self, interaction: discord.Interaction):
+        embed = ShopConfig.create_shop_embed(
+            "🕵️ Spy x Family Shop",
+            "Select a category to browse and purchase Spy x Family items"
+        )
+
+        view = SpyXFamilyCategoryView(self.quest_data, self.user_id, self.guild_id)
+        await view.update_view()
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+
+def _safe_select_emoji(value):
+    """Return a safe emoji for SelectOption/Button: unicode emoji str, PartialEmoji, or None."""
+    if not value:
+        return None
+    if isinstance(value, discord.PartialEmoji):
+        return value
+    if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return None
+        # Allow custom emoji formats: <a:name:id> or <:name:id>
+        if s.startswith("<") and s.endswith(">"):
+            return s
+        # Reject obvious non-emoji names / placeholders
+        if len(s) > 32:
+            return None
+        # Discord SelectOption emoji can be picky; avoid multi-emoji strings like "👧💎"
+        # and anything that can't be parsed by discord.PartialEmoji.
+        try:
+            parsed = discord.PartialEmoji.from_str(s)
+            # from_str returns PartialEmoji(name=...) for unicode; ensure it's not empty
+            if not getattr(parsed, "name", None):
+                return None
+            # If it's unicode, only allow a single grapheme-ish token (best-effort)
+            if parsed.id is None and len(s) > 4:
+                return None
+            return parsed
+        except Exception:
+            # best-effort fallback: only allow very short strings
+            return s if len(s) <= 2 else None
+    return None
+
+
+class SpyXFamilyCategoryView(discord.ui.View):
+    def __init__(self, quest_data, user_id, guild_id):
+        super().__init__(timeout=300)
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+
+    async def update_view(self):
+        self.clear_items()
+
+        select = SpyXFamilyCategorySelect(self.quest_data, self.user_id, self.guild_id)
+        self.add_item(select)
+
+
+
+class SpyXFamilyCategorySelect(discord.ui.Select):
+    def __init__(self, quest_data, user_id, guild_id):
+        options = [
+            discord.SelectOption(
+                label="Characters",
+                value="characters",
+                emoji="👥",
+                description="Collect Spy x Family characters (pets)",
+            ),
+            discord.SelectOption(
+                label="Ingredients",
+                value="ingredients",
+                emoji="🥕",
+                description="Buy cooking ingredients for meals",
+            ),
+            discord.SelectOption(
+                label="Recipes",
+                value="recipes",
+                emoji="📜",
+                description="View recipes (not purchasable)",
+            ),
+        ]
+        super().__init__(placeholder="Choose a Spy x Family category...", options=options)
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            if int(interaction.user.id) != int(self.user_id):
+                error_embed = ShopConfig.create_error_embed(
+                    f"{ShopConfig.EMOJIS['error']} Access Denied",
+                    ShopConfig.ERROR_MESSAGES["not_your_interface"],
+                )
+                return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+            category = self.values[0]
+            if category == "characters":
+                view = SpyXFamilyCharactersButtonView(self.quest_data, self.user_id, self.guild_id)
+                embed = await view.create_embed()
+                await view.update_view()
+                return await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+            if category == "ingredients":
+                view = SpyXFamilyCookingDexView(self.quest_data, self.user_id, self.guild_id)
+                embed = await view.create_embed()
+                await view.update_view()
+                return await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+            if category == "recipes":
+                view = SpyXFamilyCookingDexView(self.quest_data, self.user_id, self.guild_id)
+                embed = await view.create_embed()
+                await view.update_view()
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        except Exception as e:
+            await ShopView.handle_error(interaction, e)
+
+
+class SpyXFamilyCharactersButtonView(discord.ui.View):
+    def __init__(self, quest_data, user_id, guild_id):
+        super().__init__(timeout=300)
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+        self.page = 0
+        self.items_per_page = 10
+        self._items = []
+
+    def _load_items(self) -> list[dict]:
+        try:
+            with open("data/minigames/spy-x-family/characters.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            return []
+
+        items = []
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if isinstance(v, dict):
+                    items.append({"id": k, **v})
+        return items
+
+    async def create_embed(self) -> discord.Embed:
+        self._items = self._load_items()
+        if not self._items:
+            return ShopConfig.create_error_embed(
+                f"{ShopConfig.EMOJIS['error']} Missing Data",
+                "No characters found.",
+            )
+
+        self.max_pages = (len(self._items) - 1) // self.items_per_page + 1
+        start = self.page * self.items_per_page
+        end = start + self.items_per_page
+        current_items = self._items[start:end]
+
+        user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+        embed = ShopConfig.create_shop_embed(
+            "👥 Spy x Family - Characters",
+            f"Pick a number to open the character shop (Page {self.page + 1}/{self.max_pages})",
+            user_balance,
+        )
+
+        lines = []
+        for i, item in enumerate(current_items):
+            name = item.get("id")
+            emoji = item.get("emoji") or "👥"
+            cost = int(item.get("cost-stella-points") or 0)
+            owned = (
+                await self.quest_data.get_user_inventory_count(
+                    self.guild_id, self.user_id, "sxf.characters", name
+                )
+                or 0
+            )
+            name_display = f"~~{name}~~" if owned > 0 else name
+            lines.append(f"`{start + i + 1}.` {emoji} **{name_display}** - {ShopConfig.format_price(cost)}")
+
+        embed.add_field(name="Characters", value="\n".join(lines) if lines else "No characters.", inline=False)
+        embed.set_footer(text=f"Your Balance: {ShopConfig.format_balance(user_balance)} Stella Points")
+        return embed
+
+    async def update_view(self):
+        self.clear_items()
+        self._items = self._load_items()
+        self.max_pages = (len(self._items) - 1) // self.items_per_page + 1 if self._items else 1
+
+        start = self.page * self.items_per_page
+        end = start + self.items_per_page
+        current_items = self._items[start:end]
+
+        for i, _ in enumerate(current_items):
+            btn = discord.ui.Button(
+                style=discord.ButtonStyle.primary,
+                label=str(i + 1),
+                custom_id=f"sxf_char_{start + i}",
+            )
+            btn.callback = self.open_character_callback
+            self.add_item(btn)
+
+        if self.max_pages > 1:
+            if self.page > 0:
+                prev_btn = discord.ui.Button(
+                    emoji=ShopConfig.EMOJIS["prev"],
+                    style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
+                    custom_id="prev_page",
+                )
+                prev_btn.callback = self.prev_page_callback
+                self.add_item(prev_btn)
+            if self.page < self.max_pages - 1:
+                next_btn = discord.ui.Button(
+                    emoji=ShopConfig.EMOJIS["next"],
+                    style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
+                    custom_id="next_page",
+                )
+                next_btn.callback = self.next_page_callback
+                self.add_item(next_btn)
+
+    async def open_character_callback(self, interaction: discord.Interaction):
+        try:
+            if int(interaction.user.id) != int(self.user_id):
+                error_embed = ShopConfig.create_error_embed(
+                    f"{ShopConfig.EMOJIS['error']} Access Denied",
+                    ShopConfig.ERROR_MESSAGES["not_your_interface"],
+                )
+                return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+            index = int(interaction.data["custom_id"].split("_")[-1])
+
+            # Open existing character shop view at the chosen index
+            view = SpyXFamilyShopView(
+                "characters",
+                "data/minigames/spy-x-family/characters.json",
+                self.quest_data,
+                self.user_id,
+                self.guild_id,
+                title="👥 Spy x Family - Characters",
+            )
+            view.page = index // view.items_per_page
+            embed = await view.create_shop_embed()
+            await view.update_view()
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        except Exception as e:
+            await ShopView.handle_error(interaction, e)
+
+    async def prev_page_callback(self, interaction: discord.Interaction):
+        self.page -= 1
+        await self.refresh(interaction)
+
+    async def next_page_callback(self, interaction: discord.Interaction):
+        self.page += 1
+        await self.refresh(interaction)
+
+
+class SpyXFamilyRecipePageSelect(discord.ui.Select):
+    def __init__(self, parent_view):
+        self.parent_view = parent_view
+
+        recipes = parent_view._recipes or []
+        items_per_page = parent_view.items_per_page
+        max_pages = parent_view._page_count()
+
+        options = []
+        for p in range(max_pages):
+            start = p * items_per_page
+            end = start + items_per_page
+            page_recipes = recipes[start:end]
+            names = [
+                (r.get("name") or r.get("id") or "Unknown")
+                for r in page_recipes
+                if isinstance(r, dict)
+            ]
+            desc = " • ".join(names[:10])
+            if len(desc) > 100:
+                desc = desc[:97] + "..."
+            options.append(
+                discord.SelectOption(
+                    label=f"Page {p + 1}",
+                    value=str(p),
+                    description=desc or "(empty)",
+                )
+            )
+
+        super().__init__(
+            placeholder="Jump to a recipes page...",
+            options=options[:25],
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            if int(interaction.user.id) != int(self.parent_view.user_id):
+                error_embed = ShopConfig.create_error_embed(
+                    f"{ShopConfig.EMOJIS['error']} Access Denied",
+                    ShopConfig.ERROR_MESSAGES["not_your_interface"],
+                )
+                return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+            self.parent_view.page = int(self.values[0])
+            await self.parent_view.refresh(interaction)
+        except Exception as e:
+            await ShopView.handle_error(interaction, e)
+
+
+class SpyXFamilyRecipesPaginatedView(discord.ui.View):
+    def __init__(self, data_path: str, quest_data, user_id, guild_id):
+        super().__init__(timeout=300)
+        self.data_path = data_path
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+        self.page = 0
+        self.items_per_page = 10
+        self._recipes = []
+        self._ingredient_emoji = {}
+
+    def _inv_category(self) -> str:
+        return "sxf.recipes"
+
+    def _load_ingredient_emoji(self) -> dict:
+        ingredient_emoji: dict[str, str] = {}
+        try:
+            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+                ing_data = json.load(f)
+            if isinstance(ing_data, dict):
+                for group in ing_data.values():
+                    if not isinstance(group, dict):
+                        continue
+                    for ing_key, item in group.items():
+                        if not isinstance(item, dict):
+                            continue
+                        emoji = item.get("emoji") or "🥕"
+                        ingredient_emoji[str(ing_key).lower()] = emoji
+                        name = item.get("name")
+                        if name:
+                            ingredient_emoji[str(name).lower()] = emoji
+        except FileNotFoundError:
+            return {}
+        return ingredient_emoji
+
+    def _load_recipes(self) -> list:
+        try:
+            with open(self.data_path, "r", encoding="utf-8") as f:
+                recipes_data = json.load(f)
+        except FileNotFoundError:
+            return []
+
+        flat = []
+        if isinstance(recipes_data, dict):
+            for section_name, section in recipes_data.items():
+                if not isinstance(section, dict):
+                    continue
+                for recipe_id, recipe in section.items():
+                    if not isinstance(recipe, dict):
+                        continue
+                    flat.append({"section": section_name, "id": recipe_id, **recipe})
+
+        flat.sort(key=lambda r: (str(r.get("section") or ""), str(r.get("name") or r.get("id") or "")))
+        return flat
+
+
+class SpyXFamilyCookingRecipeSelect(discord.ui.Select):
+    def __init__(self, parent_view):
+        self.parent_view = parent_view
+
+        start = parent_view.recipe_page * parent_view.recipes_per_page
+        end = start + parent_view.recipes_per_page
+        page_recipes = (parent_view._recipes or [])[start:end]
+
+        options = [
+            discord.SelectOption(
+                label="Back",
+                value="__back__",
+                description="Return to Spy x Family categories",
+                emoji=_safe_select_emoji("⬅️") or "⬅️",
+            )
+        ]
+        for i, r in enumerate(page_recipes):
+            if not isinstance(r, dict):
+                continue
+            name = r.get("name") or r.get("id") or "Unknown"
+            emoji = r.get("emoji") or "🍽️"
+            section = str(r.get("section") or "").title()
+            value = str(start + i)
+            options.append(
+                discord.SelectOption(
+                    label=name[:100],
+                    value=value,
+                    description=(section[:90] or "Recipe")[:100],
+                    emoji=_safe_select_emoji(emoji) or "🍽️",
+                )
+            )
+
+        super().__init__(
+            placeholder="Select food you wanna make...",
+            options=options[:25] if options else [
+                discord.SelectOption(label="No recipes", value="-1", description="No recipes found")
+            ],
+            row=0,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            if int(interaction.user.id) != int(self.parent_view.user_id):
+                error_embed = ShopConfig.create_error_embed(
+                    f"{ShopConfig.EMOJIS['error']} Access Denied",
+                    ShopConfig.ERROR_MESSAGES["not_your_interface"],
+                )
+                return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+            if self.values[0] == "__back__":
+                return await self.parent_view.back_callback(interaction)
+
+            idx = int(self.values[0])
+            if idx < 0:
+                return await interaction.response.send_message("No recipes available.", ephemeral=True)
+
+            self.parent_view.selected_index = idx
+            embed = await self.parent_view.create_embed()
+            await self.parent_view.update_view()
+            await interaction.response.edit_message(embed=embed, view=self.parent_view)
+        except Exception as e:
+            await ShopView.handle_error(interaction, e)
+
+
+class SpyXFamilyCookingDexView(discord.ui.View):
+    def __init__(self, quest_data, user_id, guild_id):
+        super().__init__(timeout=300)
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+
+        self._ingredient_map: dict[str, dict] = {}
+        self._ingredient_emoji: dict[str, str] = {}
+        self._recipes: list[dict] = []
+
+        self.selected_index: int | None = None
+        self.recipe_page = 0
+        self.recipes_per_page = 20
+
+    def _inv_category(self) -> str:
+        return "sxf.ingredients"
+
+    def _load_ingredient_map(self) -> dict[str, dict]:
+        try:
+            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            return {}
+
+        m: dict[str, dict] = {}
+        if isinstance(data, dict):
+            for group in data.values():
+                if not isinstance(group, dict):
+                    continue
+                for key, item in group.items():
+                    if not isinstance(item, dict):
+                        continue
+                    m[str(key).strip().lower()] = {"key": str(key).strip(), **item}
+        return m
+
+    def _load_ingredient_emoji(self) -> dict[str, str]:
+        em: dict[str, str] = {}
+        m = self._ingredient_map or {}
+        for k, v in m.items():
+            emoji = v.get("emoji") or "🥕"
+            em[k.lower()] = emoji
+            name = v.get("name")
+            if name:
+                em[str(name).lower()] = emoji
+        return em
+
+    def _load_recipes(self) -> list[dict]:
+        try:
+            with open("data/minigames/spy-x-family/recipes.json", "r", encoding="utf-8") as f:
+                recipes_data = json.load(f)
+        except FileNotFoundError:
+            return []
+
+        flat: list[dict] = []
+        if isinstance(recipes_data, dict):
+            for section_name, section in recipes_data.items():
+                if not isinstance(section, dict):
+                    continue
+                for recipe_id, recipe in section.items():
+                    if not isinstance(recipe, dict):
+                        continue
+                    flat.append({"section": section_name, "id": recipe_id, **recipe})
+
+        flat.sort(key=lambda r: (str(r.get("section") or ""), str(r.get("name") or r.get("id") or "")))
+        return flat
+
+    def _required_ingredients(self, recipe: dict) -> list[tuple[str, int]]:
+        req = recipe.get("ingredients") or []
+        out: list[tuple[str, int]] = []
+        for ing in req:
+            if isinstance(ing, dict):
+                key = str(ing.get("item") or "").strip()
+                amt = int(ing.get("amount") or 1)
+            else:
+                key = str(ing).strip()
+                amt = 1
+            if key:
+                out.append((key, max(1, amt)))
+        return out
+
+    def _recipe_page_count(self) -> int:
+        total = len(self._recipes)
+        return (max(total, 1) - 1) // self.recipes_per_page + 1
+
+    def _ingredient_cost(self, ing_key: str) -> int:
+        item = (self._ingredient_map or {}).get(ing_key.lower())
+        if not item:
+            return 0
+        return int(item.get("cost") or 0)
+
+    def _ingredient_display_name(self, ing_key: str) -> str:
+        item = (self._ingredient_map or {}).get(ing_key.lower())
+        if not item:
+            return ing_key
+        return item.get("name") or ing_key
+
+    def _ingredient_inventory_names(self, ing_key: str) -> list[str]:
+        # Backward compatible: old system stored by display name, new stores by key.
+        names = [ing_key]
+        display = self._ingredient_display_name(ing_key)
+        if display and display not in names:
+            names.append(display)
+        return names
+
+    async def _owned_ingredient_count(self, ing_key: str) -> int:
+        total = 0
+        for n in self._ingredient_inventory_names(ing_key):
+            total += (
+                await self.quest_data.get_user_inventory_count(
+                    self.guild_id, self.user_id, self._inv_category(), n
+                )
+                or 0
+            )
+        return total
+
+    async def create_embed(self) -> discord.Embed:
+        if not self._ingredient_map:
+            self._ingredient_map = self._load_ingredient_map()
+        if not self._ingredient_emoji:
+            self._ingredient_emoji = self._load_ingredient_emoji()
+        if not self._recipes:
+            self._recipes = self._load_recipes()
+
+        user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+
+        embed = ShopConfig.create_shop_embed(
+            "🍳 Spy x Family - Cooking",
+            "Select food you wanna make. Then buy the ingredients below.",
+            user_balance,
+        )
+
+        if self.selected_index is None and self._recipes:
+            self.selected_index = 0
+
+        if self.selected_index is None or not self._recipes:
+            embed.add_field(name="Recipe Dex", value="No recipes found.", inline=False)
+            embed.set_footer(text=f"Balance: {ShopConfig.format_balance(user_balance)} Stella Points")
+            return embed
+
+        # Dex entry
+        r = self._recipes[self.selected_index]
+        name = r.get("name") or r.get("id") or "Unknown"
+        emoji = r.get("emoji") or "🍽️"
+        section = str(r.get("section") or "").title()
+        hp_restore = r.get("hp-restore")
+        cook_time = r.get("cooking-time")
+        description = (r.get("description") or "").strip()
+
+        stats_lines = [f"Type: **{section}**"]
+        if isinstance(hp_restore, int):
+            stats_lines.append(f"❤️ HP: **+{hp_restore}%**")
+        if isinstance(cook_time, int):
+            stats_lines.append(f"⏱️ Time: **{cook_time}m**")
+
+        req = self._required_ingredients(r)
+        can_cook = True
+        req_lines = []
+        for ing_key, amt in req:
+            owned = await self._owned_ingredient_count(ing_key)
+            if owned < amt:
+                can_cook = False
+            em = self._ingredient_emoji.get(ing_key.lower()) or "🥕"
+            disp = self._ingredient_display_name(ing_key)
+            req_lines.append(f"{em} **{disp}** `{owned}/{amt}`")
+
+        embed.add_field(
+            name="Recipe Dex",
+            value=(
+                f"{emoji} **{name}**\n"
+                f"Status: **{'READY' if can_cook else 'MISSING'}**\n\n"
+                + "\n".join(stats_lines)
+            )[:1024],
+            inline=False,
+        )
+
+        if description:
+            embed.add_field(name="Flavor Text", value=description[:1024], inline=False)
+
+        embed.add_field(
+            name="Ingredients Needed",
+            value="\n".join(req_lines)[:1024] if req_lines else "None",
+            inline=False,
+        )
+
+        embed.set_footer(text=f"Balance: {ShopConfig.format_balance(user_balance)} Stella Points")
+        return embed
+
+    async def update_view(self):
+        self.clear_items()
+
+        if not self._ingredient_map:
+            self._ingredient_map = self._load_ingredient_map()
+        if not self._ingredient_emoji:
+            self._ingredient_emoji = self._load_ingredient_emoji()
+        if not self._recipes:
+            self._recipes = self._load_recipes()
+
+        # Recipe selector (Spy Tools style)
+        self.add_item(SpyXFamilyCookingRecipeSelect(self))
+
+        # Recipe page controls
+        max_pages = self._recipe_page_count()
+        if max_pages > 1 and self.recipe_page > 0:
+            btn = discord.ui.Button(
+                style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
+                emoji=ShopConfig.EMOJIS["prev"],
+                custom_id="sxf_cookdex_recipe_prev",
+                row=1,
+            )
+            btn.callback = self.recipe_prev_callback
+            self.add_item(btn)
+        if max_pages > 1 and self.recipe_page < (max_pages - 1):
+            btn = discord.ui.Button(
+                style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
+                emoji=ShopConfig.EMOJIS["next"],
+                custom_id="sxf_cookdex_recipe_next",
+                row=1,
+            )
+            btn.callback = self.recipe_next_callback
+            self.add_item(btn)
+
+        # Ingredient buy buttons (based on selected recipe)
+        if self.selected_index is None or not self._recipes:
+            return
+
+        r = self._recipes[self.selected_index]
+        req = self._required_ingredients(r)
+        # show max 10 ingredient buttons (discord row limits)
+        req = req[:10]
+        for i, (ing_key, _amt) in enumerate(req):
+            row = 2 if i < 5 else 3
+            emoji = self._ingredient_emoji.get(ing_key.lower()) or "🥕"
+            btn = discord.ui.Button(
+                style=discord.ButtonStyle.success,
+                label="",
+                emoji=_safe_select_emoji(emoji) or "🥕",
+                custom_id=f"sxf_cookdex_buy_{ing_key}",
+                row=row,
+            )
+            btn.callback = self.buy_ingredient_callback
+            self.add_item(btn)
+
+    async def recipe_prev_callback(self, interaction: discord.Interaction):
+        if int(interaction.user.id) != int(self.user_id):
+            return
+        self.recipe_page -= 1
+        embed = await self.create_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def recipe_next_callback(self, interaction: discord.Interaction):
+        if int(interaction.user.id) != int(self.user_id):
+            return
+        self.recipe_page += 1
+        embed = await self.create_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def back_callback(self, interaction: discord.Interaction):
+        try:
+            if int(interaction.user.id) != int(self.user_id):
+                error_embed = ShopConfig.create_error_embed(
+                    f"{ShopConfig.EMOJIS['error']} Access Denied",
+                    ShopConfig.ERROR_MESSAGES["not_your_interface"],
+                )
+                return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+            embed = ShopConfig.create_shop_embed(
+                "🕵️ Spy x Family Shop",
+                "Select a category to browse Spy x Family items",
+                await self.quest_data.get_balance(self.user_id, self.guild_id),
+            )
+            view = discord.ui.View(timeout=180)
+            view.add_item(SpyXFamilyCategorySelect(self.quest_data, self.user_id, self.guild_id))
+            await interaction.response.edit_message(embed=embed, view=view)
+        except Exception as e:
+            await ShopView.handle_error(interaction, e)
+
+    async def buy_ingredient_callback(self, interaction: discord.Interaction):
+        try:
+            if int(interaction.user.id) != int(self.user_id):
+                error_embed = ShopConfig.create_error_embed(
+                    f"{ShopConfig.EMOJIS['error']} Access Denied",
+                    ShopConfig.ERROR_MESSAGES["not_your_interface"],
+                )
+                return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+            # custom_id: sxf_cookdex_buy_<ingredient-key>
+            ing_key = str(interaction.data["custom_id"]).split("sxf_cookdex_buy_", 1)[-1]
+            ing_key = ing_key.strip()
+            if not ing_key:
+                return
+
+            cost = self._ingredient_cost(ing_key)
+            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            if user_balance < cost:
+                error_embed = ShopConfig.create_error_embed(
+                    f"{ShopConfig.EMOJIS['error']} Insufficient Points",
+                    f"You need {ShopConfig.format_price(cost)} but only have {ShopConfig.format_balance(user_balance)}.",
+                )
+                return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+            # Store by key going forward (keeps recipes/cooking consistent)
+            await self.quest_data.add_balance(self.user_id, self.guild_id, -cost)
+            await self.quest_data.add_item_to_inventory(
+                self.guild_id,
+                self.user_id,
+                self._inv_category(),
+                ing_key,
+                1,
+            )
+
+            embed = await self.create_embed()
+            await self.update_view()
+            await interaction.response.edit_message(embed=embed, view=self)
+        except Exception as e:
+            await ShopView.handle_error(interaction, e)
+
+
+class SpyXFamilyCookingView(discord.ui.View):
+    def __init__(self, quest_data, user_id, guild_id, mode: str = "ingredients"):
+        super().__init__(timeout=300)
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+        self.mode = mode
+        self.items_per_page = 10
+
+        self.ing_page = 0
+        self.recipe_page = 0
+
+        self._ingredient_items: list[dict] = []
+        self._ingredient_emoji: dict[str, str] = {}
+        self._recipes: list[dict] = []
+
+        # For recipes: when a recipe is selected, show its full details
+        self.selected_index: int | None = None
+
+    def _inv_category(self) -> str:
+        return "sxf.ingredients"
+
+    def _load_ingredient_items(self) -> list[dict]:
+        try:
+            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            return []
+
+        items: list[dict] = []
+        if isinstance(data, dict):
+            for group in data.values():
+                if not isinstance(group, dict):
+                    continue
+                for _, item in group.items():
+                    if isinstance(item, dict):
+                        items.append(item)
+
+        items.sort(key=lambda x: (str(x.get("name") or "").lower()))
+        return items
+
+    def _get_ingredient_name(self, item: dict) -> str:
+        return item.get("name") or "Unknown"
+
+    def _get_ingredient_emoji(self, item: dict) -> str:
+        return item.get("emoji") or "🥕"
+
+    def _get_ingredient_cost(self, item: dict) -> int:
+        return int(item.get("cost") or 0)
+
+    def _load_ingredient_emoji(self) -> dict:
+        ingredient_emoji: dict[str, str] = {}
+        try:
+            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+                ing_data = json.load(f)
+            if isinstance(ing_data, dict):
+                for group in ing_data.values():
+                    if not isinstance(group, dict):
+                        continue
+                    for ing_key, item in group.items():
+                        if not isinstance(item, dict):
+                            continue
+                        emoji = item.get("emoji") or "🥕"
+                        ingredient_emoji[str(ing_key).lower()] = emoji
+                        name = item.get("name")
+                        if name:
+                            ingredient_emoji[str(name).lower()] = emoji
+        except FileNotFoundError:
+            return {}
+        return ingredient_emoji
+
+    def _load_recipes(self) -> list[dict]:
+        try:
+            with open("data/minigames/spy-x-family/recipes.json", "r", encoding="utf-8") as f:
+                recipes_data = json.load(f)
+        except FileNotFoundError:
+            return []
+
+        flat: list[dict] = []
+        if isinstance(recipes_data, dict):
+            for section_name, section in recipes_data.items():
+                if not isinstance(section, dict):
+                    continue
+                for recipe_id, recipe in section.items():
+                    if not isinstance(recipe, dict):
+                        continue
+                    flat.append({"section": section_name, "id": recipe_id, **recipe})
+
+        flat.sort(key=lambda r: (str(r.get("section") or ""), str(r.get("name") or r.get("id") or "")))
+        return flat
+
+    def _max_pages(self, total: int) -> int:
+        return (max(total, 1) - 1) // self.items_per_page + 1
+
+    async def create_embed(self) -> discord.Embed:
+        if not self._ingredient_items:
+            self._ingredient_items = self._load_ingredient_items()
+        if not self._recipes:
+            self._recipes = self._load_recipes()
+        if not self._ingredient_emoji:
+            self._ingredient_emoji = self._load_ingredient_emoji()
+
+        user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+
+        embed = ShopConfig.create_shop_embed(
+            "🍳 Spy x Family - Cooking",
+            "Buy ingredients and browse recipes in one place.\n"
+            "- Press ingredient numbers to buy 1x\n"
+            "- Press recipe numbers to view its dex entry",
+            user_balance,
+        )
+
+        # Ingredients list
+        ing_total = len(self._ingredient_items)
+        ing_max = self._max_pages(ing_total)
+        ing_start = self.ing_page * self.items_per_page
+        ing_end = ing_start + self.items_per_page
+        ing_current = self._ingredient_items[ing_start:ing_end]
+
+        ing_lines = []
+        for i, item in enumerate(ing_current):
+            name = self._get_ingredient_name(item)
+            emoji = self._get_ingredient_emoji(item)
+            cost = self._get_ingredient_cost(item)
+            owned = (
+                await self.quest_data.get_user_inventory_count(
+                    self.guild_id, self.user_id, self._inv_category(), name
+                )
+                or 0
+            )
+            ing_lines.append(f"`{i + 1}.` `{owned}x` {emoji} **{name}** - {ShopConfig.format_price(cost)}")
+
+        embed.add_field(
+            name=f"Ingredients (Page {self.ing_page + 1}/{ing_max})",
+            value="\n".join(ing_lines) if ing_lines else "No items.",
+            inline=False,
+        )
+
+        # Recipes list
+        r_total = len(self._recipes)
+        r_max = self._max_pages(r_total)
+        r_start = self.recipe_page * self.items_per_page
+        r_end = r_start + self.items_per_page
+        r_current = self._recipes[r_start:r_end]
+
+        r_lines = []
+        for i, r in enumerate(r_current):
+            name = r.get("name") or r.get("id") or "Unknown"
+            emoji = r.get("emoji") or "🍽️"
+            section = str(r.get("section") or "").title()
+            hp_restore = r.get("hp-restore")
+            req = r.get("ingredients") or []
+            req_count = len(req)
+            hp_text = f" | ❤️ +{hp_restore}%" if isinstance(hp_restore, int) else ""
+            r_lines.append(f"`{i + 1}.` {emoji} **{name}** `({section}){hp_text}`  `req:` **{req_count}**")
+
+        embed.add_field(
+            name=f"Recipes (Page {self.recipe_page + 1}/{r_max})",
+            value="\n".join(r_lines) if r_lines else "No recipes.",
+            inline=False,
+        )
+
+        # Selected recipe dex details (kept on same embed)
+        if self.selected_index is not None and 0 <= self.selected_index < len(self._recipes):
+            r = self._recipes[self.selected_index]
+            name = r.get("name") or r.get("id") or "Unknown"
+            emoji = r.get("emoji") or "🍽️"
+            section = str(r.get("section") or "").title()
+            hp_restore = r.get("hp-restore")
+            cook_time = r.get("cooking-time")
+            description = (r.get("description") or "").strip()
+
+            stats_parts = [f"Type: **{section}**"]
+            if isinstance(hp_restore, int):
+                stats_parts.append(f"❤️ HP: **+{hp_restore}%**")
+            if isinstance(cook_time, int):
+                stats_parts.append(f"⏱️ Time: **{cook_time}m**")
+
+            req = r.get("ingredients") or []
+            req_lines = []
+            can_cook = True
+            for ing in req:
+                if isinstance(ing, dict):
+                    ing_key = str(ing.get("item") or "").strip()
+                    amt = int(ing.get("amount") or 1)
+                else:
+                    ing_key = str(ing).strip()
+                    amt = 1
+                if not ing_key:
+                    continue
+                em = self._ingredient_emoji.get(ing_key.lower()) or "🥕"
+                owned = (
+                    await self.quest_data.get_user_inventory_count(
+                        self.guild_id,
+                        self.user_id,
+                        self._inv_category(),
+                        ing_key,
+                    )
+                    or 0
+                )
+                if owned < amt:
+                    can_cook = False
+                display_name = ing_key.title() if len(ing_key) <= 20 else ing_key
+                req_lines.append(f"{em} **{display_name}** `{owned}/{amt}`")
+
+            detail = (
+                f"**{emoji} {name}**\n"
+                f"Status: **{'READY' if can_cook else 'MISSING'}**\n"
+                f"\n" + "\n".join(stats_parts)
+            )
+            embed.add_field(name="Recipe Dex", value=detail[:1024], inline=False)
+            embed.add_field(
+                name="Requirements",
+                value="\n".join(req_lines)[:1024] if req_lines else "None",
+                inline=False,
+            )
+            if description:
+                embed.add_field(name="Flavor Text", value=description[:1024], inline=False)
+
+        embed.set_footer(text=f"Balance: {ShopConfig.format_balance(user_balance)} Stella Points")
+        return embed
+
+    async def update_view(self):
+        self.clear_items()
+
+        # === Back button ===
+        back_btn = discord.ui.Button(
+            style=discord.ButtonStyle.secondary,
+            label="Back",
+            custom_id="sxf_cook_back",
+            row=0,
+        )
+        back_btn.callback = self.back_callback
+        self.add_item(back_btn)
+
+        # Ingredient buttons (row 1-2)
+        ing_total = len(self._ingredient_items)
+        ing_start = self.ing_page * self.items_per_page
+        ing_count = max(0, min(self.items_per_page, ing_total - ing_start))
+        for i in range(ing_count):
+            row = 1 if i < 5 else 2
+            btn = discord.ui.Button(
+                style=discord.ButtonStyle.success,
+                label=str(i + 1),
+                custom_id=f"sxf_cook_ing_{ing_start + i}",
+                row=row,
+            )
+            btn.callback = self.ingredient_button_callback
+            self.add_item(btn)
+
+        # Recipe buttons (row 3-4)
+        r_total = len(self._recipes)
+        r_start = self.recipe_page * self.items_per_page
+        r_count = max(0, min(self.items_per_page, r_total - r_start))
+        for i in range(r_count):
+            row = 3 if i < 5 else 4
+            btn = discord.ui.Button(
+                style=discord.ButtonStyle.primary,
+                label=str(i + 1),
+                custom_id=f"sxf_cook_recipe_{r_start + i}",
+                row=row,
+            )
+            btn.callback = self.recipe_button_callback
+            self.add_item(btn)
+
+        # Pagination controls (row 0, keep within width)
+        if self.ing_page > 0:
+            btn = discord.ui.Button(
+                style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
+                emoji=ShopConfig.EMOJIS["prev"],
+                custom_id="sxf_cook_ing_prev",
+                row=0,
+            )
+            btn.callback = self.ing_prev_callback
+            self.add_item(btn)
+
+        if (self.ing_page + 1) < self._max_pages(ing_total):
+            btn = discord.ui.Button(
+                style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
+                emoji=ShopConfig.EMOJIS["next"],
+                custom_id="sxf_cook_ing_next",
+                row=0,
+            )
+            btn.callback = self.ing_next_callback
+            self.add_item(btn)
+
+        if self.recipe_page > 0:
+            btn = discord.ui.Button(
+                style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
+                label="R Prev",
+                custom_id="sxf_cook_recipe_prev",
+                row=0,
+            )
+            btn.callback = self.recipe_prev_callback
+            self.add_item(btn)
+
+        if (self.recipe_page + 1) < self._max_pages(r_total):
+            btn = discord.ui.Button(
+                style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
+                label="R Next",
+                custom_id="sxf_cook_recipe_next",
+                row=0,
+            )
+            btn.callback = self.recipe_next_callback
+            self.add_item(btn)
+
+    # ====================== CALLBACKS ======================
+
+    async def ingredient_button_callback(self, interaction: discord.Interaction):
+        if int(interaction.user.id) != int(self.user_id):
+            error_embed = ShopConfig.create_error_embed(
+                f"{ShopConfig.EMOJIS['error']} Access Denied",
+                ShopConfig.ERROR_MESSAGES["not_your_interface"],
+            )
+            return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+        index = int(str(interaction.data["custom_id"]).split("_")[-1])
+        await self._buy_ingredient_at_index(interaction, index)
+
+    async def recipe_button_callback(self, interaction: discord.Interaction):
+        if int(interaction.user.id) != int(self.user_id):
+            error_embed = ShopConfig.create_error_embed(
+                f"{ShopConfig.EMOJIS['error']} Access Denied",
+                ShopConfig.ERROR_MESSAGES["not_your_interface"],
+            )
+            return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+        index = int(str(interaction.data["custom_id"]).split("_")[-1])
+        self.selected_index = index
+        embed = await self.create_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def back_callback(self, interaction: discord.Interaction):
+        if int(interaction.user.id) != int(self.user_id):
+            error_embed = ShopConfig.create_error_embed(
+                f"{ShopConfig.EMOJIS['error']} Access Denied",
+                ShopConfig.ERROR_MESSAGES["not_your_interface"],
+            )
+            return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+        embed = ShopConfig.create_shop_embed(
+            "🕵️ Spy x Family Shop",
+            "Select a category to browse Spy x Family items",
+            await self.quest_data.get_balance(self.user_id, self.guild_id),
+        )
+        view = discord.ui.View(timeout=180)
+        view.add_item(SpyXFamilyCategorySelect(self.quest_data, self.user_id, self.guild_id))
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    async def back_to_list_callback(self, interaction: discord.Interaction):
+        if int(interaction.user.id) != int(self.user_id):
+            error_embed = ShopConfig.create_error_embed(
+                f"{ShopConfig.EMOJIS['error']} Access Denied",
+                ShopConfig.ERROR_MESSAGES["not_your_interface"],
+            )
+            return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+        self.selected_index = None
+        embed = await self.create_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def item_callback(self, interaction: discord.Interaction):
+        # legacy, not used in combined view
+        return
+
+    async def _buy_ingredient_at_index(self, interaction: discord.Interaction, index: int):
+        if index < 0 or index >= len(self._ingredient_items):
+            error_embed = ShopConfig.create_error_embed(
+                f"{ShopConfig.EMOJIS['error']} Not Found",
+                ShopConfig.ERROR_MESSAGES["item_not_found"],
+            )
+            return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+        item = self._ingredient_items[index]
+        name = self._get_ingredient_name(item)
+        cost = self._get_ingredient_cost(item)
+
+        user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+        if user_balance < cost:
+            error_embed = ShopConfig.create_error_embed(
+                f"{ShopConfig.EMOJIS['error']} Insufficient Points",
+                f"You need {ShopConfig.format_price(cost)} but only have {ShopConfig.format_balance(user_balance)}.",
+            )
+            return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+        await self.quest_data.add_balance(self.user_id, self.guild_id, -cost)
+        await self.quest_data.add_item_to_inventory(
+            self.guild_id,
+            self.user_id,
+            self._inv_category(),
+            name,
+            1,
+        )
+
+        embed = await self.create_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def ing_prev_callback(self, interaction: discord.Interaction):
+        if int(interaction.user.id) != int(self.user_id):
+            return
+        self.ing_page -= 1
+        embed = await self.create_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def ing_next_callback(self, interaction: discord.Interaction):
+        if int(interaction.user.id) != int(self.user_id):
+            return
+        self.ing_page += 1
+        embed = await self.create_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def recipe_prev_callback(self, interaction: discord.Interaction):
+        if int(interaction.user.id) != int(self.user_id):
+            return
+        self.recipe_page -= 1
+        self.selected_index = None
+        embed = await self.create_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def recipe_next_callback(self, interaction: discord.Interaction):
+        if int(interaction.user.id) != int(self.user_id):
+            return
+        self.recipe_page += 1
+        self.selected_index = None
+        embed = await self.create_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
+class SpyXFamilyIngredientsShopView(discord.ui.View):
+    def __init__(self, quest_data, user_id, guild_id):
+        super().__init__(timeout=300)
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+        self.page = 0
+        self.items_per_page = 10
+        self._items = []
+
+    def _inv_category(self) -> str:
+        return "sxf.ingredients"
+
+    def _load_items(self) -> list[dict]:
+        try:
+            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            return []
+
+        items: list[dict] = []
+        if isinstance(data, dict):
+            for group in data.values():
+                if not isinstance(group, dict):
+                    continue
+                for _, item in group.items():
+                    if not isinstance(item, dict):
+                        continue
+                    items.append(item)
+
+        # stable ordering for pagination/select
+        items.sort(key=lambda x: (str(x.get("name") or "").lower()))
+        return items
+
+    def _get_name(self, item: dict) -> str:
+        return item.get("name") or "Unknown"
+
+    def _get_emoji(self, item: dict) -> str:
+        return item.get("emoji") or "🥕"
+
+    def _get_cost(self, item: dict) -> int:
+        return int(item.get("cost") or 0)
+
+    async def create_shop_embed(self) -> discord.Embed:
+        self._items = self._load_items()
+        if not self._items:
+            return ShopConfig.create_error_embed(
+                f"{ShopConfig.EMOJIS['error']} Missing Data",
+                "No ingredients found.",
+            )
+
+        self.max_pages = (len(self._items) - 1) // self.items_per_page + 1
+        start = self.page * self.items_per_page
+        end = start + self.items_per_page
+        current_items = self._items[start:end]
+
+        user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+        embed = ShopConfig.create_shop_embed(
+            "🥕 Spy x Family - Ingredients",
+            f"Browse and purchase (Page {self.page + 1}/{self.max_pages})",
+            user_balance,
+        )
+
+        lines = []
+        for i, item in enumerate(current_items):
+            name = self._get_name(item)
+            emoji = self._get_emoji(item)
+            owned = (
+                await self.quest_data.get_user_inventory_count(
+                    self.guild_id, self.user_id, self._inv_category(), name
+                )
+                or 0
+            )
+            lines.append(f"`{start + i + 1}.` `{owned}x` {emoji} {name}")
+
+        embed.add_field(name="Ingredients", value="\n".join(lines) if lines else "No items.", inline=False)
+        embed.set_footer(text=f"Your Balance: {ShopConfig.format_balance(user_balance)} Stella Points")
+        return embed
+
+    async def update_view(self):
+        self.clear_items()
+        self._items = self._load_items()
+        self.max_pages = (len(self._items) - 1) // self.items_per_page + 1 if self._items else 1
+
+        start = self.page * self.items_per_page
+        end = start + self.items_per_page
+        current_items = self._items[start:end]
+
+        # ingredient buttons (10 max per page)
+        for i, _ in enumerate(current_items):
+            btn = discord.ui.Button(
+                style=discord.ButtonStyle.success,
+                label=str(i + 1),
+                custom_id=f"sxf_ing_{start + i}",
+            )
+            btn.callback = self.buy_ingredient_callback
+            self.add_item(btn)
+
+        # pagination
+        if self.max_pages > 1:
+            if self.page > 0:
+                prev_btn = discord.ui.Button(
+                    emoji=ShopConfig.EMOJIS["prev"],
+                    style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
+                    custom_id="prev_page",
+                )
+                prev_btn.callback = self.prev_page_callback
+                self.add_item(prev_btn)
+
+            if self.page < self.max_pages - 1:
+                next_btn = discord.ui.Button(
+                    emoji=ShopConfig.EMOJIS["next"],
+                    style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
+                    custom_id="next_page",
+                )
+                next_btn.callback = self.next_page_callback
+                self.add_item(next_btn)
+
+    async def prev_page_callback(self, interaction: discord.Interaction):
+        self.page -= 1
+        embed = await self.create_shop_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def next_page_callback(self, interaction: discord.Interaction):
+        self.page += 1
+        embed = await self.create_shop_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def buy_ingredient_callback(self, interaction: discord.Interaction):
+        try:
+            if int(interaction.user.id) != int(self.user_id):
+                error_embed = ShopConfig.create_error_embed(
+                    f"{ShopConfig.EMOJIS['error']} Access Denied",
+                    ShopConfig.ERROR_MESSAGES["not_your_interface"],
+                )
+                return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+            index = int(interaction.data["custom_id"].split("_")[-1])
+            self._items = self._load_items()
+            if index < 0 or index >= len(self._items):
+                error_embed = ShopConfig.create_error_embed(
+                    f"{ShopConfig.EMOJIS['error']} Not Found",
+                    ShopConfig.ERROR_MESSAGES["item_not_found"],
+                )
+                return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+            item = self._items[index]
+            name = self._get_name(item)
+            cost = self._get_cost(item)
+
+            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            if user_balance < cost:
+                error_embed = ShopConfig.create_error_embed(
+                    f"{ShopConfig.EMOJIS['error']} Insufficient Points",
+                    f"You need {ShopConfig.format_price(cost)} but only have {ShopConfig.format_balance(user_balance)}.",
+                )
+                return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+            await self.quest_data.add_balance(self.user_id, self.guild_id, -cost)
+            await self.quest_data.add_item_to_inventory(
+                self.guild_id,
+                self.user_id,
+                self._inv_category(),
+                name,
+                1,
+            )
+
+            embed = await self.create_shop_embed()
+            await self.update_view()
+            await interaction.response.edit_message(embed=embed, view=self)
+        except Exception as e:
+            await ShopView.handle_error(interaction, e)
+
+
+class SpyXFamilyShopView(discord.ui.View):
+    def __init__(self, category_key: str, data_path: str, quest_data, user_id, guild_id, title: str):
+        super().__init__(timeout=300)
+        self.category_key = category_key
+        self.data_path = data_path
+        self.quest_data = quest_data
+        self.user_id = user_id
+        self.guild_id = guild_id
+        self.title = title
+        self.page = 0
+        self.items_per_page = ShopConfig.PAGINATION["items_per_page"]
+        self._items = []
+
+    def _inv_category(self) -> str:
+        return f"sxf.{self.category_key}"
+
+    def _load_items(self) -> list:
+        try:
+            with open(self.data_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            return []
+
+        items = []
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if isinstance(v, dict):
+                    items.append({"id": k, **v})
+                else:
+                    items.append({"id": k, "value": v})
+        elif isinstance(data, list):
+            for idx, v in enumerate(data):
+                items.append({"id": str(idx), "value": v})
+        return items
+
+    def _get_cost(self, item: dict) -> int:
+        return int(item.get("cost-stella-points") or item.get("cost") or item.get("points") or 0)
+
+    def _get_emoji(self, item: dict) -> str:
+        return item.get("emoji") or "🛒"
+
+    def _get_name(self, item: dict) -> str:
+        return item.get("name") or item.get("id") or "Unknown"
+
+    async def create_shop_embed(self) -> discord.Embed:
+        self._items = self._load_items()
+        if not self._items:
+            return ShopConfig.create_error_embed(
+                f"{ShopConfig.EMOJIS['error']} Missing Data",
+                f"No items found for: {self.data_path}",
+            )
+
+        self.max_pages = (len(self._items) - 1) // self.items_per_page + 1
+        start = self.page * self.items_per_page
+        end = start + self.items_per_page
+        current_items = self._items[start:end]
+
+        user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+        embed = ShopConfig.create_shop_embed(
+            self.title,
+            f"Browse and purchase (Page {self.page + 1}/{self.max_pages})",
+            user_balance,
+        )
+
+        lines = []
+        for i, item in enumerate(current_items):
+            name = self._get_name(item)
+            emoji = self._get_emoji(item)
+            cost = self._get_cost(item)
+
+            owned = await self.quest_data.get_user_inventory_count(
+                self.guild_id, self.user_id, self._inv_category(), name
+            ) or 0
+
+            indicator = ShopConfig.get_status_indicator(owned, 1, user_balance, cost)
+            name_display = f"~~{name}~~" if owned > 0 else name
+            lines.append(f"`{start + i + 1}.` {indicator} {emoji} **{name_display}** - {ShopConfig.format_price(cost)}")
+
+        embed.add_field(name="Items", value="\n".join(lines) if lines else "No items.", inline=False)
+        embed.add_field(name="", value=ShopConfig.create_legend_text(), inline=False)
+        embed.set_footer(text=f"Your Balance: {ShopConfig.format_balance(user_balance)} Stella Points")
+        return embed
+
+    async def update_view(self):
+        self.clear_items()
+        self._items = self._load_items()
+        self.max_pages = (len(self._items) - 1) // self.items_per_page + 1 if self._items else 1
+
+        start = self.page * self.items_per_page
+        end = start + self.items_per_page
+        current_items = self._items[start:end]
+
+        for i, item in enumerate(current_items):
+            name = self._get_name(item)
+            cost = self._get_cost(item)
+            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            owned = await self.quest_data.get_user_inventory_count(
+                self.guild_id, self.user_id, self._inv_category(), name
+            ) or 0
+
+            button_config = ShopConfig.get_button_config(owned, user_balance, cost)
+            btn = discord.ui.Button(
+                style=button_config["style"],
+                label=str(i + 1),
+                custom_id=f"sxf_item_{start + i}",
+                disabled=button_config["disabled"],
+            )
+            btn.callback = self.item_callback
+            self.add_item(btn)
+
+        # Pagination
+        if self.max_pages > 1:
+            if self.page > 0:
+                prev_btn = discord.ui.Button(
+                    emoji=ShopConfig.EMOJIS["prev"],
+                    style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
+                    custom_id="prev_page",
+                )
+                prev_btn.callback = self.prev_page_callback
+                self.add_item(prev_btn)
+            if self.page < self.max_pages - 1:
+                next_btn = discord.ui.Button(
+                    emoji=ShopConfig.EMOJIS["next"],
+                    style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
+                    custom_id="next_page",
+                )
+                next_btn.callback = self.next_page_callback
+                self.add_item(next_btn)
+
+    async def item_callback(self, interaction: discord.Interaction):
+        try:
+            if int(interaction.user.id) != int(self.user_id):
+                error_embed = ShopConfig.create_error_embed(
+                    f"{ShopConfig.EMOJIS['error']} Access Denied",
+                    ShopConfig.ERROR_MESSAGES["not_your_interface"],
+                )
+                return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+            index = int(interaction.data["custom_id"].split("_")[-1])
+            self._items = self._load_items()
+            if index < 0 or index >= len(self._items):
+                error_embed = ShopConfig.create_error_embed(
+                    f"{ShopConfig.EMOJIS['error']} Not Found",
+                    ShopConfig.ERROR_MESSAGES["item_not_found"],
+                )
+                return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+            item = self._items[index]
+            name = self._get_name(item)
+            cost = self._get_cost(item)
+            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+            owned = await self.quest_data.get_user_inventory_count(
+                self.guild_id, self.user_id, self._inv_category(), name
+            ) or 0
+
+            if owned > 0:
+                info_embed = ShopConfig.create_info_embed(
+                    f"{ShopConfig.EMOJIS['info']} Already Owned",
+                    f"You already own **{name}** (Quantity: {owned})",
+                )
+                return await interaction.response.send_message(embed=info_embed, ephemeral=True)
+
+            if user_balance < cost:
+                error_embed = ShopConfig.create_error_embed(
+                    f"{ShopConfig.EMOJIS['error']} Insufficient Points",
+                    f"You need {ShopConfig.format_price(cost)} but only have {ShopConfig.format_balance(user_balance)}.",
+                )
+                return await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+            await self.quest_data.add_balance(self.user_id, self.guild_id, -cost)
+            await self.quest_data.add_item_to_inventory(
+                self.guild_id, self.user_id, self._inv_category(), name, 1
+            )
+
+            embed = await self.create_shop_embed()
+            embed.title = f"{ShopConfig.EMOJIS['success']} {ShopConfig.SUCCESS_MESSAGES['purchase_successful']}"
+            embed.description = f"You've purchased **{name}** for {ShopConfig.format_price(cost)}!\n\n{embed.description}"
+
+            await self.update_view()
+            await interaction.response.edit_message(embed=embed, view=self)
+        except Exception as e:
+            await ShopView.handle_error(interaction, e)
+
+    async def prev_page_callback(self, interaction: discord.Interaction):
+        self.page -= 1
+        embed = await self.create_shop_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def next_page_callback(self, interaction: discord.Interaction):
+        self.page += 1
+        embed = await self.create_shop_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
+
     async def show_pokemon_spawns(self, interaction: discord.Interaction):
         pokemon_spawns = self.shop_data.get("PoketwoSpawns", {})
         if not pokemon_spawns:
@@ -2968,10 +4550,7 @@ class ShopCategorySelect(discord.ui.Select):
             await interaction.response.send_message(embed=error_embed, ephemeral=True)
             return
 
-        select = PokemonSpawnSectionSelect(
-            self.shop_data, self.quest_data, self.user_id, self.guild_id
-        )
-
+        
         embed = ShopConfig.create_shop_embed(
             f"{ShopConfig.EMOJIS['pokemon_spawns']} Poketwo Spawns Shop",
             main_description or "Select a section to browse Pokemon spawn items"
@@ -2982,270 +4561,6 @@ class ShopCategorySelect(discord.ui.Select):
         view.add_item(select)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-class ProfileFamilySelect(discord.ui.Select):
-    def __init__(self, shop_data, quest_data, user_id, guild_id):
-        options = []
-        profile_customization = shop_data.get("ProfileCustomization", {})
-        
-        for family in ["ForgerFamily", "WISE", "EdenAcademy", "Garden", "Extras"]:
-            data = profile_customization.get(family, {})
-            emoji = None
-            for category in ["Backgrounds", "Fonts", "Items"]:
-                items = data.get(category, [])
-                if items:
-                    emoji = items[0].get("emoji")
-                    if emoji:
-                        break
-            if not emoji:
-                emoji = ShopConfig.EMOJIS["default_family"]
-            
-            description = f"{family} themed items"
-            options.append(discord.SelectOption(label=family, description=description, value=family, emoji=emoji))
-
-        super().__init__(placeholder=ShopConfig.SELECT_CONFIGS["profile_family"]["placeholder"], options=options)
-        self.shop_data = shop_data
-        self.quest_data = quest_data
-        self.user_id = user_id
-        self.guild_id = guild_id
-
-    async def callback(self, interaction: discord.Interaction):
-        try:
-            if int(interaction.user.id) != int(self.user_id):
-                error_embed = ShopConfig.create_error_embed(
-                    f"{ShopConfig.EMOJIS['error']} Access Denied",
-                    "This is not your customization interface."
-                )
-                await interaction.response.send_message(embed=error_embed, ephemeral=True)
-                return
-
-            family = self.values[0]
-            profile_data = self.shop_data.get("ProfileCustomization", {}).get(family, {})
-            if not profile_data:
-                error_embed = ShopConfig.create_info_embed(
-                    f"{ShopConfig.EMOJIS['info']} No Items",
-                    f"No {family} customization options available."
-                )
-                await interaction.response.send_message(embed=error_embed, ephemeral=True)
-                return
-
-            options = []
-            for item_type in ["Backgrounds", "Fonts", "Items"]:
-                if item_type in profile_data:
-                    emoji = ShopConfig.EMOJIS[item_type.lower()]
-                    description = f"{item_type} ({len(profile_data[item_type])} available)"
-                    options.append(discord.SelectOption(label=item_type, description=description, value=item_type, emoji=emoji))
-
-            type_select = ProfileTypeSelect(profile_data, family, self.quest_data, self.user_id, self.guild_id)
-            type_select.options = options
-            
-            view = discord.ui.View()
-            view.add_item(type_select)
-
-            embed = ShopConfig.create_shop_embed(
-                f"{ShopConfig.EMOJIS['profile_customization']} {family} Customization",
-                "Choose the type of customization item you want to browse"
-            )
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-        except Exception as e:
-            await ShopView.handle_error(interaction, e)
-
-class ProfileTypeSelect(discord.ui.Select):
-    def __init__(self, profile_data, family, quest_data, user_id, guild_id):
-        super().__init__(placeholder=ShopConfig.SELECT_CONFIGS["profile_type"]["placeholder"])
-        self.profile_data = profile_data
-        self.family = family
-        self.quest_data = quest_data
-        self.user_id = user_id
-        self.guild_id = guild_id
-
-    async def callback(self, interaction: discord.Interaction):
-        try:
-            if int(interaction.user.id) != int(self.user_id):
-                error_embed = ShopConfig.create_error_embed(
-                    f"{ShopConfig.EMOJIS['error']} Access Denied",
-                    "This is not your customization interface."
-                )
-                await interaction.response.send_message(embed=error_embed, ephemeral=True)
-                return
-
-            item_type = self.values[0]
-            items = self.profile_data.get(item_type, [])
-            if not items:
-                error_embed = ShopConfig.create_info_embed(
-                    f"{ShopConfig.EMOJIS['info']} No Items",
-                    f"No {item_type.lower()} available for {self.family}."
-                )
-                await interaction.response.send_message(embed=error_embed, ephemeral=True)
-                return
-
-            item_view = ProfileItemView(items, item_type, self.quest_data, self.user_id, self.guild_id, self.family)
-            embed = await item_view.create_shop_embed()
-            await item_view.update_view()
-            await interaction.response.edit_message(embed=embed, view=item_view)
-
-        except Exception as e:
-            await ShopView.handle_error(interaction, e)
-
-class ProfileItemView(discord.ui.View):
-    def __init__(self, items, item_type, quest_data, user_id, guild_id, family):
-        super().__init__(timeout=300)
-        self.items = items
-        self.item_type = item_type
-        self.quest_data = quest_data
-        self.user_id = user_id
-        self.guild_id = guild_id
-        self.family = family
-        self.page = 0
-        self.items_per_page = ShopConfig.PAGINATION["items_per_page"]
-        self.max_pages = (len(items) - 1) // self.items_per_page + 1
-
-    def _get_category_for_item_type(self, item_type):
-        """Map item types to database categories using dot notation"""
-        mapping = {
-            "Backgrounds": "profile.backgrounds",
-            "Fonts": "profile.fonts", 
-            "Items": "profile.items"
-        }
-        return mapping.get(item_type, "profile.items")
-
-    async def create_shop_embed(self):
-        start = self.page * self.items_per_page
-        end = start + self.items_per_page
-        current_items = self.items[start:end]
-
-        embed = ShopConfig.create_shop_embed(
-            f"{ShopConfig.EMOJIS['profile_customization']} {self.family} {self.item_type}",
-            f"Browse and purchase {self.item_type.lower()} for your profile (Page {self.page + 1}/{self.max_pages})"
-        )
-
-        item_list = []
-        category = self._get_category_for_item_type(self.item_type)
-        
-        for i, item in enumerate(current_items):
-            user_quantity = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, category, item["name"]) or 0
-            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
-
-            indicator = ShopConfig.get_status_indicator(user_quantity, 1, user_balance, item["points"])
-            name_display = f"~~{item['name']}~~" if user_quantity > 0 else item["name"]
-            price_display = ShopConfig.format_price(item["points"])
-            character = item.get("character", "N/A")
-            
-            item_entry = f"{indicator} **{name_display}** - {price_display}"
-            if user_quantity > 0:
-                item_entry += f" (Owned: {user_quantity})"
-            item_entry += f"\n╰>   *{character.replace('_','')}* - {item['description'][:50]}...\n"
-            item_list.append(f"`{start + i + 1}.` {item_entry}")
-
-        if item_list:
-            embed.add_field(name="Items Available", value="\n".join(item_list), inline=False)
-        
-        embed.add_field(name="", value=ShopConfig.create_legend_text(), inline=False)
-        
-        balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
-        embed.set_footer(text=f"Your Balance: {ShopConfig.format_balance(balance)} Stella Points")
-        return embed
-
-    async def update_view(self):
-        self.clear_items()
-        start = self.page * self.items_per_page
-        end = start + self.items_per_page
-        current_items = self.items[start:end]
-        category = self._get_category_for_item_type(self.item_type)
-
-        for i, item in enumerate(current_items):
-            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
-            user_quantity = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, category, item["name"]) or 0
-
-            button_config = ShopConfig.get_button_config(user_quantity, user_balance, item["points"])
-            
-            btn = discord.ui.Button(
-                style=button_config["style"],
-                label=str(i + 1),
-                custom_id=f"item_{start + i}",
-                disabled=button_config["disabled"]
-            )
-            btn.callback = self.item_callback
-            self.add_item(btn)
-
-        # Add pagination buttons
-        if self.max_pages > 1:
-            if self.page > 0:
-                prev_btn = discord.ui.Button(
-                    emoji=ShopConfig.EMOJIS["prev"],
-                    style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
-                    custom_id="prev_page"
-                )
-                prev_btn.callback = self.prev_page_callback
-                self.add_item(prev_btn)
-            
-            if self.page < self.max_pages - 1:
-                next_btn = discord.ui.Button(
-                    emoji=ShopConfig.EMOJIS["next"],
-                    style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
-                    custom_id="next_page"
-                )
-                next_btn.callback = self.next_page_callback
-                self.add_item(next_btn)
-
-    async def item_callback(self, interaction: discord.Interaction):
-        try:
-            if int(interaction.user.id) != int(self.user_id):
-                error_embed = ShopConfig.create_error_embed(
-                    f"{ShopConfig.EMOJIS['error']} Access Denied",
-                    ShopConfig.ERROR_MESSAGES["not_your_interface"]
-                )
-                await interaction.response.send_message(embed=error_embed, ephemeral=True)
-                return
-
-            index = int(interaction.data["custom_id"].split("_")[1])
-            item = self.items[index]
-            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
-            category = self._get_category_for_item_type(self.item_type)
-            user_quantity = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, category, item["name"]) or 0
-
-            if user_quantity > 0:
-                info_embed = ShopConfig.create_info_embed(
-                    f"{ShopConfig.EMOJIS['info']} Already Owned",
-                    f"You already own **{item['name']}** (Quantity: {user_quantity})"
-                )
-                return await interaction.response.send_message(embed=info_embed, ephemeral=True)
-
-            if user_balance >= item["points"]:
-                await self.quest_data.add_balance(self.user_id, self.guild_id, -item["points"])
-                await self.quest_data.add_item_to_inventory(self.guild_id, self.user_id, category, item["name"], 1)
-                new_balance = user_balance - item["points"]
-                
-                embed = await self.create_shop_embed()
-                embed.title = f"{ShopConfig.EMOJIS['success']} {ShopConfig.SUCCESS_MESSAGES['purchase_successful']}"
-                embed.description = f"You've purchased **{item['name']}** for {ShopConfig.format_price(item['points'])}!\n\n{embed.description}"
-                embed.add_field(name="Description", value=item["description"], inline=False)
-                embed.add_field(name="Character", value=item.get("character", "N/A"), inline=True)
-                embed.set_footer(text=f"Remaining balance: {ShopConfig.format_balance(new_balance)} points")
-                
-                await self.update_view()
-                await interaction.response.edit_message(embed=embed, view=self)
-            else:
-                error_embed = ShopConfig.create_error_embed(
-                    f"{ShopConfig.EMOJIS['error']} Insufficient Points",
-                    f"You need {ShopConfig.format_price(item['points'])} but only have {ShopConfig.format_balance(user_balance)}."
-                )
-                await interaction.response.send_message(embed=error_embed, ephemeral=True)
-
-        except Exception as e:
-            await ShopView.handle_error(interaction, e)
-
-    async def prev_page_callback(self, interaction: discord.Interaction):
-        self.page -= 1
-        embed = await self.create_shop_embed()
-        await self.update_view()
-        await interaction.response.edit_message(embed=embed, view=self)
-
-    async def next_page_callback(self, interaction: discord.Interaction):
-        self.page += 1
-        embed = await self.create_shop_embed()
-        await self.update_view()
-        await interaction.response.edit_message(embed=embed, view=self)
 
 class SpyToolSelect(discord.ui.Select):
     def __init__(self, shop_data, materials_dict, quest_data, user_id, guild_id):
@@ -3848,213 +5163,6 @@ class GachaGameView(discord.ui.View):
         embed = await self.create_shop_embed()
         await self.update_view()
         await interaction.response.edit_message(embed=embed, view=self)
-
-class PokemonSpawnSectionSelect(discord.ui.Select):
-    def __init__(self, shop_data, quest_data, user_id, guild_id):
-        options = []
-        pokemon_spawns = shop_data.get("PoketwoSpawns", {}).get("sections", {})
-        
-        for section_name, section_items in pokemon_spawns.items():
-            emoji = None
-            if section_items:
-                emoji = section_items[0].get("emoji")
-            if not emoji:
-                emoji = ShopConfig.EMOJIS["pokemon_spawns"]
-            
-            description = f"{section_name} ({len(section_items)} available)"
-            options.append(discord.SelectOption(label=section_name, description=description, value=section_name, emoji=emoji))
-
-        super().__init__(placeholder=ShopConfig.SELECT_CONFIGS["pokemon_section"]["placeholder"], options=options)
-        self.shop_data = shop_data
-        self.quest_data = quest_data
-        self.user_id = user_id
-        self.guild_id = guild_id
-
-    async def callback(self, interaction: discord.Interaction):
-        try:
-            if int(interaction.user.id) != int(self.user_id):
-                error_embed = ShopConfig.create_error_embed(
-                    f"{ShopConfig.EMOJIS['error']} Access Denied",
-                    ShopConfig.ERROR_MESSAGES["not_your_interface"]
-                )
-                await interaction.response.send_message(embed=error_embed, ephemeral=True)
-                return
-
-            section = self.values[0]
-            pokemon_spawns = self.shop_data.get("PoketwoSpawns", {}).get("sections", {})
-            items = pokemon_spawns.get(section, [])
-            if not items:
-                error_embed = ShopConfig.create_info_embed(
-                    f"{ShopConfig.EMOJIS['info']} No Items",
-                    f"No items available in {section}."
-                )
-                await interaction.response.send_message(embed=error_embed, ephemeral=True)
-                return
-
-            item_view = PokemonSpawnItemView(items, section, self.quest_data, self.user_id, self.guild_id)
-            embed = await item_view.create_shop_embed()
-            await item_view.update_view()
-            await interaction.response.edit_message(embed=embed, view=item_view)
-
-        except Exception as e:
-            await ShopView.handle_error(interaction, e)
-
-class PokemonSpawnItemView(discord.ui.View):
-    def __init__(self, items, section, quest_data, user_id, guild_id):
-        super().__init__(timeout=300)
-        self.items = items
-        self.section = section
-        self.quest_data = quest_data
-        self.user_id = user_id
-        self.guild_id = guild_id
-        self.page = 0
-        self.items_per_page = ShopConfig.PAGINATION["items_per_page"]
-        self.max_pages = (len(items) - 1) // self.items_per_page + 1
-
-    async def create_shop_embed(self):
-        start = self.page * self.items_per_page
-        end = start + self.items_per_page
-        current_items = self.items[start:end]
-
-        embed = ShopConfig.create_shop_embed(
-            f"{ShopConfig.EMOJIS['pokemon_spawns']} {self.section}",
-            f"Browse and purchase {self.section.lower()} items for your profile (Page {self.page + 1}/{self.max_pages})"
-        )
-
-        item_list = []
-        for i, item in enumerate(current_items):
-            user_quantity = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, "pokemon.spawns", item["name"]) or 0
-            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
-
-            indicator = ShopConfig.get_status_indicator(user_quantity, 1, user_balance, item["points"])
-            name_display = f"~~{item['name']}~~" if user_quantity > 0 else item["name"]
-            price_display = ShopConfig.format_price(item["points"])
-            theme = item.get("theme", "N/A")
-            
-            item_entry = f"{indicator} **{name_display}** - {price_display}"
-            if user_quantity > 0:
-                item_entry += f" (Owned: {user_quantity})"
-            item_entry += f"\n╰>   *{theme.replace("_","")}* - {item['description'][:50]}...\n"
-            item_list.append(f"`{start + i + 1}.` {item_entry}")
-
-        if item_list:
-            embed.add_field(name="Items Available", value="\n".join(item_list), inline=False)
-        
-        embed.add_field(name="", value=ShopConfig.create_legend_text(), inline=False)
-        
-        balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
-        embed.set_footer(text=f"Your Balance: {ShopConfig.format_balance(balance)} Stella Points")
-        return embed
-
-    async def update_view(self):
-        self.clear_items()
-        start = self.page * self.items_per_page
-        end = start + self.items_per_page
-        current_items = self.items[start:end]
-
-        current_row = 0
-        for i, item in enumerate(current_items):
-            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
-            user_quantity = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, "pokemon.spawns", item["name"]) or 0
-
-            button_config = ShopConfig.get_button_config(user_quantity, user_balance, item["points"])
-            
-            btn = discord.ui.Button(
-                style=button_config["style"],
-                label=str(i + 1),
-                custom_id=f"item_{start + i}",
-                disabled=button_config["disabled"]
-            )
-            btn.callback = self.item_callback
-            self.add_item(btn)
-
-            if (i + 1) % ShopConfig.PAGINATION["max_buttons_per_row"] == 0:
-                current_row += 1
-
-        # Pagination buttons
-        if self.max_pages > 1:
-            pagination_row = current_row + 1 if current_row < ShopConfig.PAGINATION["max_rows"] else ShopConfig.PAGINATION["max_rows"]
-            if self.page > 0:
-                prev_btn = discord.ui.Button(
-                    emoji=ShopConfig.EMOJIS["prev"],
-                    style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
-                    custom_id="prev_page",
-                    row=pagination_row
-                )
-                prev_btn.callback = self.prev_page_callback
-                self.add_item(prev_btn)
-            
-            if self.page < self.max_pages - 1:
-                next_btn = discord.ui.Button(
-                    emoji=ShopConfig.EMOJIS["next"],
-                    style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
-                    custom_id="next_page",
-                    row=pagination_row
-                )
-                next_btn.callback = self.next_page_callback
-                self.add_item(next_btn)
-
-    async def item_callback(self, interaction: discord.Interaction):
-        try:
-            if int(interaction.user.id) != int(self.user_id):
-                error_embed = ShopConfig.create_error_embed(
-                    f"{ShopConfig.EMOJIS['error']} Access Denied",
-                    ShopConfig.ERROR_MESSAGES["not_your_interface"]
-                )
-                await interaction.response.send_message(embed=error_embed, ephemeral=True)
-                return
-
-            index = int(interaction.data["custom_id"].split("_")[1])
-            item = self.items[index]
-            user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
-            user_quantity = await self.quest_data.get_user_inventory_count(self.guild_id, self.user_id, "pokemon.spawns", item["name"]) or 0
-
-            if user_quantity > 0:
-                info_embed = ShopConfig.create_info_embed(
-                    f"{ShopConfig.EMOJIS['info']} Already Owned",
-                    f"You already own **{item['name']}** (Quantity: {user_quantity})"
-                )
-                return await interaction.response.send_message(embed=info_embed, ephemeral=True)
-
-            if user_balance >= item["points"]:
-                await self.quest_data.add_balance(self.user_id, self.guild_id, -item["points"])
-                await self.quest_data.add_item_to_inventory(self.guild_id, self.user_id, "pokemon.spawns", item["name"], 1)
-                new_balance = user_balance - item["points"]
-                
-                embed = await self.create_shop_embed()
-                embed.title = f"{ShopConfig.EMOJIS['success']} {ShopConfig.SUCCESS_MESSAGES['purchase_successful']}"
-                embed.description = f"You've purchased **{item['name']}** for {ShopConfig.format_price(item['points'])}!\n\n{embed.description}"
-                embed.add_field(name="Description", value=item["description"], inline=False)
-                embed.add_field(name="Theme", value=item.get("theme", "N/A"), inline=True)
-                if item.get("season"):
-                    embed.add_field(name="Season", value=item["season"], inline=True)
-                embed.set_footer(text=f"Remaining balance: {ShopConfig.format_balance(new_balance)} points")
-                
-                await self.update_view()
-                await interaction.response.edit_message(embed=embed, view=self)
-            else:
-                error_embed = ShopConfig.create_error_embed(
-                    f"{ShopConfig.EMOJIS['error']} Insufficient Points",
-                    f"You need {ShopConfig.format_price(item['points'])} but only have {ShopConfig.format_balance(user_balance)}."
-                )
-                await interaction.response.send_message(embed=error_embed, ephemeral=True)
-
-        except Exception as e:
-            await ShopView.handle_error(interaction, e)
-
-    async def prev_page_callback(self, interaction: discord.Interaction):
-        self.page -= 1
-        embed = await self.create_shop_embed()
-        await self.update_view()
-        await interaction.response.edit_message(embed=embed, view=self)
-
-    async def next_page_callback(self, interaction: discord.Interaction):
-        self.page += 1
-        embed = await self.create_shop_embed()
-        await self.update_view()
-        await interaction.response.edit_message(embed=embed, view=self)
-
-
 
 
 

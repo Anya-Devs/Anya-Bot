@@ -1,18 +1,52 @@
-1. Update Pokétwo spawn training:
-   Train model to recognize new event Pokémon
+1. Make a Pet thing where all characters are chubi (spy x family characters)
+ - Cooking cog for food to feed them
+ - Fighting cog for them to fight each other
+ - Housing cog for them to live in
+ - Drawling there Pixel art
 
-2. Fix 'imagine' command:
-   Outdated usage—current Stable Diffusion API URL no longer works:
-   "https://hirakukatsu--example-a1111-webui-run.modal.run/sdapi/v1/txt2img"
+ a. Characters
+   Json: 
+    "anya-forger":
+     {
+       Hp: 100, 
+       Attack: 10,
+       flavor-text: "She is the adopted daughter of Loid and Yor Forger. She attends Eden Academy as a first-year student in Cecile Hall, Class 3."
+       fighting-ability: "Able to dodge 65% of attacks"
+       food-ability: "Hp + 20 boost when included peanuts"
+       cooking-difficulty: "normal"
+     }
 
-3. Build a website for our Discord bot to:
-   - Send messages
-   - View available commands
-   - Manage bot features via a user-friendly interface
-   - Fetch server data including channels, members, and related info
-
-4. Add rare Pokémon ping:
-   Scan spawn name and compare against rare Pokémon list in CSV file; alert when match is found.
-
-5. Fix Refractored PoketwoCommands:
-   - None Now
+Feeding:
+  - Characters lose 10% to 30% of their current HP every in-game day (or set interval) if not fed.
+  - Hunger state: After a certain time without food, characters enter a "hungry" state, increasing HP loss rate (e.g., doubles the percentage loss).
+  - Underfeeding consequences:
+      - Prolonged hunger applies debuffs: reduced Attack (–20–50%), lower dodge chance, slower reaction in cooking mini-games.
+      - If HP reaches 0 from hunger or battle, the character "dies" permanently and is removed from the player's roster indefinitely.
+      - Reviving a dead character requires repurchasing them with Stella points at full cost (no discounts).
+  - Meals and recovery:
+      - All characters can eat any meal; there are no character-specific food restrictions (except for special bonuses).
+      - Food restores HP as a percentage of the character's maximum HP (e.g., +15%, +25%, +40%), preventing over-healing beyond natural limits.
+      - Meals do not have fixed HP values; recovery scales with the eater's max HP and meal quality.
+      - Stocked food: Players can feed characters at any time from inventory stock.
+        - If a character is hungry and not manually fed, they will auto-consume a random basic food item from stock (if available) to satisfy hunger, but with reduced effectiveness (half the normal % restore).
+  - Meal quality tiers:
+      - Terrible: –10% to –30% HP (poison effect), possible additional debuffs.
+      - Poor: +5–10% HP restore.
+      - Normal: +15–25% HP restore.
+      - Good: +30–40% HP restore.
+      - Excellent: +50% HP restore + temporary buffs (e.g., +Attack or +dodge for next battle).
+  - Special character interactions:
+      - Yor’s cooking: Default quality is usually "Terrible" (high chance of HP loss) unless she cooks her childhood stew recipe (from the cruise arc), which becomes "Excellent" for the Forger family (+extra family bond buff).
+      - Character-specific bonuses still apply on top of meal quality (e.g., Anya gets extra +10% from any meal containing peanuts, Yuri gains more from Yor’s cooking even if terrible).
+  - Cooking system:
+      - Cooking is a mini-game based on timing, memory, and reaction (e.g., rhythm-based button presses, sequence recall, quick-time events).
+      - Outcome depends on:
+        - Cook's "cooking-difficulty" rating (easy = forgiving timings/large success window, normal = standard, hard = very tight timings).
+        - Recipe complexity.
+        - Ingredients used (better/rarer ingredients improve potential quality ceiling).
+      - Players can cook for each other: Assign any owned character as the cook for a meal.
+      - Co-op cooking possible with multiple characters for better results (but riskier if one has hard difficulty).
+  - Inventory management:
+      - Ingredients and prepared meals are stored separately.
+      - Stock sorted by type: Ingredients, Prepared Meals, Special Items.
+      - Auto-sorting option available; spoiled or expired items (if time mechanic added) are removed or reduce quality.

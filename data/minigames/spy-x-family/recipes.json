@@ -1,0 +1,260 @@
+{
+  "breakfast": {
+    "french-toast": {
+      "name": "French Toast",
+      "emoji": "🍞",
+      "ingredients": [
+        {"item": "bread", "amount": 1},
+        {"item": "eggs", "amount": 1},
+        {"item": "milk", "amount": 1},
+        {"item": "cinnamon", "amount": 1},
+        {"item": "vanilla-extract", "amount": 1},
+        {"item": "butter", "amount": 1}
+      ],
+      "difficulty": "easy",
+      "base-quality": "good",
+      "hp-restore": 15,
+      "cooking-time": 20,
+      "description": "Classic breakfast of bread soaked in egg mixture and fried to golden perfection"
+    },
+    "omelette": {
+      "name": "Cheese Omelette",
+      "emoji": "🍳",
+      "ingredients": [
+        {"item": "eggs", "amount": 1},
+        {"item": "cheddar-cheese", "amount": 1},
+        {"item": "butter", "amount": 1},
+        {"item": "salt", "amount": 1},
+        {"item": "pepper", "amount": 1}
+      ],
+      "difficulty": "easy",
+      "base-quality": "good",
+      "hp-restore": 20,
+      "cooking-time": 10,
+      "description": "Fluffy eggs folded around melted cheese"
+    },
+    "pancakes": {
+      "name": "Fluffy Pancakes",
+      "emoji": "🥞",
+      "ingredients": [
+        {"item": "flour", "amount": 1},
+        {"item": "eggs", "amount": 1},
+        {"item": "milk", "amount": 1},
+        {"item": "sugar", "amount": 1},
+        {"item": "baking-powder", "amount": 1},
+        {"item": "butter", "amount": 1}
+      ],
+      "difficulty": "easy",
+      "base-quality": "good",
+      "hp-restore": 18,
+      "cooking-time": 20,
+      "description": "Light and fluffy breakfast pancakes"
+    }
+  },
+  "lunch": {
+    "grilled-cheese": {
+      "name": "Grilled Cheese Sandwich",
+      "emoji": "🧀",
+      "ingredients": [
+        {"item": "bread", "amount": 1},
+        {"item": "cheddar-cheese", "amount": 1},
+        {"item": "butter", "amount": 1}
+      ],
+      "difficulty": "easy",
+      "base-quality": "good",
+      "hp-restore": 20,
+      "cooking-time": 15,
+      "description": "Classic comfort food with melted cheese between crispy bread"
+    },
+    "caesar-salad": {
+      "name": "Caesar Salad",
+      "emoji": "🥗",
+      "ingredients": [
+        {"item": "romaine-lettuce", "amount": 1},
+        {"item": "croutons", "amount": 1},
+        {"item": "parmesan-cheese", "amount": 1},
+        {"item": "caesar-dressing", "amount": 1},
+        {"item": "lemon-juice", "amount": 1}
+      ],
+      "difficulty": "easy",
+      "base-quality": "good",
+      "hp-restore": 15,
+      "cooking-time": 15,
+      "description": "Classic salad with crisp romaine, croutons, and creamy dressing"
+    },
+    "minestrone-soup": {
+      "name": "Minestrone Soup",
+      "emoji": "🍲",
+      "ingredients": [
+        {"item": "cannellini-beans", "amount": 1},
+        {"item": "carrots", "amount": 1},
+        {"item": "celery", "amount": 1},
+        {"item": "tomatoes", "amount": 1},
+        {"item": "pasta", "amount": 1},
+        {"item": "vegetable-broth", "amount": 1},
+        {"item": "zucchini", "amount": 1}
+      ],
+      "difficulty": "normal",
+      "base-quality": "good",
+      "hp-restore": 25,
+      "cooking-time": 60,
+      "description": "Hearty Italian vegetable soup with beans and pasta"
+    }
+  },
+  "dinner": {
+    "spaghetti-carbonara": {
+      "name": "Spaghetti Carbonara",
+      "emoji": "🍝",
+      "ingredients": [
+        {"item": "spaghetti", "amount": 1},
+        {"item": "eggs", "amount": 1},
+        {"item": "pancetta", "amount": 1},
+        {"item": "parmesan", "amount": 1},
+        {"item": "black-pepper", "amount": 1}
+      ],
+      "difficulty": "normal",
+      "base-quality": "excellent",
+      "hp-restore": 30,
+      "cooking-time": 30,
+      "description": "Creamy Italian pasta dish with eggs, cheese, and pancetta"
+    },
+    "chicken-curry": {
+      "name": "Chicken Curry",
+      "emoji": "🍛",
+      "ingredients": [
+        {"item": "chicken", "amount": 1},
+        {"item": "onion", "amount": 1},
+        {"item": "garlic", "amount": 1},
+        {"item": "ginger", "amount": 1},
+        {"item": "curry-powder", "amount": 1},
+        {"item": "coconut-milk", "amount": 1}
+      ],
+      "difficulty": "normal",
+      "base-quality": "good",
+      "hp-restore": 35,
+      "cooking-time": 45,
+      "description": "Hearty and flavorful curry with tender chicken pieces"
+    },
+    "beef-stew": {
+      "name": "Beef Stew",
+      "emoji": "🥘",
+      "ingredients": [
+        {"item": "beef-chuck", "amount": 1},
+        {"item": "carrots", "amount": 1},
+        {"item": "potatoes", "amount": 1},
+        {"item": "onion", "amount": 1},
+        {"item": "beef-broth", "amount": 1},
+        {"item": "tomato-paste", "amount": 1}
+      ],
+      "difficulty": "normal",
+      "base-quality": "excellent",
+      "hp-restore": 50,
+      "cooking-time": 120,
+      "description": "Hearty stew with tender beef and vegetables"
+    },
+    "beef-wellington": {
+      "name": "Beef Wellington",
+      "emoji": "🥩",
+      "ingredients": [
+        {"item": "beef-tenderloin", "amount": 1},
+        {"item": "puff-pastry", "amount": 1},
+        {"item": "mushrooms", "amount": 1},
+        {"item": "prosciutto", "amount": 1},
+        {"item": "mustard", "amount": 1}
+      ],
+      "difficulty": "hard",
+      "base-quality": "excellent",
+      "hp-restore": 45,
+      "cooking-time": 90,
+      "description": "Elegant dish of beef tenderloin wrapped in puff pastry"
+    }
+  },
+  "dessert": {
+    "chocolate-mousse": {
+      "name": "Chocolate Mousse",
+      "emoji": "🍫",
+      "ingredients": [
+        {"item": "dark-chocolate", "amount": 1},
+        {"item": "eggs", "amount": 1},
+        {"item": "heavy-cream", "amount": 1},
+        {"item": "sugar", "amount": 1},
+        {"item": "vanilla-extract", "amount": 1}
+      ],
+      "difficulty": "normal",
+      "base-quality": "excellent",
+      "hp-restore": 15,
+      "cooking-time": 30,
+      "description": "Light and airy chocolate dessert"
+    },
+    "apple-pie": {
+      "name": "Apple Pie",
+      "emoji": "🥧",
+      "ingredients": [
+        {"item": "apples", "amount": 1},
+        {"item": "sugar", "amount": 1},
+        {"item": "cinnamon", "amount": 1},
+        {"item": "lemon-juice", "amount": 1},
+        {"item": "pie-crust", "amount": 1},
+        {"item": "butter", "amount": 1}
+      ],
+      "difficulty": "normal",
+      "base-quality": "excellent",
+      "hp-restore": 10,
+      "cooking-time": 75,
+      "description": "Classic American dessert with spiced apples in flaky crust"
+    }
+  },
+  "snacks": {
+    "vegetable-stir-fry": {
+      "name": "Vegetable Stir Fry",
+      "emoji": "🥡",
+      "ingredients": [
+        {"item": "broccoli", "amount": 1},
+        {"item": "bell-peppers", "amount": 1},
+        {"item": "carrots", "amount": 1},
+        {"item": "snow-peas", "amount": 1},
+        {"item": "garlic", "amount": 1},
+        {"item": "ginger", "amount": 1},
+        {"item": "soy-sauce", "amount": 1}
+      ],
+      "difficulty": "easy",
+      "base-quality": "good",
+      "hp-restore": 10,
+      "cooking-time": 20,
+      "description": "Colorful mix of fresh vegetables quickly cooked with Asian flavors"
+    },
+    "cheese-plate": {
+      "name": "Cheese Plate",
+      "emoji": "🧀",
+      "ingredients": [
+        {"item": "cheddar-cheese", "amount": 1},
+        {"item": "brie", "amount": 1},
+        {"item": "grapes", "amount": 1},
+        {"item": "crackers", "amount": 1},
+        {"item": "honey", "amount": 1}
+      ],
+      "difficulty": "easy",
+      "base-quality": "excellent",
+      "hp-restore": 8,
+      "cooking-time": 5,
+      "description": "Assortment of cheeses with fruits and crackers"
+    },
+    "bruschetta": {
+      "name": "Tomato Bruschetta",
+      "emoji": "🍅",
+      "ingredients": [
+        {"item": "bread", "amount": 1},
+        {"item": "tomatoes", "amount": 1},
+        {"item": "basil", "amount": 1},
+        {"item": "garlic", "amount": 1},
+        {"item": "olive-oil", "amount": 1},
+        {"item": "balsamic-vinegar", "amount": 1}
+      ],
+      "difficulty": "easy",
+      "base-quality": "good",
+      "hp-restore": 5,
+      "cooking-time": 15,
+      "description": "Toasted bread topped with fresh tomatoes, garlic, and basil"
+    }
+  }
+}
