@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any
 
@@ -19,6 +20,7 @@ class CharacterDefinition:
     crit_rate: int
     evasion: int
     images: list[str]
+    image_variants: list[str]
     flavor_text: str
     fighting_ability: str
     food_ability: str
@@ -30,6 +32,13 @@ def _safe_int(v: Any, default: int = 0) -> int:
         return int(v)
     except Exception:
         return default
+
+
+def format_character_name(char_id: str) -> str:
+    name = str(char_id or "").strip().replace("-", " ")
+    if not name:
+        return "Character"
+    return " ".join(part[:1].upper() + part[1:].lower() if part else "" for part in name.split())
 
 
 def load_sxf_characters(path: str = "data/minigames/spy-x-family/characters.json") -> dict[str, dict]:
@@ -56,8 +65,21 @@ def get_character_def(char_id: str, path: str = "data/minigames/spy-x-family/cha
 
     imgs = data.get("images")
     images: list[str] = []
+    image_variants: list[str] = []
     if isinstance(imgs, list):
         images = [str(u) for u in imgs if isinstance(u, str) and u.strip()]
+        image_variants = [f"Image {i + 1}" for i in range(len(images))]
+    elif isinstance(imgs, dict):
+        for k, v in imgs.items():
+            if not isinstance(k, str):
+                continue
+            if not isinstance(v, str) or not v.strip():
+                continue
+            key = k.strip()
+            if key.lower() == "defualt":
+                key = "default"
+            image_variants.append(key)
+            images.append(v.strip())
 
     return CharacterDefinition(
         char_id=char_id,
@@ -70,6 +92,7 @@ def get_character_def(char_id: str, path: str = "data/minigames/spy-x-family/cha
         crit_rate=_safe_int(data.get("CritRate"), 0),
         evasion=_safe_int(data.get("Evasion"), 0),
         images=images,
+        image_variants=image_variants,
         flavor_text=str(data.get("flavor-text") or ""),
         fighting_ability=str(data.get("fighting-ability") or ""),
         food_ability=str(data.get("food-ability") or ""),
@@ -90,35 +113,97 @@ async def build_character_embed(
     user: discord.abc.User,
     char_def: CharacterDefinition,
     current_hp: int,
-    author_avatar_url: str | None = None,
     image_index: int = 0,
 ) -> discord.Embed:
+    embed, _files = await build_character_embed_with_files(
+        bot=bot,
+        user=user,
+        char_def=char_def,
+        current_hp=current_hp,
+        image_index=image_index,
+    )
+    return embed
+
+
+def _resolve_image_source(image: str, *, fallback_name: str) -> tuple[str | None, discord.File | None]:
+    if not image:
+        return None, None
+
+    img = str(image).strip()
+    if not img:
+        return None, None
+
+    if img.startswith("http://") or img.startswith("https://"):
+        return img, None
+
+    p = Path(img)
+    if not p.is_absolute():
+        p = Path.cwd() / p
+
+    if p.exists() and p.is_file():
+        suffix = p.suffix or ""
+        safe = "".join(ch for ch in str(fallback_name) if ch.isalnum() or ch in ("-", "_"))
+        filename = f"{safe}{suffix}" if safe else p.name
+        return f"attachment://{filename}", discord.File(fp=str(p), filename=filename)
+
+    # If it isn't a URL and doesn't exist as a file, don't set an invalid embed image.
+    return None, None
+
+
+async def build_character_embed_with_files(
+    *,
+    bot: discord.Client,
+    user: discord.abc.User,
+    char_def: CharacterDefinition,
+    current_hp: int,
+    image_index: int = 0,
+    next_feed_ts: int | None = None,
+    next_feed_in: str | None = None,
+    dialogue_footer: str | None = None,
+) -> tuple[discord.Embed, list[discord.File]]:
+    files: list[discord.File] = []
     max_hp = max(1, int(char_def.base_hp))
     hp = max(0, min(int(current_hp), max_hp))
 
     bar = await render_hp_bar(hp, max_hp, bot)
     pct = int((hp / max_hp) * 100)
 
+    display_name = format_character_name(char_def.char_id)
+    desc = (char_def.flavor_text or "").strip()
+
+    abilities_lines: list[str] = []
+    if (char_def.fighting_ability or "").strip():
+        abilities_lines.append(f"> **Fighting Ability:** {str(char_def.fighting_ability).strip()}")
+    if (char_def.food_ability or "").strip():
+        abilities_lines.append(f"> **Food Ability:** {str(char_def.food_ability).strip()}")
+    if abilities_lines:
+        desc = (desc + "\n\n" if desc else "") + "\n".join(abilities_lines)
+
     embed = discord.Embed(
-        title=f"{char_def.emoji} {char_def.char_id}",
-        description=(char_def.flavor_text or "").strip()[:4000],
+        title=f"{char_def.emoji} {display_name}",
+        description=desc[:4000],
         color=discord.Color.from_rgb(255, 182, 193),
     )
 
-    # Thumbnail should be the requester (ctx author)
-    if author_avatar_url:
-        embed.set_thumbnail(url=author_avatar_url)
-    else:
-        try:
-            if getattr(user, "avatar", None):
-                embed.set_thumbnail(url=user.avatar.url)
-        except Exception:
-            pass
+    try:
+        icon_url = None
+        if getattr(user, "avatar", None):
+            icon_url = user.avatar.url
+        embed.set_author(name=getattr(user, "display_name", getattr(user, "name", "User")), icon_url=icon_url)
+    except Exception:
+        pass
 
     # Character art should be the embed image; choose one of the available images
     if char_def.images:
         idx = max(0, min(int(image_index), len(char_def.images) - 1))
-        embed.set_image(url=char_def.images[idx])
+        url, f = _resolve_image_source(
+            char_def.images[idx],
+            fallback_name=f"{char_def.char_id}_{(char_def.image_variants[idx] if idx < len(char_def.image_variants) else idx)}",
+        )
+        if url:
+            embed.set_image(url=url)
+        if f:
+            files.append(f)
 
     embed.add_field(
         name="Health",
@@ -127,19 +212,26 @@ async def build_character_embed(
     )
 
     stats_lines = [
-        f"⚔️ ATK: **{char_def.attack}**",
-        f"🛡️ DEF: **{char_def.defense}**",
-        f"💨 SPD: **{char_def.speed}**",
-        f"🗡️ ATK SPD: **{char_def.attack_speed}**",
-        f"🎯 CRIT: **{char_def.crit_rate}%**",
-        f"🌀 EVA: **{char_def.evasion}%**",
+        f"> ⚔️ ATK: **{char_def.attack}**",
+        f"> 🛡️ DEF: **{char_def.defense}**",
+        f"> 💨 SPD: **{char_def.speed}**",
+        f"> 🗡️ ATK SPD: **{char_def.attack_speed}**",
+        f"> 🎯 CRIT: **{char_def.crit_rate}%**",
+        f"> 🌀 EVA: **{char_def.evasion}%**",
     ]
+
+    if next_feed_ts is not None or next_feed_in:
+        when = f"<t:{int(next_feed_ts)}:R>" if next_feed_ts is not None else "soon"
+        extra = f" ({next_feed_in})" if next_feed_in else ""
+        stats_lines.append(f"> 🍽️ Next feed: **{when}**{extra}")
+
     embed.add_field(name="Stats", value="\n".join(stats_lines), inline=False)
 
-    if char_def.fighting_ability:
-        embed.add_field(name="Fighting Ability", value=char_def.fighting_ability[:1024], inline=False)
-    if char_def.food_ability:
-        embed.add_field(name="Food Ability", value=char_def.food_ability[:1024], inline=False)
+    if dialogue_footer:
+        try:
+            who = format_character_name(char_def.char_id)
+            embed.set_footer(text=f"{who}: {str(dialogue_footer).strip()[:200]}")
+        except Exception:
+            pass
 
-    embed.set_footer(text=f"Requested by {getattr(user, 'display_name', getattr(user, 'name', 'User'))}")
-    return embed
+    return embed, files

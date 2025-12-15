@@ -1,0 +1,490 @@
+{
+  "anya-forger": {
+    "not_hungry": [
+      "I'm not hungry right now... maybe later",
+      "Nooope. My tummy is still full.",
+      "If you feed me again I might explode.",
+      "Stop trying to bribe me with food, human!",
+      "I'm not hungry please!",
+      "No thank you please!"
+    ],
+    "fed": [
+      "Yay! Food time!!",
+      "Waku waku! Delicious!",
+      "You brought {meal}? That's kinda cool.",
+      "Hehe... I will *consider* this offering.",
+      "Okay okay! I'll try it!",
+      "Ooh... {meal}?",
+      "This smells nice...",
+      "Thanks! I'll taste it.",
+      "Mmm... okay, I'm listening.",
+      "This is suspiciously tasty.",
+      "I will rate it... with my heart.",
+      "If it's good, you get headpats!"
+    ],
+    "fed_base_good": [
+      "{meal} smells like a normal yummy meal.",
+      "This looks like something people eat every day."
+    ],
+    "fed_base_excellent": [
+      "Whoa... {meal} looks fancy.",
+      "This smells like a restaurant meal!"
+    ],
+    "fed_perfect": [
+      "WAKU WAKU!! This is the best thing ever!",
+      "Perfect!! I could eat this forever!",
+      "{meal} is {quality}!! I'm gonna tell everyone!",
+      "This is SO {quality}!!"
+    ],
+    "fed_great": [
+      "Mmm! This is really good!",
+      "Super tasty!!",
+      "I like this one!",
+      "More {meal} sometime?",
+      "This is going on my favorites list.",
+      "Okay, you can cook."
+    ],
+    "fed_good": [
+      "Yum! Not bad!",
+      "Okay, I approve.",
+      "{meal} is fine. I guess.",
+      "Not bad at all!",
+      "I would eat this again.",
+      "Good job, chef-person."
+    ],
+    "fed_bad": [
+      "Uh... it's edible... I think.",
+      "Hmm... maybe next time.",
+      "This is kinda... {quality}.",
+      "Let's call it... a learning experience.",
+      "My tongue is confused.",
+      "If I smile, will you stop feeding me?"
+    ],
+    "fed_burnt": [
+      "Crunchy... too crunchy...",
+      "This tastes like sadness...",
+      "My mouth is doing the spicy-sad thing.",
+      "{meal} is... charcoal...",
+      "It crackled... ominously.",
+      "Please don't cook the plate next time."
+    ]
+  },
+  "loid-forger": {
+    "not_hungry": [
+      "Not yet. We'll eat when the timing is right.",
+      "I'm fine. Focus on the mission.",
+      "Feeding me twice won't improve the plan.",
+      "Stop. You're compromising our schedule.",
+      "I'm not hungry. Save resources.",
+      "Later. We have priorities.",
+      "I'll eat when it's necessary.",
+      "No. Stand down."
+    ],
+    "fed": [
+      "Good. Staying sharp requires proper meals.",
+      "Efficient. Thank you.",
+      "Acceptable.",
+      "Noted. {meal} acquired.",
+      "I'll take it.",
+      "This will keep me focused.",
+      "Solid work.",
+      "Nutrition acknowledged."
+    ],
+    "fed_base_good": [
+      "A standard meal. Good.",
+      "Reliable nutrition."
+    ],
+    "fed_base_excellent": [
+      "High quality. Noted.",
+      "This is premium." 
+    ],
+    "fed_perfect": [
+      "Excellent. This is flawless.",
+      "Perfect execution.",
+      "{quality}. Exactly as intended."
+    ],
+    "fed_great": [
+      "Well done.",
+      "Very good.",
+      "Solid work."
+    ],
+    "fed_good": [
+      "Good. It'll do.",
+      "Adequate nutrition.",
+      "Satisfactory.",
+      "This is fine."
+    ],
+    "fed_bad": [
+      "...We need to revisit the recipe.",
+      "Not ideal, but it'll do.",
+      "This is suboptimal.",
+      "We'll call it field rations.",
+      "I won't comment further."
+    ],
+    "fed_burnt": [
+      "This is burned. We'll survive.",
+      "Next time: lower heat.",
+      "Charcoal is not a food group.",
+      "This is a mistake.",
+      "We move on."
+    ]
+  },
+  "yor-forger": {
+    "not_hungry": [
+      "Ah! I'm okay for now... thank you!",
+      "I-I can wait a little longer!",
+      "You don't have to worry so much...",
+      "I appreciate it, but I'm full right now.",
+      "Maybe later, okay?",
+      "I'll eat when it's time!",
+      "I'm okay! Please don't worry."
+    ],
+    "fed": [
+      "Mmm... thank you!",
+      "I'll do my best after this!",
+      "It was really tasty...!",
+      "Oh! {meal}? Thank you...!",
+      "I'll cherish this!",
+      "This makes me really happy.",
+      "I feel stronger already... maybe!"
+    ],
+    "fed_base_good": [
+      "It looks nice and warm.",
+      "This seems like a comforting meal."
+    ],
+    "fed_base_excellent": [
+      "W-wow... {meal} looks amazing...!",
+      "This is such a special dish..."
+    ],
+    "fed_perfect": [
+      "W-Wow!! This is amazing!!",
+      "So delicious...!",
+      "{quality}...! You're incredible!"
+    ],
+    "fed_great": [
+      "It's really good...!",
+      "You worked hard on this, didn't you?"
+    ],
+    "fed_good": [
+      "Mmm... it's nice!",
+      "Thank you for the meal!",
+      "This is comforting.",
+      "I like it!"
+    ],
+    "fed_bad": [
+      "Oh! Um... thank you...",
+      "I-I'll still eat it!",
+      "It's okay! I'll be fine!",
+      "N-no problem!",
+      "I'll just... drink water..."
+    ],
+    "fed_burnt": [
+      "Ah... it's a little... charred...",
+      "I-I can handle it!!",
+      "N-no worries!!",
+      "It has... character!",
+      "I won't waste it!"
+    ]
+  },
+  "bond-forger": {
+    "not_hungry": [
+      "Woof! (Not hungry.)",
+      "Wuff... (later.)",
+      "...*stares* (no.)",
+      "*sniff* ...no.",
+      "...woof. (full)"
+    ],
+    "fed": [
+      "Woof woof!",
+      "WAAUF!",
+      "*happy tail wagging*",
+      "Woof? ({meal}!)",
+      "*happy chomping sounds*",
+      "Wuff! (thanks!)"
+    ],
+    "fed_base_good": [
+      "*sniff sniff* (good)"
+    ],
+    "fed_base_excellent": [
+      "*sniff sniff* (very good!)"
+    ],
+    "fed_perfect": [
+      "WOOF!! (best!!)",
+      "WOOF WOOF! ({quality}!)"
+    ],
+    "fed_great": [
+      "Wuff! (good!)",
+      "*tail wag intensifies*"
+    ],
+    "fed_good": [
+      "Woof!",
+      "*content dog noises*"
+    ],
+    "fed_bad": [
+      "...woof.",
+      "*confused sniff*",
+      "...wuff?"
+    ],
+    "fed_burnt": [
+      "...whine...",
+      "*sad puppy eyes*",
+      "...*pushes bowl away*"
+    ]
+  },
+  "damian-desmond": {
+    "not_hungry": [
+      "Hmph. I'm not hungry right now.",
+      "Stop fussing over me.",
+      "I said I'm fine!",
+      "Do you always overdo everything?",
+      "I'm not some kid you can spoil!"
+    ],
+    "fed": [
+      "...Fine. I'll take {meal}.",
+      "I guess this is acceptable.",
+      "D-Don't get the wrong idea.",
+      "I have standards, you know.",
+      "This better not be weird."
+    ],
+    "fed_base_good": [
+      "Looks... fine.",
+      "At least it's not cheap."
+    ],
+    "fed_base_excellent": [
+      "This looks expensive.",
+      "Hmph... this is high-class."
+    ],
+    "fed_perfect": [
+      "W-What?! This is actually {quality}...",
+      "...Not bad."
+    ],
+    "fed_burnt": [
+      "Tch. It's burnt.",
+      "This is embarrassing.",
+      "Don't tell anyone about this."
+    ]
+  },
+  "becky-blackbell": {
+    "not_hungry": [
+      "No thanks! I'm not hungry right now.",
+      "Maybe later~",
+      "I'm good!",
+      "I already ate something fancy.",
+      "A lady must pace herself."
+    ],
+    "fed": [
+      "Ooh, {meal}? How cute!",
+      "Thank you!",
+      "This is kinda nice.",
+      "You have taste!",
+      "I'll allow it."
+    ],
+    "fed_base_good": [
+      "Cute and simple.",
+      "A casual bite."
+    ],
+    "fed_base_excellent": [
+      "Ooh! That's fancy.",
+      "This is definitely high quality."
+    ],
+    "fed_perfect": [
+      "This is {quality}! I love it!",
+      "So fancy~"
+    ],
+    "fed_bad": [
+      "Umm... it's okay.",
+      "Let's pretend this didn't happen...",
+      "This is not my aesthetic.",
+      "We can do better next time."
+    ]
+  },
+  "yuri-briar": {
+    "not_hungry": [
+      "I'm not hungry.",
+      "No. Not now.",
+      "Save it for later.",
+      "I don't need it.",
+      "Stop."
+    ],
+    "fed": [
+      "...I'll eat {meal}.",
+      "Thanks.",
+      "Fine.",
+      "Don't make a habit of this.",
+      "Hmph."
+    ],
+    "fed_base_good": [
+      "Looks fine.",
+      "Acceptable quality."
+    ],
+    "fed_base_excellent": [
+      "This is high quality.",
+      "Impressive presentation."
+    ],
+    "fed_perfect": [
+      "{quality}. Impressive.",
+      "Hmph... good."
+    ],
+    "fed_burnt": [
+      "Burnt. Unfortunate.",
+      "This is... rough.",
+      "I expected better."
+    ]
+  },
+  "fiona-frost": {
+    "not_hungry": [
+      "Not hungry.",
+      "Later.",
+      "I'm fine.",
+      "No need.",
+      "I can wait."
+    ],
+    "fed": [
+      "Acknowledged. {meal}.",
+      "Thank you.",
+      "This will do.",
+      "Understood.",
+      "Adequate."
+    ],
+    "fed_base_good": [
+      "Standard.",
+      "Acceptable." 
+    ],
+    "fed_base_excellent": [
+      "Excellent base dish.",
+      "High quality." 
+    ],
+    "fed_perfect": [
+      "{quality}.",
+      "Excellent."
+    ],
+    "fed_bad": [
+      "...Acceptable.",
+      "Not ideal.",
+      "I'll endure it."
+    ]
+  },
+  "frankie-franklin": {
+    "not_hungry": [
+      "I'm good for now.",
+      "Give me a minute, will ya?",
+      "Not hungry yet.",
+      "I just ate!",
+      "My stomach's on break."
+    ],
+    "fed": [
+      "Oooh, {meal}! Nice.",
+      "Thanks, I needed that.",
+      "Hey, this is pretty decent!",
+      "You're spoiling me!",
+      "Look at you, chef!"
+    ],
+    "fed_base_good": [
+      "Classic.",
+      "Looks like a solid meal."
+    ],
+    "fed_base_excellent": [
+      "Now that's a fancy dish!",
+      "Whoa, that's high-end." 
+    ],
+    "fed_perfect": [
+      "Whoa! {quality}!",
+      "You trying to impress me?"
+    ],
+    "fed_burnt": [
+      "Ah, it's burnt... still edible though.",
+      "Crunchy. Too crunchy.",
+      "This could double as a weapon."
+    ]
+  },
+  "default-eden-student": {
+    "not_hungry": [
+      "No thanks, I'm not hungry.",
+      "Maybe later.",
+      "I'm full right now.",
+      "Not yet.",
+      "I'll eat later."
+    ],
+    "fed": [
+      "Thank you for {meal}.",
+      "Thanks!",
+      "I'll take it.",
+      "Looks good!",
+      "That helps a lot."
+    ],
+    "fed_base_good": [
+      "Looks like a good meal.",
+      "Smells nice."
+    ],
+    "fed_base_excellent": [
+      "Wow, that's an excellent dish!",
+      "This feels special."
+    ],
+    "fed_perfect": [
+      "Wow, {quality}!",
+      "That's amazing!"
+    ],
+    "fed_bad": [
+      "Uh... thanks.",
+      "It's... fine.",
+      "Not my favorite, but okay."
+    ]
+  },
+  "_default": {
+    "not_hungry": [
+      "I'm not hungry right now.",
+      "Maybe later.",
+      "I'm full."
+    ],
+    "fed": [
+      "Thanks!",
+      "Yum!",
+      "That hit the spot.",
+      "I'll take {meal}.",
+      "Appreciated."
+    ],
+    "fed_base_good": [
+      "Looks like a solid meal.",
+      "Seems pretty decent."
+    ],
+    "fed_base_average": [
+      "Looks... average.",
+      "Nothing special, but okay."
+    ],
+    "fed_base_great": [
+      "That looks like a great dish.",
+      "Smells really good."
+    ],
+    "fed_base_poor": [
+      "This doesn't look very good...",
+      "Are you sure about this meal?"
+    ],
+    "fed_base_excellent": [
+      "That looks like an excellent dish.",
+      "High quality meal."
+    ],
+    "fed_perfect": [
+      "That was perfect!",
+      "Incredible!",
+      "{meal} was {quality}."
+    ],
+    "fed_great": [
+      "That was great!",
+      "Really nice."
+    ],
+    "fed_good": [
+      "Good stuff.",
+      "Nice."
+    ],
+    "fed_bad": [
+      "...Thanks?",
+      "I've had better.",
+      "That was... {quality}."
+    ],
+    "fed_burnt": [
+      "Oof, that's burnt.",
+      "Please never do that again.",
+      "{meal} is charcoal now."
+    ]
+  }
+}

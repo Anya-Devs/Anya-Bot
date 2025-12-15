@@ -15,6 +15,26 @@ class Quest_Events(commands.Cog):
         self.SPAM_THRESHOLD = 50
         self.bot.loop.create_task(self._periodic_cleanup())
 
+        self._db_error_silence_until: float = 0.0
+        self._db_error_silence_seconds: int = 60
+
+    def _is_db_down_error(self, e: Exception) -> bool:
+        msg = str(e)
+        return (
+            "No replica set members available" in msg
+            or "ReplicaSetNoPrimary" in msg
+            or "ServerSelectionTimeoutError" in msg
+        )
+
+    def _should_silence_db_error(self) -> bool:
+        return time.time() < float(self._db_error_silence_until or 0.0)
+
+    def _note_db_error(self, e: Exception) -> None:
+        if self._should_silence_db_error():
+            return
+        self._db_error_silence_until = time.time() + float(self._db_error_silence_seconds)
+        logger.error("Database unavailable (cooldown %ss): %s", self._db_error_silence_seconds, e)
+
     async def _periodic_cleanup(self):
         while True:
             await asyncio.sleep(600)
@@ -58,6 +78,9 @@ class Quest_Events(commands.Cog):
                     elif quest["method"] == "emoji":
                         await self.handle_emoji_quest(quest, message, user_id, guild_id)
         except Exception as e:
+            if self._is_db_down_error(e):
+                self._note_db_error(e)
+                return
             logger.error("Error in on_message:\n%s", e)
 
     async def handle_message_quest(self, quest, message, user_id, guild_id):
@@ -110,6 +133,9 @@ class Quest_Events(commands.Cog):
                             await self.complete_quest(guild_id, user_id, quest, quest["times"], user_obj, quest["quest_id"], message, method="reaction", reward=quest["reward"])
                             await self.quest_data.add_new_quest(guild_id, user_obj)
         except Exception as e:
+            if self._is_db_down_error(e):
+                self._note_db_error(e)
+                return
             logger.error("Error in on_reaction_add:\n%s", e)
 
     async def complete_quest(self, guild_id, user_id, quest, times, user_mention, quest_id, message, method=None, reward="N/A"):

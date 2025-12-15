@@ -6,6 +6,10 @@ from data.local.const import *
 from imports.discord_imports import *
 from imports.log_imports import *
 from utils.cogs.quest import *
+from utils.character_utils import format_character_name
+from utils.cogs.quest import _safe_select_emoji
+from utils.character_utils import get_character_def
+from utils.character_utils import build_character_embed_with_files
 
 
 
@@ -15,7 +19,105 @@ import json
 import logging
 from io import BytesIO
 from datetime import datetime
+import os
+import time
 logger = logging.getLogger(__name__)
+
+
+def _today_key_utc() -> str:
+    now = datetime.utcnow()
+    return f"{now.year:04d}-{now.month:02d}-{now.day:02d}"
+
+
+def _is_dev_owner(user_id: str) -> bool:
+    # Keep simple: allowlist via env var, comma-separated user IDs.
+    raw = str(os.getenv("BOT_OWNER_IDS") or "").strip()
+    if not raw:
+        return False
+    allow = {s.strip() for s in raw.split(",") if s.strip()}
+    return str(user_id) in allow
+
+
+async def _claim_ready_pending_meals(quest_data: Quest_Data, *, guild_id: str, user_id: str) -> int:
+    """Move any pending meals whose ready_at has passed into sxf.meals inventory.
+
+    Returns number of meals claimed.
+    """
+    now = int(time.time())
+    try:
+        doc = await quest_data.mongoConnect[quest_data.DB_NAME]["Servers"].find_one(
+            {"guild_id": guild_id},
+            {f"members.{user_id}.inventory.sxf.pending_meals": 1},
+        )
+    except Exception:
+        return 0
+
+    pending = (
+        (((doc or {}).get("members") or {}).get(user_id) or {})
+        .get("inventory", {})
+        .get("sxf", {})
+        .get("pending_meals", {})
+    )
+    if not isinstance(pending, dict) or not pending:
+        return 0
+
+    claimed = 0
+    for meal_name, ready_at in list(pending.items()):
+        try:
+            ra = int(ready_at)
+        except Exception:
+            ra = None
+        if not meal_name or ra is None or ra > now:
+            continue
+        ok = await quest_data.add_item_to_inventory(guild_id, user_id, "sxf.meals", str(meal_name), 1)
+        if ok:
+            claimed += 1
+            try:
+                await quest_data.mongoConnect[quest_data.DB_NAME]["Servers"].update_one(
+                    {"guild_id": guild_id},
+                    {"$unset": {f"members.{user_id}.inventory.sxf.pending_meals.{meal_name}": ""}},
+                    upsert=True,
+                )
+            except Exception:
+                pass
+    return claimed
+
+
+async def _can_cook_today(quest_data: Quest_Data, *, guild_id: str, user_id: str, limit: int = 10) -> tuple[bool, int]:
+    """Return (allowed, used_today)."""
+    day = _today_key_utc()
+    if _is_dev_owner(user_id):
+        return True, 0
+    try:
+        doc = await quest_data.mongoConnect[quest_data.DB_NAME]["Servers"].find_one(
+            {"guild_id": guild_id},
+            {f"members.{user_id}.inventory.sxf.daily_cook.{day}": 1},
+        )
+        used = (
+            (((doc or {}).get("members") or {}).get(user_id) or {})
+            .get("inventory", {})
+            .get("sxf", {})
+            .get("daily_cook", {})
+            .get(day, 0)
+        )
+        used_i = int(used or 0)
+    except Exception:
+        used_i = 0
+    return used_i < int(limit), used_i
+
+
+async def _note_cook_today(quest_data: Quest_Data, *, guild_id: str, user_id: str) -> None:
+    if _is_dev_owner(user_id):
+        return
+    day = _today_key_utc()
+    try:
+        await quest_data.mongoConnect[quest_data.DB_NAME]["Servers"].update_one(
+            {"guild_id": guild_id},
+            {"$inc": {f"members.{user_id}.inventory.sxf.daily_cook.{day}": 1}},
+            upsert=True,
+        )
+    except Exception:
+        return
 class Quest(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -464,6 +566,16 @@ class Quest(commands.Cog):
             user_id = str(ctx.author.id)
             guild_id = str(ctx.guild.id)
 
+            # Claim any finished meals first.
+            await _claim_ready_pending_meals(self.quest_data, guild_id=guild_id, user_id=user_id)
+
+            allowed, used = await _can_cook_today(self.quest_data, guild_id=guild_id, user_id=user_id, limit=10)
+            if not allowed:
+                return await ctx.reply(
+                    f"You've reached your daily cooking limit (**10/day**). Try again tomorrow. (used: {used}/10)",
+                    mention_author=False,
+                )
+
             if not await self.quest_data.find_user_in_server(user_id, guild_id):
                 return await ctx.reply(
                     f"You need to start your quest first using `{ctx.prefix}quest` before cooking.",
@@ -530,6 +642,9 @@ class Quest(commands.Cog):
                 embed.set_thumbnail(url=ctx.author.avatar.url)
             await view.update_view()
             await ctx.reply(embed=embed, view=view, mention_author=False)
+
+            # Count this as a cooking attempt/day usage.
+            await _note_cook_today(self.quest_data, guild_id=guild_id, user_id=user_id)
 
         except Exception as e:
             logger.error(f"Error in cook command: {e}")
@@ -925,15 +1040,13 @@ class CookingRecipeSelectView(discord.ui.View):
     async def create_embed(self) -> discord.Embed:
         if not self._recipes:
             self._recipes = self._load_recipes()
-        if not self._ingredient_emoji:
-            self._ingredient_emoji = self._load_ingredient_emoji()
         if not self._ingredient_map:
             self._ingredient_map = self._load_ingredient_map()
 
         cookable = await self._get_cookable_recipes()
 
         embed = discord.Embed(
-            title="🍳 Cook a Meal",
+            title="Cook a Meal",
             description="Pick a recipe number. (Showing recipes you can cook right now)",
             color=discord.Color.from_rgb(255, 182, 193),
             timestamp=datetime.now(),
@@ -944,13 +1057,11 @@ class CookingRecipeSelectView(discord.ui.View):
         except Exception:
             pass
 
-        def _diff_full_name(d: str) -> str:
-            d = str(d or "normal").lower()
-            if d == "none":
-                return "None"
-            if d == "easy":
+        def _diff_full_name(diff: str) -> str:
+            s = str(diff or "normal").strip().lower()
+            if s in ("easy", "e"):
                 return "Easy"
-            if d == "hard":
+            if s in ("hard", "h"):
                 return "Hard"
             return "Normal"
 
@@ -959,7 +1070,8 @@ class CookingRecipeSelectView(discord.ui.View):
             chosen = next((c for c in (self.owned_chars or []) if c.get("id") == self.selected_char_id), None)
             emoji = (chosen or {}).get("emoji") or "👥"
             diff = _diff_full_name((chosen or {}).get("cooking-difficulty") or self.selected_char_difficulty)
-            embed.add_field(name="Chef", value=f"{emoji} **{self.selected_char_id}**\nDifficulty: **{diff}**", inline=False)
+            chef_name = format_character_name(self.selected_char_id)
+            embed.add_field(name="Chef", value=f"{emoji} **{chef_name}**\nDifficulty: **{diff}**", inline=False)
         else:
             embed.add_field(name="Chef", value="No character selected. Use `character select <id>` first.", inline=False)
 
@@ -1071,6 +1183,8 @@ class CookingTimingGameView(discord.ui.View):
         self._target_key: str | None = None
         self._round_time_limit = 2.0
 
+        self._required_keys: list[str] = []
+
         self._ingredient_map: dict[str, dict] = {}
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item):
@@ -1103,6 +1217,14 @@ class CookingTimingGameView(discord.ui.View):
             if key:
                 parsed.append((key, max(1, amt)))
         return parsed
+
+    def _required_key_sequence(self) -> list[str]:
+        # Sequential cooking: repeat ingredient keys based on required amount.
+        out: list[str] = []
+        for key, amt in self._required_ingredients():
+            for _i in range(max(1, int(amt))):
+                out.append(str(key))
+        return out
 
     def _load_ingredient_map(self) -> dict[str, dict]:
         try:
@@ -1228,7 +1350,7 @@ class CookingTimingGameView(discord.ui.View):
         )
         embed.add_field(
             name="Chef",
-            value=f"**{self.character_id}**\nDifficulty: **{self.difficulty.title()}**",
+            value=f"**{format_character_name(self.character_id)}**\nDifficulty: **{self.difficulty.title()}**",
             inline=False,
         )
         return embed
@@ -1252,6 +1374,9 @@ class CookingTimingGameView(discord.ui.View):
         self._reaction_times = []
         self._ready = False
         self._correct_count = 0
+
+        self._required_keys = self._required_key_sequence()
+        self.total_rounds = min(5, max(1, len(self._required_keys)))
 
         start_button = discord.ui.Button(
             style=discord.ButtonStyle.primary,
@@ -1287,6 +1412,8 @@ class CookingTimingGameView(discord.ui.View):
             self.round = 0
             self._reaction_times = []
             self._correct_count = 0
+            if not self._required_keys:
+                self._required_keys = self._required_key_sequence()
             await self._start_next_pick_round(interaction)
         except Exception as e:
             logger.error(f"Error in {self.__class__.__name__}.begin_callback: {e}", exc_info=True)
@@ -1304,24 +1431,48 @@ class CookingTimingGameView(discord.ui.View):
 
     def _difficulty_settings(self) -> tuple[int, float]:
         # button_count (max 10), time limit per round
-        if self.difficulty == "none":
-            return 3, 3.0
-        if self.difficulty == "easy":
-            return 5, 2.2
+        # Time is based on BOTH meal difficulty and character skill.
+        # User requirement: hard min reaction time should be 5-10s random.
+        base_btn = {"none": 3, "easy": 5, "normal": 7, "hard": 10}.get(self.difficulty, 7)
+
+        # Character skill proxy: Speed + AttackSpeed. Higher skill -> slightly lower time.
+        char_def = get_character_def(self.character_id)
+        speed = int(getattr(char_def, "speed", 0) or 0) if char_def else 0
+        atk_spd = int(getattr(char_def, "attack_speed", 0) or 0) if char_def else 0
+        skill = max(0, min(100, int(speed + atk_spd)))
+
+        # Reduce time by up to 25% for very high skill.
+        skill_mult = 1.0 - (0.25 * (skill / 100.0))
+
         if self.difficulty == "hard":
-            return 10, 1.2
-        # normal
-        return 7, 1.7
+            # Hard: enforce 5-10s per round random.
+            t = random.uniform(5.0, 10.0) * skill_mult
+            t = max(5.0, t)
+            return base_btn, float(t)
+
+        # Other difficulties: reasonable windows.
+        base_time = {
+            "none": 10.0,
+            "easy": 8.0,
+            "normal": 7.0,
+        }.get(self.difficulty, 7.0)
+        t = base_time * skill_mult
+        t = max(4.5, float(t))
+        return base_btn, t
 
     async def _start_next_pick_round(self, interaction: discord.Interaction):
-        # pick a target ingredient from the recipe requirements
-        req = [k for (k, _a) in self._required_ingredients()]
-        if not req:
+        # Sequential target: follow recipe order (with amounts expanded).
+        if not self._required_keys:
+            self._required_keys = self._required_key_sequence()
+        if not self._required_keys:
             return await self.finish(interaction)
 
         btn_count, time_limit = self._difficulty_settings()
         self._round_time_limit = time_limit
-        self._target_key = random.choice(req)
+
+        # Clamp round index and choose the next ingredient in sequence.
+        idx = max(0, min(int(self.round), len(self._required_keys) - 1))
+        self._target_key = str(self._required_keys[idx])
 
         # build options: target + decoys from all ingredients
         if not self._ingredient_map:
@@ -1457,32 +1608,87 @@ class CookingTimingGameView(discord.ui.View):
             base_hp = 10
         hp_final = max(1, int(base_hp * (0.5 + 0.75 * score)))
 
-        # store meal as inventory item (simple for now)
+        # Store meal with a completion timer.
         guild_id = str(self.ctx.guild.id)
         user_id = str(self.ctx.author.id)
         meal_name = self.recipe.get("name") or self.recipe.get("id") or "Meal"
-        item_name = f"{meal_name} [{quality}] +{hp_final}%"
-        await self.quest_data.add_item_to_inventory(guild_id, user_id, "sxf.meals", item_name, 1)
+        meal_emoji = self.recipe.get("emoji") or "🍽️"
+        base_quality = str(self.recipe.get("base-quality") or "").strip().lower() or "good"
+        item_name = f"{meal_name} [{quality}|base:{base_quality}] +{hp_final}%"
+
+        # Persist a "ready at" timestamp (seconds) for the cooked meal.
+        # Default cook time: 2 minutes, scaled by difficulty.
+        cook_seconds = {"none": 30, "easy": 60, "normal": 120, "hard": 240}.get(self.difficulty, 120)
+        now_ts = int(time.time())
+        ready_at = now_ts + int(cook_seconds)
+        try:
+            await self.quest_data.mongoConnect[self.quest_data.DB_NAME]["Servers"].update_one(
+                {"guild_id": guild_id},
+                {"$set": {f"members.{user_id}.inventory.sxf.pending_meals.{item_name}": ready_at}},
+                upsert=True,
+            )
+        except Exception:
+            # fallback: still give the meal immediately
+            await self.quest_data.add_item_to_inventory(guild_id, user_id, "sxf.meals", item_name, 1)
+
+        ready_text = "Ready" if ready_at <= now_ts else f"<t:{ready_at}:R>"
+
+        char_def = get_character_def(self.character_id)
+        chef_emoji = (char_def.emoji if char_def else "👨‍🍳")
+        chef_name = format_character_name(self.character_id)
 
         embed = discord.Embed(
-            title="🍽️ Meal Cooked!",
+            title=f"{meal_emoji} Meal Cooked!",
             description=(
                 f"**{meal_name}**\n"
-                f"Quality: **{quality}**\n"
-                f"Accuracy: **{int(accuracy*100)}%**\n"
-                f"Avg time: `{avg_rt:.3f}s`\n"
-                f"Meal HP: **+{hp_final}%**"
+                f"> Quality: **{quality}**\n"
+                f"> Accuracy: **{int(accuracy*100)}%**\n"
+                f"> Avg time: `{avg_rt:.3f}s`\n"
+                f"> Meal HP: **+{hp_final}%**\n"
+                f"> Status: **{ready_text}**"
             ),
             color=discord.Color.green(),
             timestamp=datetime.now(),
         )
-        embed.add_field(name="Chef", value=f"{self.character_id} (`{self.difficulty}`)", inline=False)
+
+        embed.add_field(
+            name="Chef",
+            value=f"{chef_emoji} **{chef_name}**\nDifficulty: **{self.difficulty.title()}**",
+            inline=False,
+        )
+
+        # Meal emoji as thumbnail (nice visual even without custom art)
+        try:
+            # If it's a unicode emoji, Discord can't use it as an image URL; keep thumbnail unset.
+            pass
+        except Exception:
+            pass
+
+        # If the character has a local image, attach it and show as embed image.
+        files = []
+        try:
+            if char_def and char_def.images:
+                from utils.character_utils import _resolve_image_source
+
+                url, f = _resolve_image_source(char_def.images[0], fallback_name=f"cook_{char_def.char_id}")
+                if url:
+                    embed.set_image(url=url)
+                if f:
+                    files.append(f)
+        except Exception:
+            files = []
 
         self.clear_items()
         try:
             if interaction.response.is_done():
-                await interaction.edit_original_response(embed=embed, view=None)
+                try:
+                    await interaction.edit_original_response(embed=embed, view=None, attachments=[], files=files)
+                except TypeError:
+                    await interaction.edit_original_response(embed=embed, view=None)
             else:
-                await interaction.response.edit_message(embed=embed, view=None)
+                try:
+                    await interaction.response.edit_message(embed=embed, view=None, attachments=[], files=files)
+                except TypeError:
+                    await interaction.response.edit_message(embed=embed, view=None)
         except discord.NotFound:
             return

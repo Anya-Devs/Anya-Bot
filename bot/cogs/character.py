@@ -1,8 +1,13 @@
 import discord
 from discord.ext import commands
 
-from utils.character_utils import build_character_embed, get_character_def
+from utils.character_utils import build_character_embed_with_files, get_character_def
 from utils.cogs.quest import Quest_Data
+
+import time
+import json
+from pathlib import Path
+import random
 
 
 class CharacterView(discord.ui.View):
@@ -16,6 +21,10 @@ class CharacterView(discord.ui.View):
         self.message: discord.Message | None = None
 
         self.image_index: int = 0
+
+        self.last_dialogue: str | None = None
+
+        self.FEED_INTERVAL_SECONDS: int = 6 * 60 * 60
 
         self._rebuild_components()
 
@@ -216,17 +225,24 @@ class CharacterView(discord.ui.View):
 
         hp, _max_hp = await self._get_hp()
         self.image_index = await self._get_selected_image_index()
-        embed = await build_character_embed(
+
+        next_feed_ts, next_feed_in = await self._get_next_feed_info()
+        embed, files = await build_character_embed_with_files(
             bot=self.bot,
             user=self.ctx.author,
             char_def=char_def,
             current_hp=hp,
-            author_avatar_url=self.ctx.author.avatar.url if self.ctx.author.avatar else None,
             image_index=self.image_index,
+            next_feed_ts=next_feed_ts,
+            next_feed_in=next_feed_in,
+            dialogue_footer=self.last_dialogue,
         )
         try:
             if self.message:
-                await self.message.edit(embed=embed, view=self)
+                try:
+                    await self.message.edit(embed=embed, view=self, attachments=[], files=files)
+                except TypeError:
+                    await self.message.edit(embed=embed, view=self)
         except Exception:
             return
 
@@ -292,26 +308,34 @@ class CharacterView(discord.ui.View):
 
         hp, _max_hp = await self._get_hp()
         self.image_index = await self._get_selected_image_index()
-        embed = await build_character_embed(
+        next_feed_ts, next_feed_in = await self._get_next_feed_info()
+        embed, files = await build_character_embed_with_files(
             bot=self.bot,
             user=self.ctx.author,
             char_def=char_def,
             current_hp=hp,
-            author_avatar_url=self.ctx.author.avatar.url if self.ctx.author.avatar else None,
             image_index=self.image_index,
+            next_feed_ts=next_feed_ts,
+            next_feed_in=next_feed_in,
+            dialogue_footer=self.last_dialogue,
         )
 
         if self.message and interaction.message and interaction.message.id != self.message.id:
             try:
+                await self.message.edit(embed=embed, view=self, attachments=[], files=files)
+            except TypeError:
                 await self.message.edit(embed=embed, view=self)
-                return
-            except Exception:
-                pass
-
+            return
         if interaction.response.is_done():
-            await interaction.edit_original_response(embed=embed, view=self)
+            try:
+                await interaction.edit_original_response(embed=embed, view=self, attachments=[], files=files)
+            except TypeError:
+                await interaction.edit_original_response(embed=embed, view=self)
         else:
-            await interaction.response.edit_message(embed=embed, view=self)
+            try:
+                await interaction.response.edit_message(embed=embed, view=self, attachments=[], files=files)
+            except TypeError:
+                await interaction.response.edit_message(embed=embed, view=self)
 
     async def feed_callback(self, interaction: discord.Interaction):
         if interaction.user != self.ctx.author:
@@ -323,6 +347,19 @@ class CharacterView(discord.ui.View):
         char_def = get_character_def(self.char_id)
         if not char_def:
             return await interaction.followup.send("Character not found.", ephemeral=True)
+
+        next_feed_ts, _next_feed_in = await self._get_next_feed_info()
+        if next_feed_ts is not None:
+            now = int(time.time())
+            if now < int(next_feed_ts):
+                msg = await self._unique_not_hungry_dialogue(char_def)
+                self.last_dialogue = msg
+                await interaction.followup.send(
+                    f"{char_def.emoji} **{self._display_name(char_def)}**: {msg}\n\nNext feed: <t:{int(next_feed_ts)}:R>",
+                    ephemeral=True,
+                )
+                await self.refresh(interaction)
+                return
 
         guild_id = str(self.ctx.guild.id)
         user_id = str(self.ctx.author.id)
@@ -358,7 +395,233 @@ class CharacterView(discord.ui.View):
         new_hp = min(max_hp, hp + max(1, int(max_hp * 0.15)))
         await self._set_hp(new_hp)
 
+        await self._set_last_feed_ts(int(time.time()))
+
+        quality = self._meal_quality_from_name(meal_name)
+        base_quality = self._meal_base_quality_from_name(meal_name)
+        fed_msg = self._dialogue_fed_with_base(
+            char_def,
+            meal_name=meal_name,
+            quality=quality,
+            base_quality=base_quality,
+        )
+        self.last_dialogue = fed_msg
+        await interaction.followup.send(
+            f"{char_def.emoji} **{self._display_name(char_def)}**: {fed_msg}\n\nAte: **{meal_name}**",
+            ephemeral=True,
+        )
+
         await self.refresh(interaction)
+
+    def _display_name(self, char_def) -> str:
+        try:
+            return str(getattr(char_def, "char_id", "Character")).replace("-", " ").title()
+        except Exception:
+            return "Character"
+
+    def _load_dialogue_config(self) -> dict:
+        try:
+            p = Path("data/minigames/spy-x-family/character_dialogue.json")
+            if not p.exists():
+                return {}
+            with p.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _dialogue_pool(self, char_def, key: str) -> list[str]:
+        data = self._load_dialogue_config()
+        cid = str(getattr(char_def, "char_id", "") or "")
+        pool = []
+        try:
+            pool = (data.get(cid) or {}).get(key) or []
+        except Exception:
+            pool = []
+        if not isinstance(pool, list) or not pool:
+            try:
+                pool = (data.get("_default") or {}).get(key) or []
+            except Exception:
+                pool = []
+        return [str(x) for x in pool if isinstance(x, str) and x.strip()]
+
+    def _render_dialogue_template(self, template: str, *, meal_name: str | None = None, quality: str | None = None) -> str:
+        t = str(template or "").strip()
+        if not t:
+            return ""
+        return (
+            t.replace("{meal}", str(meal_name or "food"))
+            .replace("{quality}", str((quality or "")).title() if quality else "")
+            .strip()
+        )
+
+    def _meal_quality_from_name(self, meal_name: str) -> str | None:
+        s = str(meal_name or "")
+        for q in ("Perfect", "Great", "Good", "Bad", "Burnt"):
+            if f"[{q}]" in s:
+                return q.lower()
+        return None
+
+    def _meal_base_quality_from_name(self, meal_name: str) -> str | None:
+        s = str(meal_name or "")
+        if "|base:" not in s:
+            return None
+        # Expected format: "... [Perfect|base:good] ..."
+        try:
+            inside = s.split("[", 1)[-1].split("]", 1)[0]
+            parts = [p.strip() for p in inside.split("|") if p.strip()]
+            for p in parts:
+                if p.lower().startswith("base:"):
+                    v = p.split(":", 1)[-1].strip().lower()
+                    return v or None
+        except Exception:
+            return None
+        return None
+
+    def _normalize_base_quality(self, base_quality: str | None) -> str | None:
+        if not base_quality:
+            return None
+        b = str(base_quality).strip().lower()
+        if not b:
+            return None
+        # Allow user-defined tiers. Provide a few common normalizations.
+        if b in ("poor", "terrible", "trash"):
+            return "poor"
+        if b in ("okay", "ok", "average", "normal"):
+            return "average"
+        if b in ("good", "decent"):
+            return "good"
+        if b in ("great"):
+            return "great"
+        if b in ("excellent", "amazing", "premium"):
+            return "excellent"
+        # Unknown tier: keep as-is so JSON can define it.
+        return b
+
+    async def _unique_not_hungry_dialogue(self, char_def) -> str:
+        pool = self._dialogue_pool(char_def, "not_hungry")
+        if not pool:
+            return "I'm not hungry right now."
+
+        guild_id = str(self.ctx.guild.id)
+        user_id = str(self.ctx.author.id)
+        cid = str(getattr(char_def, "char_id", "") or "")
+
+        used: list[int] = []
+        try:
+            doc = await self.quest_data.mongoConnect[self.quest_data.DB_NAME]["Servers"].find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.inventory.sxf.dialogue_used.not_hungry.{cid}": 1},
+            )
+            raw = (
+                (((doc or {}).get("members") or {}).get(user_id) or {})
+                .get("inventory", {})
+                .get("sxf", {})
+                .get("dialogue_used", {})
+                .get("not_hungry", {})
+                .get(cid, [])
+            )
+            if isinstance(raw, list):
+                used = [int(x) for x in raw if isinstance(x, int) or (isinstance(x, str) and str(x).isdigit())]
+        except Exception:
+            used = []
+
+        used_set = {i for i in used if 0 <= i < len(pool)}
+        remaining = [i for i in range(len(pool)) if i not in used_set]
+        if not remaining:
+            # reset once exhausted
+            used_set = set()
+            remaining = list(range(len(pool)))
+
+        idx = remaining[0]
+        used_set.add(idx)
+        try:
+            await self.quest_data.mongoConnect[self.quest_data.DB_NAME]["Servers"].update_one(
+                {"guild_id": guild_id},
+                {"$set": {f"members.{user_id}.inventory.sxf.dialogue_used.not_hungry.{cid}": sorted(list(used_set))}},
+                upsert=True,
+            )
+        except Exception:
+            pass
+
+        return pool[idx]
+
+    def _dialogue_not_hungry(self, char_def) -> str:
+        pool = self._dialogue_pool(char_def, "not_hungry")
+        return pool[0] if pool else "I'm not hungry right now."
+
+    def _dialogue_fed(self, char_def, *, meal_name: str | None = None, quality: str | None = None) -> str:
+        # Allow quality-based dialogue via JSON keys like fed_perfect/fed_great/etc.
+        pool: list[str] = []
+        if quality:
+            pool = self._dialogue_pool(char_def, f"fed_{quality}")
+        if not pool:
+            pool = self._dialogue_pool(char_def, "fed")
+        if not pool:
+            return "Thanks!"
+        chosen = random.choice(pool)
+        return self._render_dialogue_template(chosen, meal_name=meal_name, quality=quality)
+
+    def _dialogue_fed_with_base(self, char_def, *, meal_name: str | None = None, quality: str | None = None, base_quality: str | None = None) -> str:
+        # Priority: cooked quality -> base quality -> generic fed.
+        pool: list[str] = []
+        if quality:
+            pool = self._dialogue_pool(char_def, f"fed_{quality}")
+        bq = self._normalize_base_quality(base_quality)
+        if not pool and bq:
+            pool = self._dialogue_pool(char_def, f"fed_base_{bq}")
+        if not pool:
+            pool = self._dialogue_pool(char_def, "fed")
+        if not pool:
+            return "Thanks!"
+        chosen = random.choice(pool)
+        # Use the cooked quality (if present) for {quality} placeholder, else base quality.
+        q_for_tpl = quality or bq
+        return self._render_dialogue_template(chosen, meal_name=meal_name, quality=q_for_tpl)
+
+    async def _get_last_feed_ts(self) -> int | None:
+        guild_id = str(self.ctx.guild.id)
+        user_id = str(self.ctx.author.id)
+        try:
+            doc = await self.quest_data.mongoConnect[self.quest_data.DB_NAME]["Servers"].find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.inventory.sxf.last_feed_ts.{self.char_id}": 1},
+            )
+            ts = (
+                (((doc or {}).get("members") or {}).get(user_id) or {})
+                .get("inventory", {})
+                .get("sxf", {})
+                .get("last_feed_ts", {})
+                .get(self.char_id)
+            )
+        except Exception:
+            ts = None
+        try:
+            if ts is None:
+                return None
+            return int(ts)
+        except Exception:
+            return None
+
+    async def _set_last_feed_ts(self, ts: int) -> None:
+        guild_id = str(self.ctx.guild.id)
+        user_id = str(self.ctx.author.id)
+        try:
+            await self.quest_data.mongoConnect[self.quest_data.DB_NAME]["Servers"].update_one(
+                {"guild_id": guild_id},
+                {"$set": {f"members.{user_id}.inventory.sxf.last_feed_ts.{self.char_id}": int(ts)}},
+                upsert=True,
+            )
+        except Exception:
+            return
+
+    async def _get_next_feed_info(self) -> tuple[int | None, str | None]:
+        last = await self._get_last_feed_ts()
+        if not last:
+            return None, "Feed now"
+        nxt = int(last) + int(self.FEED_INTERVAL_SECONDS)
+        # Discord relative timestamp (<t:...:R>) is handled in embed builder.
+        return nxt, None
 
 
 class Character(commands.Cog):
@@ -461,15 +724,18 @@ class Character(commands.Cog):
 
         view = CharacterView(self.bot, self.quest_data, ctx, char_id)
         view.image_index = await view._get_selected_image_index()
-        embed = await build_character_embed(
+
+        next_feed_ts, next_feed_in = await view._get_next_feed_info()
+        embed, files = await build_character_embed_with_files(
             bot=self.bot,
             user=ctx.author,
             char_def=char_def,
             current_hp=hp,
-            author_avatar_url=ctx.author.avatar.url if ctx.author.avatar else None,
             image_index=view.image_index,
+            next_feed_ts=next_feed_ts,
+            next_feed_in=next_feed_in,
         )
-        msg = await ctx.reply(embed=embed, view=view, mention_author=False)
+        msg = await ctx.reply(embed=embed, view=view, files=files, mention_author=False)
         view.message = msg
 
     @character.command(name="view")
@@ -504,15 +770,18 @@ class Character(commands.Cog):
 
         view = CharacterView(self.bot, self.quest_data, ctx, char_id)
         view.image_index = await view._get_selected_image_index()
-        embed = await build_character_embed(
+
+        next_feed_ts, next_feed_in = await view._get_next_feed_info()
+        embed, files = await build_character_embed_with_files(
             bot=self.bot,
             user=ctx.author,
             char_def=char_def,
             current_hp=hp,
-            author_avatar_url=ctx.author.avatar.url if ctx.author.avatar else None,
             image_index=view.image_index,
+            next_feed_ts=next_feed_ts,
+            next_feed_in=next_feed_in,
         )
-        msg = await ctx.reply(embed=embed, view=view, mention_author=False)
+        msg = await ctx.reply(embed=embed, view=view, files=files, mention_author=False)
         view.message = msg
 
 
@@ -523,11 +792,18 @@ class CharacterImageSelect(discord.ui.Select):
         options = []
         if char_def and char_def.images:
             for i in range(min(25, len(char_def.images))):
+                variant = None
+                try:
+                    if getattr(char_def, "image_variants", None) and i < len(char_def.image_variants):
+                        variant = str(char_def.image_variants[i])
+                except Exception:
+                    variant = None
+                label = (variant or f"Image {i + 1}")
                 options.append(
                     discord.SelectOption(
-                        label=f"Image {i + 1}",
+                        label=label[:100],
                         value=str(i),
-                        description=f"Use variant #{i + 1}"[:100],
+                        description=(f"Use {label}" if variant else f"Use variant #{i + 1}")[:100],
                     )
                 )
 
