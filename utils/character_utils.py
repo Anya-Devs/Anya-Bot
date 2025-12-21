@@ -66,20 +66,32 @@ def get_character_def(char_id: str, path: str = "data/minigames/spy-x-family/cha
     imgs = data.get("images")
     images: list[str] = []
     image_variants: list[str] = []
-    if isinstance(imgs, list):
+    
+    if isinstance(imgs, str) and imgs.strip():
+        # New format: direct path string
+        images.append(imgs.strip())
+        image_variants.append("default")
+    elif isinstance(imgs, list):
+        # Legacy list format (for backward compatibility)
         images = [str(u) for u in imgs if isinstance(u, str) and u.strip()]
         image_variants = [f"Image {i + 1}" for i in range(len(images))]
     elif isinstance(imgs, dict):
+        # Legacy dict format (for backward compatibility)
         for k, v in imgs.items():
-            if not isinstance(k, str):
-                continue
-            if not isinstance(v, str) or not v.strip():
+            if not isinstance(k, str) or not isinstance(v, str) or not v.strip():
                 continue
             key = k.strip()
             if key.lower() == "defualt":
                 key = "default"
-            image_variants.append(key)
-            images.append(v.strip())
+            
+            # Check if the path is a directory
+            v_path = Path(v.strip())
+            if v_path.is_dir():
+                images.append(str(v_path))
+                image_variants.append(key)
+            else:
+                image_variants.append(key)
+                images.append(v.strip())
 
     return CharacterDefinition(
         char_id=char_id,
@@ -196,14 +208,32 @@ async def build_character_embed_with_files(
     # Character art should be the embed image; choose one of the available images
     if char_def.images:
         idx = max(0, min(int(image_index), len(char_def.images) - 1))
-        url, f = _resolve_image_source(
-            char_def.images[idx],
-            fallback_name=f"{char_def.char_id}_{(char_def.image_variants[idx] if idx < len(char_def.image_variants) else idx)}",
-        )
-        if url:
-            embed.set_image(url=url)
-        if f:
-            files.append(f)
+        image_path = char_def.images[idx]
+        
+        # Check if the image path is a directory
+        if image_path and Path(image_path).is_dir():
+            # Get all image files from the directory
+            image_files = [f for f in Path(image_path).glob('*') 
+                         if f.suffix.lower() in ['.png', '.jpg', '.jpeg', '.gif']]
+            if image_files:
+                # Sort files for consistent ordering
+                image_files.sort()
+                # Use the first image in the directory
+                image_path = str(image_files[0])
+        
+        if image_path:
+            fallback_name = f"{char_def.char_id}"
+            if idx < len(char_def.image_variants):
+                fallback_name += f"_{char_def.image_variants[idx]}"
+            
+            url, f = _resolve_image_source(
+                image_path,
+                fallback_name=fallback_name,
+            )
+            if url:
+                embed.set_image(url=url)
+            if f:
+                files.append(f)
 
     embed.add_field(
         name="Health",

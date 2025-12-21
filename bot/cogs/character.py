@@ -1,5 +1,6 @@
-import discord
-from discord.ext import commands
+from imports.discord_imports import *
+from imports.log_imports import *
+
 
 from utils.character_utils import build_character_embed_with_files, get_character_def
 from utils.cogs.quest import Quest_Data
@@ -19,35 +20,17 @@ class CharacterView(discord.ui.View):
         self.char_id = char_id
 
         self.message: discord.Message | None = None
-
         self.image_index: int = 0
-
         self.last_dialogue: str | None = None
 
-        self.FEED_INTERVAL_SECONDS: int = 6 * 60 * 60
+        self.FEED_INTERVAL_SECONDS: int = 6 * 60 * 60  # 6 hours
 
         self._rebuild_components()
 
     def _rebuild_components(self) -> None:
         self.clear_items()
-
         self.add_item(CharacterImageSelect(self))
-
-        self.inv_btn = discord.ui.Button(
-            style=discord.ButtonStyle.secondary,
-            label="Inventory",
-            custom_id="character_inventory",
-        )
-        self.inv_btn.callback = self.inventory_callback
-        self.add_item(self.inv_btn)
-
-        self.feed_btn = discord.ui.Button(
-            style=discord.ButtonStyle.success,
-            label="Feed",
-            custom_id="character_feed",
-        )
-        self.feed_btn.callback = self.feed_callback
-        self.add_item(self.feed_btn)
+        self.add_item(InventoryButton())
 
     async def _get_bucket(self, category_key: str) -> dict:
         guild_id = str(self.ctx.guild.id)
@@ -186,11 +169,21 @@ class CharacterView(discord.ui.View):
                     owned_chars.append((k, v))
         owned_chars.sort(key=lambda t: (t[0].lower(), -t[1]))
 
+        # Fallback if format_character_name is not available
+        def format_character_name(cid: str) -> str:
+            return cid.replace("-", " ").title()
+
+        current_char = get_character_def(selected_char or self.char_id)
+        char_emoji = current_char.emoji if current_char else ""
+        char_name = format_character_name(selected_char or self.char_id)
+
         items_embed = discord.Embed(
-            title="🎒 Inventory - Items",
+            title=f"🎒 {char_emoji} {char_name}'s Inventory",
             description=(
-                "Select an item to equip it to this character.\n"
-                + (f"Currently equipped: **{equipped}**" if equipped else "Currently equipped: **None**")
+                f"**{char_emoji} {char_name}**\n"
+                f"*{current_char.flavor_text if current_char else ''}*\n\n"
+                f"Use the buttons below to manage your inventory.\n"
+                f"Currently equipped: **{equipped or 'None'}**"
             ),
             color=discord.Color.blurple(),
         )
@@ -223,10 +216,10 @@ class CharacterView(discord.ui.View):
         if not char_def:
             return
 
-        hp, _max_hp = await self._get_hp()
+        hp, _ = await self._get_hp()
         self.image_index = await self._get_selected_image_index()
 
-        next_feed_ts, next_feed_in = await self._get_next_feed_info()
+        next_feed_ts, _ = await self._get_next_feed_info()
         embed, files = await build_character_embed_with_files(
             bot=self.bot,
             user=self.ctx.author,
@@ -234,17 +227,14 @@ class CharacterView(discord.ui.View):
             current_hp=hp,
             image_index=self.image_index,
             next_feed_ts=next_feed_ts,
-            next_feed_in=next_feed_in,
+            next_feed_in=None,
             dialogue_footer=self.last_dialogue,
         )
-        try:
-            if self.message:
-                try:
-                    await self.message.edit(embed=embed, view=self, attachments=[], files=files)
-                except TypeError:
-                    await self.message.edit(embed=embed, view=self)
-        except Exception:
-            return
+        if self.message:
+            try:
+                await self.message.edit(embed=embed, view=self, attachments=[], files=files)
+            except TypeError:
+                await self.message.edit(embed=embed, view=self)
 
     async def _get_selected_image_index(self) -> int:
         guild_id = str(self.ctx.guild.id)
@@ -303,12 +293,14 @@ class CharacterView(discord.ui.View):
         char_def = get_character_def(self.char_id)
         if not char_def:
             if interaction.response.is_done():
-                return await interaction.followup.send("Character not found.", ephemeral=True)
-            return await interaction.response.send_message("Character not found.", ephemeral=True)
+                await interaction.followup.send("Character not found.", ephemeral=True)
+            else:
+                await interaction.response.send_message("Character not found.", ephemeral=True)
+            return
 
-        hp, _max_hp = await self._get_hp()
+        hp, _ = await self._get_hp()
         self.image_index = await self._get_selected_image_index()
-        next_feed_ts, next_feed_in = await self._get_next_feed_info()
+        next_feed_ts, _ = await self._get_next_feed_info()
         embed, files = await build_character_embed_with_files(
             bot=self.bot,
             user=self.ctx.author,
@@ -316,7 +308,7 @@ class CharacterView(discord.ui.View):
             current_hp=hp,
             image_index=self.image_index,
             next_feed_ts=next_feed_ts,
-            next_feed_in=next_feed_in,
+            next_feed_in=None,
             dialogue_footer=self.last_dialogue,
         )
 
@@ -326,15 +318,16 @@ class CharacterView(discord.ui.View):
             except TypeError:
                 await self.message.edit(embed=embed, view=self)
             return
-        if interaction.response.is_done():
-            try:
+
+        try:
+            if interaction.response.is_done():
                 await interaction.edit_original_response(embed=embed, view=self, attachments=[], files=files)
-            except TypeError:
-                await interaction.edit_original_response(embed=embed, view=self)
-        else:
-            try:
+            else:
                 await interaction.response.edit_message(embed=embed, view=self, attachments=[], files=files)
-            except TypeError:
+        except TypeError:
+            if interaction.response.is_done():
+                await interaction.edit_original_response(embed=embed, view=self)
+            else:
                 await interaction.response.edit_message(embed=embed, view=self)
 
     async def feed_callback(self, interaction: discord.Interaction):
@@ -348,7 +341,7 @@ class CharacterView(discord.ui.View):
         if not char_def:
             return await interaction.followup.send("Character not found.", ephemeral=True)
 
-        next_feed_ts, _next_feed_in = await self._get_next_feed_info()
+        next_feed_ts, _ = await self._get_next_feed_info()
         if next_feed_ts is not None:
             now = int(time.time())
             if now < int(next_feed_ts):
@@ -364,7 +357,6 @@ class CharacterView(discord.ui.View):
         guild_id = str(self.ctx.guild.id)
         user_id = str(self.ctx.author.id)
 
-        # Fetch the raw member inventory document to list meals (best-effort)
         try:
             doc = await self.quest_data.mongoConnect[self.quest_data.DB_NAME]["Servers"].find_one(
                 {"guild_id": guild_id},
@@ -466,7 +458,6 @@ class CharacterView(discord.ui.View):
         s = str(meal_name or "")
         if "|base:" not in s:
             return None
-        # Expected format: "... [Perfect|base:good] ..."
         try:
             inside = s.split("[", 1)[-1].split("]", 1)[0]
             parts = [p.strip() for p in inside.split("|") if p.strip()]
@@ -484,7 +475,6 @@ class CharacterView(discord.ui.View):
         b = str(base_quality).strip().lower()
         if not b:
             return None
-        # Allow user-defined tiers. Provide a few common normalizations.
         if b in ("poor", "terrible", "trash"):
             return "poor"
         if b in ("okay", "ok", "average", "normal"):
@@ -495,7 +485,6 @@ class CharacterView(discord.ui.View):
             return "great"
         if b in ("excellent", "amazing", "premium"):
             return "excellent"
-        # Unknown tier: keep as-is so JSON can define it.
         return b
 
     async def _unique_not_hungry_dialogue(self, char_def) -> str:
@@ -529,7 +518,6 @@ class CharacterView(discord.ui.View):
         used_set = {i for i in used if 0 <= i < len(pool)}
         remaining = [i for i in range(len(pool)) if i not in used_set]
         if not remaining:
-            # reset once exhausted
             used_set = set()
             remaining = list(range(len(pool)))
 
@@ -546,24 +534,7 @@ class CharacterView(discord.ui.View):
 
         return pool[idx]
 
-    def _dialogue_not_hungry(self, char_def) -> str:
-        pool = self._dialogue_pool(char_def, "not_hungry")
-        return pool[0] if pool else "I'm not hungry right now."
-
-    def _dialogue_fed(self, char_def, *, meal_name: str | None = None, quality: str | None = None) -> str:
-        # Allow quality-based dialogue via JSON keys like fed_perfect/fed_great/etc.
-        pool: list[str] = []
-        if quality:
-            pool = self._dialogue_pool(char_def, f"fed_{quality}")
-        if not pool:
-            pool = self._dialogue_pool(char_def, "fed")
-        if not pool:
-            return "Thanks!"
-        chosen = random.choice(pool)
-        return self._render_dialogue_template(chosen, meal_name=meal_name, quality=quality)
-
     def _dialogue_fed_with_base(self, char_def, *, meal_name: str | None = None, quality: str | None = None, base_quality: str | None = None) -> str:
-        # Priority: cooked quality -> base quality -> generic fed.
         pool: list[str] = []
         if quality:
             pool = self._dialogue_pool(char_def, f"fed_{quality}")
@@ -575,7 +546,6 @@ class CharacterView(discord.ui.View):
         if not pool:
             return "Thanks!"
         chosen = random.choice(pool)
-        # Use the cooked quality (if present) for {quality} placeholder, else base quality.
         q_for_tpl = quality or bq
         return self._render_dialogue_template(chosen, meal_name=meal_name, quality=q_for_tpl)
 
@@ -597,9 +567,7 @@ class CharacterView(discord.ui.View):
         except Exception:
             ts = None
         try:
-            if ts is None:
-                return None
-            return int(ts)
+            return int(ts) if ts is not None else None
         except Exception:
             return None
 
@@ -619,9 +587,211 @@ class CharacterView(discord.ui.View):
         last = await self._get_last_feed_ts()
         if not last:
             return None, "Feed now"
-        nxt = int(last) + int(self.FEED_INTERVAL_SECONDS)
-        # Discord relative timestamp (<t:...:R>) is handled in embed builder.
+        nxt = int(last) + self.FEED_INTERVAL_SECONDS
         return nxt, None
+
+
+# Fixed buttons using proper discord.ui.Button subclasses
+class InventoryButton(discord.ui.Button['CharacterView']):
+    def __init__(self):
+        super().__init__(
+            style=discord.ButtonStyle.secondary,
+            label="Inventory",
+            custom_id="character_inventory",
+        )
+        self._logger = logging.getLogger("bot.InventoryButton")
+        self._logger.setLevel(logging.DEBUG)  # ensure all logs show
+        # Optionally add console handler if not already present
+        if not self._logger.handlers:
+            ch = logging.StreamHandler()
+            ch.setLevel(logging.DEBUG)
+            formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
+            ch.setFormatter(formatter)
+            self._logger.addHandler(ch)
+
+    def _log_ctx(
+        self,
+        level,
+        msg: str,
+        interaction: Optional[discord.Interaction] = None,
+        **extra,
+    ):
+        ctx = {}
+        if interaction:
+            ctx.update({
+                "user_id": getattr(interaction.user, "id", None),
+                "guild_id": getattr(interaction.guild, "id", None),
+                "channel_id": getattr(interaction.channel, "id", None),
+                "interaction_id": interaction.id,
+                "response_done": interaction.response.is_done(),
+            })
+        ctx.update(extra)
+        log_msg = f"{msg} | Context: {ctx}"
+        print(log_msg)  # print for immediate visibility
+        self._logger.log(level, msg, extra={"ctx": ctx})
+
+    async def callback(self, interaction: discord.Interaction):
+        # ---- View validation ----
+        if not getattr(self, "view", None) or not hasattr(self.view, "inventory_callback"):
+            self._log_ctx(
+                logging.ERROR,
+                "InventoryButton misconfigured: missing view or inventory_callback",
+                interaction,
+            )
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "⚠️ This button is not properly configured.",
+                    ephemeral=True,
+                )
+            return
+
+        view: CharacterView = self.view  # type: ignore
+
+        if not getattr(view, "ctx", None) or not getattr(view.ctx, "author", None):
+            self._log_ctx(
+                logging.ERROR,
+                "CharacterView missing ctx or ctx.author",
+                interaction,
+            )
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "⚠️ Configuration error. Please try again later.",
+                    ephemeral=True,
+                )
+            return
+
+        # ---- Ownership check ----
+        if interaction.user != view.ctx.author:
+            self._log_ctx(
+                logging.INFO,
+                "User attempted to interact with another user's character view",
+                interaction,
+                owner_id=view.ctx.author.id,
+            )
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "❌ This is not your character view.",
+                    ephemeral=True,
+                )
+            return
+
+        # ---- Execute callback ----
+        self._log_ctx(
+            logging.DEBUG,
+            "Executing inventory callback",
+            interaction,
+        )
+
+        try:
+            await view.inventory_callback(interaction)
+
+        except discord.NotFound:
+            self._log_ctx(
+                logging.WARNING,
+                "Interaction no longer valid (message/component not found)",
+                interaction,
+            )
+
+        except discord.Forbidden:
+            self._log_ctx(
+                logging.ERROR,
+                "Forbidden: missing permissions to respond",
+                interaction,
+            )
+            if not interaction.response.is_done():
+                try:
+                    await interaction.response.send_message(
+                        "❌ I don’t have permission to do that here.",
+                        ephemeral=True,
+                    )
+                except Exception as e:
+                    print("Failed to send Forbidden error message:", e)
+                    traceback.print_exc()
+                    self._logger.exception("Failed to send Forbidden error message")
+
+        except Exception as e:
+            print("Unexpected error in inventory callback:", e)
+            traceback.print_exc()
+            self._logger.exception(
+                "Unhandled exception during inventory callback",
+                extra={
+                    "ctx": {
+                        "user_id": interaction.user.id,
+                        "guild_id": getattr(interaction.guild, "id", None),
+                        "interaction_id": interaction.id,
+                    }
+                },
+            )
+            if not interaction.response.is_done():
+                try:
+                    await interaction.response.send_message(
+                        "⚠️ An unexpected error occurred. Please try again.",
+                        ephemeral=True,
+                    )
+                except Exception as send_error:
+                    print("Failed to send fallback error message:", send_error)
+                    traceback.print_exc()
+                    self._logger.exception("Failed to send fallback error message")
+
+
+
+class FeedButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(
+            style=discord.ButtonStyle.success,
+            label="Feed",
+            custom_id="character_feed",
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        view: CharacterView = self.view  # type: ignore
+        if interaction.user != view.ctx.author:
+            return await interaction.response.send_message("This is not your character view.", ephemeral=True)
+        await view.feed_callback(interaction)
+
+
+class CharacterImageSelect(discord.ui.Select):
+    def __init__(self, parent_view: CharacterView):
+        self.parent_view = parent_view
+        char_def = get_character_def(parent_view.char_id)
+        options = []
+        if char_def and getattr(char_def, "images", None):
+            for i in range(min(25, len(char_def.images))):
+                variant = None
+                try:
+                    if getattr(char_def, "image_variants", None) and i < len(char_def.image_variants):
+                        variant = str(char_def.image_variants[i])
+                except Exception:
+                    variant = None
+                label = variant or f"Image {i + 1}"
+                options.append(
+                    discord.SelectOption(
+                        label=label[:100],
+                        value=str(i),
+                        description=(f"Use {label}" if variant else f"Use variant #{i + 1}")[:100],
+                    )
+                )
+
+        super().__init__(
+            placeholder="Select character image...",
+            options=options or [discord.SelectOption(label="No images", value="0", description="This character has no images")],
+            row=0,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user != self.parent_view.ctx.author:
+            return await interaction.response.send_message("This is not your character view.", ephemeral=True)
+
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
+        try:
+            idx = int(self.values[0])
+        except Exception:
+            idx = 0
+
+        await self.parent_view._set_selected_image_index(idx)
+        await self.parent_view.refresh(interaction)
 
 
 class Character(commands.Cog):
@@ -678,7 +848,6 @@ class Character(commands.Cog):
         return await self._get_first_owned_character(guild_id, user_id)
 
     async def _set_selected_character(self, guild_id: str, user_id: str, char_id: str) -> None:
-        # Clear previous selection bucket by setting all existing keys to 0 (best-effort)
         try:
             doc = await self.quest_data.mongoConnect[self.quest_data.DB_NAME]["Servers"].find_one(
                 {"guild_id": guild_id},
@@ -725,7 +894,7 @@ class Character(commands.Cog):
         view = CharacterView(self.bot, self.quest_data, ctx, char_id)
         view.image_index = await view._get_selected_image_index()
 
-        next_feed_ts, next_feed_in = await view._get_next_feed_info()
+        next_feed_ts, _ = await view._get_next_feed_info()
         embed, files = await build_character_embed_with_files(
             bot=self.bot,
             user=ctx.author,
@@ -733,7 +902,7 @@ class Character(commands.Cog):
             current_hp=hp,
             image_index=view.image_index,
             next_feed_ts=next_feed_ts,
-            next_feed_in=next_feed_in,
+            next_feed_in=None,
         )
         msg = await ctx.reply(embed=embed, view=view, files=files, mention_author=False)
         view.message = msg
@@ -758,7 +927,6 @@ class Character(commands.Cog):
         if (owned or 0) <= 0:
             return await ctx.reply("You don't own that character.", mention_author=False)
 
-        # Open the view and let the Feed button handle meal selection/consumption.
         char_def = get_character_def(char_id)
         if not char_def:
             return await ctx.reply("Character not found.", mention_author=False)
@@ -771,7 +939,7 @@ class Character(commands.Cog):
         view = CharacterView(self.bot, self.quest_data, ctx, char_id)
         view.image_index = await view._get_selected_image_index()
 
-        next_feed_ts, next_feed_in = await view._get_next_feed_info()
+        next_feed_ts, _ = await view._get_next_feed_info()
         embed, files = await build_character_embed_with_files(
             bot=self.bot,
             user=ctx.author,
@@ -779,56 +947,120 @@ class Character(commands.Cog):
             current_hp=hp,
             image_index=view.image_index,
             next_feed_ts=next_feed_ts,
-            next_feed_in=next_feed_in,
+            next_feed_in=None,
         )
         msg = await ctx.reply(embed=embed, view=view, files=files, mention_author=False)
         view.message = msg
 
 
-class CharacterImageSelect(discord.ui.Select):
-    def __init__(self, parent_view: CharacterView):
-        self.parent_view = parent_view
-        char_def = get_character_def(parent_view.char_id)
+# Remaining classes (unchanged from your original code)
+class CharacterSelect(discord.ui.Select):
+    def __init__(self, inv_view: 'CharacterInventoryView'):
+        self.inv_view = inv_view
+        
         options = []
-        if char_def and char_def.images:
-            for i in range(min(25, len(char_def.images))):
-                variant = None
-                try:
-                    if getattr(char_def, "image_variants", None) and i < len(char_def.image_variants):
-                        variant = str(char_def.image_variants[i])
-                except Exception:
-                    variant = None
-                label = (variant or f"Image {i + 1}")
-                options.append(
-                    discord.SelectOption(
-                        label=label[:100],
-                        value=str(i),
-                        description=(f"Use {label}" if variant else f"Use variant #{i + 1}")[:100],
-                    )
-                )
-
+        for char_id, _ in inv_view.owned_chars:
+            char_def = get_character_def(char_id)
+            if not char_def:
+                continue
+                
+            char_name = ' '.join(word.capitalize() for word in char_id.split('-'))
+            emoji = char_def.emoji if char_def.emoji else ""
+            
+            label = f"{char_name}"[:100]
+            
+            is_selected = char_id == inv_view.selected_char
+            
+            options.append(discord.SelectOption(
+                label=label,
+                value=char_id,
+                description=char_def.flavor_text[:100] if char_def and char_def.flavor_text else "No description",
+                default=is_selected
+            ))
+        
         super().__init__(
-            placeholder="Select character image...",
-            options=options if options else [
-                discord.SelectOption(label="No images", value="0", description="This character has no images")
-            ],
-            row=0,
+            placeholder="Select a character...",
+            options=options[:25],
+            row=0
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user != self.inv_view.ctx.author:
+            return await interaction.response.send_message("This is not your inventory.", ephemeral=True)
+        
+        selected_char = self.values[0]
+        if selected_char == self.inv_view.selected_char:
+            return await interaction.response.defer()
+        
+        self.inv_view.selected_char = selected_char
+        self.inv_view.parent_view.char_id = selected_char
+        
+        await self.inv_view.parent_view.refresh_message()
+        
+        char_def = get_character_def(selected_char)
+        char_name = ' '.join(word.capitalize() for word in selected_char.split('-'))
+        emoji = char_def.emoji if char_def and char_def.emoji else ""
+        await interaction.response.send_message(
+            f"Selected character: {emoji} **{char_name}**",
+            ephemeral=True
         )
 
+
+class NavigationButton(discord.ui.Button):
+    def __init__(self, label: str, style: discord.ButtonStyle, row: int = 0):
+        super().__init__(label=label, style=style, row=row)
+        self.label = label
+    
     async def callback(self, interaction: discord.Interaction):
-        if interaction.user != self.parent_view.ctx.author:
-            return await interaction.response.send_message("This is not your character view.", ephemeral=True)
-
-        if not interaction.response.is_done():
-            await interaction.response.defer()
-
         try:
-            idx = int(self.values[0])
-        except Exception:
-            idx = 0
-
-        await self.parent_view._set_selected_image_index(idx)
-        await self.parent_view.refresh(interaction)
+            if not interaction.response.is_done():
+                await interaction.response.defer(ephemeral=True)
+                
+            if interaction.user != self.view.ctx.author:
+                return await interaction.followup.send("This is not your inventory.", ephemeral=True)
+            
+            view = discord.ui.View(timeout=180)
+            
+            try:
+                if self.label == "Characters":
+                    if len(self.view.owned_chars) > 1:
+                        view.add_item(CharacterSelectSelect(self.view))
+                        message = "Select a character:"
+                    else:
+                        return await interaction.followup.send("You only have one character.", ephemeral=True)
+                elif self.label == "Items":
+                    view.add_item(CharacterEquipSelect(self.view))
+                    message = "Select an item to equip:"
+                elif self.label == "Meals":
+                    view.add_item(CharacterFoodSelect(self.view))
+                    message = "Select a meal to feed:"
+                else:
+                    return await interaction.followup.send("Unknown action.", ephemeral=True)
+                
+                await interaction.followup.send(message, view=view, ephemeral=True)
+                
+            except Exception as e:
+                print(f"[ERROR] Error in {self.label} button: {str(e)}")
+                await interaction.followup.send(
+                    "An error occurred while processing your request. Please try again.", 
+                    ephemeral=True
+                )
+                
+        except Exception as e:
+            print(f"[CRITICAL] Unhandled error in NavigationButton: {str(e)}")
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        "⚠️ An unexpected error occurred. Please try again.", 
+                        ephemeral=True
+                    )
+                else:
+                    await interaction.followup.send(
+                        "⚠️ An unexpected error occurred. Please try again.", 
+                        ephemeral=True
+                    )
+            except:
+                pass
 
 
 class CharacterInventoryView(discord.ui.View):
@@ -838,20 +1070,39 @@ class CharacterInventoryView(discord.ui.View):
         items: list[tuple[str, int]],
         meals: list[tuple[str, int]],
         owned_chars: list[tuple[str, int]],
-        selected_char: str | None,
+        selected_char: str | None = None,
     ):
-        super().__init__(timeout=120)
+        super().__init__(timeout=180)
         self.parent_view = parent_view
-        self.items = items or []
-        self.meals = meals or []
-        self.owned_chars = owned_chars or []
-        self.selected_char = selected_char
+        self.items = items
+        self.meals = meals
+        self.owned_chars = owned_chars
+        self.selected_char = selected_char or parent_view.char_id
+        self.quest_data = parent_view.quest_data
+        self.ctx = parent_view.ctx
+        self.bot = parent_view.bot
+        self._add_components()
+        
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+        try:
+            if hasattr(self, 'message'):
+                await self.message.edit(view=self)
+        except:
+            pass
 
+    def _add_components(self):
+        # Navigation buttons in row 0 (max 5 items per row)
+        self.add_item(NavigationButton("Characters", discord.ButtonStyle.primary, row=0))
+        self.add_item(NavigationButton("Items", discord.ButtonStyle.secondary, row=0))
+        self.add_item(NavigationButton("Meals", discord.ButtonStyle.success, row=0))
+        
+        # Character select in row 1 (if needed)
         if len(self.owned_chars) > 1:
-            self.add_item(CharacterSelectSelect(self))
-
-        self.add_item(CharacterEquipSelect(self))
-        self.add_item(CharacterFoodSelect(self))
+            char_select = CharacterSelectSelect(self)
+            char_select.row = 1  # Explicitly set row to 1
+            self.add_item(char_select)
 
 
 class CharacterSelectSelect(discord.ui.Select):
@@ -861,12 +1112,32 @@ class CharacterSelectSelect(discord.ui.Select):
         options = []
         for cid, _qty in (inv_view.owned_chars or [])[:25]:
             char_def = get_character_def(cid)
-            emoji = (char_def.emoji if char_def else "👥")
-            label = f"{emoji} {cid}"[:100]
-            desc = "Currently selected" if cid == (inv_view.selected_char or inv_view.parent_view.char_id) else "Select this character"
-            options.append(discord.SelectOption(label=label, value=cid, description=desc[:100]))
+            if not char_def:
+                continue
+                
+            char_name = ' '.join(word.capitalize() for word in cid.split('-'))
+            emoji = char_def.emoji if char_def.emoji else "❔"
+            
+            label = f"{char_name}"[:100]
+            
+            is_selected = cid == (inv_view.selected_char or inv_view.parent_view.char_id)
+            if is_selected:
+                inv_view.selected_char = cid
+                
+            options.append(discord.SelectOption(
+                label=label,
+                value=cid,
+                emoji=emoji,
+                description="Currently selected" if is_selected else "Click to select"
+            ))
 
-        super().__init__(placeholder="Character Select...", options=options, row=0)
+        placeholder = "Select a character..."
+        if inv_view.selected_char:
+            char_def = get_character_def(inv_view.selected_char)
+            if char_def:
+                placeholder = f"Current: {inv_view.selected_char.replace('-', ' ').title()}"
+
+        super().__init__(placeholder=placeholder, options=options, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user != self.inv_view.parent_view.ctx.author:
@@ -945,7 +1216,7 @@ class CharacterFoodSelect(discord.ui.Select):
 
         super().__init__(
             placeholder="Feed meal...",
-            options=options if options else [
+            options=options or [
                 discord.SelectOption(label="No meals", value="__none__", description="Cook something first")
             ],
             row=2,

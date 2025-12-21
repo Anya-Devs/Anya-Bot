@@ -3053,17 +3053,11 @@ class SpyXFamilyCategorySelect(discord.ui.Select):
                 description="Collect Spy x Family characters (pets)",
             ),
             discord.SelectOption(
-                label="Ingredients",
-                value="ingredients",
-                emoji="🥕",
-                description="Buy cooking ingredients for meals",
-            ),
-            discord.SelectOption(
-                label="Recipes",
-                value="recipes",
-                emoji="📜",
-                description="View recipes (not purchasable)",
-            ),
+                label="Cooking",
+                value="cooking",
+                emoji="🍳",
+                description="Ingredients & Recipes - Cook meals and view recipes",
+            )
         ]
         super().__init__(placeholder="Choose a Spy x Family category...", options=options)
         self.quest_data = quest_data
@@ -3086,17 +3080,12 @@ class SpyXFamilyCategorySelect(discord.ui.Select):
                 await view.update_view()
                 return await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-            if category == "ingredients":
+            if category == "cooking":
                 view = SpyXFamilyCookingDexView(self.quest_data, self.user_id, self.guild_id)
                 embed = await view.create_embed()
                 await view.update_view()
                 return await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-            if category == "recipes":
-                view = SpyXFamilyCookingDexView(self.quest_data, self.user_id, self.guild_id)
-                embed = await view.create_embed()
-                await view.update_view()
-                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+                
         except Exception as e:
             await ShopView.handle_error(interaction, e)
 
@@ -3117,7 +3106,6 @@ class SpyXFamilyCharactersButtonView(discord.ui.View):
                 data = json.load(f)
         except FileNotFoundError:
             return []
-
         items = []
         if isinstance(data, dict):
             for k, v in data.items():
@@ -3132,19 +3120,16 @@ class SpyXFamilyCharactersButtonView(discord.ui.View):
                 f"{ShopConfig.EMOJIS['error']} Missing Data",
                 "No characters found.",
             )
-
         self.max_pages = (len(self._items) - 1) // self.items_per_page + 1
         start = self.page * self.items_per_page
         end = start + self.items_per_page
         current_items = self._items[start:end]
-
         user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
         embed = ShopConfig.create_shop_embed(
             "👥 Spy x Family - Characters",
-            f"Pick a number to open the character shop (Page {self.page + 1}/{self.max_pages})",
+            f"Click a number to purchase the character (Page {self.page + 1}/{self.max_pages})",
             user_balance,
         )
-
         lines = []
         for i, item in enumerate(current_items):
             name = item.get("id")
@@ -3156,37 +3141,54 @@ class SpyXFamilyCharactersButtonView(discord.ui.View):
                 )
                 or 0
             )
+            status_indicator = ShopConfig.get_status_indicator(owned, 1, user_balance, cost)
             name_display = f"~~{name}~~" if owned > 0 else name
-            lines.append(f"`{start + i + 1}.` {emoji} **{name_display}** - {ShopConfig.format_price(cost)}")
-
+            lines.append(f"`{start + i + 1}.` {status_indicator} {emoji} **{name_display}** - {ShopConfig.format_price(cost)}")
         embed.add_field(name="Characters", value="\n".join(lines) if lines else "No characters.", inline=False)
+        embed.add_field(name="", value=ShopConfig.create_legend_text(), inline=False)
         embed.set_footer(text=f"Your Balance: {ShopConfig.format_balance(user_balance)} Stella Points")
         return embed
 
     async def update_view(self):
         self.clear_items()
         self._items = self._load_items()
-        self.max_pages = (len(self._items) - 1) // self.items_per_page + 1 if self._items else 1
-
+        if not self._items:
+            return
+        self.max_pages = (len(self._items) - 1) // self.items_per_page + 1
         start = self.page * self.items_per_page
         end = start + self.items_per_page
         current_items = self._items[start:end]
+        user_balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
 
-        for i, _ in enumerate(current_items):
-            btn = discord.ui.Button(
-                style=discord.ButtonStyle.primary,
-                label=str(i + 1),
-                custom_id=f"sxf_char_{start + i}",
+        for i, item in enumerate(current_items):
+            name = item.get("id")
+            cost = int(item.get("cost-stella-points") or 0)
+            owned = (
+                await self.quest_data.get_user_inventory_count(
+                    self.guild_id, self.user_id, "sxf.characters", name
+                )
+                or 0
             )
-            btn.callback = self.open_character_callback
+            button_config = ShopConfig.get_button_config(owned, user_balance, cost)
+            style = button_config["style"]
+            disabled = button_config["disabled"]
+
+            btn = discord.ui.Button(
+                label=str(start + i + 1),
+                style=style,
+                disabled=disabled,
+                custom_id=f"sxf_char_buy_{start + i}",
+            )
+            btn.callback = self.buy_character_callback
             self.add_item(btn)
 
+        # Pagination buttons
         if self.max_pages > 1:
             if self.page > 0:
                 prev_btn = discord.ui.Button(
                     emoji=ShopConfig.EMOJIS["prev"],
                     style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
-                    custom_id="prev_page",
+                    custom_id="char_prev",
                 )
                 prev_btn.callback = self.prev_page_callback
                 self.add_item(prev_btn)
@@ -3194,46 +3196,68 @@ class SpyXFamilyCharactersButtonView(discord.ui.View):
                 next_btn = discord.ui.Button(
                     emoji=ShopConfig.EMOJIS["next"],
                     style=ShopConfig.BUTTON_STYLES["navigation"]["style"],
-                    custom_id="next_page",
+                    custom_id="char_next",
                 )
                 next_btn.callback = self.next_page_callback
                 self.add_item(next_btn)
 
-    async def open_character_callback(self, interaction: discord.Interaction):
-        try:
-            if int(interaction.user.id) != int(self.user_id):
-                error_embed = ShopConfig.create_error_embed(
-                    f"{ShopConfig.EMOJIS['error']} Access Denied",
-                    ShopConfig.ERROR_MESSAGES["not_your_interface"],
-                )
-                return await interaction.response.send_message(embed=error_embed, ephemeral=True)
-
-            index = int(interaction.data["custom_id"].split("_")[-1])
-
-            # Open existing character shop view at the chosen index
-            view = SpyXFamilyShopView(
-                "characters",
-                "data/minigames/spy-x-family/characters.json",
-                self.quest_data,
-                self.user_id,
-                self.guild_id,
-                title="👥 Spy x Family - Characters",
+    async def buy_character_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != int(self.user_id):
+            await interaction.response.send_message(
+                ShopConfig.ERROR_MESSAGES["not_your_interface"], ephemeral=True
             )
-            view.page = index // view.items_per_page
-            embed = await view.create_shop_embed()
-            await view.update_view()
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-        except Exception as e:
-            await ShopView.handle_error(interaction, e)
+            return
+
+        index_str = interaction.data["custom_id"].split("_")[-1]
+        try:
+            index = int(index_str)
+        except ValueError:
+            return
+
+        if index < 0 or index >= len(self._items):
+            await interaction.response.send_message("Invalid character.", ephemeral=True)
+            return
+
+        item = self._items[index]
+        name = item.get("id")
+        cost = int(item.get("cost-stella-points") or 0)
+
+        owned = await self.quest_data.get_user_inventory_count(
+            self.guild_id, self.user_id, "sxf.characters", name
+        ) or 0
+        balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+
+        if owned > 0:
+            await interaction.response.send_message(f"You already own **{name}**.", ephemeral=True)
+            return
+        if balance < cost:
+            await interaction.response.send_message(
+                f"Insufficient points! Need {ShopConfig.format_price(cost)}.", ephemeral=True
+            )
+            return
+
+        # Perform purchase
+        await self.quest_data.add_balance(self.user_id, self.guild_id, -cost)
+        await self.quest_data.add_item_to_inventory(
+            self.guild_id, self.user_id, "sxf.characters", name, 1
+        )
+
+        # Refresh the shop list
+        embed = await self.create_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
 
     async def prev_page_callback(self, interaction: discord.Interaction):
         self.page -= 1
-        await self.refresh(interaction)
+        embed = await self.create_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
 
     async def next_page_callback(self, interaction: discord.Interaction):
         self.page += 1
-        await self.refresh(interaction)
-
+        embed = await self.create_embed()
+        await self.update_view()
+        await interaction.response.edit_message(embed=embed, view=self)
 
 class SpyXFamilyRecipePageSelect(discord.ui.Select):
     def __init__(self, parent_view):
@@ -5163,7 +5187,6 @@ class GachaGameView(discord.ui.View):
         embed = await self.create_shop_embed()
         await self.update_view()
         await interaction.response.edit_message(embed=embed, view=self)
-
 
 
 
