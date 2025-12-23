@@ -14,8 +14,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 def _resolve_repo_path(p: str | Path) -> Path:
     raw = str(p) if not isinstance(p, Path) else str(p)
     raw = raw.strip()
-    if raw.startswith("data/minigames/"):
-        raw = raw.replace("data/minigames/", "data/commands/minigames/", 1)
+    if raw.startswith("data/commands/minigames/"):
+        raw = raw.replace("data/commands/minigames/", "data/commands/minigames/", 1)
     path = Path(raw)
     return path if path.is_absolute() else (_REPO_ROOT / path)
 

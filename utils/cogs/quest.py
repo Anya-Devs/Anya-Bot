@@ -3102,7 +3102,7 @@ class SpyXFamilyCharactersButtonView(discord.ui.View):
 
     def _load_items(self) -> list[dict]:
         try:
-            with open("data/minigames/spy-x-family/characters.json", "r", encoding="utf-8") as f:
+            with open("data/commands/minigames/spy-x-family/characters.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
         except FileNotFoundError:
             return []
@@ -3326,7 +3326,7 @@ class SpyXFamilyRecipesPaginatedView(discord.ui.View):
     def _load_ingredient_emoji(self) -> dict:
         ingredient_emoji: dict[str, str] = {}
         try:
-            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+            with open("data/commands/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
                 ing_data = json.load(f)
             if isinstance(ing_data, dict):
                 for group in ing_data.values():
@@ -3449,7 +3449,7 @@ class SpyXFamilyCookingDexView(discord.ui.View):
 
     def _load_ingredient_map(self) -> dict[str, dict]:
         try:
-            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+            with open("data/commands/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
         except FileNotFoundError:
             return {}
@@ -3478,7 +3478,7 @@ class SpyXFamilyCookingDexView(discord.ui.View):
 
     def _load_recipes(self) -> list[dict]:
         try:
-            with open("data/minigames/spy-x-family/recipes.json", "r", encoding="utf-8") as f:
+            with open("data/commands/minigames/spy-x-family/recipes.json", "r", encoding="utf-8") as f:
                 recipes_data = json.load(f)
         except FileNotFoundError:
             return []
@@ -3773,7 +3773,7 @@ class SpyXFamilyCookingView(discord.ui.View):
 
     def _load_ingredient_items(self) -> list[dict]:
         try:
-            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+            with open("data/commands/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
         except FileNotFoundError:
             return []
@@ -3802,7 +3802,7 @@ class SpyXFamilyCookingView(discord.ui.View):
     def _load_ingredient_emoji(self) -> dict:
         ingredient_emoji: dict[str, str] = {}
         try:
-            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+            with open("data/commands/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
                 ing_data = json.load(f)
             if isinstance(ing_data, dict):
                 for group in ing_data.values():
@@ -3822,7 +3822,7 @@ class SpyXFamilyCookingView(discord.ui.View):
 
     def _load_recipes(self) -> list[dict]:
         try:
-            with open("data/minigames/spy-x-family/recipes.json", "r", encoding="utf-8") as f:
+            with open("data/commands/minigames/spy-x-family/recipes.json", "r", encoding="utf-8") as f:
                 recipes_data = json.load(f)
         except FileNotFoundError:
             return []
@@ -4197,7 +4197,7 @@ class SpyXFamilyIngredientsShopView(discord.ui.View):
 
     def _load_items(self) -> list[dict]:
         try:
-            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+            with open("data/commands/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
         except FileNotFoundError:
             return []
