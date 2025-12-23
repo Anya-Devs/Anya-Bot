@@ -1099,12 +1099,6 @@ class CharacterInventoryView(discord.ui.View):
         self.add_item(NavigationButton("Characters", discord.ButtonStyle.primary, row=0))
         self.add_item(NavigationButton("Items", discord.ButtonStyle.secondary, row=0))
         self.add_item(NavigationButton("Meals", discord.ButtonStyle.success, row=0))
-        
-        # Character select in row 1 (if needed)
-        if len(self.owned_chars) > 1:
-            char_select = CharacterSelectSelect(self)
-            char_select.row = 1  # Explicitly set row to 1
-            self.add_item(char_select)
 
 
 class CharacterSelectSelect(discord.ui.Select):
@@ -1161,12 +1155,24 @@ class CharacterSelectSelect(discord.ui.Select):
         if not get_character_def(cid):
             return await interaction.followup.send("Character not found.", ephemeral=True)
 
+        # Set the selected character and update the parent view
         await self.inv_view.parent_view._set_selected_character(cid)
         self.inv_view.parent_view.char_id = cid
+        
+        # Reset image index to 0 for the new character
+        self.inv_view.parent_view.image_index = 0
+        await self.inv_view.parent_view._set_selected_image_index(0)
+        
+        # Rebuild components to reflect the new character
         self.inv_view.parent_view._rebuild_components()
 
-        await interaction.followup.send(f"Selected character: `{cid}`", ephemeral=True)
+        # Instantly refresh the main character embed with new character and image
         await self.inv_view.parent_view.refresh_message()
+
+        char_def = get_character_def(cid)
+        char_name = ' '.join(word.capitalize() for word in cid.split('-'))
+        emoji = char_def.emoji if char_def and char_def.emoji else ""
+        await interaction.followup.send(f"Selected character: {emoji} **{char_name}**", ephemeral=True)
 
 
 class CharacterEquipSelect(discord.ui.Select):
