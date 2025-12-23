@@ -3073,18 +3073,21 @@ class SpyXFamilyCategorySelect(discord.ui.Select):
                 )
                 return await interaction.response.send_message(embed=error_embed, ephemeral=True)
 
+            # Defer early to prevent interaction timeout during database operations
+            await interaction.response.defer(ephemeral=True)
+
             category = self.values[0]
             if category == "characters":
                 view = SpyXFamilyCharactersButtonView(self.quest_data, self.user_id, self.guild_id)
                 embed = await view.create_embed()
                 await view.update_view()
-                return await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+                return await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
             if category == "cooking":
                 view = SpyXFamilyCookingDexView(self.quest_data, self.user_id, self.guild_id)
                 embed = await view.create_embed()
                 await view.update_view()
-                return await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+                return await interaction.followup.send(embed=embed, view=view, ephemeral=True)
                 
         except Exception as e:
             await ShopView.handle_error(interaction, e)
@@ -3218,46 +3221,69 @@ class SpyXFamilyCharactersButtonView(discord.ui.View):
             await interaction.response.send_message("Invalid character.", ephemeral=True)
             return
 
+        # Defer early to prevent interaction timeout during database operations
+        await interaction.response.defer()
+
         item = self._items[index]
         name = item.get("id")
         cost = int(item.get("cost-stella-points") or 0)
 
-        owned = await self.quest_data.get_user_inventory_count(
-            self.guild_id, self.user_id, "sxf.characters", name
-        ) or 0
-        balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
+        try:
+            owned = await self.quest_data.get_user_inventory_count(
+                self.guild_id, self.user_id, "sxf.characters", name
+            ) or 0
+            balance = await self.quest_data.get_balance(self.user_id, self.guild_id)
 
-        if owned > 0:
-            await interaction.response.send_message(f"You already own **{name}**.", ephemeral=True)
-            return
-        if balance < cost:
-            await interaction.response.send_message(
-                f"Insufficient points! Need {ShopConfig.format_price(cost)}.", ephemeral=True
+            if owned > 0:
+                await interaction.followup.send(f"You already own **{name}**.", ephemeral=True)
+                return
+            if balance < cost:
+                await interaction.followup.send(
+                    f"Insufficient points! Need {ShopConfig.format_price(cost)}.", ephemeral=True
+                )
+                return
+
+            # Perform purchase
+            await self.quest_data.add_balance(self.user_id, self.guild_id, -cost)
+            await self.quest_data.add_item_to_inventory(
+                self.guild_id, self.user_id, "sxf.characters", name, 1
             )
-            return
 
-        # Perform purchase
-        await self.quest_data.add_balance(self.user_id, self.guild_id, -cost)
-        await self.quest_data.add_item_to_inventory(
-            self.guild_id, self.user_id, "sxf.characters", name, 1
-        )
-
-        # Refresh the shop list
-        embed = await self.create_embed()
-        await self.update_view()
-        await interaction.response.edit_message(embed=embed, view=self)
+            # Refresh the shop list
+            embed = await self.create_embed()
+            await self.update_view()
+            await interaction.edit_original_response(embed=embed, view=self)
+        except Exception as e:
+            try:
+                await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
+            except:
+                pass
 
     async def prev_page_callback(self, interaction: discord.Interaction):
-        self.page -= 1
-        embed = await self.create_embed()
-        await self.update_view()
-        await interaction.response.edit_message(embed=embed, view=self)
+        await interaction.response.defer()
+        try:
+            self.page -= 1
+            embed = await self.create_embed()
+            await self.update_view()
+            await interaction.edit_original_response(embed=embed, view=self)
+        except Exception as e:
+            try:
+                await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
+            except:
+                pass
 
     async def next_page_callback(self, interaction: discord.Interaction):
-        self.page += 1
-        embed = await self.create_embed()
-        await self.update_view()
-        await interaction.response.edit_message(embed=embed, view=self)
+        await interaction.response.defer()
+        try:
+            self.page += 1
+            embed = await self.create_embed()
+            await self.update_view()
+            await interaction.edit_original_response(embed=embed, view=self)
+        except Exception as e:
+            try:
+                await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
+            except:
+                pass
 
 class SpyXFamilyRecipePageSelect(discord.ui.Select):
     def __init__(self, parent_view):
@@ -3302,6 +3328,8 @@ class SpyXFamilyRecipePageSelect(discord.ui.Select):
                 )
                 return await interaction.response.send_message(embed=error_embed, ephemeral=True)
 
+            # Defer early to prevent interaction timeout
+            await interaction.response.defer()
             self.parent_view.page = int(self.values[0])
             await self.parent_view.refresh(interaction)
         except Exception as e:
@@ -3421,10 +3449,13 @@ class SpyXFamilyCookingRecipeSelect(discord.ui.Select):
             if idx < 0:
                 return await interaction.response.send_message("No recipes available.", ephemeral=True)
 
+            # Defer early to prevent interaction timeout
+            await interaction.response.defer()
+            
             self.parent_view.selected_index = idx
             embed = await self.parent_view.create_embed()
             await self.parent_view.update_view()
-            await interaction.response.edit_message(embed=embed, view=self.parent_view)
+            await interaction.edit_original_response(embed=embed, view=self.parent_view)
         except Exception as e:
             await ShopView.handle_error(interaction, e)
 
@@ -4627,6 +4658,9 @@ class SpyToolSelect(discord.ui.Select):
                 await interaction.response.send_message(embed=error_embed, ephemeral=True)
                 return
 
+            # Defer early to prevent interaction timeout during database operations
+            await interaction.response.defer(ephemeral=True)
+
             emoji = tool.get("emoji", ShopConfig.EMOJIS["spy_tools"])
             description = tool.get("description", "No description available.")
             materials_list = "\n".join(
@@ -4654,7 +4688,7 @@ class SpyToolSelect(discord.ui.Select):
             )
             await view.update_view()
 
-            await interaction.response.send_message(embed=shop_embed, view=view, ephemeral=True)
+            await interaction.followup.send(embed=shop_embed, view=view, ephemeral=True)
 
         except Exception as e:
             await ShopView.handle_error(interaction, e)
