@@ -535,16 +535,18 @@ class Quest(commands.Cog):
             except FileNotFoundError:
                 chars_data = []
 
+            # Fetch all owned characters in ONE DB query instead of per-character
+            owned_char_inventory = await self.quest_data.get_user_inventory_category(
+                guild_id, user_id, "sxf.characters"
+            ) or {}
+
             owned_chars = []
             for c in chars_data:
                 name = c.get("id")
                 if not name:
                     continue
-                owned = (
-                    await self.quest_data.get_user_inventory_count(guild_id, user_id, "sxf.characters", name)
-                    or 0
-                )
-                if owned > 0:
+                owned = owned_char_inventory.get(name, 0)
+                if isinstance(owned, int) and owned > 0:
                     owned_chars.append(c)
 
             if not owned_chars:
@@ -851,6 +853,8 @@ class CookingRecipeSelectView(discord.ui.View):
         self._ingredient_emoji: dict[str, str] = {}
         self._ingredient_map: dict[str, dict] = {}
         self._cookable_recipes: list[dict] = []
+        self._cookable_computed: bool = False
+        self._owned_ingredients: dict[str, int] = {}
 
     @staticmethod
     def _sxf_data_path(*parts: str) -> str:
@@ -912,17 +916,27 @@ class CookingRecipeSelectView(discord.ui.View):
             names.append(disp)
         return [n for n in names if n]
 
-    async def _owned_ingredient_count(self, ing_key: str) -> int:
+    async def _fetch_all_ingredients(self) -> dict[str, int]:
+        """Fetch all ingredients in one DB query and cache them."""
+        if self._owned_ingredients:
+            return self._owned_ingredients
         guild_id = str(self.ctx.guild.id)
         user_id = str(self.ctx.author.id)
+        try:
+            self._owned_ingredients = await self.quest_data.get_user_inventory_category(
+                guild_id, user_id, "sxf.ingredients"
+            ) or {}
+        except Exception:
+            self._owned_ingredients = {}
+        return self._owned_ingredients
+
+    def _owned_ingredient_count_cached(self, ing_key: str) -> int:
+        """Get ingredient count from cached inventory (must call _fetch_all_ingredients first)."""
         best = 0
         for nm in self._ingredient_inventory_names(ing_key):
-            try:
-                c = await self.quest_data.get_user_inventory_count(guild_id, user_id, "sxf.ingredients", nm)
-                if isinstance(c, int) and c > best:
-                    best = c
-            except Exception:
-                continue
+            c = self._owned_ingredients.get(nm, 0)
+            if isinstance(c, int) and c > best:
+                best = c
         return best
 
     def _required_ingredients(self, recipe: dict) -> list[tuple[str, int]]:
@@ -941,6 +955,10 @@ class CookingRecipeSelectView(discord.ui.View):
         return out
 
     async def _get_cookable_recipes(self) -> list[dict]:
+        # Return cached result if already computed
+        if self._cookable_computed:
+            return self._cookable_recipes
+
         if not self._recipes:
             self._recipes = self._load_recipes()
         if not self._ingredient_emoji:
@@ -948,11 +966,14 @@ class CookingRecipeSelectView(discord.ui.View):
         if not self._ingredient_map:
             self._ingredient_map = self._load_ingredient_map()
 
+        # Fetch all ingredients in ONE DB query
+        await self._fetch_all_ingredients()
+
         cookable: list[dict] = []
         for r in self._recipes:
             ok = True
             for ing_key, amt in self._required_ingredients(r):
-                owned = await self._owned_ingredient_count(ing_key)
+                owned = self._owned_ingredient_count_cached(ing_key)
                 if owned < amt:
                     ok = False
                     break
@@ -960,6 +981,7 @@ class CookingRecipeSelectView(discord.ui.View):
                 cookable.append(r)
 
         self._cookable_recipes = cookable
+        self._cookable_computed = True
         return cookable
 
     def _load_recipes(self) -> list[dict]:

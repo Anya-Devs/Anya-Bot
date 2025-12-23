@@ -1029,6 +1029,13 @@ class Quest_Data(commands.Cog):
             guild_id, user_id, category, item_name
         )
 
+    async def get_user_inventory_category(
+        self, guild_id: str, user_id: str, category: str
+    ) -> dict:
+        return await self.db_manager.inventory.get_user_inventory_category(
+            guild_id, user_id, category
+        )
+
     # -------------------------------
     # Tool methods
     # -------------------------------

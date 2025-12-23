@@ -135,6 +135,46 @@ class DatabaseManager:
                 logger.error(f"Error getting inventory count for {item_name} ({user_id}, {guild_id}): {e}")
                 return 0
 
+        async def get_user_inventory_category(
+            self, guild_id: str, user_id: str, category: str
+        ) -> dict:
+            """Retrieve all items in a category as a dict {item_name: count}. Single DB query."""
+            try:
+                db = self.mongoConnect[self.DB_NAME]
+                server_collection = db["Servers"]
+
+                full_path = f"inventory.{category}"
+                proj_path = f"members.{user_id}.{full_path}"
+                user_data = await server_collection.find_one(
+                    {"guild_id": guild_id, f"members.{user_id}": {"$exists": True}},
+                    {proj_path: 1},
+                )
+
+                if not user_data:
+                    return {}
+
+                full_parts = full_path.split('.')
+                category_data = self._nested_get(
+                    user_data.get("members", {}).get(user_id, {}), full_parts
+                )
+
+                if not isinstance(category_data, dict):
+                    return {}
+
+                result = {}
+                for item_name, item_value in category_data.items():
+                    if isinstance(item_value, dict):
+                        result[item_name] = item_value.get('quantity', 0)
+                    elif isinstance(item_value, int):
+                        result[item_name] = item_value
+                    else:
+                        result[item_name] = 0
+                return result
+
+            except PyMongoError as e:
+                logger.error(f"Error getting inventory category {category} ({user_id}, {guild_id}): {e}")
+                return {}
+
         async def add_item_to_inventory(
             self, guild_id: str, user_id: str, category: str, item_name: str, quantity: int
         ) -> None:
