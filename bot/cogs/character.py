@@ -1166,13 +1166,49 @@ class CharacterSelectSelect(discord.ui.Select):
         # Rebuild components to reflect the new character
         self.inv_view.parent_view._rebuild_components()
 
-        # Instantly refresh the main character embed with new character and image
-        await self.inv_view.parent_view.refresh_message()
-
+        # Get the new character data and build fresh embed with new image
         char_def = get_character_def(cid)
-        char_name = ' '.join(word.capitalize() for word in cid.split('-'))
-        emoji = char_def.emoji if char_def and char_def.emoji else ""
-        await interaction.followup.send(f"Selected character: {emoji} **{char_name}**", ephemeral=True)
+        if char_def:
+            hp, _ = await self.inv_view.parent_view._get_hp()
+            next_feed_ts, _ = await self.inv_view.parent_view._get_next_feed_info()
+            
+            # Build new embed with the switched character's image
+            embed, files = await build_character_embed_with_files(
+                bot=self.inv_view.parent_view.bot,
+                user=self.inv_view.parent_view.ctx.author,
+                char_def=char_def,
+                current_hp=hp,
+                image_index=0,  # Use first image of new character
+                next_feed_ts=next_feed_ts,
+                next_feed_in=None,
+                dialogue_footer=self.inv_view.parent_view.last_dialogue,
+            )
+            
+            # Update the message with new character embed and image
+            if self.inv_view.parent_view.message:
+                try:
+                    channel = self.inv_view.parent_view.message.channel
+                    await self.inv_view.parent_view.message.delete()
+                    new_msg = await channel.send(
+                        embed=embed,
+                        view=self.inv_view.parent_view,
+                        files=files
+                    )
+                    self.inv_view.parent_view.message = new_msg
+                except Exception:
+                    # Fallback: try edit if delete fails
+                    try:
+                        await self.inv_view.parent_view.message.edit(
+                            embed=embed, 
+                            view=self.inv_view.parent_view, 
+                            attachments=files
+                        )
+                    except Exception:
+                        pass
+
+            char_name = ' '.join(word.capitalize() for word in cid.split('-'))
+            emoji = char_def.emoji if char_def.emoji else ""
+            await interaction.followup.send(f"Selected character: {emoji} **{char_name}**", ephemeral=True)
 
 
 class CharacterEquipSelect(discord.ui.Select):
