@@ -1,4 +1,5 @@
-import { User } from 'lucide-react';
+import { User, Image as ImageIcon } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import BotAvatar from './BotAvatar';
 import { DiscordText } from '../utils/discordFormatter';
 
@@ -24,6 +25,41 @@ interface DiscordPreviewCardProps {
  * Pixel-perfect Discord embed preview
  * Matches actual Discord embed appearance exactly
  */
+// Preload images to reduce loading delays
+const preloadImage = (src: string): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if (!src) {
+      resolve(false);
+      return;
+    }
+    
+    // Convert local paths to absolute URLs if needed
+    const isLocalPath = src.startsWith('/') && !src.startsWith('http');
+    const finalSrc = isLocalPath ? `${window.location.origin}${src}` : src;
+    
+    const img = new Image();
+    img.src = finalSrc;
+    
+    // Set a timeout to prevent hanging
+    const timeout = setTimeout(() => {
+      img.onload = null;
+      img.onerror = null;
+      resolve(false);
+    }, 10000); // 10 second timeout
+    
+    img.onload = () => {
+      clearTimeout(timeout);
+      resolve(true);
+    };
+    
+    img.onerror = () => {
+      clearTimeout(timeout);
+      console.warn(`Failed to load image: ${src}`);
+      resolve(false);
+    };
+  });
+};
+
 const DiscordPreviewCard = ({
   title,
   description,
@@ -41,6 +77,64 @@ const DiscordPreviewCard = ({
   userName = 'User',
   className = ''
 }: DiscordPreviewCardProps) => {
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [isThumbnailLoaded, setIsThumbnailLoaded] = useState(false);
+  const [isGifLoaded, setIsGifLoaded] = useState(false);
+  const [gifDataUrl, setGifDataUrl] = useState<string | null>(null);
+  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Reset load states when URLs change
+    setIsImageLoaded(false);
+    setIsThumbnailLoaded(false);
+    setIsGifLoaded(false);
+    setGifDataUrl(null);
+    setImageDataUrl(null);
+
+    // Preload and cache images for instant display
+    const preloadAndCache = async () => {
+      try {
+        // Preload and cache GIF if it exists
+        if (gifUrl) {
+          const response = await fetch(gifUrl);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          reader.onload = () => {
+            setGifDataUrl(reader.result as string);
+            setIsGifLoaded(true);
+          };
+          reader.readAsDataURL(blob);
+        }
+
+        // Preload and cache static image if it exists
+        if (image) {
+          const finalImageUrl = image.startsWith('/') ? `${window.location.origin}${image}` : image;
+          const response = await fetch(finalImageUrl);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          reader.onload = () => {
+            setImageDataUrl(reader.result as string);
+            setIsImageLoaded(true);
+          };
+          reader.readAsDataURL(blob);
+        }
+
+        // Preload thumbnail if it exists
+        if (thumbnail) {
+          await preloadImage(thumbnail);
+          setIsThumbnailLoaded(true);
+        }
+      } catch (error) {
+        console.error('Error preloading images:', error);
+        // Fallback to direct URLs if caching fails
+        if (gifUrl) setIsGifLoaded(true);
+        if (image) setIsImageLoaded(true);
+        if (thumbnail) setIsThumbnailLoaded(true);
+      }
+    };
+
+    preloadAndCache();
+  }, [image, thumbnail, gifUrl]);
   return (
     <div className={`bg-[#313338] rounded-lg overflow-hidden shadow-2xl ${className}`}>
       {/* Channel bar */}
@@ -141,22 +235,76 @@ const DiscordPreviewCard = ({
                   )}
                 </div>
 
-                {/* GIF/Image */}
-                {hasGif && gifUrl && (
-                  <img 
-                    src={gifUrl} 
-                    alt="" 
-                    className="mt-3 rounded max-w-full max-h-[300px] object-contain"
-                  />
+                {/* GIF/Image with loading state */}
+                {(hasGif && gifUrl) && (
+                  <div className="mt-3 relative bg-[#2b2d31] rounded overflow-hidden min-h-[100px]">
+                    {gifDataUrl ? (
+                      <img 
+                        src={gifDataUrl}
+                        alt="" 
+                        className="max-w-full max-h-[300px] object-contain mx-auto"
+                        style={{ opacity: isGifLoaded ? 1 : 0, transition: 'opacity 100ms ease-in' }}
+                        onLoad={() => setIsGifLoaded(true)}
+                        loading="eager"
+                      />
+                    ) : (
+                      <img 
+                        src={gifUrl}
+                        alt="" 
+                        className="max-w-full max-h-[300px] object-contain mx-auto"
+                        style={{ opacity: isGifLoaded ? 1 : 0, transition: 'opacity 100ms ease-in' }}
+                        onLoad={() => setIsGifLoaded(true)}
+                        onError={() => {
+                          console.error('Failed to load GIF:', gifUrl);
+                          setIsGifLoaded(false);
+                        }}
+                        loading="eager"
+                      />
+                    )}
+                    {!isGifLoaded && !isImageLoaded && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-[#2b2d31]">
+                        <div className="flex flex-col items-center">
+                          <ImageIcon className="w-8 h-8 text-[#4e5058] animate-pulse" />
+                          <span className="text-xs text-[#949ba4] mt-2">Loading GIF...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
 
-                {/* Large image */}
-                {image && (
-                  <img 
-                    src={image} 
-                    alt="" 
-                    className="mt-3 rounded max-w-full max-h-[300px] object-contain"
-                  />
+                {/* Large image - shows if no GIF or if GIF failed to load */}
+                {image && (isImageLoaded || !hasGif || !gifUrl) && (
+                  <div className="mt-3 relative bg-[#2b2d31] rounded overflow-hidden min-h-[100px]">
+                    {imageDataUrl ? (
+                      <img 
+                        src={imageDataUrl}
+                        alt="" 
+                        className="max-w-full max-h-[300px] object-contain mx-auto"
+                        style={{ opacity: isImageLoaded ? 1 : 0, transition: 'opacity 100ms ease-in' }}
+                      />
+                    ) : (
+                      <img 
+                        src={image.startsWith('/') ? `${window.location.origin}${image}` : image}
+                        alt="" 
+                        className="max-w-full max-h-[300px] object-contain mx-auto"
+                        style={{ opacity: isImageLoaded ? 1 : 0, transition: 'opacity 100ms ease-in' }}
+                        onLoad={() => setIsImageLoaded(true)}
+                        onError={() => {
+                          console.error('Failed to load image:', image);
+                          setIsImageLoaded(false);
+                        }}
+                        loading="eager"
+                      />
+                    )}
+                    {!isImageLoaded && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-[#2b2d31]">
+                        <div className="flex flex-col items-center">
+                          <ImageIcon className="w-8 h-8 text-[#4e5058] animate-pulse" />
+                          <span className="text-xs text-[#949ba4] mt-2">Loading image...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Visual Progress Bar */}

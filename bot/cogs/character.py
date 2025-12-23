@@ -10,6 +10,8 @@ import json
 from pathlib import Path
 import random
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 class CharacterView(discord.ui.View):
     def __init__(self, bot: commands.Bot, quest_data: Quest_Data, ctx: commands.Context, char_id: str):
@@ -413,7 +415,7 @@ class CharacterView(discord.ui.View):
 
     def _load_dialogue_config(self) -> dict:
         try:
-            p = Path("data/minigames/spy-x-family/character_dialogue.json")
+            p = _REPO_ROOT / "data" / "commands" / "minigames" / "spy-x-family" / "character_dialogue.json"
             if not p.exists():
                 return {}
             with p.open("r", encoding="utf-8") as f:

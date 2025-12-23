@@ -23,8 +23,11 @@ body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background: linear-gradient(135deg, var(--bg-color) 0%, #1a1a2e 100%);
   color: var(--text-color);
-  line-height: 1.6;
+  line-height: 1.8;
   min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
 }
 
 /* Header */
@@ -101,13 +104,16 @@ body {
 /* Hero Section */
 .hero {
   text-align: center;
-  padding: 6rem 2rem;
+  padding: 8rem 2rem;
   background: radial-gradient(circle at center, rgba(255, 107, 157, 0.1) 0%, transparent 70%);
+  max-width: 100%;
+  margin: 0 auto;
 }
 
 .hero-content {
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
+  padding: 0 2rem;
 }
 
 .hero-title {
@@ -191,9 +197,33 @@ body {
   animation: fadeInUp 0.8s ease 0.6s both;
 }
 
+/* Sections */
+section {
+  padding: 6rem 0;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Container */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  width: 100%;
+}
+
 /* Features Section */
 .features {
-  padding: 4rem 2rem;
+  padding: 6rem 0;
+  background: rgba(22, 33, 62, 0.3);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  margin: 4rem auto;
+  max-width: 1400px;
+  width: calc(100% - 4rem);
+}
+
+.features .container {
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -205,10 +235,13 @@ body {
   color: var(--primary-color);
 }
 
-.features-grid {
+.feature-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
+  gap: 2.5rem;
+  margin: 4rem auto 0;
+  padding: 0 1rem;
+  max-width: 1400px;
 }
 
 .feature-card {
@@ -265,9 +298,10 @@ body {
 /* Footer */
 .footer {
   text-align: center;
-  padding: 2rem;
-  background: var(--card-bg);
-  border-top: 2px solid var(--border-color);
+  padding: 4rem 2rem;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  margin-top: 4rem;
   color: var(--text-secondary);
   margin-top: 4rem;
 }
@@ -300,6 +334,48 @@ body {
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+  .hero {
+    padding: 6rem 1.5rem;
+  }
+  
+  .hero-title {
+    font-size: 2.8rem;
+  }
+  
+  .hero-subtitle {
+    font-size: 1.2rem;
+  }
+  
+  .feature-cards {
+    grid-template-columns: 1fr;
+    max-width: 600px;
+    margin: 3rem auto 0;
+  }
+  
+  .nav {
+    display: none;
+  }
+  
+  .mobile-menu-btn {
+    display: block;
+  }
+  
+  section {
+    padding: 4rem 0;
+  }
+  
+  .features {
+    width: calc(100% - 2rem);
+    margin: 2rem auto;
+    padding: 3rem 0;
+  }
+  
+  .feature-card {
+    padding: 2rem;
+  }
+}
+
 @media (max-width: 768px) {
   .header {
     flex-direction: column;
@@ -324,6 +400,39 @@ body {
 
   .features-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero {
+    padding: 4rem 1rem;
+  }
+  
+  .hero-title {
+    font-size: 2.2rem;
+  }
+  
+  .hero-subtitle {
+    font-size: 1.1rem;
+  }
+  
+  .hero-buttons {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .cta {
+    width: 100%;
+  }
+  
+  .features {
+    padding: 2rem 0;
+    margin: 1rem auto;
+    width: calc(100% - 1rem);
+  }
+  
+  .feature-card {
+    padding: 1.5rem;
   }
 }
 

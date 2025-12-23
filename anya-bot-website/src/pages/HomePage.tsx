@@ -1,5 +1,48 @@
 import { useState, useEffect } from 'react';
 import { ArrowRight, Shield, Star, Users, Server, Heart, FileText, Gamepad2, Image, Sparkles } from 'lucide-react';
+
+// Progress bar utility
+const getEmojiUrl = (emojiId: string, size: number = 16): string => {
+  return `https://cdn.discordapp.com/emojis/${emojiId}.webp?size=${size}&quality=lossless`;
+};
+
+const generateProgressBar = (current: number, max: number, length: number = 10): string => {
+  const progress = Math.min(Math.max(current / max, 0), 1);
+  const filledSegments = Math.round(progress * length);
+  const percentage = Math.round(progress * 100);
+  
+  const emojiIds = {
+    front_empty: '1421229056946470993',
+    front_full: '1421224992263114905',
+    mid_empty: '1421229540444737727',
+    mid_full: '1421222542596771891',
+    back_empty: '1421228774761959464',
+    back_full: '1421225912657252452',
+  };
+  
+  // Start with current/max HP
+  let bar = `<span style="color: #dbdee1; font-family: monospace;">${current}/${max}</span> `;
+  
+  // Add front emoji (use full if there's any progress)
+  const frontEmojiId = filledSegments > 0 ? emojiIds.front_full : emojiIds.front_empty;
+  bar += `<img src="${getEmojiUrl(frontEmojiId)}" alt="[" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />`;
+  
+  // Add middle emojis (filled or empty)
+  for (let i = 1; i < length - 1; i++) {
+    const isFilled = i < filledSegments;
+    const emojiId = isFilled ? emojiIds.mid_full : emojiIds.mid_empty;
+    bar += `<img src="${getEmojiUrl(emojiId)}" alt="${isFilled ? '█' : ' '}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />`;
+  }
+  
+  // Add back emoji (always visible)
+  const backEmojiId = emojiIds.back_empty;
+  bar += `<img src="${getEmojiUrl(backEmojiId)}" alt="]" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />`;
+  
+  // Add percentage
+  bar += ` <span style="color: #dbdee1; font-family: monospace; vertical-align: middle;">${percentage}%</span>`;
+  
+  return bar;
+};
 import { BOT_CONFIG } from '../config/bot';
 import { SAMPLE_EMBEDS } from '../config/embedTemplates';
 import BotAvatar from '../components/BotAvatar';
@@ -85,49 +128,93 @@ const anyaStory = [
     }
   },
   {
-    icon: Star,
-    title: 'Anime Lookups',
-    summary: 'Search anime, manga, and characters using live data from MyAnimeList via Jikan API. Get episodes, status, genres, scores, and synopses instantly.',
+    icon: Heart,
+    title: 'Character Companions',
+    summary: 'Adopt and raise Spy x Family characters with unique stats and abilities. Feed, interact, and bond with them as they grow stronger.',
     preview: {
-      command: '.anime search Spy x Family',
-      // Exact format from utils/cogs/anime.py lines 125-148
-      title: SAMPLE_EMBEDS.anime.title,
-      description: SAMPLE_EMBEDS.anime.description,
-      image: SAMPLE_EMBEDS.anime.image,
-      embedColor: SAMPLE_EMBEDS.anime.color,
-      fields: SAMPLE_EMBEDS.anime.fields,
-      footer: SAMPLE_EMBEDS.anime.footer
+      command: '.character',
+      title: '👤 Anya Forger',
+      description: 'She is the adopted daughter of Loid and Yor Forger. She attends Eden Academy as a first-year student in Cecile Hall, Class 3.\n\n> **Fighting Ability:** Able to dodge 65% of attacks\n> **Food Ability:** Hp + 20 boost when included peanuts',
+      image: '/images/characters/anya-forger.png',
+      embedColor: '#FFB6C1',
+      fields: [
+        { 
+          name: 'HP', 
+          value: generateProgressBar(80, 100),
+          inline: false,
+        },
+        { 
+          name: 'Stats', 
+          value: '⚔️ ATK: 10\n🛡️ DEF: 8\n⚡ SPD: 14\n🎯 CRIT: 5%\n🎭 EVA: 10%', 
+          inline: true 
+        },
+        { 
+          name: 'Info', 
+          value: '❤️ Bond: 0/10\n🍽️ Next meal: 1h 23m\n🍳 Cooking: Normal', 
+          inline: true 
+        }
+      ],
+      footer: 'Use .feed, .play, or .pet to interact with your companion!'
     }
   },
   {
     icon: Gamepad2,
-    title: 'Pokédex & Pokétwo',
-    summary: 'Full Pokédex lookups with stats, types, and region data. Plus Pokétwo helper tools: shiny hunt alerts, collection tracking, and spawn protection.',
+    title: 'Quest System',
+    summary: 'Go on missions, complete objectives, and earn rewards. Track your progress with detailed quest logs and visual progress bars.',
     preview: {
-      command: '.pokedex vulpix',
-      // Exact format from utils/cogs/pokemon.py lines 147-224
-      title: SAMPLE_EMBEDS.pokemon.title,
-      description: SAMPLE_EMBEDS.pokemon.description,
-      image: SAMPLE_EMBEDS.pokemon.image,
-      embedColor: SAMPLE_EMBEDS.pokemon.color,
-      fields: SAMPLE_EMBEDS.pokemon.fields,
-      footer: SAMPLE_EMBEDS.pokemon.footer,
-      footerIcon: SAMPLE_EMBEDS.pokemon.footerIcon
-    }
-  },
-  {
-    icon: Shield,
-    title: '8Ball & Mini Games',
-    summary: 'Classic magic 8-ball predictions, emoji memory games, server Q&A channels, and more fun commands to keep your community engaged.',
-    preview: {
-      command: '.8ball Will Anya pass her exam?',
-      // Exact format from bot/cogs/fun.py lines 21-32:
-      // embed = discord.Embed(title="🎱 8Ball", description=f"**{question}**\n{blank_emoji} {ans}", color=primary_color())
-      // .set_footer(text=f"Requested by {ctx.author}")
-      title: SAMPLE_EMBEDS.eightBall.title,
-      description: SAMPLE_EMBEDS.eightBall.description,
-      embedColor: SAMPLE_EMBEDS.eightBall.color,
-      footer: SAMPLE_EMBEDS.eightBall.footer
+      command: '.quest',
+      title: 'Your Quests',
+      embedColor: '#FF6B9D',
+      image: '/images/quest/quest-preview.png',
+      fields: [
+        { 
+          name: '', 
+          value: '**#1** - Send: Hello {user}\n' +
+            '`0/5` ' +
+            // 10-segment progress bar (0% complete)
+            `<img src="${getEmojiUrl('1421224992263114905')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // front_full (always show)
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
+            `<img src="${getEmojiUrl('1421228774761959464')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // back_empty
+            ' `0%`\n' +
+            '📍 In this channel • ' +
+            `<img src="https://cdn.discordapp.com/emojis/1247800150479339581.gif" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // stella (animated gif)
+            ' `100 stp`',
+          inline: false 
+        },
+        { 
+          name: '', 
+          value: '**#2** - React with: :thumbsup:\n' +
+            '`2/10` ' +
+            // 10-segment progress bar (20% complete - 2/10)
+            `<img src="${getEmojiUrl('1421224992263114905')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // front_full (always show)
+            // 2 out of 10 segments filled (20%)
+            `<img src="${getEmojiUrl('1421222542596771891')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_full (filled)
+            `<img src="${getEmojiUrl('1421222542596771891')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_full (filled)
+            // Remaining empty segments
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
+            `<img src="${getEmojiUrl('1421228774761959464')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // back_empty
+            ' `20%`\n' +
+            '📍 In this channel • ' +
+            `<img src="https://cdn.discordapp.com/emojis/1247800150479339581.gif" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // stella (animated gif)
+            ' `250 stp`',
+          inline: false 
+        }
+      ],
+      footer: "User's quests • Page 1/1",
+      footerIcon: 'https://cdn.discordapp.com/embed/avatars/0.png', // Default Discord user avatar
+      allowMarkdown: true
     }
   },
   {

@@ -8,6 +8,18 @@ import discord
 from data.local.const import Quest_Progress
 
 
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _resolve_repo_path(p: str | Path) -> Path:
+    raw = str(p) if not isinstance(p, Path) else str(p)
+    raw = raw.strip()
+    if raw.startswith("data/minigames/"):
+        raw = raw.replace("data/minigames/", "data/commands/minigames/", 1)
+    path = Path(raw)
+    return path if path.is_absolute() else (_REPO_ROOT / path)
+
+
 @dataclass(frozen=True)
 class CharacterDefinition:
     char_id: str
@@ -41,9 +53,10 @@ def format_character_name(char_id: str) -> str:
     return " ".join(part[:1].upper() + part[1:].lower() if part else "" for part in name.split())
 
 
-def load_sxf_characters(path: str = "data/minigames/spy-x-family/characters.json") -> dict[str, dict]:
+def load_sxf_characters(path: str = "data/commands/minigames/spy-x-family/characters.json") -> dict[str, dict]:
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        p = _resolve_repo_path(path)
+        with p.open("r", encoding="utf-8") as f:
             raw = json.load(f)
         if isinstance(raw, dict):
             return raw
@@ -54,7 +67,7 @@ def load_sxf_characters(path: str = "data/minigames/spy-x-family/characters.json
     return {}
 
 
-def get_character_def(char_id: str, path: str = "data/minigames/spy-x-family/characters.json") -> CharacterDefinition | None:
+def get_character_def(char_id: str, path: str = "data/commands/minigames/spy-x-family/characters.json") -> CharacterDefinition | None:
     if not char_id:
         return None
 
@@ -148,9 +161,7 @@ def _resolve_image_source(image: str, *, fallback_name: str) -> tuple[str | None
     if img.startswith("http://") or img.startswith("https://"):
         return img, None
 
-    p = Path(img)
-    if not p.is_absolute():
-        p = Path.cwd() / p
+    p = _resolve_repo_path(img)
 
     if p.exists() and p.is_file():
         suffix = p.suffix or ""
@@ -211,9 +222,9 @@ async def build_character_embed_with_files(
         image_path = char_def.images[idx]
         
         # Check if the image path is a directory
-        if image_path and Path(image_path).is_dir():
+        if image_path and _resolve_repo_path(image_path).is_dir():
             # Get all image files from the directory
-            image_files = [f for f in Path(image_path).glob('*') 
+            image_files = [f for f in _resolve_repo_path(image_path).glob('*') 
                          if f.suffix.lower() in ['.png', '.jpg', '.jpeg', '.gif']]
             if image_files:
                 # Sort files for consistent ordering

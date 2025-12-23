@@ -118,11 +118,16 @@ async def _note_cook_today(quest_data: Quest_Data, *, guild_id: str, user_id: st
         )
     except Exception:
         return
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
 class Quest(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.quest_data = Quest_Data(bot)
-        self.shop_file = "data/commands/quest/shop.json"
+        self.shop_file = str(_REPO_ROOT / "data" / "commands" / "quest" / "shop.json")
         self.shop_data = self.load_shop_data()
 
     def load_shop_data(self):
@@ -132,6 +137,10 @@ class Quest(commands.Cog):
         except Exception as e:
             logger.error(f"Error loading shop data: {e}")
             return {}
+
+    @staticmethod
+    def _sxf_data_path(*parts: str) -> str:
+        return str(_REPO_ROOT / "data" / "commands" / "minigames" / "spy-x-family" / Path(*parts))
 
     def get_tool_emoji(self, tool_name):
         """Fetches the emoji for a given tool name."""
@@ -364,105 +373,37 @@ class Quest(commands.Cog):
         target_member = member if member else ctx.author
         target_id = str(target_member.id)
 
-        # Anya's special rank tiers (Spy x Family themed)
-        RANK_TIERS = [
-            (100000, "🥜 Peanut Addict", discord.Color.gold()),
-            (50000, "🕵️‍♂️ Master Spy", discord.Color.from_rgb(255, 215, 0)),
-            (25000, "🌟 Imperial Scooter", discord.Color.purple()),
-            (10000, "⭐ Stella Collector", discord.Color.blue()),
-            (5000, "🔮 Telepath", discord.Color.dark_blue()),
-            (2500, "🏫 Eden Student", discord.Color.teal()),
-            (1000, "⚡ Tonitrus Survivor", discord.Color.dark_teal()),
-            (500, "🐶 Bond's Friend", discord.Color.green()),
-            (100, "🥜 Peanut Fan", discord.Color.dark_green()),
-            (0, "🆕 New Forger", discord.Color.greyple()),
-        ]
-
-        def get_rank_info(points):
-            for threshold, title, color in RANK_TIERS:
-                if points >= threshold:
-                    return title, color, threshold
-            return "🆕 Newcomer", discord.Color.greyple(), 0
-
-        def get_next_rank(points):
-            for i, (threshold, title, _) in enumerate(RANK_TIERS):
-                if points >= threshold:
-                    if i > 0:
-                        return RANK_TIERS[i-1][0], RANK_TIERS[i-1][1]
-                    return None, None
-            return RANK_TIERS[-2][0], RANK_TIERS[-2][1]
-
         try:
             if method == "add":
                 if ctx.author.id in [1030285330739363880, 1124389055598170182]:
                     await self.quest_data.add_balance(target_id, guild_id, amount)
                     amount_with_commas = "{:,}".format(amount)
                     await ctx.send(
-                        f":white_check_mark: Successfully added {amount_with_commas} balance to {target_member.display_name}'s account."
+                        f"Added {amount_with_commas} Stella Points to {target_member.display_name}'s balance.",
+                        mention_author=False,
                     )
+                    return
                 else:
-                    await ctx.send(
-                        "You don't have permission to use this command to add balance to other users."
+                    await ctx.reply(
+                        "You don't have permission to use this command.",
+                        mention_author=False,
                     )
-            else:
-                # View balance
-                if target_id == str(ctx.author.id) and amount is None:
-                    await self.quest_data.initialize_balance(target_id, guild_id)
-                balance = await self.quest_data.get_balance(target_id, guild_id)
-                balance_with_commas = "{:,}".format(balance)
+                    return
 
-                # Get rank info
-                rank_title, rank_color, current_threshold = get_rank_info(balance)
-                next_threshold, next_title = get_next_rank(balance)
-
-                # Get server ranking
-                leaderboard = await self.quest_data.get_leaderboard(guild_id, 100)
-                server_rank = None
-                for i, entry in enumerate(leaderboard):
-                    if entry["user_id"] == target_id:
-                        server_rank = i + 1
-                        break
-
-                embed = discord.Embed(
-                    color=rank_color,
-                    timestamp=datetime.now(),
-                )
-                embed.set_author(
-                    name=f"{target_member.display_name}'s Profile",
-                    icon_url=target_member.avatar.url if target_member.avatar else target_member.default_avatar.url
-                )
-                embed.set_thumbnail(url=target_member.avatar.url if target_member.avatar else target_member.default_avatar.url)
-                
-                # Main stats
-                embed.add_field(name="⭐ Stella Points", value=f"**{balance_with_commas}**", inline=True)
-                embed.add_field(name="🏆 Server Rank", value=f"**#{server_rank}**" if server_rank else "`Unranked`", inline=True)
-                embed.add_field(name="🎖️ Title", value=f"**{rank_title}**", inline=False)
-
-                # Progress to next rank
-                if next_threshold and next_title:
-                    progress = balance - current_threshold
-                    needed = next_threshold - current_threshold
-                    progress_pct = min(100, int((progress / needed) * 100)) if needed > 0 else 100
-                    points_needed = next_threshold - balance
-                    
-                    # Visual progress bar
-                    filled = int(progress_pct / 10)
-                    bar = "█" * filled + "░" * (10 - filled)
-                    
-                    embed.add_field(
-                        name=f"📈 Progress to {next_title}",
-                        value=f"`{bar}` **{progress_pct}%**\n-# {points_needed:,} points needed",
-                        inline=False
-                    )
-                else:
-                    embed.add_field(
-                        name="🎉 Max Rank Achieved!",
-                        value="You've reached the highest rank!",
-                        inline=False
-                    )
-
-                embed.set_footer(text="Complete quests to earn more stella points!", icon_url=self.bot.user.avatar.url)
-                await ctx.reply(embed=embed, mention_author=False)
+            balance = await self.quest_data.get_balance(target_id, guild_id)
+            
+            # Get leaderboard position
+            leaderboard = await self.quest_data.get_leaderboard(guild_id)
+            position = next((i+1 for i, (user_id, _) in enumerate(leaderboard) if user_id == target_id), None)
+            
+            embed = discord.Embed(color=primary_color())
+            embed.set_author(name=f"{target_member.display_name}'s Balance", icon_url=target_member.display_avatar.url)
+            
+            embed.add_field(name="Stella Points", value=f"```{balance:,}```")
+            if position:
+                embed.add_field(name="Server Rank", value=f"`#{position}`")
+            
+            await ctx.reply(embed=embed, mention_author=False)
 
         except Exception as e:
             logger.error(f"An error occurred in the balance command: {e}")
@@ -585,7 +526,7 @@ class Quest(commands.Cog):
             # Require at least one Spy x Family character
             chars_data = []
             try:
-                with open("data/minigames/spy-x-family/characters.json", "r", encoding="utf-8") as f:
+                with open(self._sxf_data_path("characters.json"), "r", encoding="utf-8") as f:
                     raw = json.load(f)
                 if isinstance(raw, dict):
                     for k, v in raw.items():
@@ -913,7 +854,7 @@ class CookingRecipeSelectView(discord.ui.View):
 
     def _load_ingredient_emoji(self) -> dict[str, str]:
         try:
-            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+            with open(self._sxf_data_path("ingredients.json"), "r", encoding="utf-8") as f:
                 data = json.load(f)
         except FileNotFoundError:
             return {}
@@ -934,7 +875,7 @@ class CookingRecipeSelectView(discord.ui.View):
 
     def _load_ingredient_map(self) -> dict[str, dict]:
         try:
-            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+            with open(self._sxf_data_path("ingredients.json"), "r", encoding="utf-8") as f:
                 data = json.load(f)
         except FileNotFoundError:
             return {}
@@ -1019,7 +960,7 @@ class CookingRecipeSelectView(discord.ui.View):
 
     def _load_recipes(self) -> list[dict]:
         try:
-            with open("data/minigames/spy-x-family/recipes.json", "r", encoding="utf-8") as f:
+            with open(self._sxf_data_path("recipes.json"), "r", encoding="utf-8") as f:
                 recipes_data = json.load(f)
         except FileNotFoundError:
             return []
@@ -1228,7 +1169,7 @@ class CookingTimingGameView(discord.ui.View):
 
     def _load_ingredient_map(self) -> dict[str, dict]:
         try:
-            with open("data/minigames/spy-x-family/ingredients.json", "r", encoding="utf-8") as f:
+            with open(Quest._sxf_data_path("ingredients.json"), "r", encoding="utf-8") as f:
                 data = json.load(f)
         except FileNotFoundError:
             return {}

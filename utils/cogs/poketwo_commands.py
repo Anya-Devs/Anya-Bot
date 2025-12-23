@@ -48,6 +48,9 @@ class PokemonDataManager:
         self._valid_slugs = None
         self._pokemon_types = None
         self._pokemon_rarity = None
+        self._variant_pokemon = None
+        self._variant_base_map = None
+        self.variant_csv = "data/commands/pokemon/variant_pokemon_entries.csv"
         self.region_map = {"alolan": "-alola", "galarian": "-galar", "hisuian": "-hisui", "paldean": "-paldea", "mega": "-mega"}
         self.reverse_region_map = {"alola": "Alolan", "galar": "Galarian", "hisui": "Hisuian", "paldea": "Paldean", "mega": "Mega"}
         self.ultra_beasts = ["nihilego", "buzzwole", "pheromosa", "xurkitree", "celesteela", "kartana", "guzzlord", "poipole", "naganadel", "stakataka", "blacephalon"]
@@ -57,12 +60,43 @@ class PokemonDataManager:
         }
 
     def normalize_regional_name(self, name: str) -> str:
-        parts = name.lower().split("-")
+        # Handle variant names with underscores first
+        normalized_name = self.normalize_variant_name(name)
+        
+        parts = normalized_name.lower().split("-")
         for i, p in enumerate(parts):
             if p in self.region_map:
                 parts.pop(i)
                 return "-".join(parts) + self.region_map[p]
-        return name
+        return normalized_name
+
+    def normalize_variant_name(self, name: str) -> str:
+        """Convert variant names with underscores to hyphen format for consistency."""
+        # Convert underscores to hyphens for variant forms
+        normalized = name.replace('_', '-').lower().strip()
+        
+        # Handle special cases for user input
+        # "blue flower flabebe" -> "blue-flower-flabebe"
+        if ' ' in normalized:
+            normalized = normalized.replace(' ', '-')
+        
+        return normalized
+    
+    async def get_base_pokemon_for_image(self, variant_name: str) -> str:
+        """Get the base Pokémon name for image URL lookup."""
+        # First check if this is a variant Pokémon in our variant CSV
+        variant_base_map = await self.load_variant_base_map()
+        base_name = variant_base_map.get(variant_name.lower())
+        if base_name:
+            return base_name
+        
+        # If not found in variant map, try to extract base name from the slug
+        if '-' in variant_name:
+            # For regional forms like "vulpix-alola", the base is usually the first part
+            parts = variant_name.split('-')
+            return parts[0]
+        
+        return variant_name
 
     def display_name_with_region(self, slug: str) -> str:
         parts = slug.lower().split("-")
@@ -172,6 +206,31 @@ class PokemonDataManager:
                 print(f"Error fetching species list: {e}")
         return rarity_data
 
+    async def load_variant_pokemon(self):
+        """Load variant Pokémon from the variant CSV file."""
+        variant_slugs = set()
+        if os.path.isfile(self.variant_csv):
+            with open(self.variant_csv, newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    slug = row.get("slug", "").lower().strip()
+                    if slug:
+                        variant_slugs.add(slug)
+        return variant_slugs
+
+    async def load_variant_base_map(self):
+        """Load variant to base Pokémon name mapping from CSV."""
+        variant_base_map = {}
+        if os.path.isfile(self.variant_csv):
+            with open(self.variant_csv, newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    slug = row.get("slug", "").lower().strip()
+                    base_name = row.get("base_name", "").lower().strip()
+                    if slug and base_name:
+                        variant_base_map[slug] = base_name
+        return variant_base_map
+
     async def load_valid_slugs(self):
         if not os.path.isfile(self.pokemon_names_csv):
             os.makedirs(os.path.dirname(self.pokemon_names_csv), exist_ok=True)
@@ -182,9 +241,17 @@ class PokemonDataManager:
                 writer = csv.DictWriter(f, fieldnames=["id", "name"])
                 writer.writeheader()
                 writer.writerows(pokemon_list)
-                
+        
+        # Load base Pokémon names
+        base_slugs = set()
         with open(self.pokemon_names_csv, newline="", encoding="utf-8") as f:
-            return {row["name"].lower() for row in csv.DictReader(f)}
+            base_slugs = {row["name"].lower() for row in csv.DictReader(f)}
+        
+        # Load variant Pokémon names
+        variant_slugs = await self.load_variant_pokemon()
+        
+        # Combine both sets
+        return base_slugs.union(variant_slugs)
 
     async def generate_pokemon_types_csv(self):
         if not os.path.isfile(self.pokemon_types_csv):
@@ -256,6 +323,12 @@ class PokemonDataManager:
         if self._pokemon_rarity is None:
             self._pokemon_rarity = await self.load_pokemon_rarity()
         return self._pokemon_rarity
+
+    @property
+    async def variant_base_map(self):
+        if self._variant_base_map is None:
+            self._variant_base_map = await self.load_variant_base_map()
+        return self._variant_base_map
 
     async def filter_by_flags(self, entries: list[str], flags_obj) -> list[str]:
         try:
@@ -514,8 +587,14 @@ class PokemonCollectionHandler:
                     emoji = ""
                     if self.pe:
                         try:
-                            pid = (self.pokemon_subcogs.pokemon_name_to_id(name)
+                            # For variant Pokémon, try to get emoji from base form
+                            base_name = await self.data_manager.get_base_pokemon_for_image(name)
+                            pid = (self.pokemon_subcogs.pokemon_name_to_id(base_name)
                                    if self.pokemon_subcogs else None)
+                            if not pid:
+                                # Fallback to original name for non-variants
+                                pid = (self.pokemon_subcogs.pokemon_name_to_id(name)
+                                       if self.pokemon_subcogs else None)
                             emoji = self.pe.get_emoji_for_pokemon(pid) or ""
                         except:
                             pass
@@ -549,8 +628,14 @@ class PokemonCollectionHandler:
             for raw, norm in names:
                 name_lower = norm.lower()
                 if name_lower in valid_slugs:
-                    pid = (self.pokemon_subcogs.pokemon_name_to_id(name_lower)
+                    # For variant Pokémon, try to get emoji from base form
+                    base_name = await self.data_manager.get_base_pokemon_for_image(name_lower)
+                    pid = (self.pokemon_subcogs.pokemon_name_to_id(base_name)
                            if self.pokemon_subcogs else None)
+                    if not pid:
+                        # Fallback to original name for non-variants
+                        pid = (self.pokemon_subcogs.pokemon_name_to_id(name_lower)
+                               if self.pokemon_subcogs else None)
                     emoji = (self.pe.get_emoji_for_pokemon(pid) or "") if self.pe and pid else ""
                     disp = self.data_manager.display_name_with_region(name_lower)
 
@@ -600,8 +685,11 @@ class PokemonCollectionHandler:
                         parent_cog=self, ctx=ctx, col=col, uid=uid,
                         action=action, max_one=max_one
                     ) if 'UnifiedResultView' in globals() else None
-                    return await ctx.reply(embed=embed, view=view, mention_author=False) \
-                        if view else await ctx.reply(embed=embed, mention_author=False)
+                    if view:
+                        await view.update_components()  # Initialize components
+                        return await ctx.reply(embed=embed, view=view, mention_author=False)
+                    else:
+                        return await ctx.reply(embed=embed, mention_author=False)
 
                 if success or failed or exists:
                     label_map = {
@@ -675,7 +763,7 @@ class UnifiedResultView(View):
                 self.current_view = "suggestions"
                 self.show_suggestions = True
         
-        self.update_components()
+        # Components will be updated when the view is first displayed
 
     def get_pages(self, result_type):
         if result_type == "suggestions":
@@ -691,7 +779,7 @@ class UnifiedResultView(View):
         has_suggestions = bool(self.suggestions)
         return categories_with_data + (1 if has_suggestions else 0) > 1
 
-    def update_components(self):
+    async def update_components(self):
         self.clear_items()
         
         # Only show category buttons if there are multiple categories with data
@@ -739,7 +827,12 @@ class UnifiedResultView(View):
                 page_items = pages[self.current_page]
                 options = []
                 for original_name, suggestion in page_items:
-                    pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(suggestion) if self.parent_cog.pokemon_subcogs else None
+                    # For variant Pokémon, try to get emoji from base form
+                    base_name = await self.parent_cog.data_manager.get_base_pokemon_for_image(suggestion)
+                    pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(base_name) if self.parent_cog.pokemon_subcogs else None
+                    if not pid:
+                        # Fallback to original name for non-variants
+                        pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(suggestion) if self.parent_cog.pokemon_subcogs else None
                     emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid) if self.parent_cog.pe and pid else ""
                     display_name = self.parent_cog.data_manager.display_name_with_region(suggestion)
                     option_label = f"{display_name} (for '{original_name}')"
@@ -834,7 +927,7 @@ class UnifiedResultView(View):
         
         self.selected_items.update(selected_values)
         
-        self.update_components()
+        await self.update_components()
         await interaction.response.edit_message(view=self)
 
     async def confirm_action(self, interaction: Interaction):
@@ -849,7 +942,12 @@ class UnifiedResultView(View):
             if self.action == "add":
                 if self.max_one:
                     await self.parent_cog.data_manager.mongo.replace(self.col, selected_slug, self.uid)
-                    pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(selected_slug) if self.parent_cog.pokemon_subcogs else None
+                    # For variant Pokémon, try to get emoji from base form
+                    base_name = await self.parent_cog.data_manager.get_base_pokemon_for_image(selected_slug)
+                    pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(base_name) if self.parent_cog.pokemon_subcogs else None
+                    if not pid:
+                        # Fallback to original name for non-variants
+                        pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(selected_slug) if self.parent_cog.pokemon_subcogs else None
                     emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid) if self.parent_cog.pe and pid else ""
                     name_disp = self.parent_cog.data_manager.display_name_with_region(selected_slug)
                     new_success.append(f"{self.parent_cog.icons['success']} Set your shiny hunt to {emoji} {name_disp}!")
@@ -859,7 +957,12 @@ class UnifiedResultView(View):
                         new_other.append(f"{self.parent_cog.icons['error']} Max {self.parent_cog.max_pokemon} Pokémon. {selected_slug.title()} not added.")
                         continue
                     ok = await self.parent_cog.data_manager.mongo.add(self.col, selected_slug, self.uid)
-                    pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(selected_slug) if self.parent_cog.pokemon_subcogs else None
+                    # For variant Pokémon, try to get emoji from base form
+                    base_name = await self.parent_cog.data_manager.get_base_pokemon_for_image(selected_slug)
+                    pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(base_name) if self.parent_cog.pokemon_subcogs else None
+                    if not pid:
+                        # Fallback to original name for non-variants
+                        pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(selected_slug) if self.parent_cog.pokemon_subcogs else None
                     emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid) if self.parent_cog.pe and pid else ""
                     icon = self.parent_cog.icons['success'] if ok else self.parent_cog.icons['exists']
                     name_disp = self.parent_cog.data_manager.display_name_with_region(selected_slug)
@@ -872,7 +975,12 @@ class UnifiedResultView(View):
                         
             elif self.action == "remove":
                 ok = await self.parent_cog.data_manager.mongo.remove(self.col, selected_slug, self.uid)
-                pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(selected_slug) if self.parent_cog.pokemon_subcogs else None
+                # For variant Pokémon, try to get emoji from base form
+                base_name = await self.parent_cog.data_manager.get_base_pokemon_for_image(selected_slug)
+                pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(base_name) if self.parent_cog.pokemon_subcogs else None
+                if not pid:
+                    # Fallback to original name for non-variants
+                    pid = self.parent_cog.pokemon_subcogs.pokemon_name_to_id(selected_slug) if self.parent_cog.pokemon_subcogs else None
                 emoji = self.parent_cog.pe.get_emoji_for_pokemon(pid) if self.parent_cog.pe and pid else ""
                 icon = self.parent_cog.icons['removed'] if ok else self.parent_cog.icons['not_found']
                 name_disp = self.parent_cog.data_manager.display_name_with_region(selected_slug)
@@ -946,7 +1054,7 @@ class UnifiedResultView(View):
             else:
                 embed.set_footer(text="" if self.max_one else "Updated Your Pokemon Collection")
         
-        self.update_components()
+        await self.update_components()
         await interaction.response.edit_message(embed=embed, view=self)
 
     async def interaction_check(self, interaction: Interaction):
