@@ -852,6 +852,10 @@ class CookingRecipeSelectView(discord.ui.View):
         self._ingredient_map: dict[str, dict] = {}
         self._cookable_recipes: list[dict] = []
 
+    @staticmethod
+    def _sxf_data_path(*parts: str) -> str:
+        return str(_REPO_ROOT / "data" / "commands" / "minigames" / "spy-x-family" / Path(*parts))
+
     def _load_ingredient_emoji(self) -> dict[str, str]:
         try:
             with open(self._sxf_data_path("ingredients.json"), "r", encoding="utf-8") as f:
