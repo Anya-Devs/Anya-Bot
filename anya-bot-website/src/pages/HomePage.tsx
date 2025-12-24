@@ -167,7 +167,7 @@ const featureShowcases = [
     tags: ['Character Shop', 'Feeding System', 'Customization', 'Mini-Games', 'PvP Battles'],
     preview: {
       command: '.character',
-      title: '👤 Anya Forger',
+      title: '<img src="https://cdn.discordapp.com/emojis/1450198321372073984.webp?size=96" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" /> Anya Forger',
       description: 'She is the adopted daughter of Loid and Yor Forger. She attends Eden Academy as a first-year student in Cecile Hall, Class 3.\n\n> **Fighting Ability:** Able to dodge 65% of attacks\n> **Food Ability:** Hp + 20 boost when included peanuts',
       image: '/images/characters/anya-forger.png',
       embedColor: '#FFB6C1',
