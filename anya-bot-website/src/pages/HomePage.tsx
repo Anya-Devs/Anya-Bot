@@ -44,13 +44,6 @@ const generateProgressBar = (current: number, max: number, length: number = 10):
   return bar;
 };
 
-// Feature tag component for showcase sections
-const FeatureTag = ({ children, color = 'primary' }: { children: React.ReactNode; color?: string }) => (
-  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-${color}/10 text-${color} border border-${color}/20`}>
-    {children}
-  </span>
-);
-
 // Stat display component - warm style with responsive design
 interface StatCardProps {
   value: number;
@@ -205,10 +198,8 @@ const featureShowcases = [
     tags: ['Spawn Alerts', 'Shiny Protection', 'Type Pings', 'Collection Tracking', 'Quest Pings'],
     preview: {
       command: '.pt sh alolan vulpix',
-      title: '✓ Shiny Hunt Set',
-      description: "You'll be pinged when **Alolan Vulpix** spawns in protected channels.",
-      embedColor: '#34D399',
-      footer: 'Use .pt sh remove to clear',
+      description: '✅ <img src="https://cdn.discordapp.com/emojis/1340557284597698682.webp?size=96" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" /> You are now shiny hunting Alolan Vulpix!',
+      embedColor: '#5865F2',
     }
   },
   {
