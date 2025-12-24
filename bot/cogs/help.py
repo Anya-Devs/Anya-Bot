@@ -32,7 +32,12 @@ class Help(commands.Cog):
         if command_name:
             try:
                 sub = Sub_Helper(self.bot, ctx.prefix)
-                return await ctx.reply(sub.get_command_help_string(ctx, command_name))
+                result = await sub.get_command_help_embed(ctx, command_name)
+                if isinstance(result, tuple):
+                    embed, view = result
+                    return await ctx.reply(embed=embed, view=view, mention_author=False)
+                else:
+                    return await ctx.reply(result, mention_author=False)
             except Exception as e:
                 logger.error(f"Error generating help for command {command_name}: {e}")
                 return await ctx.reply(embed=await error_custom_embed(self.bot, ctx, e, title="Command Help"))

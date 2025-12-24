@@ -13,12 +13,164 @@
       "related_commands": ".imagine"
     }
   },
+  "Search": {
+    "google": {
+      "description": "Search Google and get top 5 results with titles, snippets, and links.",
+      "example": ".google discord bot development",
+      "aliases": ["g", "search"],
+      "related_commands": ".image, .youtube, .wiki"
+    },
+    "image": {
+      "description": "Search for images on Google and browse results.",
+      "example": ".image anime wallpaper",
+      "aliases": ["img", "images"],
+      "related_commands": ".google, .art"
+    },
+    "youtube": {
+      "description": "Search YouTube videos with interactive pagination and video previews.",
+      "example": ".youtube anime opening",
+      "aliases": ["yt", "video"],
+      "related_commands": ".google"
+    },
+    "art": {
+      "description": "Search anime/manga art from 6 sources: Danbooru, Gelbooru, Safebooru, Konachan, Yande.re, and Rule34 (NSFW only). Save favorites to folders, organized in MongoDB. NSFW mode auto-activates in NSFW channels.",
+      "example": ".art naruto",
+      "aliases": ["artwork"],
+      "related_commands": ".art source, .art save, .art favorites"
+    },
+    "art source": {
+      "description": "Search a specific art source (danbooru, gelbooru, safebooru, konachan, yandere, rule34).",
+      "example": ".art source danbooru miku",
+      "aliases": [],
+      "related_commands": ".art"
+    },
+    "art save": {
+      "description": "Save art to your favorites with optional folder organization. Art stored in MongoDB.",
+      "example": ".art save danbooru_12345 anime",
+      "aliases": ["favorite", "fav"],
+      "related_commands": ".art favorites, .art folder"
+    },
+    "art folder": {
+      "description": "Manage art folders - create, delete, list, and organize your saved art collections.",
+      "example": ".art folder create wallpapers",
+      "aliases": [],
+      "related_commands": ".art save, .art favorites"
+    },
+    "art favorites": {
+      "description": "View your saved favorite art organized by folders. Browse your personal collection.",
+      "example": ".art favorites wallpapers",
+      "aliases": ["favs", "saved"],
+      "related_commands": ".art save, .art folder"
+    },
+    "translate": {
+      "description": "Translate text to another language. Supports 50+ languages including Japanese, Spanish, French, German, Chinese.",
+      "example": ".translate es Hello, how are you?",
+      "aliases": ["tr", "trans"],
+      "related_commands": ".translate detect"
+    },
+    "weather": {
+      "description": "Get current weather and forecast for any location worldwide.",
+      "example": ".weather Tokyo",
+      "aliases": ["w", "forecast"],
+      "related_commands": ""
+    },
+    "define": {
+      "description": "Look up word definitions, pronunciations, and examples from the dictionary.",
+      "example": ".define serendipity",
+      "aliases": ["dict", "dictionary", "meaning"],
+      "related_commands": ".urban"
+    },
+    "urban": {
+      "description": "Look up slang and internet terms on Urban Dictionary with examples and votes.",
+      "example": ".urban yeet",
+      "aliases": ["ud", "urbandictionary"],
+      "related_commands": ".define"
+    },
+    "wiki": {
+      "description": "Search Wikipedia articles with summaries and links to full articles.",
+      "example": ".wiki Quantum Computing",
+      "aliases": ["wikipedia", "wp"],
+      "related_commands": ".google"
+    },
+    "color": {
+      "description": "Designer's color toolkit! Analyze colors, get role/user colors, extract from images, generate palettes, and check WCAG accessibility.",
+      "example": ".color #FF5733",
+      "aliases": ["colour", "clr"],
+      "related_commands": ".color palette, .color contrast, .color image"
+    },
+    "color random": {
+      "description": "Generate a random color for design inspiration with full color analysis.",
+      "example": ".color random",
+      "aliases": ["rand", "rng"],
+      "related_commands": ".color palette"
+    },
+    "color role": {
+      "description": "Get detailed color information from any role in your server.",
+      "example": ".color role @Moderator",
+      "aliases": [],
+      "related_commands": ".color user"
+    },
+    "color user": {
+      "description": "Get the display color from a user's top colored role.",
+      "example": ".color user @someone",
+      "aliases": ["member"],
+      "related_commands": ".color role"
+    },
+    "color palette": {
+      "description": "Generate a color harmony palette with complementary, analogous, triadic colors, shades and tints.",
+      "example": ".color palette #FF5733",
+      "aliases": ["harmony", "scheme"],
+      "related_commands": ".color contrast"
+    },
+    "color contrast": {
+      "description": "Check WCAG accessibility contrast ratio between two colors. Shows AA/AAA compliance.",
+      "example": ".color contrast #FFFFFF #000000",
+      "aliases": ["check", "wcag"],
+      "related_commands": ".color preview"
+    },
+    "color preview": {
+      "description": "Preview how a color looks on UI elements with CSS/Tailwind/Discord code snippets.",
+      "example": ".color preview #FF5733",
+      "aliases": ["demo", "show"],
+      "related_commands": ".color palette"
+    },
+    "color image": {
+      "description": "Extract dominant colors from an attached image. Great for creating palettes from photos!",
+      "example": ".color image (with image attached)",
+      "aliases": ["extract", "img"],
+      "related_commands": ".color palette"
+    },
+    "qr": {
+      "description": "Generate a QR code from text or URL. Share links, WiFi passwords, or any text instantly!",
+      "example": ".qr https://discord.gg/yourserver",
+      "aliases": ["qrcode"],
+      "related_commands": ".shorten"
+    },
+    "screenshot": {
+      "description": "Take a screenshot of any website. Preview pages without leaving Discord!",
+      "example": ".screenshot google.com",
+      "aliases": ["ss", "snap"],
+      "related_commands": ".qr"
+    },
+    "shorten": {
+      "description": "Shorten long URLs using TinyURL. Perfect for sharing links in chat!",
+      "example": ".shorten https://very-long-url.com/with/many/paths",
+      "aliases": ["short", "tinyurl"],
+      "related_commands": ".qr"
+    },
+    "calc": {
+      "description": "Calculate math expressions safely. Supports +, -, *, /, **, % operations.",
+      "example": ".calc (5 + 3) * 2",
+      "aliases": ["calculate", "math"],
+      "related_commands": ""
+    }
+  },
   "Anime": {
     "anime": {
-      "description": "Anime command group. Use subcommands: search, character, recommend.",
+      "description": "Anime command group. Use subcommands: search, character, recommend, quote, schedule, trivia.",
       "example": ".anime",
       "aliases": [],
-      "related_commands": ".anime search, .anime recommend"
+      "related_commands": ".anime search, .anime recommend, .anime quote"
     },
     "anime search": {
       "description": "Search MyAnimeList for anime titles. Shows synopsis, ratings, episodes, studios, and genres with interactive navigation.",
@@ -38,6 +190,24 @@
       "aliases": [],
       "related_commands": ".anime search, .manga recommend"
     },
+    "anime quote": {
+      "description": "Get random anime quotes from popular series with character and anime information.",
+      "example": ".anime quote",
+      "aliases": [],
+      "related_commands": ".anime search"
+    },
+    "anime schedule": {
+      "description": "View anime airing schedule for any day of the week. Shows currently airing anime with episode counts and scores.",
+      "example": ".anime schedule monday",
+      "aliases": ["airing"],
+      "related_commands": ".anime search, .topanime"
+    },
+    "anime trivia": {
+      "description": "Play anime trivia! Guess which anime a character is from. 30 seconds to answer.",
+      "example": ".anime trivia",
+      "aliases": [],
+      "related_commands": ".anime character"
+    },
     "manga": {
       "description": "Manga command group. Use subcommands: search, read, recommend.",
       "example": ".manga",
@@ -52,7 +222,7 @@
     },
     "manga read": {
       "description": "Read manga directly in Discord through MangaDex. Navigate chapters with interactive controls.",
-      "example": ".manga read One Piece 1056",
+      "example": ".manga read One Piece",
       "aliases": [],
       "related_commands": ".manga search"
     },
@@ -61,6 +231,152 @@
       "example": ".manga recommend",
       "aliases": [],
       "related_commands": ".manga search, .anime recommend"
+    },
+    "waifu": {
+      "description": "Get random waifu images. Supports categories: waifu, neko, shinobu, megumin, and more reaction types.",
+      "example": ".waifu",
+      "aliases": [],
+      "related_commands": ".husbando, .neko"
+    },
+    "husbando": {
+      "description": "Get random husbando images with artist credits.",
+      "example": ".husbando",
+      "aliases": [],
+      "related_commands": ".waifu"
+    },
+    "neko": {
+      "description": "Get random neko (cat girl) images with artist credits.",
+      "example": ".neko",
+      "aliases": [],
+      "related_commands": ".kitsune, .waifu"
+    },
+    "kitsune": {
+      "description": "Get random kitsune (fox girl) images with artist credits.",
+      "example": ".kitsune",
+      "aliases": [],
+      "related_commands": ".neko, .waifu"
+    },
+    "anime smug": {
+      "description": "Get smug anime reaction GIFs.",
+      "example": ".anime smug",
+      "aliases": [],
+      "related_commands": ".anime happy, .anime dance"
+    },
+    "anime cry": {
+      "description": "Get crying anime reaction GIFs.",
+      "example": ".anime cry",
+      "aliases": [],
+      "related_commands": ".anime happy"
+    },
+    "anime blush": {
+      "description": "Get blushing anime reaction images.",
+      "example": ".anime blush",
+      "aliases": [],
+      "related_commands": ".anime happy"
+    },
+    "anime happy": {
+      "description": "Get happy anime reaction GIFs.",
+      "example": ".anime happy",
+      "aliases": [],
+      "related_commands": ".anime dance, .anime smug"
+    },
+    "anime dance": {
+      "description": "Get dancing anime reaction GIFs.",
+      "example": ".anime dance",
+      "aliases": [],
+      "related_commands": ".anime happy"
+    },
+    "anime wallpaper": {
+      "description": "Get random anime wallpapers with artist credits and download button.",
+      "example": ".anime wallpaper",
+      "aliases": ["wall"],
+      "related_commands": ".waifu, .art"
+    },
+    "topanime": {
+      "description": "Get top anime lists by popularity, airing status, upcoming, or favorites.",
+      "example": ".topanime bypopularity",
+      "aliases": ["top", "popular"],
+      "related_commands": ".anime search, .anime schedule"
+    },
+    "wallpaper": {
+      "description": "Get random anime wallpapers with artist credits and download links.",
+      "example": ".wallpaper",
+      "aliases": ["wall", "animewallpaper"],
+      "related_commands": ".art, .waifu"
+    }
+  },
+  "Games": {
+    "game": {
+      "description": "Anya's Game Corner! View all available mini-games organized by category. Shows your balance and character bonuses.",
+      "example": ".game",
+      "aliases": ["games", "play"],
+      "related_commands": ".slots, .coinflip, .hangman, .work"
+    },
+    "game pokemon": {
+      "description": "Draw a random Pokémon card for 100 stella points. Gacha-style rarity system with multiplied rewards!",
+      "example": ".game pokemon",
+      "aliases": ["poke", "pkm"],
+      "related_commands": ".game anime"
+    },
+    "game anime": {
+      "description": "Draw a random anime character card for 100 stella points. Features characters from various anime!",
+      "example": ".game anime",
+      "aliases": ["char", "character"],
+      "related_commands": ".game pokemon"
+    },
+    "slots": {
+      "description": "Spin the slot machine! Match symbols to win. Three-of-a-kind = jackpot with symbol multiplier!",
+      "example": ".slots 100",
+      "aliases": ["slot", "spin"],
+      "related_commands": ".coinflip, .guess"
+    },
+    "coinflip": {
+      "description": "Flip a coin! Call heads or tails to double your bet. Simple 50/50 gambling.",
+      "example": ".coinflip 100 heads",
+      "aliases": ["cf", "flip"],
+      "related_commands": ".slots, .guess"
+    },
+    "guess": {
+      "description": "Guess a number 1-100 in 5 attempts! Closer guesses win more. Perfect guess = 10x bet!",
+      "example": ".guess 50",
+      "aliases": ["number", "guessnumber"],
+      "related_commands": ".slots, .coinflip"
+    },
+    "hangman": {
+      "description": "Play hangman! Guess letters to reveal the word. Win points based on word length and mistakes.",
+      "example": ".hangman",
+      "aliases": ["hm"],
+      "related_commands": ".wordle"
+    },
+    "wordle": {
+      "description": "Play Wordle! Guess the 5-letter word in 6 tries. Green = correct, Yellow = wrong position.",
+      "example": ".wordle",
+      "aliases": [],
+      "related_commands": ".hangman"
+    },
+    "work": {
+      "description": "Do honest work for guaranteed stella points. 30-minute cooldown. Character bonuses apply!",
+      "example": ".work",
+      "aliases": [],
+      "related_commands": ".job, .claim"
+    },
+    "job": {
+      "description": "Take on a risky mission for bigger rewards. May fail! 1-hour cooldown. Character-specific missions.",
+      "example": ".job",
+      "aliases": ["mission"],
+      "related_commands": ".work, .rob"
+    },
+    "rob": {
+      "description": "Attempt to steal stella points from another user. High risk - you may get fined if caught!",
+      "example": ".rob @user",
+      "aliases": ["steal"],
+      "related_commands": ".job, .work"
+    },
+    "claim": {
+      "description": "Claim your daily stella points reward! Streak bonuses increase rewards up to 30 days.",
+      "example": ".claim",
+      "aliases": ["daily"],
+      "related_commands": ".work, .balance"
     }
   },
   "Fun": {
@@ -107,74 +423,66 @@
       "related_commands": ""
     }
   },
-  "Information": {
-    "about": {
-      "description": "Get information about the server and bot including stats and features.",
-      "example": ".about",
-      "aliases": ["info", "details"],
-      "related_commands": ".server, .invite"
-    },
-    "server": {
-      "description": "Display detailed server information and statistics.",
-      "example": ".server",
-      "aliases": [],
-      "related_commands": ".about, .roles"
-    },
-    "pfp": {
-      "description": "Get a user's profile picture in full resolution.",
-      "example": ".pfp @user",
-      "aliases": [],
-      "related_commands": ".banner"
-    },
-    "banner": {
-      "description": "Get a user's profile banner image in full resolution.",
-      "example": ".banner @user",
-      "aliases": [],
-      "related_commands": ".pfp"
-    },
-    "invite": {
-      "description": "Get the bot's invite link to add it to your server.",
-      "example": ".invite",
-      "aliases": [],
-      "related_commands": ".about"
-    },
-    "perms": {
-      "description": "Check your permissions or another user's permissions in the server.",
-      "example": ".perms @user",
-      "aliases": [],
-      "related_commands": ".roles"
-    },
-    "roles": {
-      "description": "List all roles in the server with member counts.",
-      "example": ".roles",
-      "aliases": [],
-      "related_commands": ".perms, .server"
-    },
-    "leaderboard": {
-      "description": "Show the server activity leaderboard with rankings.",
-      "example": ".leaderboard",
-      "aliases": ["lb"],
-      "related_commands": ".profile"
-    },
-    "reviews": {
-      "description": "View or leave reviews for the server.",
-      "example": ".reviews",
-      "aliases": [],
-      "related_commands": ".about"
-    }
-  },
   "Moderation": {
-    "log": {
-      "description": "Set or view the moderation log channel. All mod actions will be logged here. Requires Manage Server.",
-      "example": ".log #mod-logs",
+    "mod": {
+      "description": "Moderation command group. Configure mod log, mute role, and view cases.",
+      "example": ".mod",
       "aliases": [],
-      "related_commands": ".ban, .timeout"
+      "related_commands": ".mod log, .mod cases"
+    },
+    "mod log": {
+      "description": "Set or view the moderation log channel. All mod actions will be logged here. Requires Manage Server.",
+      "example": ".mod log #mod-logs",
+      "aliases": [],
+      "related_commands": ".mod cases"
+    },
+    "mod muterole": {
+      "description": "Set the mute role for the server. This role will be assigned when using the mute command. Requires Manage Server.",
+      "example": ".mod muterole @Muted",
+      "aliases": [],
+      "related_commands": ".mute, .unmute"
+    },
+    "mod cases": {
+      "description": "View moderation case history for a user. Shows all warnings, bans, kicks, timeouts, and mutes.",
+      "example": ".mod cases @user",
+      "aliases": [],
+      "related_commands": ".warn list"
+    },
+    "warn": {
+      "description": "Warn a user with a reason. Warnings are logged and can be viewed later. Requires Kick Members.",
+      "example": ".warn @user Breaking rules",
+      "aliases": [],
+      "related_commands": ".warn list, .warn clear"
+    },
+    "warn list": {
+      "description": "List all warnings for a user with warning IDs and reasons.",
+      "example": ".warn list @user",
+      "aliases": [],
+      "related_commands": ".warn, .warn remove"
+    },
+    "warn clear": {
+      "description": "Clear all warnings for a user. Requires confirmation. Requires Kick Members.",
+      "example": ".warn clear @user",
+      "aliases": [],
+      "related_commands": ".warn list"
+    },
+    "warn remove": {
+      "description": "Remove a specific warning by ID. Requires Kick Members.",
+      "example": ".warn remove @user 1",
+      "aliases": [],
+      "related_commands": ".warn list"
+    },
+    "kick": {
+      "description": "Kick a user from the server with an optional reason. Requires Kick Members.",
+      "example": ".kick @user spamming",
+      "aliases": [],
+      "related_commands": ".ban, .warn"
     },
     "ban": {
-      "description": "Ban a user from the server with an optional reason. Requires Ban Members.",
+      "description": "Ban a user from the server with an optional reason and message deletion period. Requires Ban Members.",
       "example": ".ban @user spamming",
       "aliases": [],
-      "related_commands": ".unban, .timeout"
+      "related_commands": ".unban, .softban"
     },
     "unban": {
       "description": "Unban a user from the server by their user ID. Requires Ban Members.",
@@ -182,35 +490,137 @@
       "aliases": [],
       "related_commands": ".ban"
     },
+    "softban": {
+      "description": "Softban a user (ban then immediately unban) to delete their recent messages. Requires Ban Members.",
+      "example": ".softban @user",
+      "aliases": [],
+      "related_commands": ".ban, .kick"
+    },
     "timeout": {
       "description": "Timeout a user for a specified duration (e.g., 10m, 1h, 1d). Requires Moderate Members.",
       "example": ".timeout @user 10m spamming",
       "aliases": [],
-      "related_commands": ".timeout remove, .ban"
+      "related_commands": ".untimeout, .mute"
     },
-    "timeout remove": {
+    "untimeout": {
       "description": "Remove timeout from a user, allowing them to send messages again. Requires Moderate Members.",
-      "example": ".timeout remove @user 10m spamming",
+      "example": ".untimeout @user",
       "aliases": [],
       "related_commands": ".timeout"
     },
-    "purge": {
-      "description": "Bulk delete messages from a channel. Requires Manage Messages.",
-      "example": ".purge 50",
+    "mute": {
+      "description": "Mute a user by assigning the mute role. Use .mod muterole to set the role first. Requires Moderate Members.",
+      "example": ".mute @user 1h spamming",
       "aliases": [],
-      "related_commands": ".purge user, .purge bot"
+      "related_commands": ".unmute, .timeout"
+    },
+    "unmute": {
+      "description": "Unmute a user by removing the mute role. Requires Moderate Members.",
+      "example": ".unmute @user",
+      "aliases": [],
+      "related_commands": ".mute"
+    },
+    "purge": {
+      "description": "Bulk delete messages from a channel. Supports various filters. Requires Manage Messages.",
+      "example": ".purge 50",
+      "aliases": ["clear", "clean"],
+      "related_commands": ".purge user, .purge bots"
     },
     "purge user": {
       "description": "Delete messages from a specific user in the channel. Requires Manage Messages.",
       "example": ".purge user @user 20",
       "aliases": [],
-      "related_commands": ".purge, .purge bot"
+      "related_commands": ".purge"
     },
-    "purge bot": {
-      "description": "Delete bot messages from the channel. Requires Manage Messages.",
-      "example": ".purge bot 30",
+    "purge bots": {
+      "description": "Delete all bot messages from the channel. Requires Manage Messages.",
+      "example": ".purge bots 30",
       "aliases": [],
-      "related_commands": ".purge, .purge user"
+      "related_commands": ".purge"
+    },
+    "purge embeds": {
+      "description": "Delete all messages containing embeds. Requires Manage Messages.",
+      "example": ".purge embeds 20",
+      "aliases": [],
+      "related_commands": ".purge"
+    },
+    "purge images": {
+      "description": "Delete all messages containing images or attachments. Requires Manage Messages.",
+      "example": ".purge images 15",
+      "aliases": [],
+      "related_commands": ".purge"
+    },
+    "purge contains": {
+      "description": "Delete messages containing specific text. Requires Manage Messages.",
+      "example": ".purge contains spam 25",
+      "aliases": [],
+      "related_commands": ".purge"
+    },
+    "slowmode": {
+      "description": "Set channel slowmode delay (0-21600 seconds). 0 to disable. Requires Manage Channels.",
+      "example": ".slowmode 5",
+      "aliases": [],
+      "related_commands": ".lock, .unlock"
+    },
+    "lock": {
+      "description": "Lock a channel to prevent @everyone from sending messages. Requires Manage Channels.",
+      "example": ".lock",
+      "aliases": [],
+      "related_commands": ".unlock"
+    },
+    "unlock": {
+      "description": "Unlock a previously locked channel. Requires Manage Channels.",
+      "example": ".unlock",
+      "aliases": [],
+      "related_commands": ".lock"
+    },
+    "nuke": {
+      "description": "Delete and recreate a channel, removing all messages. Requires confirmation. Requires Manage Channels.",
+      "example": ".nuke",
+      "aliases": [],
+      "related_commands": ".purge"
+    },
+    "role add": {
+      "description": "Add a role to a user or multiple users. Requires Manage Roles.",
+      "example": ".role add @user @RoleName",
+      "aliases": [],
+      "related_commands": ".role remove"
+    },
+    "role remove": {
+      "description": "Remove a role from a user or multiple users. Requires Manage Roles.",
+      "example": ".role remove @user @RoleName",
+      "aliases": [],
+      "related_commands": ".role add"
+    },
+    "role all": {
+      "description": "Add a role to all members in the server. Requires confirmation. Requires Manage Roles.",
+      "example": ".role all @RoleName",
+      "aliases": [],
+      "related_commands": ".role removeall"
+    },
+    "role bots": {
+      "description": "Add a role to all bots in the server. Requires Manage Roles.",
+      "example": ".role bots @BotRole",
+      "aliases": [],
+      "related_commands": ".role humans"
+    },
+    "role humans": {
+      "description": "Add a role to all human members in the server. Requires Manage Roles.",
+      "example": ".role humans @MemberRole",
+      "aliases": [],
+      "related_commands": ".role bots"
+    },
+    "role removeall": {
+      "description": "Remove a role from all members who have it. Requires confirmation. Requires Manage Roles.",
+      "example": ".role removeall @RoleName",
+      "aliases": [],
+      "related_commands": ".role all"
+    },
+    "notes": {
+      "description": "Moderator notes system. Add, view, and manage notes about users.",
+      "example": ".notes",
+      "aliases": [],
+      "related_commands": ".notes add, .notes view"
     }
   },
   "Pokemon": {
@@ -270,6 +680,42 @@
     }
   },
   "Quest": {
+    "quest": {
+      "description": "Main quest command group. View active quests, manage settings, and interact with characters.",
+      "example": ".quest",
+      "aliases": ["q"],
+      "related_commands": ".quest character, .quest roles, .profile"
+    },
+    "quest roles": {
+      "description": "Configure roles that can be randomly assigned to targets. Requires Manage Roles or Anya Manager.",
+      "example": ".quest roles @Role1 @Role2",
+      "aliases": [],
+      "related_commands": ".quest"
+    },
+    "quest leaderboard": {
+      "description": "Show the stella points leaderboard for the server with top earners.",
+      "example": ".quest leaderboard",
+      "aliases": ["lb", "top", "ranking"],
+      "related_commands": ".balance, .profile"
+    },
+    "quest character": {
+      "description": "View your active character with HP, stats, and feeding status. Part of the quest reward system.",
+      "example": ".quest character",
+      "aliases": ["char", "view"],
+      "related_commands": ".character"
+    },
+    "character": {
+      "description": "View your active character (shortcut). Shows character info, HP bar, and inventory options.",
+      "example": ".character",
+      "aliases": ["char"],
+      "related_commands": ".inventory"
+    },
+    "cook": {
+      "description": "Cook meals using your characters as chefs. Play timing mini-game for quality results.",
+      "example": ".cook",
+      "aliases": [],
+      "related_commands": ".character"
+    },
     "redirect": {
       "description": "Set channels for quest mission redirects. Requires Manage Channels or Anya Manager role.",
       "example": ".redirect #quest-channel",
@@ -277,66 +723,146 @@
       "related_commands": ".quest"
     },
     "profile": {
-      "description": "View your quest profile with level, XP, and stats.",
-      "example": ".profile",
+      "description": "View your quest profile with level, XP, stella points, and server rank.",
+      "example": ".profile @user",
       "aliases": ["pf"],
       "related_commands": ".balance, .inventory"
     },
     "inventory": {
-      "description": "View your quest inventory with collected items and rewards.",
+      "description": "View your quest inventory with items, meals, and characters organized by category.",
       "example": ".inventory",
       "aliases": ["inv"],
       "related_commands": ".profile, .shop"
     },
     "balance": {
-      "description": "Check your quest balance and star points.",
-      "example": ".balance",
+      "description": "Check your stella points balance and server leaderboard position.",
+      "example": ".balance @user",
       "aliases": ["bal", "points", "stars", "stp"],
-      "related_commands": ".profile, .shop"
+      "related_commands": ".profile, .quest leaderboard"
     },
     "shop": {
-      "description": "Browse and purchase items from the quest shop.",
+      "description": "Browse and purchase items, characters, and recipes from the quest shop.",
       "example": ".shop",
       "aliases": [],
       "related_commands": ".balance, .inventory"
-    },
-    "quest": {
-      "description": "Main quest command group. View active quests and settings.",
-      "example": ".quest",
+    }
+  },
+  "Information": {
+    "info": {
+      "description": "Information commands hub - shows all available info commands organized by category.",
+      "example": ".info",
       "aliases": [],
-      "related_commands": ".quest create, .quest roles"
+      "related_commands": ".user, .server, .channel"
     },
-    "quest roles": {
-      "description": "Configure roles that can create and manage quests. Requires Administrator.",
-      "example": ".quest roles @Moderator",
-      "aliases": [],
-      "related_commands": ".quest create"
+    "user": {
+      "description": "Get detailed user profile: ID, status, badges, roles, account age, join date, activity, and boosting status.",
+      "example": ".user @someone",
+      "aliases": ["userinfo", "ui", "whois"],
+      "related_commands": ".avatar, .banner, .permissions"
     },
-    "quest create": {
-      "description": "Create a new quest with custom objectives and rewards.",
-      "example": ".quest create",
-      "aliases": [],
-      "related_commands": ".quest delete"
+    "avatar": {
+      "description": "Get a user's avatar in full resolution with download button. Shows both server and global avatars.",
+      "example": ".avatar @user",
+      "aliases": ["av", "pfp"],
+      "related_commands": ".banner, .user"
     },
-    "quest delete": {
-      "description": "Delete an existing quest by ID.",
-      "example": ".quest delete 1",
+    "banner": {
+      "description": "Get a user's profile banner in full resolution with download link.",
+      "example": ".banner @user",
       "aliases": [],
-      "related_commands": ".quest create"
+      "related_commands": ".avatar, .user"
+    },
+    "server": {
+      "description": "Comprehensive server overview with member count, boost level, channels, roles, and creation date.",
+      "example": ".server",
+      "aliases": [],
+      "related_commands": ".server icon, .members"
+    },
+    "server icon": {
+      "description": "Get the server's icon in full resolution with download button.",
+      "example": ".server icon",
+      "aliases": [],
+      "related_commands": ".server banner, .server"
+    },
+    "server banner": {
+      "description": "Get the server's banner in full resolution with download button.",
+      "example": ".server banner",
+      "aliases": [],
+      "related_commands": ".server icon, .server"
+    },
+    "members": {
+      "description": "Detailed member statistics: total count, humans vs bots, and status breakdown (online/idle/dnd/offline).",
+      "example": ".members",
+      "aliases": ["membercount", "mc"],
+      "related_commands": ".server, .user"
+    },
+    "channel": {
+      "description": "Channel information: ID, type, position, category, NSFW status, slowmode, topic, or voice settings.",
+      "example": ".channel #general",
+      "aliases": ["channelinfo", "ci"],
+      "related_commands": ".server"
+    },
+    "role": {
+      "description": "Role details: ID, color, position, member count, permissions, mentionable/hoisted status.",
+      "example": ".role @Moderator",
+      "aliases": ["roleinfo", "ri"],
+      "related_commands": ".roles, .perms"
+    },
+    "roles": {
+      "description": "View a user's roles organized by type (highest, managed, other). Supports lookup and member modes.",
+      "example": ".roles @user",
+      "aliases": [],
+      "related_commands": ".role, .perms"
+    },
+    "emojis": {
+      "description": "List all server emojis with counts for static and animated, plus usage limits.",
+      "example": ".emojis",
+      "aliases": ["emojilist", "serveremojis"],
+      "related_commands": ".emoji, .server"
+    },
+    "emoji": {
+      "description": "Get detailed info about a specific emoji: ID, name, animated status, creation date, and download link.",
+      "example": ".emoji :custom_emoji:",
+      "aliases": ["emojiinfo", "ei"],
+      "related_commands": ".emojis"
+    },
+    "botinfo": {
+      "description": "Bot statistics: server count, user count, latency, Python/Discord.py versions, and creation date.",
+      "example": ".botinfo",
+      "aliases": ["bot", "stats"],
+      "related_commands": ".ping, .invite"
+    },
+    "ping": {
+      "description": "Check bot latency with color-coded status (green=excellent, yellow=good, red=poor).",
+      "example": ".ping",
+      "aliases": ["latency", "pong"],
+      "related_commands": ".botinfo"
+    },
+    "permissions": {
+      "description": "View permissions for a user or role with categorized breakdown.",
+      "example": ".permissions @user",
+      "aliases": ["perms"],
+      "related_commands": ".role, .user"
+    },
+    "invite": {
+      "description": "Get or create server invite links. Can also inspect existing invite links.",
+      "example": ".invite",
+      "aliases": [],
+      "related_commands": ".server"
+    },
+    "activity": {
+      "description": "Discover what members are playing, streaming, listening to, or watching. Find players for specific games.",
+      "example": ".activity Minecraft",
+      "aliases": ["playing", "activities"],
+      "related_commands": ".user"
     }
   },
   "System": {
-    "ping": {
-      "description": "Check Discord API latency with color-coded response (green/yellow/red).",
-      "example": ".ping",
-      "aliases": [],
-      "related_commands": ".uptime, .memory"
-    },
     "uptime": {
       "description": "Display how long the bot has been running.",
       "example": ".uptime",
       "aliases": [],
-      "related_commands": ".ping, .memory"
+      "related_commands": ".botinfo, .memory"
     },
     "memory": {
       "description": "Show current bot memory usage for performance monitoring.",

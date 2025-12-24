@@ -123,8 +123,9 @@ class Information(commands.Cog):
         embed = result
         await ctx.reply(embed=embed, mention_author=False) 
         
-    @commands.command(name="server")
-    async def server_info(self, ctx, mode: Optional[Literal["roles", "emojis"]] = None):
+    @commands.group(name="server", invoke_without_command=True)
+    async def server_group(self, ctx, mode: Optional[Literal["roles", "emojis"]] = None):
+        """Server information commands."""
         try:
             embed_or_view = await self.ic.server(
                 ctx=ctx,
@@ -139,6 +140,42 @@ class Information(commands.Cog):
                 await ctx.reply(embed=embed_or_view, mention_author=False)
         except Exception as e:
             await error_custom_embed(self.bot, ctx, e)
+    
+    @server_group.command(name="icon")
+    async def server_icon(self, ctx):
+        """Get the server's icon in full resolution."""
+        if not ctx.guild.icon:
+            return await ctx.reply("This server doesn't have an icon.", mention_author=False)
+        
+        embed = discord.Embed(
+            title=f"{ctx.guild.name}'s Icon",
+            color=primary_color(),
+            timestamp=datetime.now()
+        )
+        embed.set_image(url=ctx.guild.icon.url)
+        
+        view = discord.ui.View()
+        view.add_item(discord.ui.Button(label="Download", style=discord.ButtonStyle.link, url=ctx.guild.icon.url))
+        
+        await ctx.reply(embed=embed, view=view, mention_author=False)
+    
+    @server_group.command(name="banner")
+    async def server_banner(self, ctx):
+        """Get the server's banner in full resolution."""
+        if not ctx.guild.banner:
+            return await ctx.reply("This server doesn't have a banner.", mention_author=False)
+        
+        embed = discord.Embed(
+            title=f"{ctx.guild.name}'s Banner",
+            color=primary_color(),
+            timestamp=datetime.now()
+        )
+        embed.set_image(url=ctx.guild.banner.url)
+        
+        view = discord.ui.View()
+        view.add_item(discord.ui.Button(label="Download", style=discord.ButtonStyle.link, url=ctx.guild.banner.url))
+        
+        await ctx.reply(embed=embed, view=view, mention_author=False)
 
     @commands.command(name="pfp")
     async def pfp(self, ctx, user: discord.Member = None):
@@ -154,41 +191,9 @@ class Information(commands.Cog):
         button = discord.ui.Button(label="Download", style=discord.ButtonStyle.link, url=avatar_url)
         await ctx.reply(embed=embed, mention_author=False, view=discord.ui.View().add_item(button))
 
-    @commands.command(name="banner")
-    async def banner(self, ctx, user: discord.Member = None):
-     user = user or ctx.author
-     banner_url = await get_user_banner_url(self.bot, user)
-     embed = discord.Embed(title=f"{user.display_name}'s banner" if banner_url else user.display_name, description=None if banner_url else "No banner set", color=primary_color(), timestamp=datetime.now(), url=banner_url)
-     if banner_url:
-        dl_url = f"{banner_url.split('?')[0]}?format=png&size=4096"
-        embed.set_image(url=dl_url)
-        button = discord.ui.Button(label="Download Banner", style=discord.ButtonStyle.link, url=dl_url)
-        await ctx.reply(embed=embed, mention_author=False, view=discord.ui.View().add_item(button))
-     else:
-        await ctx.reply(embed=embed, mention_author=False)
-        
-    @commands.command(name="invite")
-    async def invite(self, ctx, link: str = None):
-        if link:
-            try:
-                invite = await self.bot.fetch_invite(link)
-                embed = await Information_Embed.get_invite_embed(invite)
-                await ctx.reply(embed=embed, mention_author=False)
-            except discord.NotFound:
-                await ctx.reply("The provided invite link is invalid or expired. Generating a new invite...", mention_author=False)
-                await self.create_and_send_invite(ctx)
-        else:
-            await self.create_and_send_invite(ctx)
-
-    async def create_and_send_invite(self, ctx):        
-        if ctx.channel.permissions_for(ctx.guild.me).create_instant_invite:
-            invite = await ctx.channel.create_invite(max_uses=0, temporary=False, unique=True)
-            await ctx.reply(f"Here is your permanent invite link: {invite.url}", mention_author=False)
-        else:
-            await ctx.reply("I do not have permission to create invites in this channel.", mention_author=False)
-
-    @commands.command(name="perms")
-    async def perms(self, ctx, target: Union[discord.Member, discord.Role] = None):
+    @commands.command(name="permissions", aliases=["perms"])
+    async def permissions(self, ctx, target: Union[discord.Member, discord.Role] = None):
+        """View permissions for a user or role."""
         target = target or ctx.author  
         permissions = target.guild_permissions if isinstance(target, discord.Member) else target.permissions
         if permissions:
@@ -259,11 +264,11 @@ class Information(commands.Cog):
             color=primary_color(),
             timestamp=datetime.now()
         )
-        embed.add_field(name="⭐ Highest Role", value=f"<@&{highest.id}>", inline=False)
+        embed.add_field(name="```    Highest Role    ```", value=f"<@&{highest.id}>", inline=False)
         if managed:
-            embed.add_field(name="⚙️ Managed Roles", value=", ".join(f"<@&{r.id}>" for r in managed), inline=False)
+            embed.add_field(name="```    Managed Roles    ```", value=", ".join(f"<@&{r.id}>" for r in managed), inline=False)
         if normal:
-            embed.add_field(name="📂 Other Roles", value=", ".join(f"<@&{r.id}>" for r in normal), inline=False)
+            embed.add_field(name="```    Other Roles    ```", value=", ".join(f"<@&{r.id}>" for r in normal), inline=False)
         embed.set_footer(text=f"Found {len(roles)} roles")
         return await ctx.reply(embed=embed, mention_author=False)
 

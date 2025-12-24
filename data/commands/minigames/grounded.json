@@ -1,0 +1,151 @@
+{
+  "theme": {
+    "name": "Spy x Family Grounded Games",
+    "description": "Work, earn, and survive in the world of espionage! Your character affects your outcomes.",
+    "default_character": null
+  },
+  "work": {
+    "name": "Work",
+    "emoji": "💼",
+    "description": "Do an honest day's work for guaranteed stella points.",
+    "cooldown": 1800,
+    "base_reward": [50, 150],
+    "character_bonuses": {
+      "Loid Forger": {"multiplier": 1.5, "title": "Psychiatrist", "message": "You helped patients at the hospital."},
+      "Yor Forger": {"multiplier": 1.3, "title": "City Hall Clerk", "message": "You processed documents at city hall."},
+      "Anya Forger": {"multiplier": 1.0, "title": "Student", "message": "You studied hard at Eden Academy."},
+      "Bond Forger": {"multiplier": 0.8, "title": "Good Boy", "message": "You guarded the house."},
+      "Franky Franklin": {"multiplier": 1.2, "title": "Info Broker", "message": "You gathered intel around town."},
+      "Fiona Frost": {"multiplier": 1.4, "title": "WISE Agent", "message": "You completed spy training."},
+      "Damian Desmond": {"multiplier": 1.1, "title": "Imperial Scholar", "message": "You studied at Eden Academy."},
+      "Becky Blackbell": {"multiplier": 1.1, "title": "Socialite", "message": "You attended a fancy party."}
+    },
+    "default_jobs": [
+      {"title": "Delivery", "message": "You delivered packages around town."},
+      {"title": "Shop Assistant", "message": "You helped customers at a store."},
+      {"title": "Street Performer", "message": "You entertained people in the square."},
+      {"title": "Dishwasher", "message": "You washed dishes at a restaurant."},
+      {"title": "Leaflet Distributor", "message": "You handed out flyers."}
+    ]
+  },
+  "job": {
+    "name": "Mission",
+    "emoji": "🎯",
+    "description": "Take on a risky mission for bigger rewards. May fail!",
+    "cooldown": 3600,
+    "success_rate": 0.65,
+    "base_reward": [100, 400],
+    "fail_penalty": [25, 100],
+    "character_bonuses": {
+      "Loid Forger": {"success_boost": 0.2, "reward_multiplier": 2.0, "missions": ["Infiltrate the embassy", "Extract classified intel", "Protect the target"]},
+      "Yor Forger": {"success_boost": 0.25, "reward_multiplier": 1.8, "missions": ["Eliminate the target", "Rescue the hostage", "Intercept the courier"]},
+      "Anya Forger": {"success_boost": 0.1, "reward_multiplier": 1.2, "missions": ["Read someone's mind", "Gather school gossip", "Find the hidden snack"]},
+      "Bond Forger": {"success_boost": 0.15, "reward_multiplier": 1.3, "missions": ["Track the scent", "Predict the future", "Protect Anya"]},
+      "Franky Franklin": {"success_boost": 0.1, "reward_multiplier": 1.5, "missions": ["Sell secret information", "Create fake IDs", "Plant surveillance"]},
+      "Fiona Frost": {"success_boost": 0.2, "reward_multiplier": 1.7, "missions": ["Assassinate quietly", "Gather enemy intel", "Sabotage operations"]}
+    },
+    "default_missions": [
+      {"title": "Courier Job", "message": "Deliver a suspicious package."},
+      {"title": "Lookout", "message": "Watch for police activity."},
+      {"title": "Dead Drop", "message": "Retrieve a hidden message."},
+      {"title": "Surveillance", "message": "Watch a target location."}
+    ],
+    "fail_messages": [
+      "You were spotted and had to abort!",
+      "The mission went sideways...",
+      "Your cover was blown!",
+      "The target got away!",
+      "Something went wrong..."
+    ]
+  },
+  "rob": {
+    "name": "Rob",
+    "emoji": "💰",
+    "description": "Attempt to steal stella points from another user. High risk!",
+    "cooldown": 7200,
+    "success_rate": 0.4,
+    "steal_percent": [10, 30],
+    "fail_fine_percent": [15, 25],
+    "min_target_balance": 500,
+    "character_bonuses": {
+      "Loid Forger": {"success_boost": 0.15, "steal_boost": 5},
+      "Yor Forger": {"success_boost": 0.2, "steal_boost": 10},
+      "Anya Forger": {"success_boost": 0.05, "steal_boost": 0},
+      "Franky Franklin": {"success_boost": 0.1, "steal_boost": 5}
+    },
+    "success_messages": [
+      "You skillfully picked their pocket!",
+      "You swiped their stella points unnoticed!",
+      "Clean getaway! They never saw you!",
+      "Mission accomplished! Points secured!"
+    ],
+    "fail_messages": [
+      "You got caught red-handed!",
+      "They noticed and called security!",
+      "Your hands slipped and you got caught!",
+      "A witness saw everything!"
+    ],
+    "protected_messages": [
+      "They had a Chimera protecting them!",
+      "Their security was too tight!"
+    ]
+  },
+  "claim": {
+    "name": "Daily Claim",
+    "emoji": "🎁",
+    "description": "Claim your daily stella points reward!",
+    "cooldown": 86400,
+    "base_reward": [100, 200],
+    "streak_bonus": 25,
+    "max_streak": 30,
+    "streak_milestone_bonuses": {
+      "7": 500,
+      "14": 1000,
+      "21": 1500,
+      "30": 3000
+    },
+    "character_bonuses": {
+      "Loid Forger": {"base_bonus": 50},
+      "Yor Forger": {"base_bonus": 40},
+      "Anya Forger": {"base_bonus": 30},
+      "Bond Forger": {"base_bonus": 20},
+      "Franky Franklin": {"base_bonus": 35},
+      "Fiona Frost": {"base_bonus": 45}
+    },
+    "messages": {
+      "claimed": "🎁 You claimed **{amount:,}** stella points!",
+      "streak": "🔥 Daily streak: **{streak}** days! (+{bonus} bonus)",
+      "milestone": "🏆 **Milestone bonus!** +**{bonus:,}** stella points!",
+      "already_claimed": "❌ You already claimed today! Come back in **{time}**."
+    }
+  },
+  "crime": {
+    "name": "Crime",
+    "emoji": "🔪",
+    "description": "Commit a crime for potentially big rewards. Very risky!",
+    "cooldown": 14400,
+    "success_rate": 0.35,
+    "base_reward": [200, 800],
+    "fail_penalty_percent": [20, 40],
+    "jail_time": 1800,
+    "character_bonuses": {
+      "Yor Forger": {"success_boost": 0.3, "reward_multiplier": 2.0, "immune_to_jail": true},
+      "Loid Forger": {"success_boost": 0.2, "reward_multiplier": 1.5},
+      "Fiona Frost": {"success_boost": 0.25, "reward_multiplier": 1.7}
+    },
+    "crimes": [
+      {"name": "Heist", "risk": "high", "reward_mult": 1.5},
+      {"name": "Smuggling", "risk": "medium", "reward_mult": 1.2},
+      {"name": "Counterfeiting", "risk": "low", "reward_mult": 1.0},
+      {"name": "Blackmail", "risk": "medium", "reward_mult": 1.3},
+      {"name": "Assassination Contract", "risk": "extreme", "reward_mult": 2.0}
+    ],
+    "jail_message": "🚔 You got caught and are in jail for **{time}**!"
+  },
+  "messages": {
+    "character_bonus": "🌟 **{character}** bonus: {bonus}",
+    "no_character": "💡 Tip: Get a character from the quest shop for bonuses!",
+    "on_cooldown": "⏳ You can {action} again in **{time}**.",
+    "in_jail": "🚔 You're in jail! Wait **{time}** to be released."
+  }
+}

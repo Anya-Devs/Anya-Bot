@@ -527,6 +527,220 @@ class Help_Thumbnails:
 
  
 
+# ═══════════════════════════════════════════════════════════════
+# COMMAND HELP VIEW - Interactive UI for command details
+# ═══════════════════════════════════════════════════════════════
+
+class CommandHelpView(discord.ui.View):
+    """Interactive help view with depth navigation for commands/subgroups"""
+    
+    def __init__(self, bot, ctx, command, command_info: dict, prefix: str, parent_command: str = None):
+        super().__init__(timeout=120)
+        self.bot = bot
+        self.ctx = ctx
+        self.command = command
+        self.command_info = command_info
+        self.prefix = prefix
+        self.parent_command = parent_command
+        self.primary_color = primary_color()
+        
+        self._setup_buttons()
+    
+    def _setup_buttons(self):
+        """Setup navigation buttons based on command structure"""
+        # Add subcommand dropdown if this is a group command
+        if hasattr(self.command, 'commands') and self.command.commands:
+            subcommands = [cmd for cmd in self.command.commands if not cmd.hidden]
+            if subcommands:
+                self.add_item(SubcommandSelect(self.bot, self.ctx, subcommands, self.prefix, self.command.qualified_name))
+        
+        # Add related commands buttons (max 3)
+        related = self.command_info.get("related_commands", "")
+        if related and related != "Provide related commands" and related != "No related commands.":
+            related_cmds = [cmd.strip().replace(self.prefix, "").replace("{}", "") for cmd in related.split(",")][:3]
+            for cmd_name in related_cmds:
+                cmd_name = cmd_name.strip()
+                if cmd_name and self.bot.get_command(cmd_name):
+                    btn = discord.ui.Button(
+                        label=cmd_name[:20],
+                        style=discord.ButtonStyle.secondary,
+                        emoji="🔗",
+                        custom_id=f"related_{cmd_name}_{self.ctx.author.id}"
+                    )
+                    btn.callback = self._make_related_callback(cmd_name)
+                    self.add_item(btn)
+        
+        # Back button if we came from a parent command
+        if self.parent_command:
+            back_btn = discord.ui.Button(
+                label="Back",
+                style=discord.ButtonStyle.gray,
+                emoji="◀️",
+                custom_id=f"back_{self.ctx.author.id}"
+            )
+            back_btn.callback = self._back_callback
+            self.add_item(back_btn)
+    
+    def _make_related_callback(self, cmd_name: str):
+        async def callback(interaction: discord.Interaction):
+            if interaction.user != self.ctx.author:
+                return await interaction.response.send_message("This isn't your help menu!", ephemeral=True)
+            
+            helper = Sub_Helper(self.bot, self.prefix)
+            result = await helper.get_command_help_embed(self.ctx, cmd_name)
+            if isinstance(result, tuple):
+                embed, view = result
+                await interaction.response.edit_message(embed=embed, view=view)
+            else:
+                await interaction.response.edit_message(content=result, embed=None, view=None)
+        return callback
+    
+    async def _back_callback(self, interaction: discord.Interaction):
+        if interaction.user != self.ctx.author:
+            return await interaction.response.send_message("This isn't your help menu!", ephemeral=True)
+        
+        helper = Sub_Helper(self.bot, self.prefix)
+        result = await helper.get_command_help_embed(self.ctx, self.parent_command)
+        if isinstance(result, tuple):
+            embed, view = result
+            await interaction.response.edit_message(embed=embed, view=view)
+    
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return interaction.user == self.ctx.author
+    
+    def build_embed(self) -> discord.Embed:
+        """Build a modern, spread-out embed for command help"""
+        cmd = self.command
+        info = self.command_info
+        
+        # Get command info
+        aliases = info.get("aliases", cmd.aliases if hasattr(cmd, 'aliases') else [])
+        description = info.get("description", cmd.help or "No description provided.")
+        example = info.get("example", f"{self.prefix}{cmd.qualified_name}")
+        result = info.get("result", "")
+        
+        # Format usage with proper signature
+        signature = cmd.signature.replace('[', '<').replace(']', '>').replace('=None', '') if hasattr(cmd, 'signature') else ""
+        usage = f"{self.prefix}{cmd.qualified_name} {signature}".strip()
+        
+        # Build embed with website-inspired styling
+        embed = discord.Embed(color=self.primary_color)
+        
+        # Header section
+        embed.set_author(
+            name=f"📖 Command: {cmd.qualified_name}",
+            icon_url=self.bot.user.display_avatar.url if self.bot.user.avatar else None
+        )
+        
+        # Usage section - prominent display
+        embed.add_field(
+            name="⌨️ Usage",
+            value=f"```\n{usage}\n```",
+            inline=False
+        )
+        
+        # Aliases section
+        if aliases:
+            alias_str = " • ".join([f"`{a}`" for a in aliases])
+            embed.add_field(
+                name="Aliases",
+                value=alias_str,
+                inline=True
+            )
+        
+        # Cooldown info if exists
+        if hasattr(cmd, '_buckets') and cmd._buckets and cmd._buckets._cooldown:
+            cooldown = cmd._buckets._cooldown
+            embed.add_field(
+                name="Cooldown",
+                value=f"⏱️ - {cooldown.rate} use / {int(cooldown.per)}s",
+                inline=True
+            )
+        
+        # Description section - full width
+        embed.add_field(
+            name="Description",
+            value=description[:1024],
+            inline=False
+        )
+        
+        # Example section
+        if example and example != "No example provided.":
+            formatted_example = example.format(*[self.prefix] * example.count('{}')) if '{}' in example else example
+            embed.add_field(
+                name="Example",
+                value=f"```\n{formatted_example}\n```",
+                inline=False
+            )
+        
+        # Result section
+        if result and result != "No result provided.":
+            embed.add_field(
+                name="Result",
+                value=result[:1024],
+                inline=False
+            )
+        
+        # Subcommands section if group command
+        if hasattr(cmd, 'commands') and cmd.commands:
+            subcommands = [c for c in cmd.commands if not c.hidden]
+            if subcommands:
+                sub_list = " ".join([f"`{c.name}`" for c in subcommands[:15]])
+                embed.add_field(
+                    name=f"Subcommands ({len(subcommands)})",
+                    value=sub_list + ("\n*Use dropdown to explore*" if len(subcommands) > 1 else ""),
+                    inline=False
+                )
+        
+        # Footer with helpful info
+        embed.set_footer(
+            text=f"<> = required • [] = optional • Use {self.prefix}help for all commands",
+            icon_url=self.ctx.author.display_avatar.url
+        )
+        
+        return embed
+
+
+class SubcommandSelect(discord.ui.Select):
+    """Dropdown to navigate subcommands"""
+    
+    def __init__(self, bot, ctx, subcommands, prefix: str, parent_name: str):
+        self.bot = bot
+        self.ctx = ctx
+        self.prefix = prefix
+        self.parent_name = parent_name
+        
+        options = []
+        for cmd in subcommands[:25]:  # Discord limit
+            desc = (cmd.help or "No description")[:100]
+            options.append(discord.SelectOption(
+                label=cmd.name,
+                description=desc,
+                value=cmd.qualified_name,
+                emoji="▸"
+            ))
+        
+        super().__init__(
+            placeholder="🔍 Explore subcommands...",
+            options=options,
+            custom_id=f"subcmd_select_{ctx.author.id}"
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user != self.ctx.author:
+            return await interaction.response.send_message("This isn't your help menu!", ephemeral=True)
+        
+        selected_cmd = self.values[0]
+        helper = Sub_Helper(self.bot, self.prefix)
+        result = await helper.get_command_help_embed(self.ctx, selected_cmd, parent_command=self.parent_name)
+        
+        if isinstance(result, tuple):
+            embed, view = result
+            await interaction.response.edit_message(embed=embed, view=view)
+        else:
+            await interaction.response.edit_message(content=result, embed=None, view=None)
+
+
 class Sub_Helper:
     def __init__(self, bot, prefix):
         self.bot = bot
@@ -567,19 +781,61 @@ class Sub_Helper:
                     }
 
         self._save_help_json(help_data)
+    
+    def _find_command_info(self, help_data: dict, command_name: str) -> dict:
+        """Find command info in help data, supporting nested subcommand keys"""
+        # Check for direct qualified name match (e.g., "anime search")
+        for cog_data in help_data.values():
+            if isinstance(cog_data, dict):
+                if command_name in cog_data:
+                    return cog_data[command_name]
+                # Check subcommands key
+                for cmd_key, cmd_data in cog_data.items():
+                    if isinstance(cmd_data, dict):
+                        subcommands = cmd_data.get("subcommands", {})
+                        if isinstance(subcommands, dict):
+                            # Check if the subcommand name matches
+                            sub_name = command_name.split()[-1] if " " in command_name else command_name
+                            if sub_name in subcommands:
+                                return subcommands[sub_name]
+        return {}
+    
+    async def get_command_help_embed(self, ctx, command_name: str, parent_command: str = None):
+        """Get command help as an embed with interactive view"""
+        help_data = self._load_help_json()
+        command = self.bot.get_command(command_name)
+        
+        if not command:
+            return f"Command `{command_name}` not found."
+        
+        # Find command info - check multiple locations
+        command_info = self._find_command_info(help_data, command.qualified_name)
+        if not command_info:
+            command_info = self._find_command_info(help_data, command.name)
+        if not command_info:
+            # Fallback to basic info from command itself
+            command_info = {
+                "aliases": command.aliases if hasattr(command, 'aliases') else [],
+                "description": command.help or "No description provided.",
+                "example": f"{self.prefix}{command.qualified_name}",
+            }
+        
+        view = CommandHelpView(self.bot, ctx, command, command_info, self.prefix, parent_command)
+        embed = view.build_embed()
+        
+        return embed, view
 
     def get_command_help_string(self, ctx, command_name: str) -> str:
+        """Legacy method - returns markdown string for backwards compatibility"""
         help_data = self._load_help_json()
         command = self.bot.get_command(command_name)
 
         if not command:
             return f"Command `{command_name}` not found."
 
-        command_info = {}
-        for cog_data in help_data.values():
-            if command.name in cog_data:
-                command_info = cog_data[command.name]
-                break
+        command_info = self._find_command_info(help_data, command.qualified_name)
+        if not command_info:
+            command_info = self._find_command_info(help_data, command.name)
 
         aliases = command_info.get("aliases", [])
         description = command_info.get("description", "No description provided.")

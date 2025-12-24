@@ -1,0 +1,85 @@
+{
+  "hangman": {
+    "name": "Hangman",
+    "emoji": "📝",
+    "description": "Guess the word letter by letter before the spy gets caught!",
+    "entry_cost": 50,
+    "cooldown": 10,
+    "daily_limit": 20,
+    "max_wrong_guesses": 6,
+    "time_limit": 120,
+    "word_api": "https://random-word-api.herokuapp.com/word",
+    "fallback_words": [
+      "mission", "secret", "agent", "forger", "twilight", "anya", "yor", "bond", 
+      "cipher", "disguise", "espionage", "handler", "intel", "operative", "target",
+      "undercover", "surveillance", "extraction", "infiltrate", "safehouse",
+      "assassin", "spy", "embassy", "protocol", "encrypted", "classified"
+    ],
+    "payouts": {
+      "win_base": 100,
+      "bonus_per_letter": 10,
+      "perfect_bonus": 200,
+      "streak_multiplier": 0.1
+    },
+    "hangman_stages": [
+      "```\n  +---+\n      |\n      |\n      |\n      |\n=========```",
+      "```\n  +---+\n  O   |\n      |\n      |\n      |\n=========```",
+      "```\n  +---+\n  O   |\n  |   |\n      |\n      |\n=========```",
+      "```\n  +---+\n  O   |\n /|   |\n      |\n      |\n=========```",
+      "```\n  +---+\n  O   |\n /|\\  |\n      |\n      |\n=========```",
+      "```\n  +---+\n  O   |\n /|\\  |\n /    |\n      |\n=========```",
+      "```\n  +---+\n  O   |\n /|\\  |\n / \\  |\n      |\n=========```"
+    ],
+    "themes": {
+      "spy": {
+        "title": "🕵️ Operation: Hangman",
+        "win_message": "✅ Mission Complete! The spy escaped!",
+        "lose_message": "❌ Mission Failed! The spy was caught!"
+      }
+    }
+  },
+  "wordle": {
+    "name": "Wordle",
+    "emoji": "🟩",
+    "description": "Guess the 5-letter word in 6 tries!",
+    "entry_cost": 75,
+    "cooldown": 15,
+    "daily_limit": 10,
+    "word_length": 5,
+    "max_attempts": 6,
+    "time_limit": 300,
+    "word_api": "https://random-word-api.herokuapp.com/word?length=5",
+    "fallback_words": [
+      "agent", "codes", "quest", "ninja", "sword", "flame", "storm", "light",
+      "peace", "world", "heart", "dream", "power", "brave", "trust", "honor",
+      "night", "ghost", "blade", "crown", "magic", "steel", "frost", "chaos"
+    ],
+    "colors": {
+      "correct": {"emoji": "🟩", "hex": "#6aaa64"},
+      "present": {"emoji": "🟨", "hex": "#c9b458"},
+      "absent": {"emoji": "⬛", "hex": "#787c7e"},
+      "empty": {"emoji": "⬜", "hex": "#d3d6da"}
+    },
+    "payouts": {
+      "guess_1": 500,
+      "guess_2": 400,
+      "guess_3": 300,
+      "guess_4": 200,
+      "guess_5": 150,
+      "guess_6": 100,
+      "lose": 0
+    },
+    "keyboard_layout": [
+      ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+      ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+      ["Z", "X", "C", "V", "B", "N", "M"]
+    ]
+  },
+  "messages": {
+    "game_start": "🎮 Game started! You have **{time}** seconds.",
+    "already_playing": "❌ You're already in a game! Finish it first.",
+    "invalid_guess": "❌ Invalid guess! {reason}",
+    "timeout": "⏰ Time's up! The answer was **{answer}**.",
+    "streak": "🔥 Win streak: **{streak}**"
+  }
+}

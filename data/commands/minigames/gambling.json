@@ -1,0 +1,70 @@
+{
+  "slots": {
+    "name": "Slot Machine",
+    "emoji": "🎰",
+    "description": "Spin the reels and match symbols to win big!",
+    "min_bet": 10,
+    "max_bet": 10000,
+    "cooldown": 3,
+    "daily_limit": 50,
+    "symbols": {
+      "🍒": {"name": "Cherry", "multiplier": 2, "weight": 30},
+      "🍋": {"name": "Lemon", "multiplier": 3, "weight": 25},
+      "🍊": {"name": "Orange", "multiplier": 4, "weight": 20},
+      "🍇": {"name": "Grape", "multiplier": 5, "weight": 15},
+      "🔔": {"name": "Bell", "multiplier": 10, "weight": 7},
+      "⭐": {"name": "Star", "multiplier": 25, "weight": 2},
+      "💎": {"name": "Diamond", "multiplier": 50, "weight": 1}
+    },
+    "payouts": {
+      "three_match": "bet * symbol_multiplier",
+      "two_match": "bet * 1.5",
+      "no_match": 0
+    }
+  },
+  "coinflip": {
+    "name": "Coin Flip",
+    "emoji": "🪙",
+    "description": "Call heads or tails - double your bet or lose it all!",
+    "min_bet": 10,
+    "max_bet": 5000,
+    "cooldown": 2,
+    "daily_limit": 100,
+    "win_multiplier": 2,
+    "outcomes": ["heads", "tails"],
+    "animations": {
+      "flipping": ["🪙 Flipping...", "🪙 Spinning...", "🪙 In the air..."],
+      "heads": "👑 **HEADS!**",
+      "tails": "🦅 **TAILS!**"
+    }
+  },
+  "guess": {
+    "name": "Number Guess",
+    "emoji": "🔢",
+    "description": "Guess a number between 1-100. Closer guesses win more!",
+    "min_bet": 20,
+    "max_bet": 5000,
+    "cooldown": 5,
+    "daily_limit": 30,
+    "range": [1, 100],
+    "hints_enabled": true,
+    "max_attempts": 5,
+    "payouts": {
+      "exact": "bet * 10",
+      "off_by_1": "bet * 5",
+      "off_by_5": "bet * 3",
+      "off_by_10": "bet * 2",
+      "off_by_20": "bet * 1.5",
+      "miss": 0
+    }
+  },
+  "messages": {
+    "not_enough_points": "❌ You need **{cost:,}** stella points but only have **{balance:,}**!",
+    "daily_limit": "⏰ You've reached your daily limit of **{limit}** plays for {game}!",
+    "min_bet": "❌ Minimum bet is **{min:,}** stella points!",
+    "max_bet": "❌ Maximum bet is **{max:,}** stella points!",
+    "cooldown": "⏳ Please wait **{time:.1f}s** before playing again!",
+    "win": "🎉 You won **{amount:,}** stella points!",
+    "lose": "💸 You lost **{amount:,}** stella points..."
+  }
+}

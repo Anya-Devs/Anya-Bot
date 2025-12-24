@@ -29,23 +29,154 @@
     "Anime": {
         "anime": {
             "aliases": [],
-            "description": "Search for information about any anime.",
-            "example": "{}anime Spy x Family",
-            "result": "Sends an embed with comprehensive information about the specified anime, including synopsis, genres, episodes, rating, and poster image.",
-            "related_commands": "{}character, {}manga"
-        },
-        "character": {
-            "aliases": [],
-            "description": "Search for information about any anime character.",
-            "example": "{}character Anya Forger",
-            "result": "Provides detailed information about the anime character, including description, anime/manga appearances, and images.",
-            "related_commands": "{}anime"
+            "description": "Anime command group - Search anime, get recommendations, find characters, reactions & more! Use subcommands to explore.",
+            "example": "{}anime search Spy x Family\n{}anime recommend\n{}anime character Anya",
+            "result": "Access various anime-related features through subcommands.",
+            "related_commands": "{}manga, {}waifu, {}neko",
+            "subcommands": {
+                "search": {
+                    "aliases": [],
+                    "description": "Search for detailed information about any anime by name. Returns synopsis, genres, episodes, rating, studios, and poster.",
+                    "example": "{}anime search Spy x Family\n{}anime search Attack on Titan",
+                    "result": "Displays an interactive embed with comprehensive anime info. Use navigation buttons to browse multiple results.",
+                    "related_commands": "{}anime character, {}anime recommend"
+                },
+                "character": {
+                    "aliases": [],
+                    "description": "Search for information about any anime character. Get their description, anime appearances, and images.",
+                    "example": "{}anime character Anya Forger\n{}anime character Levi Ackerman",
+                    "result": "Shows character details with images, anime/manga appearances, and voice actors.",
+                    "related_commands": "{}anime search, {}anime trivia"
+                },
+                "recommend": {
+                    "aliases": ["rec"],
+                    "description": "Get a random anime recommendation! Perfect for finding your next watch.",
+                    "example": "{}anime recommend",
+                    "result": "Displays a random anime with full details including synopsis, genres, and ratings.",
+                    "related_commands": "{}anime search, {}manga recommend"
+                },
+                "quote": {
+                    "aliases": [],
+                    "description": "Get a random inspiring or memorable anime quote with character and source.",
+                    "example": "{}anime quote",
+                    "result": "Shows an anime quote with the character name and anime source.",
+                    "related_commands": "{}anime trivia"
+                },
+                "schedule": {
+                    "aliases": ["airing"],
+                    "description": "View the anime airing schedule for any day of the week. See what's currently airing!",
+                    "example": "{}anime schedule\n{}anime schedule monday",
+                    "result": "Lists anime airing on the specified day with episode counts and scores.",
+                    "related_commands": "{}anime search, {}anime recommend"
+                },
+                "wallpaper": {
+                    "aliases": ["wall"],
+                    "description": "Get a random high-quality anime wallpaper. Includes download button!",
+                    "example": "{}anime wallpaper",
+                    "result": "Displays a beautiful anime wallpaper with artist credit and download link.",
+                    "related_commands": "{}waifu, {}neko"
+                },
+                "trivia": {
+                    "aliases": [],
+                    "description": "Test your anime knowledge! Guess which anime a character is from.",
+                    "example": "{}anime trivia",
+                    "result": "Shows a character image and you have 30 seconds to guess the anime.",
+                    "related_commands": "{}anime character, {}anime quote"
+                },
+                "smug": {
+                    "aliases": [],
+                    "description": "Get a smug anime reaction GIF.",
+                    "example": "{}anime smug",
+                    "result": "Sends a smug anime reaction image.",
+                    "related_commands": "{}anime happy, {}anime dance"
+                },
+                "cry": {
+                    "aliases": [],
+                    "description": "Get a crying anime reaction GIF.",
+                    "example": "{}anime cry",
+                    "result": "Sends a crying anime reaction image.",
+                    "related_commands": "{}anime happy, {}anime blush"
+                },
+                "blush": {
+                    "aliases": [],
+                    "description": "Get a blushing anime reaction GIF.",
+                    "example": "{}anime blush",
+                    "result": "Sends a blushing anime reaction image.",
+                    "related_commands": "{}anime happy, {}anime dance"
+                },
+                "happy": {
+                    "aliases": [],
+                    "description": "Get a happy anime reaction GIF.",
+                    "example": "{}anime happy",
+                    "result": "Sends a happy anime reaction image.",
+                    "related_commands": "{}anime dance, {}anime smug"
+                },
+                "dance": {
+                    "aliases": [],
+                    "description": "Get a dancing anime reaction GIF.",
+                    "example": "{}anime dance",
+                    "result": "Sends a dancing anime reaction image.",
+                    "related_commands": "{}anime happy, {}anime smug"
+                }
+            }
         },
         "manga": {
             "aliases": [],
-            "description": "Search for information about any anime manga.",
-            "example": "{}manga Spy x Family",
-            "related_commands": "{}anime"
+            "description": "Manga command group - Search manga, read chapters, get recommendations!",
+            "example": "{}manga search Spy x Family\n{}manga read One Piece",
+            "result": "Access manga features through subcommands.",
+            "related_commands": "{}anime",
+            "subcommands": {
+                "search": {
+                    "aliases": [],
+                    "description": "Search for detailed information about any manga by name.",
+                    "example": "{}manga search Spy x Family",
+                    "result": "Displays manga info with chapters, status, and synopsis.",
+                    "related_commands": "{}manga read, {}manga recommend"
+                },
+                "read": {
+                    "aliases": [],
+                    "description": "Search and read manga chapters directly from MangaDex.",
+                    "example": "{}manga read One Piece",
+                    "result": "Shows manga search results with chapter selection dropdown.",
+                    "related_commands": "{}manga search"
+                },
+                "recommend": {
+                    "aliases": ["rec"],
+                    "description": "Get a random manga recommendation.",
+                    "example": "{}manga recommend",
+                    "result": "Displays a random manga with full details.",
+                    "related_commands": "{}manga search, {}anime recommend"
+                }
+            }
+        },
+        "waifu": {
+            "aliases": [],
+            "description": "Get random waifu images! Supports various categories like neko, shinobu, megumin, and reaction GIFs.",
+            "example": "{}waifu\n{}waifu neko\n{}waifu hug",
+            "result": "Displays a random waifu image from the selected category.",
+            "related_commands": "{}husbando, {}neko, {}anime wallpaper"
+        },
+        "husbando": {
+            "aliases": [],
+            "description": "Get a random husbando image with artist credit.",
+            "example": "{}husbando",
+            "result": "Displays a random husbando image.",
+            "related_commands": "{}waifu, {}neko"
+        },
+        "neko": {
+            "aliases": [],
+            "description": "Get a random cute neko (catgirl) image.",
+            "example": "{}neko",
+            "result": "Displays a random neko image with artist credit.",
+            "related_commands": "{}waifu, {}kitsune"
+        },
+        "kitsune": {
+            "aliases": [],
+            "description": "Get a random kitsune (foxgirl) image.",
+            "example": "{}kitsune",
+            "result": "Displays a random kitsune image with artist credit.",
+            "related_commands": "{}neko, {}waifu"
         }
     },
     "Help": {},
