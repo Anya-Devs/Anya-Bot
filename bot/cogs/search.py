@@ -242,54 +242,6 @@ class Search(commands.Cog):
             asyncio.create_task(api.close())
 
     # ═══════════════════════════════════════════════════════════════
-    # SEARCH GROUP - Main search command hub
-    # ═══════════════════════════════════════════════════════════════
-    @commands.group(name="search", aliases=["s", "lookup"], invoke_without_command=True)
-    async def search_group(self, ctx):
-        """🔍 Search command hub - View all search commands"""
-        embed = discord.Embed(
-            title="🔍 Search Commands",
-            description="Search the web, translate text, and look up information",
-            color=primary_color(),
-            timestamp=datetime.now(timezone.utc)
-        )
-        
-        embed.add_field(
-            name="🌐 Web Search",
-            value=f"`{ctx.prefix}google <query>` - Google search\n"
-                  f"`{ctx.prefix}image <query>` - Image search\n"
-                  f"`{ctx.prefix}youtube <query>` - YouTube search\n"
-                  f"`{ctx.prefix}wiki <query>` - Wikipedia search",
-            inline=True
-        )
-        
-        embed.add_field(
-            name="🎨 Media & Art",
-            value=f"`{ctx.prefix}art <query>` - Art gallery search\n"
-                  f"`{ctx.prefix}video <query>` - Video search",
-            inline=True
-        )
-        
-        embed.add_field(
-            name="📚 Reference",
-            value=f"`{ctx.prefix}define <word>` - Dictionary\n"
-                  f"`{ctx.prefix}urban <term>` - Urban Dictionary\n"
-                  f"`{ctx.prefix}translate <text>` - Translate text",
-            inline=True
-        )
-        
-        embed.add_field(
-            name="🌤️ Utilities",
-            value=f"`{ctx.prefix}weather <location>` - Weather forecast\n"
-                  f"`{ctx.prefix}crypto <coin>` - Crypto prices\n"
-                  f"`{ctx.prefix}color <hex>` - Color info",
-            inline=True
-        )
-        
-        embed.set_footer(text=f"Use {ctx.prefix}help <command> for more details")
-        await ctx.reply(embed=embed, mention_author=False)
-
-    # ═══════════════════════════════════════════════════════════════
     # GOOGLE SEARCH
     # ═══════════════════════════════════════════════════════════════
     @commands.command(name="google", aliases=["g"])

@@ -248,14 +248,15 @@
         }
     },
     "Quest_Data": {},
-    "Mini_Games": {
+    "Games": {
         "memo": {
             "aliases": [],
             "description": "Play an emoji memory matching game. Find matching pairs of emojis within the time limit.",
             "example": "{}memo",
-            "related_commands": "{}8ball"
+            "related_commands": "{}slots, {}coinflip, {}guess"
         }
     },
+    "Mini_Games": {},
     "Memo_Data": {},
     "Pokemon_Emojis": {},
     "PoketwoCommands": {
@@ -579,18 +580,110 @@
     "EventGate": {},
     "Quest_Checker": {},
     "ToolBot": {},
-    "Ticket": {
-        "ticket": {
-            "aliases": [],
-            "description": "No description provided.",
-            "example": "{}ticket",
-            "related_commands": "Provide related commands"
-        }
-    },
     "PoketwoSpawnDetector": {},
     "Quest_Events": {},
     "Quest_Tools": {},
     "Anime_Recommendation": {},
+    "Search": {
+        "google": {
+            "aliases": ["g"],
+            "description": "Search Google and get the top results with titles, descriptions, and links.",
+            "example": "{}google how to make sushi\n{}g discord bot tutorial",
+            "result": "Displays top 5 Google search results with clickable links.",
+            "related_commands": "{}image, {}youtube, {}wiki"
+        },
+        "image": {
+            "aliases": ["img", "images"],
+            "description": "Search for images on Google. Returns a gallery of image results.",
+            "example": "{}image cute cats\n{}img anime wallpaper",
+            "result": "Displays image search results with navigation buttons.",
+            "related_commands": "{}google, {}art"
+        },
+        "youtube": {
+            "aliases": ["yt"],
+            "description": "Search YouTube for videos. Returns video titles, channels, and links.",
+            "example": "{}youtube lofi music\n{}yt coding tutorial",
+            "result": "Displays YouTube search results with video info and links.",
+            "related_commands": "{}google, {}video"
+        },
+        "wiki": {
+            "aliases": ["wikipedia", "w"],
+            "description": "Search Wikipedia for articles and get summaries.",
+            "example": "{}wiki Albert Einstein\n{}w quantum physics",
+            "result": "Displays Wikipedia article summary with link to full article.",
+            "related_commands": "{}define, {}google"
+        },
+        "translate": {
+            "aliases": ["tr"],
+            "description": "Translate text between languages. Auto-detects source language.",
+            "example": "{}translate Hello, how are you?\n{}tr こんにちは",
+            "result": "Shows translated text with detected source language.",
+            "related_commands": "{}define"
+        },
+        "weather": {
+            "aliases": [],
+            "description": "Get current weather and forecast for any location.",
+            "example": "{}weather Tokyo\n{}weather New York",
+            "result": "Displays weather info including temperature, conditions, and forecast.",
+            "related_commands": "{}google"
+        },
+        "define": {
+            "aliases": ["dict", "dictionary"],
+            "description": "Look up word definitions, pronunciations, and examples.",
+            "example": "{}define ephemeral\n{}dict serendipity",
+            "result": "Shows word definition, pronunciation, and usage examples.",
+            "related_commands": "{}urban, {}wiki"
+        },
+        "urban": {
+            "aliases": ["ud"],
+            "description": "Search Urban Dictionary for slang definitions.",
+            "example": "{}urban yeet\n{}ud based",
+            "result": "Displays Urban Dictionary definition with examples and votes.",
+            "related_commands": "{}define"
+        },
+        "art": {
+            "aliases": [],
+            "description": "Search art galleries for artwork and paintings.",
+            "example": "{}art starry night\n{}art monet",
+            "result": "Displays artwork with artist info and high-resolution image.",
+            "related_commands": "{}image"
+        },
+        "color": {
+            "aliases": [],
+            "description": "Get information about a color by hex code. Shows preview and color values.",
+            "example": "{}color #ff5733\n{}color 7289DA",
+            "result": "Displays color preview with RGB, HSL, and complementary colors.",
+            "related_commands": "{}qr"
+        },
+        "qr": {
+            "aliases": ["qrcode"],
+            "description": "Generate a QR code for any text or URL.",
+            "example": "{}qr https://discord.gg/example\n{}qr Hello World",
+            "result": "Generates and sends a QR code image.",
+            "related_commands": "{}shorten"
+        },
+        "screenshot": {
+            "aliases": ["ss", "snap"],
+            "description": "Take a screenshot of any website.",
+            "example": "{}screenshot https://google.com",
+            "result": "Sends a screenshot image of the specified website.",
+            "related_commands": "{}google"
+        },
+        "shorten": {
+            "aliases": ["short"],
+            "description": "Shorten a long URL using a URL shortener service.",
+            "example": "{}shorten https://very-long-url.com/with/many/paths",
+            "result": "Returns a shortened URL.",
+            "related_commands": "{}qr"
+        },
+        "calc": {
+            "aliases": ["calculate", "math"],
+            "description": "Evaluate mathematical expressions.",
+            "example": "{}calc 2 + 2 * 3\n{}math sqrt(144)",
+            "result": "Returns the calculated result.",
+            "related_commands": "{}define"
+        }
+    },
     "StarboardScanner": {
         "set_starboard": {
             "aliases": [],

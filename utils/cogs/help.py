@@ -63,13 +63,20 @@ class HelpMenu(discord.ui.View):
         items = list(self.cog_commands.items())[start:end]
 
         for cog_name, commands_list in items:
-            all_cmds = [f"`{cmd.name}`" for cmd in commands_list]
+            # Separate group commands from regular commands
+            groups = [cmd for cmd in commands_list if isinstance(cmd, commands.Group)]
+            regular = [cmd for cmd in commands_list if not isinstance(cmd, commands.Group)]
+            
+            # Build all commands as simple inline code
+            all_cmds = [f"`{cmd.name}`" for cmd in regular]
+            all_cmds += [f"`{g.name}`" for g in groups]
+            
             value = " ".join(all_cmds) if all_cmds else "No commands."
             embed.add_field(name=cog_name.replace("_", " "), value=value, inline=False)
 
         total_pages = max(1, (len(self.cog_commands) - 1) // self.fields_per_page + 1)
         embed.set_footer(
-            text=f"Page {self.page+1}/{total_pages} | Use {self.ctx.prefix}help <command> for details."
+            text=f"Page {self.page+1}/{total_pages} | {self.ctx.prefix}help <command> for details"
         )
         return embed
 
@@ -151,9 +158,28 @@ class Select_Help(discord.ui.Select):
             if not visible_cmds:
                 continue
 
-            commands_str = " ".join(f"`{cmd.name}`" for cmd in visible_cmds)
-
-            inline = len(self.module_to_cogs[module]) == 1
+            # Separate groups from regular commands
+            groups = [cmd for cmd in visible_cmds if isinstance(cmd, commands.Group)]
+            regular = [cmd for cmd in visible_cmds if not isinstance(cmd, commands.Group)]
+            
+            # Build command display
+            cmd_parts = []
+            
+            # Regular commands inline
+            if regular:
+                cmd_parts.append(" ".join(f"`{cmd.name}`" for cmd in regular))
+            
+            # Group commands with subcommands shown inline
+            if groups:
+                for group in groups:
+                    subcmds = [c.name for c in group.commands if not c.hidden]
+                    if subcmds:
+                        cmd_parts.append(f"`{group.name}` > {' '.join(f'`{s}`' for s in subcmds)}")
+                    else:
+                        cmd_parts.append(f"`{group.name}`")
+            
+            commands_str = "\n".join(cmd_parts) if cmd_parts else "No commands."
+            inline = False
             fields.append((cog.__class__.__name__.replace("_", " "), commands_str, inline))
         return fields
 
@@ -784,12 +810,15 @@ class Sub_Helper:
     
     def _find_command_info(self, help_data: dict, command_name: str) -> dict:
         """Find command info in help data, supporting nested subcommand keys"""
-        # Check for direct qualified name match (e.g., "anime search")
+        # First pass: Check ALL top-level commands across all cogs
         for cog_data in help_data.values():
             if isinstance(cog_data, dict):
                 if command_name in cog_data:
                     return cog_data[command_name]
-                # Check subcommands key
+        
+        # Second pass: Only check subcommands if no top-level match found
+        for cog_data in help_data.values():
+            if isinstance(cog_data, dict):
                 for cmd_key, cmd_data in cog_data.items():
                     if isinstance(cmd_data, dict):
                         subcommands = cmd_data.get("subcommands", {})

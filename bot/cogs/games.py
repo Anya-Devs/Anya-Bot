@@ -64,6 +64,433 @@ DAILY_LIMITS = {
 }
 
 
+# ═══════════════════════════════════════════════════════════════
+# MULTIPLAYER GAME VIEWS
+# ═══════════════════════════════════════════════════════════════
+
+class HangmanJoinView(discord.ui.View):
+    """View for joining hangman game"""
+    def __init__(self, cog, game_id: str):
+        super().__init__(timeout=30)
+        self.cog = cog
+        self.game_id = game_id
+    
+    @discord.ui.button(label="Join Game", style=discord.ButtonStyle.green, emoji="🎮")
+    async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.game_id not in self.cog.active_games:
+            return await interaction.response.send_message("❌ Game no longer exists!", ephemeral=True)
+        
+        game = self.cog.active_games[self.game_id]
+        user_id = str(interaction.user.id)
+        
+        if game["started"]:
+            return await interaction.response.send_message("❌ Game already started!", ephemeral=True)
+        
+        if user_id in game["players"]:
+            return await interaction.response.send_message("✅ You're already in this game!", ephemeral=True)
+        
+        if len(game["players"]) >= 5:
+            return await interaction.response.send_message("❌ Game is full (5 players max)!", ephemeral=True)
+        
+        # Add player
+        game["players"][user_id] = {
+            "guessed": set(),
+            "wrong": 0,
+            "display": " ".join("_" for _ in game["word"]),
+            "status": "playing",
+            "dm_msg": None,
+            "view": None
+        }
+        
+        await interaction.response.send_message(f"✅ Joined! Check your DMs when the game starts.", ephemeral=True)
+        
+        # Update join message
+        embed = interaction.message.embeds[0]
+        embed.description = f"**Word Length:** {len(game['word'])} letters\n\n" \
+                           f"**Players:** {len(game['players'])}/5\n" \
+                           f"Click **Join Game** to play in your DMs!\n" \
+                           f"Wrong guesses lose **10 stella points** each.\n" \
+                           f"(You can play even with 0 points!)\n\n" \
+                           f"Game starts in **30 seconds** or when 5 players join."
+        await interaction.message.edit(embed=embed)
+        
+        # Start early if 5 players
+        if len(game["players"]) >= 5:
+            game["started"] = True
+            self.stop()
+            await self.cog._start_hangman_game(self.game_id)
+
+
+# Hangman ASCII art stages
+HANGMAN_STAGES = [
+    "```\n  +---+\n      |\n      |\n      |\n      |\n=========```",
+    "```\n  +---+\n  O   |\n      |\n      |\n      |\n=========```",
+    "```\n  +---+\n  O   |\n  |   |\n      |\n      |\n=========```",
+    "```\n  +---+\n  O   |\n /|   |\n      |\n      |\n=========```",
+    "```\n  +---+\n  O   |\n /|\\  |\n      |\n      |\n=========```",
+    "```\n  +---+\n  O   |\n /|\\  |\n /    |\n      |\n=========```",
+    "```\n  +---+\n  O   |\n /|\\  |\n / \\  |\n      |\n=========```",
+]
+
+
+class HangmanLetterView(discord.ui.View):
+    """View for guessing letters in hangman with pagination"""
+    def __init__(self, cog, game_id: str, user_id: str):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.game_id = game_id
+        self.user_id = user_id
+        self.page = 0
+        
+        # Letter pages: 5 letters per row, 3 rows = 15 letters per page
+        self.letter_pages = [
+            "ABCDEFGHIJKLMNO",  # Page 0: A-O
+            "PQRSTUVWXYZ"       # Page 1: P-Z
+        ]
+        
+        self._build_buttons()
+    
+    def _build_buttons(self):
+        """Build the current page of letter buttons"""
+        self.clear_items()
+        
+        letters = self.letter_pages[self.page]
+        game = self.cog.active_games.get(self.game_id)
+        if not game:
+            return
+        
+        player = game["players"].get(self.user_id)
+        if not player:
+            return
+        
+        # Add letter buttons (5 per row, up to 3 rows)
+        for i, letter in enumerate(letters):
+            # Determine button style based on guess status
+            if letter in player.get("guessed", set()):
+                if letter in game["word"]:
+                    style = discord.ButtonStyle.success  # Green for correct
+                else:
+                    style = discord.ButtonStyle.danger   # Red for wrong
+                disabled = True
+            else:
+                style = discord.ButtonStyle.primary
+                disabled = False
+            
+            button = discord.ui.Button(
+                label=letter,
+                style=style,
+                disabled=disabled,
+                row=i // 5
+            )
+            button.callback = self._create_letter_callback(letter)
+            self.add_item(button)
+        
+        # Add navigation buttons on row 4
+        if len(self.letter_pages) > 1:
+            prev_btn = discord.ui.Button(
+                label="⬅️ Back",
+                style=discord.ButtonStyle.secondary,
+                disabled=(self.page == 0),
+                row=4
+            )
+            prev_btn.callback = self._prev_page
+            self.add_item(prev_btn)
+            
+            next_btn = discord.ui.Button(
+                label="Next ➡️",
+                style=discord.ButtonStyle.secondary,
+                disabled=(self.page == len(self.letter_pages) - 1),
+                row=4
+            )
+            next_btn.callback = self._next_page
+            self.add_item(next_btn)
+    
+    async def _prev_page(self, interaction: discord.Interaction):
+        """Go to previous page"""
+        if self.page > 0:
+            self.page -= 1
+            self._build_buttons()
+            
+            game = self.cog.active_games.get(self.game_id)
+            player = game["players"].get(self.user_id)
+            guessed_str = ", ".join(sorted(player["guessed"])) or "None"
+            
+            embed = discord.Embed(
+                title="🕵️ Hangman",
+                description=f"{HANGMAN_STAGES[player['wrong']]}\n**Word:** `{player['display']}`",
+                color=discord.Color.blue()
+            )
+            embed.add_field(name="Guessed", value=guessed_str, inline=True)
+            embed.add_field(name="Wrong", value=f"{player['wrong']}/6", inline=True)
+            
+            await interaction.response.edit_message(embed=embed, view=self)
+    
+    async def _next_page(self, interaction: discord.Interaction):
+        """Go to next page"""
+        if self.page < len(self.letter_pages) - 1:
+            self.page += 1
+            self._build_buttons()
+            
+            game = self.cog.active_games.get(self.game_id)
+            player = game["players"].get(self.user_id)
+            guessed_str = ", ".join(sorted(player["guessed"])) or "None"
+            
+            embed = discord.Embed(
+                title="🕵️ Hangman",
+                description=f"{HANGMAN_STAGES[player['wrong']]}\n**Word:** `{player['display']}`",
+                color=discord.Color.blue()
+            )
+            embed.add_field(name="Guessed", value=guessed_str, inline=True)
+            embed.add_field(name="Wrong", value=f"{player['wrong']}/6", inline=True)
+            
+            await interaction.response.edit_message(embed=embed, view=self)
+    
+    def _create_letter_callback(self, letter: str):
+        """Create callback for letter button"""
+        async def callback(interaction: discord.Interaction):
+            if self.game_id not in self.cog.active_games:
+                return await interaction.response.send_message("❌ Game ended!", ephemeral=True)
+            
+            game = self.cog.active_games[self.game_id]
+            player = game["players"].get(self.user_id)
+            
+            if not player or player["status"] != "playing":
+                return await interaction.response.send_message("❌ You're not playing!", ephemeral=True)
+            
+            if letter in player["guessed"]:
+                return await interaction.response.send_message(f"❌ Already guessed **{letter}**!", ephemeral=True)
+            
+            # Process guess
+            player["guessed"].add(letter)
+            guild_id = game["guild_id"]
+            
+            # Check if letter is in word
+            is_correct = letter in game["word"]
+            if not is_correct:
+                player["wrong"] += 1
+                await self.cog.quest_data.add_balance(self.user_id, guild_id, -10)
+            
+            # Update display
+            player["display"] = " ".join(c if c in player["guessed"] else "_" for c in game["word"])
+            
+            # Rebuild buttons FIRST to update colors
+            self._build_buttons()
+            
+            # Check win/lose
+            if "_" not in player["display"]:
+                player["status"] = "won"
+                word_len = len(game["word"])
+                winnings = 100 + (word_len * 10) + ((6 - player["wrong"]) * 20)
+                await self.cog.quest_data.add_balance(self.user_id, guild_id, winnings)
+                
+                embed = discord.Embed(
+                    title="🏆 You Won!",
+                    description=f"{HANGMAN_STAGES[player['wrong']]}\n**Word:** {game['word']}\n\n💰 Won **+{winnings}** stella points!",
+                    color=discord.Color.green()
+                )
+                await interaction.response.edit_message(embed=embed, view=None)
+            elif player["wrong"] >= 6:
+                player["status"] = "lost"
+                embed = discord.Embed(
+                    title="💀 Game Over!",
+                    description=f"{HANGMAN_STAGES[6]}\n**Word was:** {game['word']}",
+                    color=discord.Color.red()
+                )
+                await interaction.response.edit_message(embed=embed, view=None)
+            else:
+                # Update DM with hangman drawing
+                guessed_str = ", ".join(sorted(player["guessed"])) or "None"
+                
+                embed = discord.Embed(
+                    title="🕵️ Hangman",
+                    description=f"{HANGMAN_STAGES[player['wrong']]}\n**Word:** `{player['display']}`",
+                    color=discord.Color.blue()
+                )
+                embed.add_field(name="Guessed", value=guessed_str, inline=True)
+                embed.add_field(name="Wrong", value=f"{player['wrong']}/6", inline=True)
+                
+                await interaction.response.edit_message(embed=embed, view=self)
+            
+            # Update leaderboard
+            await self.cog._update_hangman_leaderboard(self.game_id)
+        
+        return callback
+
+
+class WordleJoinView(discord.ui.View):
+    """View for joining wordle game"""
+    def __init__(self, cog, game_id: str):
+        super().__init__(timeout=30)
+        self.cog = cog
+        self.game_id = game_id
+    
+    @discord.ui.button(label="Join Game", style=discord.ButtonStyle.green, emoji="🎮")
+    async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.game_id not in self.cog.active_games:
+            return await interaction.response.send_message("❌ Game no longer exists!", ephemeral=True)
+        
+        game = self.cog.active_games[self.game_id]
+        user_id = str(interaction.user.id)
+        
+        if game["started"]:
+            return await interaction.response.send_message("❌ Game already started!", ephemeral=True)
+        
+        if user_id in game["players"]:
+            return await interaction.response.send_message("✅ You're already in this game!", ephemeral=True)
+        
+        if len(game["players"]) >= 5:
+            return await interaction.response.send_message("❌ Game is full (5 players max)!", ephemeral=True)
+        
+        # Add player
+        game["players"][user_id] = {
+            "attempts": [],
+            "status": "playing",
+            "dm_msg": None,
+            "view": None
+        }
+        
+        await interaction.response.send_message(f"✅ Joined! Check your DMs when the game starts.", ephemeral=True)
+        
+        # Update join message
+        embed = interaction.message.embeds[0]
+        embed.description = f"Guess the **5-letter word** in 6 tries!\n\n" \
+                           f"**Players:** {len(game['players'])}/5\n" \
+                           f"Click **Join Game** to play in your DMs!\n" \
+                           f"Wrong guesses lose **15 stella points** each.\n" \
+                           f"(You can play even with 0 points!)\n\n" \
+                           f"Game starts in **30 seconds** or when 5 players join."
+        await interaction.message.edit(embed=embed)
+        
+        # Start early if 5 players
+        if len(game["players"]) >= 5:
+            game["started"] = True
+            self.stop()
+            await self.cog._start_wordle_game(self.game_id)
+
+
+class WordleGuessModal(discord.ui.Modal, title="Submit Your Guess"):
+    """Modal for submitting wordle guesses"""
+    guess_input = discord.ui.TextInput(
+        label="Enter a 5-letter word",
+        placeholder="AGENT",
+        min_length=5,
+        max_length=5,
+        required=True
+    )
+    
+    def __init__(self, cog, game_id: str, user_id: str):
+        super().__init__()
+        self.cog = cog
+        self.game_id = game_id
+        self.user_id = user_id
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        if self.game_id not in self.cog.active_games:
+            return await interaction.response.send_message("❌ Game ended!", ephemeral=True)
+        
+        game = self.cog.active_games[self.game_id]
+        player = game["players"].get(self.user_id)
+        
+        if not player or player["status"] != "playing":
+            return await interaction.response.send_message("❌ You're not playing!", ephemeral=True)
+        
+        guess = self.guess_input.value.upper()
+        
+        if not guess.isalpha():
+            return await interaction.response.send_message("❌ Only letters allowed!", ephemeral=True)
+        
+        # Calculate result
+        def get_result(guess_word, answer):
+            result = []
+            answer_chars = list(answer)
+            for i, (g, a) in enumerate(zip(guess_word, answer)):
+                if g == a:
+                    result.append("🟩")
+                    answer_chars[i] = None
+                else:
+                    result.append(None)
+            for i, g in enumerate(guess_word):
+                if result[i] is None:
+                    if g in answer_chars:
+                        result[i] = "🟨"
+                        answer_chars[answer_chars.index(g)] = None
+                    else:
+                        result[i] = "⬛"
+            return "".join(result)
+        
+        result = get_result(guess, game["word"])
+        
+        # Deduct points if not correct
+        if guess != game["word"]:
+            guild_id = game["guild_id"]
+            await self.cog.quest_data.add_balance(self.user_id, guild_id, -15)
+        
+        # Add attempt
+        player["attempts"].append({"word": guess, "result": result})
+        
+        # Check win/lose
+        payouts = {1: 500, 2: 400, 3: 300, 4: 200, 5: 150, 6: 100}
+        
+        if guess == game["word"]:
+            player["status"] = "won"
+            attempt_num = len(player["attempts"])
+            winnings = payouts.get(attempt_num, 100)
+            guild_id = game["guild_id"]
+            await self.cog.quest_data.add_balance(self.user_id, guild_id, winnings)
+            
+            grid = [att["result"] + f" `{att['word']}`" for att in player["attempts"]]
+            
+            embed = discord.Embed(
+                title="🏆 You Won!",
+                description="\n".join(grid) + f"\n\n💰 Won **+{winnings}** stella points!",
+                color=discord.Color.gold()
+            )
+            await interaction.response.edit_message(embed=embed, view=None)
+        elif len(player["attempts"]) >= 6:
+            player["status"] = "lost"
+            grid = [att["result"] + f" `{att['word']}`" for att in player["attempts"]]
+            
+            embed = discord.Embed(
+                title="💀 Game Over!",
+                description="\n".join(grid) + f"\n\n**Word was:** {game['word']}",
+                color=discord.Color.red()
+            )
+            await interaction.response.edit_message(embed=embed, view=None)
+        else:
+            # Continue playing
+            grid = [att["result"] + f" `{att['word']}`" for att in player["attempts"]]
+            for _ in range(6 - len(player["attempts"])):
+                grid.append("⬜⬜⬜⬜⬜")
+            
+            embed = discord.Embed(
+                title="🟩 Your Wordle Game",
+                description="\n".join(grid) + "\n\n"
+                           f"Click **Submit Guess** to enter a 5-letter word!\n"
+                           f"❌ Wrong guess = **-15 stella points**",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Attempts", value=f"{len(player['attempts'])}/6", inline=True)
+            
+            await interaction.response.edit_message(embed=embed)
+        
+        # Update leaderboard
+        await self.cog._update_wordle_leaderboard(self.game_id)
+
+
+class WordleGuessView(discord.ui.View):
+    """View for wordle game with submit button"""
+    def __init__(self, cog, game_id: str, user_id: str):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.game_id = game_id
+        self.user_id = user_id
+    
+    @discord.ui.button(label="Submit Guess", style=discord.ButtonStyle.green, emoji="📝")
+    async def submit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = WordleGuessModal(self.cog, self.game_id, self.user_id)
+        await interaction.response.send_modal(modal)
+
+
 class Games(commands.Cog):
     """🎮 Mini-games that use stella points - Gamble, Classic Games & Grounded Economy!"""
     
@@ -807,27 +1234,15 @@ class Games(commands.Cog):
         await ctx.reply(embed=embed, mention_author=False)
     
     # ═══════════════════════════════════════════════════════════════
-    # CLASSIC GAMES - HANGMAN
+    # MULTIPLAYER GAMES - HANGMAN
     # ═══════════════════════════════════════════════════════════════
     
     @commands.command(name="hangman", aliases=["hm"])
-    @commands.cooldown(1, 10, commands.BucketType.user)
+    @commands.cooldown(1, 5, commands.BucketType.channel)
     async def hangman_game(self, ctx):
-        """📝 Play hangman! Guess the word letter by letter."""
+        """📝 Multiplayer Hangman! Play in DMs, results shown in channel."""
         guild_id = str(ctx.guild.id)
-        user_id = str(ctx.author.id)
-        cost = 50
-        
-        # Check if already in a game
-        game_key = f"{guild_id}_{user_id}_hangman"
-        if game_key in self.active_games:
-            return await ctx.reply("❌ You're already in a hangman game!", mention_author=False)
-        
-        balance = await self.quest_data.get_balance(user_id, guild_id)
-        if balance < cost:
-            return await ctx.reply(f"❌ Need **{cost}** pts to play! You have **{balance:,}**", mention_author=False)
-        
-        await self.quest_data.add_balance(user_id, guild_id, -cost)
+        game_id = f"{guild_id}_{ctx.channel.id}_hangman_{int(datetime.now(timezone.utc).timestamp())}"
         
         # Get word from API or fallback
         word = None
@@ -843,137 +1258,170 @@ class Games(commands.Cog):
         
         if not word:
             fallback = CLASSIC_CONFIG.get("hangman", {}).get("fallback_words", [
-                "MISSION", "SECRET", "AGENT", "FORGER", "TWILIGHT", "CIPHER"
+                "MISSION", "SECRET", "AGENT", "FORGER", "TWILIGHT", "CIPHER", "PUZZLE", "MYSTERY"
             ])
             word = random.choice(fallback).upper()
         
-        # Initialize game state
-        self.active_games[game_key] = {
+        # Initialize multiplayer game
+        self.active_games[game_id] = {
             "word": word,
-            "guessed": set(),
-            "wrong": 0,
-            "max_wrong": 6
+            "players": {},
+            "channel": ctx.channel,
+            "guild_id": guild_id,
+            "started": False,
+            "game_msg": None
         }
         
-        hangman_stages = [
-            "```\n  +---+\n      |\n      |\n      |\n=========```",
-            "```\n  +---+\n  O   |\n      |\n      |\n=========```",
-            "```\n  +---+\n  O   |\n  |   |\n      |\n=========```",
-            "```\n  +---+\n  O   |\n /|   |\n      |\n=========```",
-            "```\n  +---+\n  O   |\n /|\\  |\n      |\n=========```",
-            "```\n  +---+\n  O   |\n /|\\  |\n /    |\n=========```",
-            "```\n  +---+\n  O   |\n /|\\  |\n / \\  |\n=========```"
-        ]
+        # Create join embed
+        embed = discord.Embed(
+            title="🕵️ Multiplayer Hangman Starting!",
+            description=f"**Word Length:** {len(word)} letters\n\n"
+                       f"Click **Join Game** to play in your DMs!\n"
+                       f"Wrong guesses lose **10 stella points** each.\n"
+                       f"(You can play even with 0 points!)\n\n"
+                       f"Game starts in **30 seconds** or when 5 players join.",
+            color=discord.Color.blue()
+        )
+        embed.set_footer(text="Results will be shown here!")
         
-        def get_display(word, guessed):
-            return " ".join(c if c in guessed else "_" for c in word)
+        view = HangmanJoinView(self, game_id)
+        msg = await ctx.reply(embed=embed, view=view, mention_author=False)
+        self.active_games[game_id]["game_msg"] = msg
         
-        def build_embed(game, stage_idx, status="playing"):
-            display = get_display(game["word"], game["guessed"])
-            guessed_str = ", ".join(sorted(game["guessed"])) or "None"
-            
-            if status == "win":
-                title = "✅ You Won!"
-                color = discord.Color.green()
-            elif status == "lose":
-                title = "❌ Game Over!"
-                color = discord.Color.red()
+        # Wait for players
+        await asyncio.sleep(30)
+        
+        if game_id in self.active_games:
+            game = self.active_games[game_id]
+            if len(game["players"]) == 0:
+                embed.description = "❌ No players joined! Game cancelled."
+                embed.color = discord.Color.red()
+                await msg.edit(embed=embed, view=None)
+                del self.active_games[game_id]
             else:
-                title = "🕵️ Hangman"
-                color = discord.Color.blue()
-            
-            embed = discord.Embed(title=title, color=color)
-            embed.add_field(name="Word", value=f"`{display}`", inline=False)
-            embed.description = hangman_stages[min(stage_idx, 6)]
-            embed.add_field(name="Guessed", value=guessed_str, inline=True)
-            embed.add_field(name="Wrong", value=f"{game['wrong']}/6", inline=True)
-            return embed
+                game["started"] = True
+                view.stop()
+                await self._start_hangman_game(game_id)
+    
+    async def _start_hangman_game(self, game_id: str):
+        """Start the multiplayer hangman game"""
+        if game_id not in self.active_games:
+            return
         
-        embed = build_embed(self.active_games[game_key], 0)
-        embed.set_footer(text="Type a letter to guess! (60s timeout)")
-        msg = await ctx.reply(embed=embed, mention_author=False)
+        game = self.active_games[game_id]
+        channel = game["channel"]
+        failed_users = []
         
-        def check(m):
-            return (m.author == ctx.author and m.channel == ctx.channel and 
-                    len(m.content) == 1 and m.content.isalpha())
-        
-        while game_key in self.active_games:
-            game = self.active_games[game_key]
-            
+        # Send DMs to all players
+        for user_id, player_data in game["players"].items():
             try:
-                guess_msg = await self.bot.wait_for("message", timeout=60.0, check=check)
-                letter = guess_msg.content.upper()
+                user = await self.bot.fetch_user(int(user_id))
+                view = HangmanLetterView(self, game_id, user_id)
                 
+                word_display = " ".join("_" for _ in game["word"])
+                embed = discord.Embed(
+                    title="🕵️ Hangman",
+                    description=f"{HANGMAN_STAGES[0]}\n**Word:** `{word_display}`",
+                    color=discord.Color.blue()
+                )
+                embed.add_field(name="Guessed", value="None", inline=True)
+                embed.add_field(name="Wrong", value="0/6", inline=True)
+                
+                dm_msg = await user.send(embed=embed, view=view)
+                player_data["dm_msg"] = dm_msg
+                player_data["view"] = view
+            except discord.Forbidden:
+                logger.warning(f"Cannot DM user {user_id} - DMs disabled")
                 try:
-                    await guess_msg.delete()
+                    user_obj = await self.bot.fetch_user(int(user_id))
+                    failed_users.append(user_obj.mention)
                 except:
-                    pass
+                    failed_users.append(f"<@{user_id}>")
+                player_data["status"] = "failed"
+            except Exception as e:
+                logger.error(f"Error sending hangman DM to {user_id}: {e}")
+                try:
+                    user_obj = await self.bot.fetch_user(int(user_id))
+                    failed_users.append(user_obj.mention)
+                except:
+                    failed_users.append(f"<@{user_id}>")
+                player_data["status"] = "failed"
+        
+        # Notify about failed DMs with mentions
+        if failed_users:
+            try:
+                await channel.send(
+                    f"⚠️ {' '.join(failed_users)} - Could not send you DMs!\n"
+                    f"Please enable DMs from server members to play!",
+                    delete_after=15
+                )
+            except:
+                pass
+        
+        # Update channel message
+        await self._update_hangman_leaderboard(game_id)
+    
+    async def _update_hangman_leaderboard(self, game_id: str):
+        """Update the leaderboard in the channel"""
+        if game_id not in self.active_games:
+            return
+        
+        game = self.active_games[game_id]
+        msg = game["game_msg"]
+        
+        # Build leaderboard
+        leaderboard = []
+        for user_id, player_data in game["players"].items():
+            try:
+                user = await self.bot.fetch_user(int(user_id))
+                display = player_data["display"]
+                wrong = player_data["wrong"]
+                status = player_data["status"]
                 
-                if letter in game["guessed"]:
-                    continue
+                if status == "won":
+                    emoji = "🏆"
+                elif status == "lost":
+                    emoji = "💀"
+                else:
+                    emoji = "🎮"
                 
-                game["guessed"].add(letter)
-                
-                if letter not in game["word"]:
-                    game["wrong"] += 1
-                
-                # Check win/lose
-                display = get_display(game["word"], game["guessed"])
-                
-                if "_" not in display:
-                    # Won!
-                    word_len = len(game["word"])
-                    winnings = 100 + (word_len * 10) + ((6 - game["wrong"]) * 20)
-                    await self.quest_data.add_balance(user_id, guild_id, winnings)
-                    new_balance = await self.quest_data.get_balance(user_id, guild_id)
-                    
-                    embed = build_embed(game, game["wrong"], "win")
-                    embed.add_field(name="💰 Won", value=f"+**{winnings}** pts", inline=True)
-                    embed.add_field(name="💳 Balance", value=f"**{new_balance:,}** pts", inline=True)
-                    await msg.edit(embed=embed)
-                    del self.active_games[game_key]
-                    return
-                
-                if game["wrong"] >= 6:
-                    # Lost
-                    embed = build_embed(game, 6, "lose")
-                    embed.add_field(name="The word was", value=f"**{game['word']}**", inline=False)
-                    await msg.edit(embed=embed)
-                    del self.active_games[game_key]
-                    return
-                
-                embed = build_embed(game, game["wrong"])
-                embed.set_footer(text="Type a letter to guess!")
-                await msg.edit(embed=embed)
-                
-            except asyncio.TimeoutError:
-                embed = build_embed(game, game["wrong"], "lose")
-                embed.add_field(name="⏰ Timeout!", value=f"The word was **{game['word']}**", inline=False)
-                await msg.edit(embed=embed)
-                del self.active_games[game_key]
-                return
+                lives = "❤️" * (6 - wrong)
+                leaderboard.append(f"{emoji} **{user.display_name}** - `{display}` {lives}")
+            except:
+                pass
+        
+        embed = discord.Embed(
+            title="🕵️ Hangman - Live Results",
+            description="\n".join(leaderboard) if leaderboard else "No players",
+            color=discord.Color.blue()
+        )
+        embed.add_field(name="Word Length", value=f"{len(game['word'])} letters", inline=True)
+        
+        # Check if game is over
+        all_done = all(p["status"] != "playing" for p in game["players"].values())
+        if all_done:
+            winners = [uid for uid, p in game["players"].items() if p["status"] == "won"]
+            embed.add_field(name="Game Over!", value=f"Word was: **{game['word']}**", inline=False)
+            if winners:
+                embed.color = discord.Color.green()
+            else:
+                embed.color = discord.Color.red()
+        
+        try:
+            await msg.edit(embed=embed)
+        except:
+            pass
     
     # ═══════════════════════════════════════════════════════════════
-    # CLASSIC GAMES - WORDLE
+    # MULTIPLAYER GAMES - WORDLE
     # ═══════════════════════════════════════════════════════════════
     
     @commands.command(name="wordle")
-    @commands.cooldown(1, 15, commands.BucketType.user)
+    @commands.cooldown(1, 5, commands.BucketType.channel)
     async def wordle_game(self, ctx):
-        """🟩 Play Wordle! Guess the 5-letter word in 6 tries."""
+        """🟩 Multiplayer Wordle! Play in DMs, results shown in channel."""
         guild_id = str(ctx.guild.id)
-        user_id = str(ctx.author.id)
-        cost = 75
-        
-        game_key = f"{guild_id}_{user_id}_wordle"
-        if game_key in self.active_games:
-            return await ctx.reply("❌ You're already in a wordle game!", mention_author=False)
-        
-        balance = await self.quest_data.get_balance(user_id, guild_id)
-        if balance < cost:
-            return await ctx.reply(f"❌ Need **{cost}** pts! You have **{balance:,}**", mention_author=False)
-        
-        await self.quest_data.add_balance(user_id, guild_id, -cost)
+        game_id = f"{guild_id}_{ctx.channel.id}_wordle_{int(datetime.now(timezone.utc).timestamp())}"
         
         # Get 5-letter word
         word = None
@@ -988,28 +1436,176 @@ class Games(commands.Cog):
             pass
         
         if not word:
-            fallback = ["AGENT", "CODES", "QUEST", "SWORD", "FLAME", "STORM", "PEACE", "DREAM"]
+            fallback = ["AGENT", "CODES", "QUEST", "SWORD", "FLAME", "STORM", "PEACE", "DREAM", "MAGIC", "BRAVE"]
             word = random.choice(fallback)
         
-        self.active_games[game_key] = {
+        # Initialize multiplayer game
+        self.active_games[game_id] = {
             "word": word,
-            "attempts": [],
-            "max_attempts": 6
+            "players": {},
+            "channel": ctx.channel,
+            "guild_id": guild_id,
+            "started": False,
+            "game_msg": None
         }
         
+        # Create join embed
+        embed = discord.Embed(
+            title="🟩 Multiplayer Wordle Starting!",
+            description=f"Guess the **5-letter word** in 6 tries!\n\n"
+                       f"Click **Join Game** to play in your DMs!\n"
+                       f"Wrong guesses lose **15 stella points** each.\n"
+                       f"(You can play even with 0 points!)\n\n"
+                       f"Game starts in **30 seconds** or when 5 players join.",
+            color=discord.Color.green()
+        )
+        embed.set_footer(text="Results will be shown here!")
+        
+        view = WordleJoinView(self, game_id)
+        msg = await ctx.reply(embed=embed, view=view, mention_author=False)
+        self.active_games[game_id]["game_msg"] = msg
+        
+        # Wait for players
+        await asyncio.sleep(30)
+        
+        if game_id in self.active_games:
+            game = self.active_games[game_id]
+            if len(game["players"]) == 0:
+                embed.description = "❌ No players joined! Game cancelled."
+                embed.color = discord.Color.red()
+                await msg.edit(embed=embed, view=None)
+                del self.active_games[game_id]
+            else:
+                game["started"] = True
+                view.stop()
+                await self._start_wordle_game(game_id)
+    
+    async def _start_wordle_game(self, game_id: str):
+        """Start the multiplayer wordle game"""
+        if game_id not in self.active_games:
+            return
+        
+        game = self.active_games[game_id]
+        channel = game["channel"]
+        failed_users = []
+        
+        # Send DMs to all players
+        for user_id, player_data in game["players"].items():
+            try:
+                user = await self.bot.fetch_user(int(user_id))
+                view = WordleGuessView(self, game_id, user_id)
+                
+                embed = discord.Embed(
+                    title="🟩 Your Wordle Game",
+                    description="⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n\n"
+                               f"Click **Submit Guess** to enter a 5-letter word!\n"
+                               f"❌ Wrong guess = **-15 stella points**",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="Attempts", value="0/6", inline=True)
+                
+                dm_msg = await user.send(embed=embed, view=view)
+                player_data["dm_msg"] = dm_msg
+                player_data["view"] = view
+            except discord.Forbidden:
+                logger.warning(f"Cannot DM user {user_id} - DMs disabled")
+                try:
+                    user_obj = await self.bot.fetch_user(int(user_id))
+                    failed_users.append(user_obj.mention)
+                except:
+                    failed_users.append(f"<@{user_id}>")
+                player_data["status"] = "failed"
+            except Exception as e:
+                logger.error(f"Error sending wordle DM to {user_id}: {e}")
+                try:
+                    user_obj = await self.bot.fetch_user(int(user_id))
+                    failed_users.append(user_obj.mention)
+                except:
+                    failed_users.append(f"<@{user_id}>")
+                player_data["status"] = "failed"
+        
+        # Notify about failed DMs with mentions
+        if failed_users:
+            try:
+                await channel.send(
+                    f"⚠️ {' '.join(failed_users)} - Could not send you DMs!\n"
+                    f"Please enable DMs from server members to play!",
+                    delete_after=15
+                )
+            except:
+                pass
+        
+        # Update channel message
+        await self._update_wordle_leaderboard(game_id)
+    
+    async def _update_wordle_leaderboard(self, game_id: str):
+        """Update the wordle leaderboard in the channel"""
+        if game_id not in self.active_games:
+            return
+        
+        game = self.active_games[game_id]
+        msg = game["game_msg"]
+        
+        # Build leaderboard
+        leaderboard = []
+        for user_id, player_data in game["players"].items():
+            try:
+                user = await self.bot.fetch_user(int(user_id))
+                attempts = len(player_data["attempts"])
+                status = player_data["status"]
+                
+                if status == "won":
+                    emoji = "🏆"
+                elif status == "lost":
+                    emoji = "💀"
+                else:
+                    emoji = "🎮"
+                
+                # Show last attempt result
+                last_result = ""
+                if player_data["attempts"]:
+                    last_result = player_data["attempts"][-1]["result"]
+                
+                leaderboard.append(f"{emoji} **{user.display_name}** - {attempts}/6 {last_result}")
+            except:
+                pass
+        
+        embed = discord.Embed(
+            title="🟩 Wordle - Live Results",
+            description="\n".join(leaderboard) if leaderboard else "No players",
+            color=discord.Color.green()
+        )
+        
+        # Check if game is over
+        all_done = all(p["status"] != "playing" for p in game["players"].values())
+        if all_done:
+            winners = [uid for uid, p in game["players"].items() if p["status"] == "won"]
+            embed.add_field(name="Game Over!", value=f"Word was: **{game['word']}**", inline=False)
+            if winners:
+                embed.color = discord.Color.gold()
+            else:
+                embed.color = discord.Color.red()
+        
+        try:
+            await msg.edit(embed=embed)
+        except:
+            pass
+    
+    # ═══════════════════════════════════════════════════════════════
+    # CLASSIC GAMES - WORDLE (OLD - KEEPING FOR COMPATIBILITY)
+    # ═══════════════════════════════════════════════════════════════
+    
+    async def _old_wordle_timeout_handler(self, game, game_key, msg):
+        """Handle old wordle timeout"""
         def get_result(guess, answer):
             result = []
             answer_chars = list(answer)
-            
-            # First pass: correct positions
             for i, (g, a) in enumerate(zip(guess, answer)):
                 if g == a:
                     result.append("🟩")
                     answer_chars[i] = None
                 else:
                     result.append(None)
-            
-            # Second pass: wrong positions
             for i, g in enumerate(guess):
                 if result[i] is None:
                     if g in answer_chars:
@@ -1017,7 +1613,6 @@ class Games(commands.Cog):
                         answer_chars[answer_chars.index(g)] = None
                     else:
                         result[i] = "⬛"
-            
             return "".join(result)
         
         def build_embed(game, status="playing"):
@@ -1030,77 +1625,22 @@ class Games(commands.Cog):
             else:
                 title = "🟩 Wordle"
                 color = discord.Color.blue()
-            
             embed = discord.Embed(title=title, color=color)
-            
             grid = []
             for attempt in game["attempts"]:
                 result = get_result(attempt, game["word"])
                 grid.append(f"{result} `{attempt}`")
-            
-            # Add empty rows
             for _ in range(6 - len(game["attempts"])):
                 grid.append("⬜⬜⬜⬜⬜")
-            
             embed.description = "\n".join(grid)
             embed.add_field(name="Attempts", value=f"{len(game['attempts'])}/6", inline=True)
             return embed
         
-        embed = build_embed(self.active_games[game_key])
-        embed.set_footer(text="Type a 5-letter word! (90s timeout)")
-        msg = await ctx.reply(embed=embed, mention_author=False)
-        
-        def check(m):
-            return (m.author == ctx.author and m.channel == ctx.channel and 
-                    len(m.content) == 5 and m.content.isalpha())
-        
-        payouts = {1: 500, 2: 400, 3: 300, 4: 200, 5: 150, 6: 100}
-        
-        while game_key in self.active_games:
-            game = self.active_games[game_key]
-            
-            try:
-                guess_msg = await self.bot.wait_for("message", timeout=90.0, check=check)
-                guess = guess_msg.content.upper()
-                
-                try:
-                    await guess_msg.delete()
-                except:
-                    pass
-                
-                game["attempts"].append(guess)
-                
-                if guess == game["word"]:
-                    # Won!
-                    attempt_num = len(game["attempts"])
-                    winnings = payouts.get(attempt_num, 100)
-                    await self.quest_data.add_balance(user_id, guild_id, winnings)
-                    new_balance = await self.quest_data.get_balance(user_id, guild_id)
-                    
-                    embed = build_embed(game, "win")
-                    embed.add_field(name="💰 Won", value=f"+**{winnings}** pts", inline=True)
-                    embed.add_field(name="💳 Balance", value=f"**{new_balance:,}** pts", inline=True)
-                    await msg.edit(embed=embed)
-                    del self.active_games[game_key]
-                    return
-                
-                if len(game["attempts"]) >= 6:
-                    embed = build_embed(game, "lose")
-                    embed.add_field(name="The word was", value=f"**{game['word']}**", inline=False)
-                    await msg.edit(embed=embed)
-                    del self.active_games[game_key]
-                    return
-                
-                embed = build_embed(game)
-                embed.set_footer(text="Type a 5-letter word!")
-                await msg.edit(embed=embed)
-                
-            except asyncio.TimeoutError:
-                embed = build_embed(game, "lose")
-                embed.add_field(name="⏰ Timeout!", value=f"The word was **{game['word']}**", inline=False)
-                await msg.edit(embed=embed)
-                del self.active_games[game_key]
-                return
+        embed = build_embed(game, "lose")
+        embed.add_field(name="⏰ Timeout!", value=f"The word was **{game['word']}**", inline=False)
+        await msg.edit(embed=embed)
+        del self.active_games[game_key]
+        return
 
     # ═══════════════════════════════════════════════════════════════
     # GROUNDED GAMES (Spy x Family Themed Economy)
@@ -1406,6 +1946,51 @@ class Games(commands.Cog):
         else:
             logger.error(f"Game error: {error}")
             raise error
+
+
+    @commands.command(name="memo")
+    @commands.cooldown(1, 15, commands.BucketType.user)
+    async def memo_game(self, ctx):
+        """🧠 Memory game - Remember the emoji!"""
+        from utils.cogs.fun import Memo
+        from data.local.const import primary_color
+        
+        emojis = ["😀","😊","😂","😍","😎","😢","😠","😱","😡","😐","🥳","😏","🙃","😇","😅","😜","😌","😋"]
+        shuffled = emojis * 2
+        random.shuffle(shuffled)
+        chosen = random.choice(emojis)
+        
+        if not hasattr(self, 'correct_emojis'):
+            self.correct_emojis = {}
+        self.correct_emojis[ctx.channel.id] = chosen
+
+        embed = discord.Embed(
+            description=f"Remember this emoji: {chosen}",
+            color=primary_color()
+        )
+        msg = await ctx.reply(embed=embed, mention_author=False)
+        await asyncio.sleep(2)
+
+        view = Memo(ctx, shuffled, chosen, msg, bot=self.bot)
+        future = int((datetime.now(timezone.utc) + timedelta(seconds=13)).timestamp())
+        
+        def timestamp_gen(ts: int) -> str:
+            return f"<t:{int(ts)}:R>"
+        
+        embed = discord.Embed(
+            description=f"React with the emoji you remembered.\n`Remaining Time:` {timestamp_gen(future)}",
+            color=primary_color(),
+        )
+        try:
+            await msg.edit(embed=embed, view=view)
+            await asyncio.sleep(10)
+        except asyncio.TimeoutError:
+            timeout_embed = discord.Embed(
+                title="⏰ Time's Up...",
+                description="||```You didn't click the emoji in time.```||",
+                color=primary_color()
+            )
+            await msg.edit(embed=timeout_embed, view=None)
 
 
 async def setup(bot):

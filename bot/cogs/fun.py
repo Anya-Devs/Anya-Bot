@@ -68,34 +68,6 @@ class Fun(commands.Cog):
     def get_commands(self):
         return super().get_commands() + self._dynamic_commands
 
-    @commands.command(name="memo")
-    @commands.cooldown(1, 15, commands.BucketType.user)
-    async def play_emoji_game(self, ctx):
-        emojis = ["😀","😊","😂","😍","😎","😢","😠","😱","😡","😐","🥳","😏","🙃","😇","😅","😜","😌","😋"]
-        shuffled = emojis * 2
-        random.shuffle(shuffled)
-        chosen = random.choice(emojis)
-        self.correct_emojis[ctx.channel.id] = chosen
-
-        embed = discord.Embed(
-            description=f"Remember this emoji: {chosen}",
-            color=primary_color()
-        )
-        msg = await ctx.reply(embed=embed, mention_author=False)
-        await asyncio.sleep(2)
-
-        view = Memo(ctx, shuffled, chosen, msg, bot=self.bot)
-        future = int((datetime.utcnow() + timedelta(seconds=13)).timestamp())
-        embed = discord.Embed(
-            description=f"React with the emoji you remembered.\n`Remaining Time:` {self.timestamp_gen(future)}",
-            color=primary_color(),
-        )
-        try:
-            await msg.edit(embed=embed, view=view)
-            await asyncio.sleep(10)
-        except asyncio.TimeoutError:
-            await msg.edit(embed=self.timeout_embed(), view=None)
-
     @commands.command(name="qna")
     @commands.has_permissions(manage_channels=True)
     async def qna(self, ctx):
