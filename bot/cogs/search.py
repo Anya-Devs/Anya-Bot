@@ -292,7 +292,7 @@ class Search(commands.Cog):
     # ═══════════════════════════════════════════════════════════════
     # GOOGLE SEARCH
     # ═══════════════════════════════════════════════════════════════
-    @commands.command(name="google", aliases=["g", "search"])
+    @commands.command(name="google", aliases=["g"])
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def google_search(self, ctx, *, query: str):
         """🔍 Search Google"""
