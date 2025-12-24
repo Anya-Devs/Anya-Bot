@@ -662,9 +662,9 @@ class Moderation(commands.Cog):
     @commands.group(name="role", invoke_without_command=True)
     @commands.has_permissions(manage_roles=True)
     async def role_group(self, ctx):
-        """🎭 Role management commands"""
+        """Role management commands"""
         embed = discord.Embed(
-            title="🎭 Role Commands",
+            title="Role Commands",
             description=f"`{ctx.prefix}role add @user @role` - Add role to user\n"
                         f"`{ctx.prefix}role remove @user @role` - Remove role from user\n"
                         f"`{ctx.prefix}role all @role` - Add role to everyone\n"

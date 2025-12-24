@@ -30,40 +30,307 @@ class SearchAPI:
 
 
 class GoogleSearch(SearchAPI):
-    """Google Custom Search API wrapper"""
+    """Google Search using web scraping (no API key required)"""
+    
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1"
+    }
     
     def __init__(self):
         super().__init__()
-        self.api_key = os.getenv("GOOGLE_API_KEY")
-        self.cx = os.getenv("GOOGLE_CX")  # Custom Search Engine ID
     
-    async def search(self, query: str, num: int = 5, search_type: str = None) -> List[Dict]:
-        """Perform a Google search"""
-        if not self.api_key or not self.cx:
-            return []
+    async def search(self, query: str, num: int = 10, start: int = 0, safe: bool = True) -> List[Dict]:
+        """Scrape Google web search results
         
+        Args:
+            query: Search query
+            num: Number of results
+            start: Start offset for pagination
+            safe: Enable SafeSearch (default True)
+        """
         session = await self.get_session()
-        params = {
-            "key": self.api_key,
-            "cx": self.cx,
-            "q": query,
-            "num": min(num, 10)
-        }
-        if search_type:
-            params["searchType"] = search_type
+        encoded_query = urllib.parse.quote(query)
+        # safe=active enables SafeSearch, safe=off disables it
+        safe_param = "active" if safe else "off"
+        url = f"https://www.google.com/search?q={encoded_query}&num={num}&start={start}&safe={safe_param}"
         
         try:
-            async with session.get("https://www.googleapis.com/customsearch/v1", params=params) as resp:
+            async with session.get(url, headers=self.HEADERS) as resp:
                 if resp.status == 200:
-                    data = await resp.json()
-                    return data.get("items", [])
-        except Exception:
-            pass
+                    text = await resp.text()
+                    return self._parse_web_results(text)
+        except Exception as e:
+            print(f"Google search error: {e}")
         return []
     
-    async def image_search(self, query: str, num: int = 5) -> List[Dict]:
-        """Search for images"""
-        return await self.search(query, num, search_type="image")
+    def _parse_web_results(self, html: str) -> List[Dict]:
+        """Parse web search results from HTML - simplified and more reliable"""
+        import re
+        results = []
+        
+        # Split by result containers - Google wraps each result in specific divs
+        # Look for the pattern: href="/url?q=..." which is Google's redirect link
+        
+        # Pattern 1: Find all /url?q= patterns (Google's main result links)
+        # This captures the actual destination URL
+        url_pattern = r'/url\?q=([^&]+)&'
+        urls = re.findall(url_pattern, html)
+        
+        # Pattern 2: Find h3 tags which contain titles
+        # h3 tags are used for search result titles
+        h3_pattern = r'<h3[^>]*>([^<]+)</h3>'
+        titles = re.findall(h3_pattern, html)
+        
+        # Pattern 3: Find description text in divs/spans
+        # Look for text that appears after titles (usually in divs with specific classes)
+        # This is trickier - we'll extract text between certain markers
+        desc_pattern = r'<span[^>]*>([^<]{30,400})</span>'
+        descriptions = re.findall(desc_pattern, html)
+        
+        # Clean and deduplicate URLs
+        seen_urls = set()
+        clean_urls = []
+        
+        for url in urls:
+            try:
+                # URL decode the URL
+                decoded = urllib.parse.unquote(url)
+                
+                # Skip Google's own domains and duplicates
+                if any(skip in decoded.lower() for skip in ['google.com', 'gstatic.com', 'googleusercontent.com']):
+                    continue
+                
+                if decoded not in seen_urls and decoded.startswith('http'):
+                    seen_urls.add(decoded)
+                    clean_urls.append(decoded)
+                    
+                    if len(clean_urls) >= 10:
+                        break
+            except:
+                continue
+        
+        # If we didn't get URLs from the redirect pattern, try direct href extraction
+        if len(clean_urls) < 3:
+            href_pattern = r'href="(https?://[^"]+)"'
+            href_urls = re.findall(href_pattern, html)
+            
+            for url in href_urls:
+                if any(skip in url.lower() for skip in ['google.com', 'gstatic.com', 'javascript:', '#']):
+                    continue
+                    
+                if url not in seen_urls:
+                    seen_urls.add(url)
+                    clean_urls.append(url)
+                    
+                    if len(clean_urls) >= 10:
+                        break
+        
+        # Clean titles - remove HTML tags
+        clean_titles = []
+        for title in titles:
+            clean_title = re.sub(r'<[^>]+>', '', title).strip()
+            if clean_title and len(clean_title) > 3:
+                clean_titles.append(clean_title)
+        
+        # Clean descriptions - remove HTML tags and filter
+        clean_descs = []
+        for desc in descriptions:
+            clean_desc = re.sub(r'<[^>]+>', '', desc).strip()
+            # Filter out UI text and very short descriptions
+            if clean_desc and len(clean_desc) > 30 and not clean_desc.startswith('http'):
+                clean_descs.append(clean_desc)
+        
+        # Build results by combining URLs, titles, and descriptions
+        for i, url in enumerate(clean_urls):
+            title = clean_titles[i] if i < len(clean_titles) else self._extract_title_from_url(url)
+            snippet = clean_descs[i] if i < len(clean_descs) else "No description available"
+            
+            if title and url:
+                results.append({
+                    "title": title[:100],
+                    "link": url,
+                    "snippet": snippet[:250]
+                })
+        
+        return results
+    
+    def _extract_title_from_url(self, url: str) -> str:
+        """Extract a readable title from URL"""
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            # Use domain + path for title
+            domain = parsed.netloc.replace('www.', '')
+            path = parsed.path.strip('/').split('/')[-1] if parsed.path.strip('/') else ''
+            if path:
+                path = path.replace('-', ' ').replace('_', ' ').replace('.html', '').replace('.php', '')
+                return f"{path.title()} - {domain}"[:80]
+            return domain[:60]
+        except:
+            return "Web Result"
+    
+    async def image_search(self, query: str, num: int = 20, start: int = 0, safe: bool = True) -> List[Dict]:
+        """Scrape Google Images search results
+        
+        Args:
+            query: Search query
+            num: Number of results
+            start: Start offset
+            safe: Enable SafeSearch (default True)
+        """
+        session = await self.get_session()
+        encoded_query = urllib.parse.quote(query)
+        safe_param = "active" if safe else "off"
+        url = f"https://www.google.com/search?q={encoded_query}&tbm=isch&start={start}&safe={safe_param}"
+        
+        try:
+            async with session.get(url, headers=self.HEADERS) as resp:
+                if resp.status == 200:
+                    text = await resp.text()
+                    return self._parse_image_results(text, num)
+        except Exception as e:
+            print(f"Image search error: {e}")
+        return []
+    
+    def _parse_image_results(self, html: str, limit: int = 20) -> List[Dict]:
+        """Parse image search results from HTML"""
+        import re
+        import json
+        results = []
+        
+        # Google Images embeds image data in JSON within the page
+        # Look for image URLs in various patterns
+        
+        # Pattern 1: Direct image URLs in data attributes
+        img_pattern = r'"(https?://[^"]+\.(?:jpg|jpeg|png|gif|webp)[^"]*)"'
+        
+        # Pattern 2: Thumbnail URLs
+        thumb_pattern = r'data:image/[^"]+|https?://encrypted-tbn[^"]+|https?://[^"]+\.googleusercontent\.com[^"]+'
+        
+        # Find all potential image URLs
+        all_urls = re.findall(img_pattern, html, re.IGNORECASE)
+        
+        seen = set()
+        for url in all_urls:
+            # Skip Google's own assets and tiny images
+            if any(skip in url.lower() for skip in ['gstatic.com', 'google.com/images', 'googlelogo', 'favicon', 'icon', 'logo', 'sprite', 'button']):
+                continue
+            if url in seen:
+                continue
+            if len(url) < 30:  # Skip very short URLs (likely not real images)
+                continue
+                
+            seen.add(url)
+            
+            # Try to extract source page URL
+            source_url = ""
+            
+            results.append({
+                "link": url,
+                "thumbnail": url,
+                "source": source_url,
+                "title": f"Image {len(results) + 1}"
+            })
+            
+            if len(results) >= limit:
+                break
+        
+        # Fallback: Try to find images in JSON data blocks
+        if len(results) < 5:
+            json_pattern = r'\["(https?://[^"]+)",\d+,\d+\]'
+            json_urls = re.findall(json_pattern, html)
+            for url in json_urls:
+                if url not in seen and not any(skip in url.lower() for skip in ['gstatic', 'google.com', 'favicon']):
+                    seen.add(url)
+                    results.append({
+                        "link": url,
+                        "thumbnail": url,
+                        "source": "",
+                        "title": f"Image {len(results) + 1}"
+                    })
+                    if len(results) >= limit:
+                        break
+        
+        return results
+    
+    async def video_search(self, query: str, num: int = 10, start: int = 0, safe: bool = True) -> List[Dict]:
+        """Scrape Google Videos search results
+        
+        Args:
+            query: Search query
+            num: Number of results
+            start: Start offset
+            safe: Enable SafeSearch (default True)
+        """
+        session = await self.get_session()
+        encoded_query = urllib.parse.quote(query)
+        safe_param = "active" if safe else "off"
+        url = f"https://www.google.com/search?q={encoded_query}&tbm=vid&start={start}&safe={safe_param}"
+        
+        try:
+            async with session.get(url, headers=self.HEADERS) as resp:
+                if resp.status == 200:
+                    text = await resp.text()
+                    return self._parse_video_results(text, num)
+        except Exception as e:
+            print(f"Video search error: {e}")
+        return []
+    
+    def _parse_video_results(self, html: str, limit: int = 10) -> List[Dict]:
+        """Parse video search results from HTML"""
+        import re
+        results = []
+        
+        # Find YouTube video IDs
+        yt_pattern = r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})'
+        video_ids = re.findall(yt_pattern, html)
+        
+        # Also look for other video platforms
+        vimeo_pattern = r'vimeo\.com/(\d+)'
+        vimeo_ids = re.findall(vimeo_pattern, html)
+        
+        seen = set()
+        
+        # Add YouTube videos
+        for vid_id in video_ids:
+            if vid_id in seen:
+                continue
+            seen.add(vid_id)
+            
+            results.append({
+                "platform": "youtube",
+                "video_id": vid_id,
+                "url": f"https://www.youtube.com/watch?v={vid_id}",
+                "thumbnail": f"https://img.youtube.com/vi/{vid_id}/hqdefault.jpg",
+                "title": f"YouTube Video",
+                "embed_url": f"https://www.youtube.com/embed/{vid_id}"
+            })
+            
+            if len(results) >= limit:
+                break
+        
+        # Add Vimeo videos
+        for vid_id in vimeo_ids:
+            if vid_id in seen or len(results) >= limit:
+                continue
+            seen.add(vid_id)
+            
+            results.append({
+                "platform": "vimeo",
+                "video_id": vid_id,
+                "url": f"https://vimeo.com/{vid_id}",
+                "thumbnail": "",
+                "title": f"Vimeo Video",
+                "embed_url": f"https://player.vimeo.com/video/{vid_id}"
+            })
+        
+        return results
 
 
 class YouTubeSearch(SearchAPI):

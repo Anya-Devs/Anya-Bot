@@ -491,6 +491,389 @@ class WordleGuessView(discord.ui.View):
         await interaction.response.send_modal(modal)
 
 
+# ═══════════════════════════════════════════════════════════════
+# JOB SYSTEM VIEWS
+# ═══════════════════════════════════════════════════════════════
+
+class JobSelectMenu(discord.ui.Select):
+    """Dropdown menu for selecting a job to apply for"""
+    def __init__(self, cog, user: discord.Member, guild_id: str, user_stats: dict):
+        self.cog = cog
+        self.user = user
+        self.guild_id = guild_id
+        self.user_stats = user_stats
+        
+        jobs_config = GROUNDED_CONFIG.get("jobs_system", {}).get("available_jobs", [])
+        
+        options = []
+        for job in jobs_config:
+            reqs = job.get("requirements", {})
+            qualified = (
+                user_stats["stars"] >= reqs.get("min_stars", 0) and
+                user_stats["activity"] >= reqs.get("min_activity", 0) and
+                user_stats["balance"] >= reqs.get("min_balance", 0)
+            )
+            
+            desc = f"Pay: {job['pay_range'][0]}-{job['pay_range'][1]} pts"
+            if not qualified:
+                desc = f"🔒 Requires: ⭐{reqs.get('min_stars', 0)} 📊{reqs.get('min_activity', 0)}"
+            
+            options.append(discord.SelectOption(
+                label=job["title"],
+                value=job["id"],
+                description=desc[:100],
+                emoji=job.get("emoji", "💼")
+            ))
+        
+        super().__init__(
+            placeholder="Select a job to apply for...",
+            min_values=1,
+            max_values=1,
+            options=options[:25]
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("❌ This isn't your job board!", ephemeral=True)
+        
+        job_id = self.values[0]
+        job_data = self.cog.get_job_by_id(job_id)
+        
+        if not job_data:
+            return await interaction.response.send_message("❌ Job not found!", ephemeral=True)
+        
+        # Check requirements
+        reqs = job_data.get("requirements", {})
+        if (self.user_stats["stars"] < reqs.get("min_stars", 0) or
+            self.user_stats["activity"] < reqs.get("min_activity", 0) or
+            self.user_stats["balance"] < reqs.get("min_balance", 0)):
+            
+            # Build requirement status with checkmarks
+            stars_ok = "✅" if self.user_stats["stars"] >= reqs.get("min_stars", 0) else "❌"
+            activity_ok = "✅" if self.user_stats["activity"] >= reqs.get("min_activity", 0) else "❌"
+            balance_ok = "✅" if self.user_stats["balance"] >= reqs.get("min_balance", 0) else "❌"
+            
+            embed = discord.Embed(
+                title="❌ Requirements Not Met",
+                description=f"You don't qualify for **{job_data['title']}** yet!\n\n"
+                           f"**Requirements:**\n"
+                           f"{stars_ok} ⭐ Stars: {reqs.get('min_stars', 0):,} (You: {self.user_stats['stars']:,})\n"
+                           f"{activity_ok} 📊 Activity: {reqs.get('min_activity', 0)} (You: {self.user_stats['activity']})\n"
+                           f"{balance_ok} 💰 Balance: {reqs.get('min_balance', 0):,} (You: {self.user_stats['balance']:,})",
+                color=discord.Color.red()
+            )
+            
+            # Add tips on how to earn each requirement
+            tips = []
+            if self.user_stats["stars"] < reqs.get("min_stars", 0):
+                tips.append("⭐ **Stars** = Total stella points earned lifetime. Use `.work` at your current job to earn more!")
+            if self.user_stats["activity"] < reqs.get("min_activity", 0):
+                tips.append("📊 **Activity** = Commands used. Keep using bot commands to increase!")
+            if self.user_stats["balance"] < reqs.get("min_balance", 0):
+                tips.append("💰 **Balance** = Current stella points. Earn with `.work`, `.claim`, games, etc.")
+            
+            embed.add_field(
+                name="💡 How to Qualify",
+                value="\n".join(tips) if tips else "Keep playing to meet requirements!",
+                inline=False
+            )
+            
+            # Suggest a job they might qualify for
+            embed.set_footer(text="Tip: Start with entry-level jobs and work your way up!")
+            
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+        # Apply for job
+        user_id = str(interaction.user.id)
+        await self.cog.set_user_job(user_id, self.guild_id, job_id)
+        
+        embed = discord.Embed(
+            title="✅ Job Application Accepted!",
+            description=f"Congratulations! You are now employed as a **{job_data['emoji']} {job_data['title']}**!\n\n"
+                       f"Use `.work` to start earning stella points!",
+            color=discord.Color.green()
+        )
+        embed.add_field(
+            name="💰 Pay Range",
+            value=f"{job_data['pay_range'][0]}-{job_data['pay_range'][1]} pts per shift",
+            inline=True
+        )
+        
+        await interaction.response.edit_message(embed=embed, view=None)
+
+
+class JobBoardView(discord.ui.View):
+    """View for the job board with apply/quit buttons"""
+    def __init__(self, cog, user: discord.Member, guild_id: str, current_job_id: Optional[str]):
+        super().__init__(timeout=120)
+        self.cog = cog
+        self.user = user
+        self.guild_id = guild_id
+        self.current_job_id = current_job_id
+        self.user_stats = {}
+    
+    async def setup(self):
+        """Async setup to fetch user stats"""
+        user_id = str(self.user.id)
+        self.user_stats = {
+            "stars": await self.cog.get_user_stars(user_id, self.guild_id),
+            "activity": await self.cog.get_user_activity(user_id, self.guild_id),
+            "balance": await self.cog.quest_data.get_balance(user_id, self.guild_id)
+        }
+        
+        # Add job select menu
+        self.add_item(JobSelectMenu(self.cog, self.user, self.guild_id, self.user_stats))
+    
+    @discord.ui.button(label="Quit Job", style=discord.ButtonStyle.danger, emoji="🚪", row=1)
+    async def quit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("❌ This isn't your job board!", ephemeral=True)
+        
+        user_id = str(interaction.user.id)
+        current_job_id = await self.cog.get_user_job(user_id, self.guild_id)
+        
+        if not current_job_id:
+            return await interaction.response.send_message("❌ You don't have a job to quit!", ephemeral=True)
+        
+        job_data = self.cog.get_job_by_id(current_job_id)
+        job_name = job_data["title"] if job_data else "Unknown"
+        
+        await self.cog.set_user_job(user_id, self.guild_id, None)
+        
+        embed = discord.Embed(
+            title="👋 Job Quit",
+            description=f"You quit your job as **{job_name}**.\n\n"
+                       f"Use `.jobs` to find a new job!",
+            color=discord.Color.orange()
+        )
+        await interaction.response.edit_message(embed=embed, view=None)
+    
+    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, emoji="🔄", row=1)
+    async def refresh_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("❌ This isn't your job board!", ephemeral=True)
+        
+        # Refresh stats and rebuild view
+        user_id = str(interaction.user.id)
+        current_job_id = await self.cog.get_user_job(user_id, self.guild_id)
+        balance = await self.cog.quest_data.get_balance(user_id, self.guild_id)
+        stars = await self.cog.get_user_stars(user_id, self.guild_id)
+        activity = await self.cog.get_user_activity(user_id, self.guild_id)
+        
+        jobs_config = GROUNDED_CONFIG.get("jobs_system", {})
+        available_jobs = jobs_config.get("available_jobs", [])
+        categories = jobs_config.get("job_categories", {})
+        
+        embed = discord.Embed(
+            title="📋 Job Board",
+            description="Apply for a job to start earning stella points with `.work`!\n\n"
+                       f"**Your Stats:**\n"
+                       f"⭐ Stars: **{stars:,}**\n"
+                       f"📊 Activity: **{activity}**\n"
+                       f"💰 Balance: **{balance:,}**",
+            color=discord.Color.blue()
+        )
+        
+        if current_job_id:
+            current_job = self.cog.get_job_by_id(current_job_id)
+            if current_job:
+                embed.add_field(
+                    name="💼 Current Job",
+                    value=f"{current_job['emoji']} **{current_job['title']}**\n"
+                          f"Pay: {current_job['pay_range'][0]}-{current_job['pay_range'][1]} pts",
+                    inline=False
+                )
+        
+        jobs_by_category = {}
+        for job in available_jobs:
+            cat = job.get("category", "entry")
+            if cat not in jobs_by_category:
+                jobs_by_category[cat] = []
+            jobs_by_category[cat].append(job)
+        
+        for cat_id, cat_jobs in jobs_by_category.items():
+            cat_info = categories.get(cat_id, {"name": cat_id.title(), "emoji": "📋"})
+            job_lines = []
+            for job in cat_jobs:
+                reqs = job.get("requirements", {})
+                qualified = (
+                    stars >= reqs.get("min_stars", 0) and
+                    activity >= reqs.get("min_activity", 0) and
+                    balance >= reqs.get("min_balance", 0)
+                )
+                status = "✅" if qualified else "🔒"
+                job_lines.append(f"{status} {job['emoji']} **{job['title']}** - {job['pay_range'][0]}-{job['pay_range'][1]} pts")
+            
+            embed.add_field(
+                name=f"{cat_info['emoji']} {cat_info['name']}",
+                value="\n".join(job_lines) if job_lines else "No jobs",
+                inline=False
+            )
+        
+        # Update user stats for the select menu
+        self.user_stats = {"stars": stars, "activity": activity, "balance": balance}
+        
+        await interaction.response.edit_message(embed=embed)
+
+
+class TaskSelectMenu(discord.ui.Select):
+    """Dropdown menu for selecting a work task"""
+    def __init__(self, cog, user: discord.Member, guild_id: str, job_data: dict):
+        self.cog = cog
+        self.user = user
+        self.guild_id = guild_id
+        self.job_data = job_data
+        
+        tasks = job_data.get("tasks", [])
+        options = []
+        for i, task in enumerate(tasks):
+            options.append(discord.SelectOption(
+                label=task["name"],
+                value=str(i),
+                description=task["message"][:100] if len(task["message"]) > 100 else task["message"],
+                emoji="📝"
+            ))
+        
+        super().__init__(
+            placeholder="Choose your task...",
+            min_values=1,
+            max_values=1,
+            options=options if options else [discord.SelectOption(label="Work", value="0")]
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("❌ This isn't your work shift!", ephemeral=True)
+        
+        user_id = str(interaction.user.id)
+        task_idx = int(self.values[0])
+        tasks = self.job_data.get("tasks", [])
+        
+        if task_idx < len(tasks):
+            task = tasks[task_idx]
+            task_name = task["name"]
+            task_message = task["message"]
+        else:
+            task_name = "Work"
+            task_message = "You completed your work shift!"
+        
+        # Calculate reward
+        pay_min, pay_max = self.job_data.get("pay_range", [50, 100])
+        reward = random.randint(pay_min, pay_max)
+        
+        # Apply character bonus if any
+        character = await self.cog.get_user_character(user_id, self.guild_id)
+        if character:
+            work_config = GROUNDED_CONFIG.get("work", {})
+            char_bonus = work_config.get("character_bonuses", {}).get(character, {})
+            multiplier = char_bonus.get("multiplier", 1.0)
+            reward = int(reward * multiplier)
+        
+        # Add reward and set cooldown
+        await self.cog.quest_data.add_balance(user_id, self.guild_id, reward)
+        await self.cog.set_cooldown(user_id, "work")
+        
+        # Track total stars earned
+        try:
+            db = self.cog.quest_data.mongoConnect[self.cog.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            await server_col.update_one(
+                {"guild_id": self.guild_id},
+                {"$inc": {f"members.{user_id}.total_stars_earned": reward}},
+                upsert=True
+            )
+        except Exception as e:
+            logger.error(f"Error tracking stars: {e}")
+        
+        new_balance = await self.cog.quest_data.get_balance(user_id, self.guild_id)
+        
+        embed = discord.Embed(
+            title=f"{self.job_data['emoji']} {task_name}",
+            description=task_message,
+            color=discord.Color.green()
+        )
+        embed.add_field(name="💰 Earned", value=f"+**{reward}** pts", inline=True)
+        embed.add_field(name="💳 Balance", value=f"**{new_balance:,}** pts", inline=True)
+        
+        if character:
+            embed.set_footer(text=f"🌟 {character} bonus applied!")
+        
+        await interaction.response.edit_message(embed=embed, view=None)
+
+
+class WorkTaskView(discord.ui.View):
+    """View for selecting work tasks"""
+    def __init__(self, cog, user: discord.Member, guild_id: str, job_data: dict):
+        super().__init__(timeout=60)
+        self.cog = cog
+        self.user = user
+        self.guild_id = guild_id
+        self.job_data = job_data
+        
+        # Add task select menu
+        self.add_item(TaskSelectMenu(cog, user, guild_id, job_data))
+    
+    @discord.ui.button(label="Quick Work", style=discord.ButtonStyle.green, emoji="⚡", row=1)
+    async def quick_work_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Do a random task quickly"""
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("❌ This isn't your work shift!", ephemeral=True)
+        
+        user_id = str(interaction.user.id)
+        tasks = self.job_data.get("tasks", [])
+        
+        if tasks:
+            task = random.choice(tasks)
+            task_name = task["name"]
+            task_message = task["message"]
+        else:
+            task_name = "Work"
+            task_message = "You completed your work shift!"
+        
+        # Calculate reward
+        pay_min, pay_max = self.job_data.get("pay_range", [50, 100])
+        reward = random.randint(pay_min, pay_max)
+        
+        # Apply character bonus
+        character = await self.cog.get_user_character(user_id, self.guild_id)
+        if character:
+            work_config = GROUNDED_CONFIG.get("work", {})
+            char_bonus = work_config.get("character_bonuses", {}).get(character, {})
+            multiplier = char_bonus.get("multiplier", 1.0)
+            reward = int(reward * multiplier)
+        
+        # Add reward and set cooldown
+        await self.cog.quest_data.add_balance(user_id, self.guild_id, reward)
+        await self.cog.set_cooldown(user_id, "work")
+        
+        # Track total stars earned
+        try:
+            db = self.cog.quest_data.mongoConnect[self.cog.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            await server_col.update_one(
+                {"guild_id": self.guild_id},
+                {"$inc": {f"members.{user_id}.total_stars_earned": reward}},
+                upsert=True
+            )
+        except Exception as e:
+            logger.error(f"Error tracking stars: {e}")
+        
+        new_balance = await self.cog.quest_data.get_balance(user_id, self.guild_id)
+        
+        embed = discord.Embed(
+            title=f"{self.job_data['emoji']} {task_name}",
+            description=task_message,
+            color=discord.Color.green()
+        )
+        embed.add_field(name="💰 Earned", value=f"+**{reward}** pts", inline=True)
+        embed.add_field(name="💳 Balance", value=f"**{new_balance:,}** pts", inline=True)
+        
+        if character:
+            embed.set_footer(text=f"🌟 {character} bonus applied!")
+        
+        await interaction.response.edit_message(embed=embed, view=None)
+
+
 class Games(commands.Cog):
     """🎮 Mini-games that use stella points - Gamble, Classic Games & Grounded Economy!"""
     
@@ -795,8 +1178,79 @@ class Games(commands.Cog):
         # Deduct bet
         await self.quest_data.add_balance(user_id, guild_id, -bet)
         
-        # Spin animation
+        # Pre-generate final results
         results = [self.get_slot_symbol() for _ in range(3)]
+        
+        # Send initial spinning message
+        spinning_embed = discord.Embed(
+            title="🎰 Spinning...",
+            description="```\n╔══════════════╗\n║  🎲  │  🎲  │  🎲  ║\n╚══════════════╝\n```",
+            color=discord.Color.blue()
+        )
+        spinning_embed.set_footer(text=f"Bet: {bet:,} pts")
+        message = await ctx.reply(embed=spinning_embed, mention_author=False)
+        
+        # Animate each reel spinning one at a time
+        spinning_symbols = ["🎲", "🎪", "🎭", "🎨", "🎬", "🎯"]
+        
+        # Reel 1 spinning
+        for _ in range(4):
+            reel1 = random.choice(spinning_symbols)
+            anim_embed = discord.Embed(
+                title="🎰 Spinning...",
+                description=f"```\n╔══════════════╗\n║  {reel1}  │  🎲  │  🎲  ║\n╚══════════════╝\n```",
+                color=discord.Color.blue()
+            )
+            anim_embed.set_footer(text=f"Bet: {bet:,} pts")
+            await message.edit(embed=anim_embed)
+            await asyncio.sleep(0.3)
+        
+        # Reel 1 stops
+        anim_embed = discord.Embed(
+            title="🎰 Spinning...",
+            description=f"```\n╔══════════════╗\n║  {results[0]}  │  🎲  │  🎲  ║\n╚══════════════╝\n```",
+            color=discord.Color.blue()
+        )
+        anim_embed.set_footer(text=f"Bet: {bet:,} pts")
+        await message.edit(embed=anim_embed)
+        await asyncio.sleep(0.5)
+        
+        # Reel 2 spinning
+        for _ in range(4):
+            reel2 = random.choice(spinning_symbols)
+            anim_embed = discord.Embed(
+                title="🎰 Spinning...",
+                description=f"```\n╔══════════════╗\n║  {results[0]}  │  {reel2}  │  🎲  ║\n╚══════════════╝\n```",
+                color=discord.Color.blue()
+            )
+            anim_embed.set_footer(text=f"Bet: {bet:,} pts")
+            await message.edit(embed=anim_embed)
+            await asyncio.sleep(0.3)
+        
+        # Reel 2 stops
+        anim_embed = discord.Embed(
+            title="🎰 Spinning...",
+            description=f"```\n╔══════════════╗\n║  {results[0]}  │  {results[1]}  │  🎲  ║\n╚══════════════╝\n```",
+            color=discord.Color.blue()
+        )
+        anim_embed.set_footer(text=f"Bet: {bet:,} pts")
+        await message.edit(embed=anim_embed)
+        await asyncio.sleep(0.5)
+        
+        # Reel 3 spinning
+        for _ in range(4):
+            reel3 = random.choice(spinning_symbols)
+            anim_embed = discord.Embed(
+                title="🎰 Spinning...",
+                description=f"```\n╔══════════════╗\n║  {results[0]}  │  {results[1]}  │  {reel3}  ║\n╚══════════════╝\n```",
+                color=discord.Color.blue()
+            )
+            anim_embed.set_footer(text=f"Bet: {bet:,} pts")
+            await message.edit(embed=anim_embed)
+            await asyncio.sleep(0.3)
+        
+        # Reel 3 stops - show final result
+        await asyncio.sleep(0.3)
         
         # Calculate winnings
         winnings = 0
@@ -819,7 +1273,7 @@ class Games(commands.Cog):
         new_balance = balance - bet + winnings
         profit = winnings - bet
         
-        # Create embed
+        # Create final embed
         slot_display = f"╔══════════════╗\n║  {results[0]}  │  {results[1]}  │  {results[2]}  ║\n╚══════════════╝"
         
         embed = discord.Embed(title=title, description=f"```{slot_display}```", color=color)
@@ -832,11 +1286,19 @@ class Games(commands.Cog):
         embed.add_field(name="💳 Balance", value=f"**{new_balance:,}** pts", inline=True)
         embed.set_footer(text=f"Bet: {bet:,} pts")
         
-        await ctx.reply(embed=embed, mention_author=False)
+        await message.edit(embed=embed)
+    
+    def parse_bet(self, bet_str: str) -> int:
+        """Parse a bet string that may contain commas (e.g., '5,000' -> 5000)."""
+        if bet_str is None:
+            return 50
+        # Remove commas and convert to int
+        cleaned = str(bet_str).replace(",", "").replace(" ", "")
+        return int(cleaned)
     
     @commands.command(name="coinflip", aliases=["cf", "flip"])
     @commands.cooldown(1, 2, commands.BucketType.user)
-    async def coinflip_command(self, ctx, bet: int = 50, choice: str = None):
+    async def coinflip_command(self, ctx, bet: str = "50", choice: str = None):
         """🪙 Flip a coin! Call heads or tails to double your bet."""
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
@@ -851,6 +1313,12 @@ class Games(commands.Cog):
                 color=discord.Color.gold()
             )
             return await ctx.reply(embed=embed, mention_author=False)
+        
+        # Parse bet (handles commas like "5,000")
+        try:
+            bet = self.parse_bet(bet)
+        except ValueError:
+            return await ctx.reply("❌ Invalid bet amount! Use numbers like `100` or `5,000`", mention_author=False)
         
         # Normalize choice
         choice = choice.lower()
@@ -1646,140 +2114,234 @@ class Games(commands.Cog):
     # GROUNDED GAMES (Spy x Family Themed Economy)
     # ═══════════════════════════════════════════════════════════════
     
+    async def get_user_job(self, user_id: str, guild_id: str) -> Optional[str]:
+        """Get the user's current job ID."""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.current_job": 1}
+            )
+            if result:
+                return result.get("members", {}).get(user_id, {}).get("current_job")
+        except Exception as e:
+            logger.error(f"Error getting user job: {e}")
+        return None
+    
+    async def set_user_job(self, user_id: str, guild_id: str, job_id: Optional[str]):
+        """Set the user's current job."""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            if job_id is None:
+                await server_col.update_one(
+                    {"guild_id": guild_id},
+                    {"$unset": {f"members.{user_id}.current_job": ""}},
+                    upsert=True
+                )
+            else:
+                await server_col.update_one(
+                    {"guild_id": guild_id},
+                    {"$set": {f"members.{user_id}.current_job": job_id}},
+                    upsert=True
+                )
+        except Exception as e:
+            logger.error(f"Error setting user job: {e}")
+    
+    async def get_user_activity(self, user_id: str, guild_id: str) -> int:
+        """Get user's activity score (based on messages, commands used, etc.)."""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.activity_score": 1}
+            )
+            if result:
+                return result.get("members", {}).get(user_id, {}).get("activity_score", 0)
+        except Exception as e:
+            logger.error(f"Error getting activity: {e}")
+        return 0
+    
+    async def increment_activity(self, user_id: str, guild_id: str, amount: int = 1):
+        """Increment user's activity score."""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            await server_col.update_one(
+                {"guild_id": guild_id},
+                {"$inc": {f"members.{user_id}.activity_score": amount}},
+                upsert=True
+            )
+        except Exception as e:
+            logger.error(f"Error incrementing activity: {e}")
+    
+    async def get_user_stars(self, user_id: str, guild_id: str) -> int:
+        """Get user's total stella stars earned (lifetime earnings)."""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.total_stars_earned": 1}
+            )
+            if result:
+                return result.get("members", {}).get(user_id, {}).get("total_stars_earned", 0)
+        except Exception as e:
+            logger.error(f"Error getting stars: {e}")
+        return 0
+    
+    def get_job_by_id(self, job_id: str) -> Optional[Dict]:
+        """Get job data by ID from config."""
+        jobs_config = GROUNDED_CONFIG.get("jobs_system", {}).get("available_jobs", [])
+        for job in jobs_config:
+            if job.get("id") == job_id:
+                return job
+        return None
+    
+    @commands.command(name="jobs", aliases=["job_list", "careers"])
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    async def jobs_command(self, ctx):
+        """📋 View available jobs and apply for one!"""
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        # Increment activity for using commands
+        await self.increment_activity(user_id, guild_id, 1)
+        
+        # Get user stats
+        current_job_id = await self.get_user_job(user_id, guild_id)
+        balance = await self.quest_data.get_balance(user_id, guild_id)
+        stars = await self.get_user_stars(user_id, guild_id)
+        activity = await self.get_user_activity(user_id, guild_id)
+        
+        jobs_config = GROUNDED_CONFIG.get("jobs_system", {})
+        available_jobs = jobs_config.get("available_jobs", [])
+        categories = jobs_config.get("job_categories", {})
+        
+        # Build embed
+        embed = discord.Embed(
+            title="📋 Job Board",
+            description="Apply for a job to start earning stella points with `.work`!\n\n"
+                       f"**Your Stats:**\n"
+                       f"⭐ Stars: **{stars:,}**\n"
+                       f"📊 Activity: **{activity}**\n"
+                       f"💰 Balance: **{balance:,}**",
+            color=discord.Color.blue()
+        )
+        
+        if current_job_id:
+            current_job = self.get_job_by_id(current_job_id)
+            if current_job:
+                embed.add_field(
+                    name="💼 Current Job",
+                    value=f"{current_job['emoji']} **{current_job['title']}**\n"
+                          f"Pay: {current_job['pay_range'][0]}-{current_job['pay_range'][1]} pts",
+                    inline=False
+                )
+        
+        # Group jobs by category
+        jobs_by_category = {}
+        for job in available_jobs:
+            cat = job.get("category", "entry")
+            if cat not in jobs_by_category:
+                jobs_by_category[cat] = []
+            jobs_by_category[cat].append(job)
+        
+        for cat_id, cat_jobs in jobs_by_category.items():
+            cat_info = categories.get(cat_id, {"name": cat_id.title(), "emoji": "📋"})
+            job_lines = []
+            for job in cat_jobs:
+                reqs = job.get("requirements", {})
+                qualified = (
+                    stars >= reqs.get("min_stars", 0) and
+                    activity >= reqs.get("min_activity", 0) and
+                    balance >= reqs.get("min_balance", 0)
+                )
+                status = "✅" if qualified else "🔒"
+                job_lines.append(f"{status} {job['emoji']} **{job['title']}** - {job['pay_range'][0]}-{job['pay_range'][1]} pts")
+            
+            embed.add_field(
+                name=f"{cat_info['emoji']} {cat_info['name']}",
+                value="\n".join(job_lines) if job_lines else "No jobs",
+                inline=False
+            )
+        
+        # Create view with job select and buttons
+        view = JobBoardView(self, ctx.author, guild_id, current_job_id)
+        await view.setup()  # Async setup to add the select menu with user stats
+        await ctx.reply(embed=embed, view=view, mention_author=False)
+    
     @commands.command(name="work")
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def work_command(self, ctx):
-        """💼 Do honest work for guaranteed stella points."""
+        """💼 Work at your job to earn stella points!"""
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
         
-        # Check cooldown (30 minutes)
-        remaining = await self.check_cooldown(user_id, "work", 1800)
+        # Increment activity
+        await self.increment_activity(user_id, guild_id, 1)
+        
+        # Check if user has a job
+        current_job_id = await self.get_user_job(user_id, guild_id)
+        if not current_job_id:
+            embed = discord.Embed(
+                title="❌ No Job!",
+                description="You don't have a job yet!\n\n"
+                           f"Use `{ctx.prefix}jobs` to view available jobs and apply for one.",
+                color=discord.Color.red()
+            )
+            return await ctx.reply(embed=embed, mention_author=False)
+        
+        # Get job data
+        job_data = self.get_job_by_id(current_job_id)
+        if not job_data:
+            # Job no longer exists, clear it
+            await self.set_user_job(user_id, guild_id, None)
+            embed = discord.Embed(
+                title="❌ Job Not Found!",
+                description=f"Your job no longer exists. Use `{ctx.prefix}jobs` to find a new one.",
+                color=discord.Color.red()
+            )
+            return await ctx.reply(embed=embed, mention_author=False)
+        
+        # Check cooldown
+        cooldown = job_data.get("cooldown", 1800)
+        remaining = await self.check_cooldown(user_id, "work", cooldown)
         if remaining:
             return await ctx.reply(f"⏳ You can work again in **{self.format_time(remaining)}**", mention_author=False)
         
-        # Get character bonus
-        character = await self.get_user_character(user_id, guild_id)
-        config = GROUNDED_CONFIG.get("work", {})
-        
-        base_min, base_max = config.get("base_reward", [50, 150])
-        reward = random.randint(base_min, base_max)
-        
-        # Apply character bonus
-        title = "Worker"
-        message = "You did some work around town."
-        
-        if character:
-            char_bonus = config.get("character_bonuses", {}).get(character, {})
-            multiplier = char_bonus.get("multiplier", 1.0)
-            reward = int(reward * multiplier)
-            title = char_bonus.get("title", "Worker")
-            message = char_bonus.get("message", message)
-        else:
-            jobs = config.get("default_jobs", [{"title": "Worker", "message": "You worked hard."}])
-            job = random.choice(jobs)
-            title = job["title"]
-            message = job["message"]
-        
-        await self.quest_data.add_balance(user_id, guild_id, reward)
-        await self.set_cooldown(user_id, "work")
-        
-        new_balance = await self.quest_data.get_balance(user_id, guild_id)
+        # Show task selection view
+        view = WorkTaskView(self, ctx.author, guild_id, job_data)
         
         embed = discord.Embed(
-            title=f"💼 {title}",
-            description=message,
-            color=discord.Color.green()
+            title=f"{job_data['emoji']} {job_data['title']}",
+            description=f"**Choose a task to complete:**\n\n"
+                       f"Select a task from the dropdown below to start working!",
+            color=discord.Color.blue()
         )
-        embed.add_field(name="💰 Earned", value=f"+**{reward}** pts", inline=True)
-        embed.add_field(name="💳 Balance", value=f"**{new_balance:,}** pts", inline=True)
+        embed.add_field(
+            name="💰 Pay Range",
+            value=f"{job_data['pay_range'][0]}-{job_data['pay_range'][1]} pts",
+            inline=True
+        )
         
-        if character:
-            embed.set_footer(text=f"🌟 {character} bonus applied!")
-        
-        await ctx.reply(embed=embed, mention_author=False)
+        await ctx.reply(embed=embed, view=view, mention_author=False)
     
-    @commands.command(name="job", aliases=["mission"])
-    @commands.cooldown(1, 5, commands.BucketType.user)
-    async def job_command(self, ctx):
-        """🎯 Take on a risky mission for bigger rewards. May fail!"""
-        guild_id = str(ctx.guild.id)
-        user_id = str(ctx.author.id)
-        
-        # Check cooldown (1 hour)
-        remaining = await self.check_cooldown(user_id, "job", 3600)
-        if remaining:
-            return await ctx.reply(f"⏳ Next mission available in **{self.format_time(remaining)}**", mention_author=False)
-        
-        character = await self.get_user_character(user_id, guild_id)
-        config = GROUNDED_CONFIG.get("job", {})
-        
-        base_success = config.get("success_rate", 0.65)
-        base_min, base_max = config.get("base_reward", [100, 400])
-        fail_min, fail_max = config.get("fail_penalty", [25, 100])
-        
-        success_rate = base_success
-        reward_mult = 1.0
-        mission_name = "Secret Mission"
-        
-        if character:
-            char_bonus = config.get("character_bonuses", {}).get(character, {})
-            success_rate += char_bonus.get("success_boost", 0)
-            reward_mult = char_bonus.get("reward_multiplier", 1.0)
-            missions = char_bonus.get("missions", [mission_name])
-            mission_name = random.choice(missions)
-        else:
-            missions = config.get("default_missions", [{"title": "Mission"}])
-            mission = random.choice(missions)
-            mission_name = mission.get("title", "Mission")
-        
-        await self.set_cooldown(user_id, "job")
-        
-        # Roll for success
-        if random.random() < success_rate:
-            reward = int(random.randint(base_min, base_max) * reward_mult)
-            await self.quest_data.add_balance(user_id, guild_id, reward)
-            new_balance = await self.quest_data.get_balance(user_id, guild_id)
-            
-            embed = discord.Embed(
-                title=f"✅ Mission Complete!",
-                description=f"**{mission_name}**\n\nYou successfully completed the mission!",
-                color=discord.Color.green()
-            )
-            embed.add_field(name="💰 Earned", value=f"+**{reward}** pts", inline=True)
-            embed.add_field(name="💳 Balance", value=f"**{new_balance:,}** pts", inline=True)
-        else:
-            penalty = random.randint(fail_min, fail_max)
-            await self.quest_data.add_balance(user_id, guild_id, -penalty)
-            new_balance = await self.quest_data.get_balance(user_id, guild_id)
-            
-            fail_messages = config.get("fail_messages", ["Mission failed!"])
-            
-            embed = discord.Embed(
-                title=f"❌ Mission Failed!",
-                description=f"**{mission_name}**\n\n{random.choice(fail_messages)}",
-                color=discord.Color.red()
-            )
-            embed.add_field(name="📉 Lost", value=f"-**{penalty}** pts", inline=True)
-            embed.add_field(name="💳 Balance", value=f"**{new_balance:,}** pts", inline=True)
-        
-        if character:
-            embed.set_footer(text=f"🌟 {character}")
-        
-        await ctx.reply(embed=embed, mention_author=False)
     
     @commands.command(name="rob", aliases=["steal"])
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def rob_command(self, ctx, target: discord.Member = None):
         """💰 Attempt to steal stella points from another user. High risk!"""
         if target is None:
-            return await ctx.reply(f"❌ Usage: `{ctx.prefix}rob @user`", mention_author=False)
+            return await ctx.reply(f"`{ctx.prefix}rob @user`", mention_author=False)
         
         if target.id == ctx.author.id:
-            return await ctx.reply("❌ You can't rob yourself!", mention_author=False)
+            return await ctx.reply("You can't rob yourself!", mention_author=False)
         
         if target.bot:
-            return await ctx.reply("❌ You can't rob bots!", mention_author=False)
+            return await ctx.reply("You can't rob bots!", mention_author=False)
         
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
@@ -1793,7 +2355,7 @@ class Games(commands.Cog):
         # Check target balance
         target_balance = await self.quest_data.get_balance(target_id, guild_id)
         if target_balance < 500:
-            return await ctx.reply(f"❌ {target.display_name} doesn't have enough to steal (min 500 pts)", mention_author=False)
+            return await ctx.reply(f"{target.display_name} doesn't have enough to steal (min 500 pts)", mention_author=False)
         
         config = GROUNDED_CONFIG.get("rob", {})
         base_success = config.get("success_rate", 0.4)
@@ -1922,8 +2484,8 @@ class Games(commands.Cog):
     @guess_command.error
     @hangman_game.error
     @wordle_game.error
+    @jobs_command.error
     @work_command.error
-    @job_command.error
     @rob_command.error
     @claim_command.error
     async def game_error(self, ctx, error):

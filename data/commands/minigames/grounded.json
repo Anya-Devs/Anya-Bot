@@ -147,5 +147,184 @@
     "no_character": "💡 Tip: Get a character from the quest shop for bonuses!",
     "on_cooldown": "⏳ You can {action} again in **{time}**.",
     "in_jail": "🚔 You're in jail! Wait **{time}** to be released."
+  },
+  "jobs_system": {
+    "name": "Job Application System",
+    "emoji": "📋",
+    "description": "Apply for jobs based on your stella stars and activity level!",
+    "available_jobs": [
+      {
+        "id": "dishwasher",
+        "title": "Dishwasher",
+        "emoji": "🍽️",
+        "description": "Wash dishes at a local restaurant.",
+        "category": "entry",
+        "requirements": {
+          "min_stars": 0,
+          "min_activity": 0,
+          "min_balance": 0
+        },
+        "pay_range": [30, 60],
+        "cooldown": 1800,
+        "tasks": [
+          {"name": "Wash the plates", "message": "You scrubbed plates until they sparkled!"},
+          {"name": "Clean the pots", "message": "Those pots are spotless now!"},
+          {"name": "Dry the dishes", "message": "You dried a mountain of dishes!"}
+        ]
+      },
+      {
+        "id": "delivery",
+        "title": "Delivery Driver",
+        "emoji": "📦",
+        "description": "Deliver packages around town.",
+        "category": "entry",
+        "requirements": {
+          "min_stars": 50,
+          "min_activity": 5,
+          "min_balance": 100
+        },
+        "pay_range": [50, 100],
+        "cooldown": 1800,
+        "tasks": [
+          {"name": "Package Run", "message": "You delivered packages all over town!"},
+          {"name": "Express Delivery", "message": "Rush delivery completed on time!"},
+          {"name": "Bulk Shipment", "message": "You handled a huge shipment efficiently!"}
+        ]
+      },
+      {
+        "id": "shop_assistant",
+        "title": "Shop Assistant",
+        "emoji": "🛒",
+        "description": "Help customers at a local store.",
+        "category": "entry",
+        "requirements": {
+          "min_stars": 100,
+          "min_activity": 10,
+          "min_balance": 200
+        },
+        "pay_range": [60, 120],
+        "cooldown": 1800,
+        "tasks": [
+          {"name": "Customer Service", "message": "You helped customers find what they needed!"},
+          {"name": "Stock Shelves", "message": "You restocked the entire aisle!"},
+          {"name": "Cashier Duty", "message": "You handled the register like a pro!"}
+        ]
+      },
+      {
+        "id": "tutor",
+        "title": "Private Tutor",
+        "emoji": "📚",
+        "description": "Teach students various subjects.",
+        "category": "skilled",
+        "requirements": {
+          "min_stars": 300,
+          "min_activity": 25,
+          "min_balance": 500
+        },
+        "pay_range": [100, 180],
+        "cooldown": 1800,
+        "tasks": [
+          {"name": "Math Lesson", "message": "You taught algebra to struggling students!"},
+          {"name": "Language Class", "message": "Your language lesson was a hit!"},
+          {"name": "Science Help", "message": "You explained complex theories simply!"}
+        ]
+      },
+      {
+        "id": "chef",
+        "title": "Restaurant Chef",
+        "emoji": "👨‍🍳",
+        "description": "Cook delicious meals at a restaurant.",
+        "category": "skilled",
+        "requirements": {
+          "min_stars": 500,
+          "min_activity": 40,
+          "min_balance": 1000
+        },
+        "pay_range": [120, 220],
+        "cooldown": 1800,
+        "tasks": [
+          {"name": "Lunch Rush", "message": "You cooked through the busy lunch rush!"},
+          {"name": "Special Menu", "message": "Your special dish was a customer favorite!"},
+          {"name": "Catering Order", "message": "You prepared a huge catering order!"}
+        ]
+      },
+      {
+        "id": "programmer",
+        "title": "Software Developer",
+        "emoji": "💻",
+        "description": "Write code and build applications.",
+        "category": "professional",
+        "requirements": {
+          "min_stars": 1000,
+          "min_activity": 75,
+          "min_balance": 2500
+        },
+        "pay_range": [180, 350],
+        "cooldown": 1800,
+        "tasks": [
+          {"name": "Bug Fix", "message": "You squashed a critical bug!"},
+          {"name": "Feature Development", "message": "You shipped a new feature!"},
+          {"name": "Code Review", "message": "You reviewed and improved the codebase!"}
+        ]
+      },
+      {
+        "id": "doctor",
+        "title": "Medical Doctor",
+        "emoji": "🩺",
+        "description": "Treat patients at the hospital.",
+        "category": "professional",
+        "requirements": {
+          "min_stars": 2000,
+          "min_activity": 100,
+          "min_balance": 5000
+        },
+        "pay_range": [250, 450],
+        "cooldown": 1800,
+        "tasks": [
+          {"name": "Patient Checkup", "message": "You gave thorough checkups to patients!"},
+          {"name": "Emergency Care", "message": "You handled an emergency with skill!"},
+          {"name": "Surgery Assist", "message": "You assisted in a successful surgery!"}
+        ]
+      },
+      {
+        "id": "spy",
+        "title": "Secret Agent",
+        "emoji": "🕵️",
+        "description": "Conduct covert operations for WISE.",
+        "category": "elite",
+        "requirements": {
+          "min_stars": 5000,
+          "min_activity": 200,
+          "min_balance": 10000
+        },
+        "pay_range": [400, 800],
+        "cooldown": 1800,
+        "tasks": [
+          {"name": "Intel Gathering", "message": "You gathered crucial intelligence!"},
+          {"name": "Infiltration", "message": "You infiltrated the enemy base undetected!"},
+          {"name": "Asset Extraction", "message": "You safely extracted a valuable asset!"}
+        ]
+      }
+    ],
+    "job_categories": {
+      "entry": {"name": "Entry Level", "color": "#808080", "emoji": "🟢"},
+      "skilled": {"name": "Skilled", "color": "#3498db", "emoji": "🔵"},
+      "professional": {"name": "Professional", "color": "#9b59b6", "emoji": "🟣"},
+      "elite": {"name": "Elite", "color": "#f1c40f", "emoji": "🟡"}
+    },
+    "ui": {
+      "apply_button": {"label": "Apply for Job", "emoji": "📝", "style": "green"},
+      "quit_button": {"label": "Quit Job", "emoji": "🚪", "style": "red"},
+      "work_button": {"label": "Start Working", "emoji": "💼", "style": "primary"},
+      "jobs_select": {"placeholder": "Select a job to apply for...", "emoji": "📋"},
+      "task_select": {"placeholder": "Choose your task...", "emoji": "📝"}
+    },
+    "messages": {
+      "no_job": "❌ You don't have a job! Use `.jobs` to apply for one.",
+      "already_employed": "📋 You already have a job as **{job}**! Quit first to apply elsewhere.",
+      "requirements_not_met": "❌ You don't meet the requirements for **{job}**!\n\n**Required:**\n⭐ Stars: {req_stars} (You: {user_stars})\n📊 Activity: {req_activity} (You: {user_activity})\n💰 Balance: {req_balance} (You: {user_balance})",
+      "job_applied": "✅ Congratulations! You are now employed as a **{job}**!",
+      "job_quit": "👋 You quit your job as **{job}**. Apply for a new one with `.jobs`!"
+    }
   }
 }

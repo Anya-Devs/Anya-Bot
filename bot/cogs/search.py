@@ -3,6 +3,7 @@
 from imports.discord_imports import *
 from datetime import datetime, timezone
 from typing import Optional, Literal
+from io import BytesIO
 from utils.cogs.search import (
     GoogleSearch, YouTubeSearch, TranslationAPI, WeatherAPI,
     DictionaryAPI, WikipediaAPI, ArtGalleryAPI, UrbanDictionaryAPI,
@@ -215,6 +216,216 @@ class SourceButton(discord.ui.Button):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
+class GoogleSearchTypeSelect(discord.ui.Select):
+    """Select menu for switching between search types"""
+    def __init__(self, current_type: str = "web"):
+        options = [
+            discord.SelectOption(label="Web Results", value="web", emoji="🔗", default=(current_type == "web")),
+            discord.SelectOption(label="Images", value="images", emoji="🖼️", default=(current_type == "images")),
+            discord.SelectOption(label="Videos", value="videos", emoji="🎬", default=(current_type == "videos")),
+        ]
+        super().__init__(placeholder="Select search type...", options=options, row=0)
+    
+    async def callback(self, interaction: discord.Interaction):
+        view: GoogleSearchView = self.view
+        if interaction.user.id != view.author.id:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        
+        view.search_type = self.values[0]
+        view.page = 0
+        
+        # Update select default
+        for opt in self.options:
+            opt.default = (opt.value == view.search_type)
+        
+        # Fetch new results
+        await interaction.response.defer()
+        await view.fetch_results()
+        embed = view.build_embed()
+        view.update_buttons()
+        await interaction.edit_original_response(embed=embed, view=view)
+
+
+class GoogleSearchView(discord.ui.View):
+    """Interactive view for Google search with tabs for web/images/videos"""
+    
+    def __init__(self, cog, author: discord.Member, query: str, search_type: str = "web", safe_search: bool = True):
+        super().__init__(timeout=180)
+        self.cog = cog
+        self.author = author
+        self.query = query
+        self.search_type = search_type
+        self.safe_search = safe_search  # SafeSearch enabled by default
+        self.page = 0
+        self.results = {"web": [], "images": [], "videos": []}
+        self.per_page = {"web": 5, "images": 1, "videos": 1}
+        
+        # Add select menu
+        self.type_select = GoogleSearchTypeSelect(search_type)
+        self.add_item(self.type_select)
+    
+    async def fetch_results(self):
+        """Fetch results for current search type with SafeSearch"""
+        if self.search_type == "web" and not self.results["web"]:
+            self.results["web"] = await self.cog.google.search(self.query, num=10, safe=self.safe_search)
+        elif self.search_type == "images" and not self.results["images"]:
+            self.results["images"] = await self.cog.google.image_search(self.query, num=20, safe=self.safe_search)
+        elif self.search_type == "videos" and not self.results["videos"]:
+            self.results["videos"] = await self.cog.google.video_search(self.query, num=10, safe=self.safe_search)
+    
+    def get_current_results(self):
+        return self.results.get(self.search_type, [])
+    
+    def get_max_pages(self):
+        results = self.get_current_results()
+        per_page = self.per_page.get(self.search_type, 1)
+        return max(1, (len(results) + per_page - 1) // per_page)
+    
+    def update_buttons(self):
+        self.prev_btn.disabled = self.page <= 0
+        self.next_btn.disabled = self.page >= self.get_max_pages() - 1
+    
+    def build_embed(self) -> discord.Embed:
+        results = self.get_current_results()
+        
+        if not results:
+            embed = discord.Embed(
+                title=f"🔍 Google Search: {self.query[:50]}",
+                description=f"No {self.search_type} results found for **{self.query}**\n\n"
+                           f"Try a different search term or type.",
+                color=discord.Color.orange()
+            )
+            return embed
+        
+        if self.search_type == "web":
+            return self._build_web_embed(results)
+        elif self.search_type == "images":
+            return self._build_image_embed(results)
+        elif self.search_type == "videos":
+            return self._build_video_embed(results)
+        
+        return discord.Embed(title="Error", color=discord.Color.red())
+    
+    def _build_web_embed(self, results: list) -> discord.Embed:
+        embed = discord.Embed(
+            title=f"🔗 Web Results: {self.query[:40]}",
+            color=primary_color(),
+            timestamp=datetime.now(timezone.utc)
+        )
+        
+        start = self.page * 5
+        page_results = results[start:start + 5]
+        
+        for i, result in enumerate(page_results, start + 1):
+            title = result.get("title", "No Title")[:55]
+            link = result.get("link", "")
+            snippet = result.get("snippet", "No description")[:150]
+            
+            # Clean up the snippet
+            snippet = snippet.replace("\n", " ").strip()
+            
+            embed.add_field(
+                name=f"{i}. {title}",
+                value=f"{snippet}\n🔗 [Visit]({link})",
+                inline=False
+            )
+        
+        embed.set_footer(text=f"Page {self.page + 1}/{self.get_max_pages()} • {len(results)} results")
+        return embed
+    
+    def _build_image_embed(self, results: list) -> discord.Embed:
+        if self.page >= len(results):
+            self.page = 0
+        
+        image = results[self.page]
+        
+        embed = discord.Embed(
+            title=f"🖼️ Images: {self.query[:40]}",
+            color=primary_color(),
+            timestamp=datetime.now(timezone.utc)
+        )
+        
+        image_url = image.get("link", "")
+        if image_url:
+            embed.set_image(url=image_url)
+        
+        if image.get("source"):
+            embed.add_field(name="Source", value=f"[View Source]({image['source']})", inline=True)
+        
+        embed.set_footer(text=f"Image {self.page + 1}/{len(results)} • Click arrows to browse")
+        return embed
+    
+    def _build_video_embed(self, results: list) -> discord.Embed:
+        if self.page >= len(results):
+            self.page = 0
+        
+        video = results[self.page]
+        
+        platform_emoji = "🎬"
+        if video.get("platform") == "youtube":
+            platform_emoji = "📺"
+        elif video.get("platform") == "vimeo":
+            platform_emoji = "🎥"
+        
+        embed = discord.Embed(
+            title=f"{platform_emoji} Videos: {self.query[:40]}",
+            url=video.get("url", ""),
+            color=discord.Color.red() if video.get("platform") == "youtube" else primary_color(),
+            timestamp=datetime.now(timezone.utc)
+        )
+        
+        embed.add_field(
+            name="🎬 Watch Video",
+            value=f"**[Click to Watch]({video.get('url', '')})**",
+            inline=False
+        )
+        
+        if video.get("platform") == "youtube":
+            embed.add_field(name="Platform", value="YouTube", inline=True)
+            embed.add_field(name="Video ID", value=f"`{video.get('video_id', 'N/A')}`", inline=True)
+        
+        # Set thumbnail
+        if video.get("thumbnail"):
+            embed.set_image(url=video["thumbnail"])
+        
+        embed.set_footer(text=f"Video {self.page + 1}/{len(results)} • Click link to watch")
+        return embed
+    
+    @discord.ui.button(label="◀ Prev", style=discord.ButtonStyle.secondary, row=1)
+    async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        
+        self.page = max(0, self.page - 1)
+        self.update_buttons()
+        embed = self.build_embed()
+        await interaction.response.edit_message(embed=embed, view=self)
+    
+    @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.secondary, row=1)
+    async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        
+        self.page = min(self.get_max_pages() - 1, self.page + 1)
+        self.update_buttons()
+        embed = self.build_embed()
+        await interaction.response.edit_message(embed=embed, view=self)
+    
+    @discord.ui.button(label="🔄 Refresh", style=discord.ButtonStyle.primary, row=1)
+    async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        
+        # Clear cached results for current type and refetch
+        self.results[self.search_type] = []
+        await interaction.response.defer()
+        await self.fetch_results()
+        self.page = 0
+        self.update_buttons()
+        embed = self.build_embed()
+        await interaction.edit_original_response(embed=embed, view=self)
+
+
 class Search(commands.Cog):
     """🔍 Search & Lookup - Search the web, translate, get weather, and more"""
     
@@ -242,74 +453,66 @@ class Search(commands.Cog):
             asyncio.create_task(api.close())
 
     # ═══════════════════════════════════════════════════════════════
-    # GOOGLE SEARCH
+    # GOOGLE SEARCH - Main unified command
     # ═══════════════════════════════════════════════════════════════
-    @commands.command(name="google", aliases=["g"])
-    @commands.cooldown(1, 5, commands.BucketType.user)
+    @commands.command(name="google", aliases=["g", "search", "gsearch"])
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def google_search(self, ctx, *, query: str):
-        """🔍 Search Google"""
+        """🔍 Search Google for web results, images, and videos
+        
+        Use the dropdown to switch between:
+        • 🔗 Web Results - Links and descriptions
+        • 🖼️ Images - Browse images in embeds
+        • 🎬 Videos - Find YouTube and other videos
+        
+        SafeSearch is ON by default. Use in NSFW channels to disable.
+        
+        Example: .google cute cats
+        """
+        # SafeSearch: ON in normal channels, OFF in NSFW channels
+        is_nsfw = isinstance(ctx.channel, discord.TextChannel) and ctx.channel.is_nsfw()
+        safe_search = not is_nsfw
+        
         async with ctx.typing():
-            results = await self.google.search(query, num=5)
-        
-        if not results:
-            embed = discord.Embed(
-                title="🔍 Google Search",
-                description=f"No results found for **{query}**\n\n"
-                           f"*Note: Google API key may not be configured.*",
-                color=discord.Color.orange()
-            )
-            return await ctx.reply(embed=embed, mention_author=False)
-        
-        embed = discord.Embed(
-            title=f"🔍 Google: {query[:50]}",
-            color=primary_color(),
-            timestamp=datetime.now(timezone.utc)
-        )
-        
-        for i, result in enumerate(results[:5], 1):
-            title = result.get("title", "No Title")[:60]
-            link = result.get("link", "")
-            snippet = result.get("snippet", "No description")[:100]
+            view = GoogleSearchView(self, ctx.author, query, "web", safe_search=safe_search)
+            await view.fetch_results()
+            view.update_buttons()
+            embed = view.build_embed()
             
-            embed.add_field(
-                name=f"{i}. {title}",
-                value=f"{snippet}...\n[Link]({link})",
-                inline=False
-            )
+            # Add SafeSearch indicator
+            if not safe_search:
+                embed.set_footer(text=f"🔞 SafeSearch OFF (NSFW channel) • Page {view.page + 1}/{view.get_max_pages()}")
         
-        embed.set_footer(text=f"Requested by {ctx.author}")
-        await ctx.reply(embed=embed, mention_author=False)
+        await ctx.reply(embed=embed, view=view, mention_author=False)
 
     # ═══════════════════════════════════════════════════════════════
-    # IMAGE SEARCH
+    # IMAGE SEARCH - Direct image search
     # ═══════════════════════════════════════════════════════════════
-    @commands.command(name="image", aliases=["img", "images"])
-    @commands.cooldown(1, 5, commands.BucketType.user)
+    @commands.command(name="image", aliases=["img", "images", "pic", "pics"])
+    @commands.cooldown(1, 3, commands.BucketType.user)
     async def image_search(self, ctx, *, query: str):
-        """🖼️ Search for images"""
+        """🖼️ Search Google Images directly
+        
+        Browse through images with navigation buttons.
+        SafeSearch is ON by default. Use in NSFW channels to disable.
+        
+        Example: .image anya forger
+        """
+        # SafeSearch: ON in normal channels, OFF in NSFW channels
+        is_nsfw = isinstance(ctx.channel, discord.TextChannel) and ctx.channel.is_nsfw()
+        safe_search = not is_nsfw
+        
         async with ctx.typing():
-            results = await self.google.image_search(query, num=5)
+            view = GoogleSearchView(self, ctx.author, query, "images", safe_search=safe_search)
+            await view.fetch_results()
+            view.update_buttons()
+            embed = view.build_embed()
+            
+            # Add SafeSearch indicator for NSFW
+            if not safe_search:
+                embed.set_footer(text=f"🔞 SafeSearch OFF (NSFW channel) • Image {view.page + 1}/{len(view.get_current_results())}")
         
-        if not results:
-            embed = discord.Embed(
-                title="🖼️ Image Search",
-                description=f"No images found for **{query}**",
-                color=discord.Color.orange()
-            )
-            return await ctx.reply(embed=embed, mention_author=False)
-        
-        # Show first image with navigation
-        embed = discord.Embed(
-            title=f"🖼️ Images: {query[:50]}",
-            color=primary_color()
-        )
-        
-        first_result = results[0]
-        if first_result.get("link"):
-            embed.set_image(url=first_result.get("link"))
-        
-        embed.set_footer(text=f"Result 1/{len(results)} • Requested by {ctx.author}")
-        await ctx.reply(embed=embed, mention_author=False)
+        await ctx.reply(embed=embed, view=view, mention_author=False)
 
     # ═══════════════════════════════════════════════════════════════
     # YOUTUBE / VIDEO SEARCH
@@ -996,7 +1199,7 @@ class Search(commands.Cog):
             )
             
             embed.add_field(
-                name="🎭 Get Colors From",
+                name="Get Colors From",
                 value=f"`{ctx.prefix}color role @role` - Role's color\n"
                       f"`{ctx.prefix}color user @user` - User's top role color\n"
                       f"`{ctx.prefix}color image` - Extract from attached image",
@@ -1126,14 +1329,14 @@ class Search(commands.Cog):
     
     @color_group.command(name="role")
     async def color_from_role(self, ctx, *, role: discord.Role):
-        """🎭 Get color info from a role."""
+        """Get color info from a role."""
         r, g, b = role.color.r, role.color.g, role.color.b
         
         if r == 0 and g == 0 and b == 0:
             return await ctx.reply(f"❌ {role.mention} has no color set (default)", mention_author=False)
         
         embed = discord.Embed(
-            title=f"🎭 {role.name}'s Color",
+            title=f"{role.name}'s Color",
             color=role.color
         )
         
@@ -1147,33 +1350,207 @@ class Search(commands.Cog):
     
     @color_group.command(name="user", aliases=["member"])
     async def color_from_user(self, ctx, *, member: discord.Member = None):
-        """👤 Get color from a user's top role."""
+        """👤 Get color palette from user's avatar + their role color."""
         member = member or ctx.author
         
-        # Get top colored role
-        colored_role = None
-        for role in reversed(member.roles):
-            if role.color.value != 0:
-                colored_role = role
-                break
+        async with ctx.typing():
+            # Get avatar palette
+            avatar_url = member.display_avatar.with_size(64).url
+            avatar_colors = await self._extract_avatar_palette(avatar_url)
+            
+            # Get top colored role
+            colored_role = None
+            for role in reversed(member.roles):
+                if role.color.value != 0:
+                    colored_role = role
+                    break
+            
+            # Build embed
+            embed = discord.Embed(
+                title=f"🎨 {member.display_name}'s Colors",
+                color=colored_role.color if colored_role else discord.Color.blurple()
+            )
+            
+            # Avatar palette section
+            if avatar_colors:
+                palette_str = ""
+                for i, (r, g, b) in enumerate(avatar_colors[:5], 1):
+                    hex_c = self._rgb_to_hex(r, g, b)
+                    color_name = self._get_color_name(r, g, b)
+                    palette_str += f"`#{hex_c}` {color_name}\n"
+                
+                embed.add_field(
+                    name="🖼️ Avatar Palette",
+                    value=palette_str or "Could not extract colors",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="🖼️ Avatar Palette",
+                    value="Could not extract colors from avatar",
+                    inline=False
+                )
+            
+            # Role color section
+            if colored_role:
+                r, g, b = colored_role.color.r, colored_role.color.g, colored_role.color.b
+                hex_color = self._rgb_to_hex(r, g, b)
+                color_name = self._get_color_name(r, g, b)
+                
+                embed.add_field(
+                    name="Role Color",
+                    value=f"{colored_role.mention}\n"
+                          f"`#{hex_color}` {color_name}\n"
+                          f"`rgb({r}, {g}, {b})`",
+                    inline=True
+                )
+            else:
+                embed.add_field(
+                    name="Role Color",
+                    value="No colored role",
+                    inline=True
+                )
+            
+            # Set avatar as thumbnail
+            embed.set_thumbnail(url=member.display_avatar.url)
+            
+            # Generate palette table image from avatar colors
+            file = None
+            if avatar_colors and len(avatar_colors) >= 1:
+                image_bytes = self._generate_palette_image(avatar_colors[:5])
+                file = discord.File(BytesIO(image_bytes), filename="avatar_palette.png")
+                embed.set_image(url="attachment://avatar_palette.png")
+            
+            embed.set_footer(text=f"💡 Use {ctx.prefix}color #{self._rgb_to_hex(*avatar_colors[0]) if avatar_colors else 'hex'} for detailed info")
         
-        if not colored_role:
-            return await ctx.reply(f"❌ {member.display_name} has no colored roles!", mention_author=False)
+        if file:
+            await ctx.reply(embed=embed, file=file, mention_author=False)
+        else:
+            await ctx.reply(embed=embed, mention_author=False)
+    
+    async def _extract_avatar_palette(self, url: str) -> list:
+        """Extract dominant colors from an avatar image."""
+        try:
+            import aiohttp
+            from collections import Counter
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as resp:
+                    if resp.status != 200:
+                        return []
+                    image_data = await resp.read()
+            
+            # Use PIL to extract colors
+            from io import BytesIO
+            from PIL import Image
+            
+            img = Image.open(BytesIO(image_data))
+            img = img.convert("RGB")
+            img = img.resize((50, 50))  # Resize for faster processing
+            
+            pixels = list(img.getdata())
+            
+            # Quantize colors to reduce noise
+            def quantize(color, factor=32):
+                return tuple((c // factor) * factor for c in color)
+            
+            quantized = [quantize(p) for p in pixels]
+            
+            # Count and get most common
+            counter = Counter(quantized)
+            most_common = counter.most_common(10)
+            
+            # Filter out very dark and very light colors, and dedupe similar colors
+            filtered = []
+            for color, count in most_common:
+                r, g, b = color
+                # Skip very dark or very light
+                brightness = (r + g + b) / 3
+                if brightness < 20 or brightness > 240:
+                    continue
+                
+                # Skip if too similar to existing
+                is_similar = False
+                for existing in filtered:
+                    er, eg, eb = existing
+                    if abs(r - er) < 40 and abs(g - eg) < 40 and abs(b - eb) < 40:
+                        is_similar = True
+                        break
+                
+                if not is_similar:
+                    filtered.append(color)
+                
+                if len(filtered) >= 5:
+                    break
+            
+            return filtered
+        except Exception as e:
+            print(f"Avatar palette extraction error: {e}")
+            return []
+    
+    def _generate_palette_image(self, colors: list) -> bytes:
+        """Generate a color palette image with hex and RGB values."""
+        from PIL import Image, ImageDraw, ImageFont
+        from io import BytesIO
         
-        r, g, b = colored_role.color.r, colored_role.color.g, colored_role.color.b
-        hex_color = self._rgb_to_hex(r, g, b)
+        # Image dimensions
+        row_height = 50
+        color_width = 120
+        hex_width = 140
+        rgb_width = 160
+        total_width = color_width + hex_width + rgb_width
+        total_height = row_height * len(colors) + 60  # Extra for header
         
-        embed = discord.Embed(
-            title=f"👤 {member.display_name}'s Color",
-            description=f"From role: {colored_role.mention}",
-            color=colored_role.color
-        )
+        # Create image with white background
+        img = Image.new('RGB', (total_width, total_height), (255, 255, 255))
+        draw = ImageDraw.Draw(img)
         
-        embed.add_field(name="Hex", value=f"`#{hex_color}`", inline=True)
-        embed.add_field(name="RGB", value=f"`rgb({r}, {g}, {b})`", inline=True)
-        embed.set_thumbnail(url=f"https://singlecolorimage.com/get/{hex_color}/100x100")
+        # Try to load a font, fallback to default
+        try:
+            font = ImageFont.truetype("arial.ttf", 18)
+            header_font = ImageFont.truetype("arial.ttf", 22)
+        except:
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
+                header_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 22)
+            except:
+                font = ImageFont.load_default()
+                header_font = font
         
-        await ctx.reply(embed=embed, mention_author=False)
+        # Draw header
+        header_y = 15
+        draw.text((color_width // 2 - 20, header_y), "Color", fill=(70, 70, 70), font=header_font)
+        draw.text((color_width + hex_width // 2 - 20, header_y), "Hex", fill=(70, 70, 70), font=header_font)
+        draw.text((color_width + hex_width + rgb_width // 2 - 20, header_y), "RGB", fill=(70, 70, 70), font=header_font)
+        
+        # Draw separator line under header
+        draw.line([(10, 50), (total_width - 10, 50)], fill=(200, 200, 200), width=2)
+        
+        # Draw each color row
+        for i, (r, g, b) in enumerate(colors):
+            y_start = 60 + (i * row_height)
+            
+            # Draw color swatch
+            draw.rectangle(
+                [(10, y_start + 5), (color_width - 10, y_start + row_height - 5)],
+                fill=(r, g, b),
+                outline=(180, 180, 180),
+                width=1
+            )
+            
+            # Draw hex code
+            hex_code = f"#{r:02X}{g:02X}{b:02X}".lower()
+            draw.text((color_width + 20, y_start + 15), hex_code, fill=(70, 130, 180), font=font)
+            
+            # Draw RGB values
+            rgb_text = f"({r},{g},{b})"
+            draw.text((color_width + hex_width + 20, y_start + 15), rgb_text, fill=(70, 70, 70), font=font)
+        
+        # Save to bytes
+        buffer = BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+        return buffer.getvalue()
     
     @color_group.command(name="palette", aliases=["harmony", "scheme"])
     async def color_palette(self, ctx, color: str):
@@ -1197,54 +1574,58 @@ class Search(commands.Cog):
         shades = [self._hsl_to_rgb(h, s, max(0, l - 20)), self._hsl_to_rgb(h, s, max(0, l - 40))]
         tints = [self._hsl_to_rgb(h, s, min(100, l + 20)), self._hsl_to_rgb(h, s, min(100, l + 40))]
         
+        # Collect all palette colors for the image
+        palette_colors = [
+            (r, g, b),  # Original
+            comp,  # Complementary
+            analogous[0],  # Analogous 1
+            analogous[1],  # Analogous 2
+            triadic[0],  # Triadic 1
+            triadic[1],  # Triadic 2
+        ]
+        
+        # Generate palette image
+        image_bytes = self._generate_palette_image(palette_colors)
+        file = discord.File(BytesIO(image_bytes), filename="palette.png")
+        
         embed = discord.Embed(
             title=f"🎨 Color Palette for #{color}",
             color=discord.Color.from_rgb(r, g, b)
         )
         
-        # Complementary
+        # Build palette info in embed
+        palette_text = ""
+        labels = ["Original", "Complementary", "Analogous 1", "Analogous 2", "Triadic 1", "Triadic 2"]
+        for label, (pr, pg, pb) in zip(labels, palette_colors):
+            hex_c = f"#{pr:02X}{pg:02X}{pb:02X}"
+            palette_text += f"**{label}:** `{hex_c}` → `rgb({pr},{pg},{pb})`\n"
+        
         embed.add_field(
-            name="🔄 Complementary",
-            value=f"`#{self._rgb_to_hex(*comp)}`",
-            inline=True
+            name="🎯 Colors in Palette",
+            value=palette_text,
+            inline=False
         )
         
-        # Analogous
-        embed.add_field(
-            name="↔️ Analogous",
-            value="\n".join([f"`#{self._rgb_to_hex(*c)}`" for c in analogous]),
-            inline=True
-        )
+        # Shades & Tints info
+        shades_text = " ".join([f"`#{self._rgb_to_hex(*c)}`" for c in shades])
+        tints_text = " ".join([f"`#{self._rgb_to_hex(*c)}`" for c in tints])
         
-        # Triadic
-        embed.add_field(
-            name="🔺 Triadic",
-            value="\n".join([f"`#{self._rgb_to_hex(*c)}`" for c in triadic]),
-            inline=True
-        )
-        
-        # Shades & Tints
         embed.add_field(
             name="🌑 Shades (Darker)",
-            value=" ".join([f"`#{self._rgb_to_hex(*c)}`" for c in shades]),
+            value=shades_text,
             inline=True
         )
         
         embed.add_field(
             name="☀️ Tints (Lighter)",
-            value=" ".join([f"`#{self._rgb_to_hex(*c)}`" for c in tints]),
+            value=tints_text,
             inline=True
         )
         
-        embed.add_field(name="\u200b", value="\u200b", inline=True)
+        embed.set_image(url="attachment://palette.png")
+        embed.set_footer(text="💡 Copy hex codes directly from the image or embed!")
         
-        # Create palette image URL
-        palette_colors = [color, self._rgb_to_hex(*comp), self._rgb_to_hex(*analogous[0]), 
-                         self._rgb_to_hex(*triadic[0]), self._rgb_to_hex(*shades[0])]
-        embed.set_image(url=f"https://via.placeholder.com/500x60/{color}/{color}?text=+")
-        
-        embed.set_footer(text="💡 Click the colors to copy them!")
-        await ctx.reply(embed=embed, mention_author=False)
+        await ctx.reply(embed=embed, file=file, mention_author=False)
     
     @color_group.command(name="contrast", aliases=["check", "wcag"])
     async def color_contrast(self, ctx, color1: str, color2: str):

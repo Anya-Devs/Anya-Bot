@@ -22,7 +22,7 @@ class StarboardConfig:
             r"\s*You caught a Level\s+(\d+)\s+"
             r"([A-Za-z0-9\s\-\'\.:]+?)"
             r"(?::[a-zA-Z0-9_]+:|<:[a-zA-Z0-9_]+:\d+>)"
-            r"\s*\([\d\.]+%\)",
+            r"(?:\s*\([\d\.]+%\))?",
             re.IGNORECASE,
         ),
         "spawn_message_title": r"pokémon has appeared",
@@ -52,7 +52,7 @@ class StarboardConfig:
         },
         "starboard": {
             "title_template": "{sparkle_emoji} {pokemon_name}",
-            "description_template": "Caught by {mention}\n- [Go to spawn]({spawn_location})",
+            "description_template": "Caught by {mention}\n> [Go to spawn]({spawn_location})",
         },
     }
 
@@ -217,7 +217,7 @@ class StarboardProcessor:
           
         ),
         color=spawn_color or self.determine_color(shiny, pokemon_name),
-        timestamp=message.created_at if cfg.get("show_timestamp") else None,
+        #timestamp=message.created_at if cfg.get("show_timestamp") else None,
     )
      if cfg.get("show_thumbnail"):
         embed.set_thumbnail(url=cfg["thumbnail_url"])
