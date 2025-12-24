@@ -16,8 +16,48 @@ interface PatternDefinition {
 export function formatDiscordText(text: string): React.ReactNode[] {
   if (!text) return [];
 
-  // First, handle blockquotes by processing line by line
-  const lines = text.split('\n');
+  // FIRST: Extract HTML img tags before any other processing
+  const imgRegex = /<img\s+[^>]*src=["']([^"']+)["'][^>]*>/gi;
+  const imgTags: { placeholder: string; src: string; style?: string }[] = [];
+  let imgIndex = 0;
+  
+  let processedText = text.replace(imgRegex, (match, src) => {
+    const placeholder = `__IMG_${imgIndex++}__`;
+    // Extract style attribute if present
+    const styleMatch = match.match(/style=["']([^"']+)["']/i);
+    const style = styleMatch ? styleMatch[1] : undefined;
+    imgTags.push({ placeholder, src, style });
+    return placeholder;
+  });
+
+  // Extract HTML span tags with styles
+  const spanRegex = /<span\s+[^>]*style=["']([^"']+)["'][^>]*>([^<]*)<\/span>/gi;
+  const spanTags: { placeholder: string; style: string; content: string }[] = [];
+  let spanIndex = 0;
+  
+  processedText = processedText.replace(spanRegex, (_, style, content) => {
+    const placeholder = `__SPAN_${spanIndex++}__`;
+    spanTags.push({ placeholder, style, content });
+    return placeholder;
+  });
+
+  // SECOND: Extract code blocks before any other processing to preserve them
+  const codeBlockRegex = /```(\w+)?\s*([\s\S]*?)```/g;
+  const codeBlocks: { placeholder: string; language: string; content: string }[] = [];
+  let codeBlockIndex = 0;
+  
+  processedText = processedText.replace(codeBlockRegex, (_, lang, content) => {
+    const placeholder = `__CODEBLOCK_${codeBlockIndex++}__`;
+    codeBlocks.push({
+      placeholder,
+      language: (lang || '').trim().toLowerCase(),
+      content: content || ''
+    });
+    return placeholder;
+  });
+
+  // Now handle blockquotes by processing line by line
+  const lines = processedText.split('\n');
   const processedLines: { content: string; isBlockquote: boolean }[] = [];
   
   for (const line of lines) {
@@ -53,11 +93,11 @@ export function formatDiscordText(text: string): React.ReactNode[] {
           key={`blockquote-${groupKey++}`}
           className="pl-3 border-l-4 border-[#4e5058] my-1"
         >
-          {formatInlineMarkdown(groupText)}
+          {formatInlineMarkdown(groupText, codeBlocks, imgTags, spanTags)}
         </div>
       );
     } else {
-      const formatted = formatInlineMarkdown(groupText);
+      const formatted = formatInlineMarkdown(groupText, codeBlocks, imgTags, spanTags);
       if (formatted.length > 0) {
         result.push(<span key={`text-${groupKey++}`}>{formatted}</span>);
       }
@@ -70,7 +110,12 @@ export function formatDiscordText(text: string): React.ReactNode[] {
 /**
  * Formats inline Discord markdown (everything except blockquotes)
  */
-function formatInlineMarkdown(text: string): React.ReactNode[] {
+function formatInlineMarkdown(
+  text: string, 
+  codeBlocks: { placeholder: string; language: string; content: string }[] = [],
+  imgTags: { placeholder: string; src: string; style?: string }[] = [],
+  spanTags: { placeholder: string; style: string; content: string }[] = []
+): React.ReactNode[] {
   if (!text) return [];
 
   const elements: React.ReactNode[] = [];
@@ -78,8 +123,35 @@ function formatInlineMarkdown(text: string): React.ReactNode[] {
   let key = 0;
 
   // Regex patterns for Discord markdown
-  // Order matters! Process code blocks first to avoid conflicts
+  // Order matters! Process placeholders first
   const patterns: PatternDefinition[] = [
+    // Image placeholders (already extracted)
+    ...imgTags.map((img) => ({
+      regex: new RegExp(img.placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+      tag: 'img',
+      transformer: () => ({
+        content: img.src,
+        meta: { src: img.src, style: img.style }
+      })
+    })),
+    // Span placeholders (already extracted)
+    ...spanTags.map((span) => ({
+      regex: new RegExp(span.placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+      tag: 'span',
+      transformer: () => ({
+        content: span.content,
+        meta: { style: span.style }
+      })
+    })),
+    // Code block placeholders (already extracted)
+    ...codeBlocks.map((cb) => ({
+      regex: new RegExp(cb.placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+      tag: 'codeblock',
+      transformer: () => ({
+        content: cb.content,
+        meta: { language: cb.language }
+      })
+    })),
     {
       // Score with progress bar (e.g., "Score: 7.1/10▰▰▰▰▰▰▰▱▱▱")
       regex: /(Score:?|Rating:?)\s*([\d.]+)\s*\/\s*(\d+)[\s\n]*([▰▱]+)/g,
@@ -92,14 +164,6 @@ function formatInlineMarkdown(text: string): React.ReactNode[] {
           max: parseInt(match[3], 10),
           progressBar: match[4].trim()
         }
-      }),
-    },
-    {
-      regex: /```(\w+)?\n?([\s\S]+?)```/g,
-      tag: 'codeblock',
-      transformer: (match) => ({
-        content: match[2],
-        meta: { language: (match[1] || '').trim().toLowerCase() },
       }),
     },
     { regex: /`([^`]+)`/g, tag: 'code' },                      // `code`
@@ -171,6 +235,55 @@ function formatInlineMarkdown(text: string): React.ReactNode[] {
 
 function formatElement(content: string, tag: string, key: number, meta?: Record<string, unknown>): React.ReactNode {
   switch (tag) {
+    case 'img':
+      {
+        const src = typeof meta?.src === 'string' ? meta.src : content;
+        const styleStr = typeof meta?.style === 'string' ? meta.style : '';
+        // Parse inline style string to object
+        const styleObj: React.CSSProperties = { width: '20px', height: '20px', display: 'inline-block', verticalAlign: 'middle' };
+        if (styleStr) {
+          styleStr.split(';').forEach(rule => {
+            const [prop, val] = rule.split(':').map(s => s.trim());
+            if (prop && val) {
+              // Convert CSS property to camelCase
+              const camelProp = prop.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+              (styleObj as Record<string, string>)[camelProp] = val;
+            }
+          });
+        }
+        return (
+          <img 
+            key={key} 
+            src={src} 
+            alt="" 
+            className="inline-block align-middle"
+            style={styleObj}
+          />
+        );
+      }
+    
+    case 'span':
+      {
+        const styleStr = typeof meta?.style === 'string' ? meta.style : '';
+        // Parse inline style string to object
+        const styleObj: React.CSSProperties = {};
+        if (styleStr) {
+          styleStr.split(';').forEach(rule => {
+            const [prop, val] = rule.split(':').map(s => s.trim());
+            if (prop && val) {
+              // Convert CSS property to camelCase
+              const camelProp = prop.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+              (styleObj as Record<string, string>)[camelProp] = val;
+            }
+          });
+        }
+        return (
+          <span key={key} style={styleObj}>
+            {content}
+          </span>
+        );
+      }
+    
     case 'bold':
       return <strong key={key} className="font-bold">{content}</strong>;
     
@@ -196,15 +309,17 @@ function formatElement(content: string, tag: string, key: number, meta?: Record<
     case 'codeblock':
       {
         const language = typeof meta?.language === 'string' ? meta.language : '';
-        const languageClass = language ? `language-${language}` : '';
         return (
-          <pre
-            key={key}
-            className={`my-2 p-3 bg-[#2b2d31] border border-dark-600 rounded text-sm font-mono overflow-x-auto whitespace-pre-wrap break-words ${languageClass}`.trim()}
-            data-language={language || undefined}
-          >
-            <code className={`text-gray-300 ${languageClass}`.trim()}>{content.trim()}</code>
-          </pre>
+          <div key={key} className="my-2 rounded overflow-hidden bg-[#2b2d31] border border-[#1e1f22]">
+            {language && (
+              <div className="px-3 py-1 bg-[#1e1f22] text-[#949ba4] text-xs font-medium border-b border-[#1e1f22]">
+                {language}
+              </div>
+            )}
+            <pre className="p-3 text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+              <code className="text-[#dcddde] block">{content}</code>
+            </pre>
+          </div>
         );
       }
     
@@ -239,7 +354,7 @@ function formatElement(content: string, tag: string, key: number, meta?: Record<
     case 'score':
       const score = typeof meta?.score === 'number' ? meta.score : 0;
       const max = typeof meta?.max === 'number' ? meta.max : 10;
-      const progressBar = meta?.progressBar || '▰▰▰▰▰▰▰▰▰▰';
+      const progressBar = String(meta?.progressBar || '▰▰▰▰▰▰▰▰▰▰');
       const percentage = Math.min(Math.max((score / max) * 100, 0), 100);
       
       return (
@@ -282,69 +397,12 @@ interface DiscordTextProps {
 export const DiscordText: React.FC<DiscordTextProps> = ({ children, className = '' }) => {
   if (!children) return null;
   
-  // Split by newlines first to handle them properly
-  const lines = children.split('\n');
+  // Process the FULL text first to handle multi-line code blocks properly
+  const formatted = formatDiscordText(children);
   
   return (
     <span className={className}>
-      {lines.map((line, i) => {
-        // Check if the line contains HTML
-        const hasHtml = /<[a-z][\s\S]*>/i.test(line);
-        
-        if (!hasHtml) {
-          // For non-HTML lines, just use the markdown formatter
-          return (
-            <React.Fragment key={i}>
-              {i > 0 && <br />}
-              {formatDiscordText(line)}
-            </React.Fragment>
-          );
-        }
-        
-        // For lines with HTML, process them
-        const parts: React.ReactNode[] = [];
-        let lastIndex = 0;
-        const htmlTagRegex = /(<\/?[a-z][^>]*>)/gi;
-        let match;
-        let matchCount = 0;
-        
-        // Split by HTML tags
-        while ((match = htmlTagRegex.exec(line)) !== null) {
-          // Add text before the HTML tag with markdown
-          const textBefore = line.slice(lastIndex, match.index);
-          if (textBefore) {
-            parts.push(...formatDiscordText(textBefore));
-          }
-          
-          // Skip processing if it's a closing span tag
-          if (match[0].toLowerCase() !== '</span>') {
-            parts.push(
-              <span 
-                key={`html-${i}-${matchCount++}`}
-                dangerouslySetInnerHTML={{ __html: match[0] }}
-              />
-            );
-          }
-          
-          lastIndex = htmlTagRegex.lastIndex;
-        }
-        
-        // Add any remaining text after the last HTML tag
-        if (lastIndex < line.length) {
-          const remainingText = line.slice(lastIndex);
-          // Only process if there's actual content (not just whitespace or closing tags)
-          if (remainingText.trim() && remainingText.trim() !== '</span>') {
-            parts.push(...formatDiscordText(remainingText));
-          }
-        }
-        
-        return (
-          <React.Fragment key={i}>
-            {i > 0 && <br />}
-            {parts}
-          </React.Fragment>
-        );
-      })}
+      {formatted}
     </span>
   );
 };

@@ -20,7 +20,6 @@ const Navbar = () => {
   const navLinks = [
     { name: 'Home', path: '/', icon: Home },
     { name: 'Commands', path: '/commands', icon: Terminal },
-    { name: 'Updates', path: '/updates', icon: Sparkles },
     { name: 'Contact', path: '/contact', icon: MessageCircle },
   ];
 

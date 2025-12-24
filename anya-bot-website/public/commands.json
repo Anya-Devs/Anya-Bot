@@ -186,11 +186,11 @@
       "description": "Timeout a user for a specified duration (e.g., 10m, 1h, 1d). Requires Moderate Members.",
       "example": ".timeout @user 10m spamming",
       "aliases": [],
-      "related_commands": ".untimeout, .ban"
+      "related_commands": ".timeout remove, .ban"
     },
-    "untimeout": {
+    "timeout remove": {
       "description": "Remove timeout from a user, allowing them to send messages again. Requires Moderate Members.",
-      "example": ".untimeout @user",
+      "example": ".timeout remove @user 10m spamming",
       "aliases": [],
       "related_commands": ".timeout"
     },

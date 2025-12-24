@@ -150,7 +150,7 @@
       "lastModified": "2025-11-20T19:29:02.354Z"
     },
     "CommandsPage": {
-      "lastModified": "2025-11-27T11:13:14.565Z"
+      "lastModified": "2025-12-24T08:50:03.127Z"
     },
     "ContactPage": {
       "lastModified": "2025-11-29T21:43:29.270Z"
@@ -159,7 +159,7 @@
       "lastModified": "2025-11-27T07:50:44.456Z"
     },
     "HomePage": {
-      "lastModified": "2025-11-29T21:16:31.240Z"
+      "lastModified": "2025-12-24T08:40:52.123Z"
     },
     "LeaderboardPage": {
       "lastModified": "2025-11-19T18:57:17.983Z"
@@ -173,12 +173,54 @@
     "OgPreviewHome": {
       "lastModified": "2025-11-28T03:29:43.464Z"
     },
-    "OgPreviewUpdates": {
-      "lastModified": "2025-11-28T03:30:04.272Z"
+    "AnimatedSection": {
+      "lastModified": "2025-11-27T06:56:51.529Z"
     },
-    "UpdatesPage": {
-      "lastModified": "2025-11-29T21:20:04.711Z"
+    "AnyaDecoration": {
+      "lastModified": "2025-11-19T18:31:24.270Z"
+    },
+    "BotAvatar": {
+      "lastModified": "2025-11-19T18:59:40.993Z"
+    },
+    "CharacterCard": {
+      "lastModified": "2025-11-19T19:53:13.976Z"
+    },
+    "CharacterDetailModal": {
+      "lastModified": "2025-11-20T06:01:29.025Z"
+    },
+    "DeveloperNotes": {
+      "lastModified": "2025-11-27T06:40:44.711Z"
+    },
+    "DiscordChannel": {
+      "lastModified": "2025-11-27T07:14:11.414Z"
+    },
+    "DiscordMessage": {
+      "lastModified": "2025-11-29T20:48:50.691Z"
+    },
+    "DiscordPreviewCard": {
+      "lastModified": "2025-12-24T07:38:08.156Z"
+    },
+    "ErrorBoundary": {
+      "lastModified": "2025-11-20T19:25:26.551Z"
+    },
+    "FeatureShowcase": {
+      "lastModified": "2025-11-28T00:54:15.849Z"
+    },
+    "Footer": {
+      "lastModified": "2025-11-29T21:43:30.965Z"
+    },
+    "HeroSlider": {
+      "lastModified": "2025-11-19T18:55:20.514Z"
+    },
+    "Navbar": {
+      "lastModified": "2025-12-24T08:21:35.680Z"
+    },
+    "RealCommandShowcase": {
+      "lastModified": "2025-11-20T18:58:48.556Z"
+    },
+    "SlidingFeatures": {
+      "lastModified": "2025-12-24T08:17:06.314Z"
     }
   },
-  "lastScan": "2025-11-30T02:21:16.440Z"
+  "lastScan": "2025-12-24T08:55:10.706Z"
 }

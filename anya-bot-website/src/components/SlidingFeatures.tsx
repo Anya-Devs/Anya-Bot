@@ -415,7 +415,7 @@ const SlidingFeatures: React.FC = () => {
         value: `**Episodes:** \`${anime.episodes || 'Unknown'}\`\n` +
                `**Status:** \`${anime.status || 'Unknown'}\`\n` +
                `**Genres:** \`${anime.genres?.map(g => g.name).join(', ') || 'Unknown'}\`\n` +
-               `\`\`\`py\nScore: ${ (anime.score || 0).toFixed(1) }/10\n${bar}\`\`\``,
+               `\`\`\`\nScore: ${ (anime.score || 0).toFixed(1) }/10\n${bar}\`\`\``,
         inline: false,
       }],
       footer: 'MyAnimeList • Source: Jikan API',

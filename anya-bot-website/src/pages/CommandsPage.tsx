@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Search, Sparkles, Gamepad2, Laugh, Trophy, Book, Zap, Bot, 
-  Copy, Check, ChevronDown, Terminal, Heart, Music, Image, Command
+  Copy, Check, ChevronDown, ChevronRight, Terminal, Heart, Music, Image, Command
 } from 'lucide-react';
 import { BOT_CONFIG } from '../config/bot';
 
@@ -52,61 +52,94 @@ const CommandItem = ({
   isCopied: boolean;
   isSubcommand?: boolean;
 }) => {
+  // Truncate description for preview (first line or first 80 chars)
+  const getPreviewDescription = (desc: string) => {
+    if (!desc) return '';
+    const firstLine = desc.split('\n')[0];
+    return firstLine.length > 100 ? firstLine.slice(0, 100) + '...' : firstLine;
+  };
+
   return (
     <div className={`border rounded-xl transition-all duration-200 ${
       isExpanded ? 'border-primary bg-primary/5' : 'border-dark-600 bg-dark-800/50 hover:border-dark-500'
     } ${isSubcommand ? 'ml-4 border-l-2 border-l-primary/30' : ''}`}>
-      {/* Command Header - Always Visible */}
+      {/* Command Header - Always Visible with Description */}
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 text-left"
+        className="w-full flex items-start justify-between p-4 text-left gap-3"
       >
-        <div className="flex items-center gap-3">
-          <code className="text-primary font-semibold">{BOT_CONFIG.prefix}{cmdName}</code>
-          {cmd.aliases?.length > 0 && (
-            <span className="text-xs text-gray-500 hidden sm:inline">
-              +{cmd.aliases.length} alias{cmd.aliases.length > 1 ? 'es' : ''}
-            </span>
-          )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 flex-wrap">
+            <code className="text-primary font-semibold text-sm sm:text-base">{BOT_CONFIG.prefix}{cmdName}</code>
+            {cmd.aliases?.length > 0 && (
+              <div className="flex gap-1 flex-wrap">
+                {cmd.aliases.slice(0, 2).map((alias, i) => (
+                  <span key={i} className="px-1.5 py-0.5 bg-dark-700 text-gray-400 rounded text-xs font-mono">
+                    {BOT_CONFIG.prefix}{alias}
+                  </span>
+                ))}
+                {cmd.aliases.length > 2 && (
+                  <span className="text-xs text-gray-500">+{cmd.aliases.length - 2}</span>
+                )}
+              </div>
+            )}
+          </div>
+          {/* Description Preview - Always Visible */}
+          <p className="text-gray-400 text-sm mt-1.5 leading-relaxed">
+            {isExpanded ? '' : getPreviewDescription(cmd.description || 'No description available.')}
+          </p>
         </div>
-        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 mt-1 ${isExpanded ? 'rotate-180' : ''}`} />
       </button>
 
       {/* Expandable Details */}
       {isExpanded && (
-        <div className="px-4 pb-4 space-y-4 animate-fade-in">
-          {/* Description - render newlines as line breaks */}
-          <p className="text-gray-300 text-sm whitespace-pre-line">{cmd.description || 'No description available.'}</p>
+        <div className="px-4 pb-4 space-y-4 animate-fade-in border-t border-dark-700 pt-4 mx-4 -mt-2">
+          {/* Full Description - render newlines as line breaks */}
+          <p className="text-gray-300 text-sm whitespace-pre-line leading-relaxed">{cmd.description || 'No description available.'}</p>
 
           {/* Usage Example */}
           {cmd.example && (
-            <div className="flex items-center gap-2">
-              <div className="flex-1 p-2.5 bg-dark-900 rounded-lg font-mono text-sm text-green-400 overflow-x-auto">
-                {cmd.example.replace(/\{\}/g, BOT_CONFIG.prefix).replace(/\{prefix\}/g, BOT_CONFIG.prefix)}
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">Usage</span>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 p-2.5 bg-dark-900 rounded-lg font-mono text-sm text-green-400 overflow-x-auto">
+                  {cmd.example.replace(/\{\}/g, BOT_CONFIG.prefix).replace(/\{prefix\}/g, BOT_CONFIG.prefix)}
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onCopy(); }}
+                  className="p-2 rounded-lg bg-dark-700 hover:bg-primary/20 transition-colors flex-shrink-0"
+                  title="Copy command"
+                >
+                  {isCopied ? (
+                    <Check className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <Copy className="w-4 h-4 text-gray-400" />
+                  )}
+                </button>
               </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); onCopy(); }}
-                className="p-2 rounded-lg bg-dark-700 hover:bg-primary/20 transition-colors flex-shrink-0"
-                title="Copy command"
-              >
-                {isCopied ? (
-                  <Check className="w-4 h-4 text-green-400" />
-                ) : (
-                  <Copy className="w-4 h-4 text-gray-400" />
-                )}
-              </button>
             </div>
           )}
 
           {/* Aliases */}
           {cmd.aliases?.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              <span className="text-xs text-gray-500">Aliases:</span>
-              {cmd.aliases.map((alias, i) => (
-                <span key={i} className="px-2 py-0.5 bg-dark-700 text-gray-300 rounded text-xs font-mono">
-                  {BOT_CONFIG.prefix}{alias}
-                </span>
-              ))}
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">Aliases</span>
+              <div className="flex flex-wrap gap-2">
+                {cmd.aliases.map((alias, i) => (
+                  <span key={i} className="px-2 py-1 bg-dark-700 text-gray-300 rounded-lg text-xs font-mono">
+                    {BOT_CONFIG.prefix}{alias}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Related Commands */}
+          {cmd.related_commands && (
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">Related</span>
+              <p className="text-gray-400 text-sm">{cmd.related_commands}</p>
             </div>
           )}
         </div>
@@ -115,7 +148,98 @@ const CommandItem = ({
   );
 };
 
-// Command Group Component - groups related commands together
+// Tree Branch Subcommand Item - with visual tree connector
+const TreeCommandItem = ({ 
+  cmdName, 
+  cmd, 
+  isExpanded, 
+  onToggle, 
+  onCopy, 
+  isCopied,
+  isLast = false
+}: { 
+  cmdName: string; 
+  cmd: BotCommand; 
+  isExpanded: boolean; 
+  onToggle: () => void;
+  onCopy: () => void;
+  isCopied: boolean;
+  isLast?: boolean;
+}) => {
+  const getPreviewDescription = (desc: string) => {
+    if (!desc) return '';
+    const firstLine = desc.split('\n')[0];
+    return firstLine.length > 100 ? firstLine.slice(0, 100) + '...' : firstLine;
+  };
+
+  // Extract just the subcommand part (e.g., "anime search" -> "search")
+  const subCmdPart = cmdName.includes(' ') ? cmdName.split(' ').slice(1).join(' ') : cmdName;
+
+  return (
+    <div className="flex">
+      {/* Tree branch connector */}
+      <div className="flex flex-col items-center w-6 flex-shrink-0">
+        <div className={`w-px bg-primary/40 ${isLast ? 'h-5' : 'flex-1'}`}></div>
+        <div className="w-3 h-px bg-primary/40 self-end"></div>
+        {!isLast && <div className="w-px bg-primary/40 flex-1"></div>}
+      </div>
+      
+      {/* Command card */}
+      <div className={`flex-1 border rounded-xl transition-all duration-200 ${
+        isExpanded ? 'border-primary bg-primary/5' : 'border-dark-600 bg-dark-800/50 hover:border-dark-500'
+      }`}>
+        <button
+          onClick={onToggle}
+          className="w-full flex items-start justify-between p-3 text-left gap-3"
+        >
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <code className="text-primary/80 font-semibold text-sm">{subCmdPart}</code>
+              {cmd.aliases?.length > 0 && (
+                <div className="flex gap-1 flex-wrap">
+                  {cmd.aliases.slice(0, 2).map((alias, i) => (
+                    <span key={i} className="px-1.5 py-0.5 bg-dark-700 text-gray-400 rounded text-xs font-mono">
+                      {alias}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <p className="text-gray-400 text-xs mt-1 leading-relaxed">
+              {isExpanded ? '' : getPreviewDescription(cmd.description || 'No description available.')}
+            </p>
+          </div>
+          <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform flex-shrink-0 mt-1 ${isExpanded ? 'rotate-180' : ''}`} />
+        </button>
+
+        {isExpanded && (
+          <div className="px-3 pb-3 space-y-3 animate-fade-in border-t border-dark-700 pt-3 mx-3 -mt-1">
+            <p className="text-gray-300 text-xs whitespace-pre-line leading-relaxed">{cmd.description || 'No description available.'}</p>
+            {cmd.example && (
+              <div>
+                <span className="text-xs text-gray-500 uppercase tracking-wider mb-1 block">Usage</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 p-2 bg-dark-900 rounded-lg font-mono text-xs text-green-400 overflow-x-auto">
+                    {cmd.example.replace(/\{\}/g, BOT_CONFIG.prefix).replace(/\{prefix\}/g, BOT_CONFIG.prefix)}
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onCopy(); }}
+                    className="p-1.5 rounded-lg bg-dark-700 hover:bg-primary/20 transition-colors flex-shrink-0"
+                    title="Copy command"
+                  >
+                    {isCopied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-gray-400" />}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Command Group Component - groups related commands together with tree structure
 const CommandGroup = ({
   groupName,
   commands,
@@ -134,53 +258,104 @@ const CommandGroup = ({
   const mainCmd = commands.find(([name]) => name === groupName);
   const subCmds = commands.filter(([name]) => name !== groupName);
 
+  const getPreviewDescription = (desc: string) => {
+    if (!desc) return '';
+    const firstLine = desc.split('\n')[0];
+    return firstLine.length > 100 ? firstLine.slice(0, 100) + '...' : firstLine;
+  };
+
   return (
-    <div className="border border-dark-600 rounded-2xl bg-dark-900/30 overflow-hidden">
-      {/* Group Header */}
-      <div className="px-4 py-3 bg-dark-800/50 border-b border-dark-700 flex items-center gap-2">
-        <Command className="w-4 h-4 text-primary" />
-        <span className="text-sm font-semibold text-white">{groupName}</span>
-        <span className="text-xs text-gray-500">({commands.length} command{commands.length > 1 ? 's' : ''})</span>
-      </div>
+    <div className="rounded-2xl bg-dark-900/30 overflow-hidden">
+      {/* Main/Parent Command - Tree Root */}
+      {mainCmd && (
+        <div className={`border rounded-xl transition-all duration-200 ${
+          expandedCommand === mainCmd[0] ? 'border-primary bg-primary/5' : 'border-dark-600 bg-dark-800/50 hover:border-dark-500'
+        }`}>
+          <button
+            onClick={() => onToggle(mainCmd[0])}
+            className="w-full flex items-start justify-between p-4 text-left gap-3"
+          >
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Command className="w-4 h-4 text-primary" />
+                  <code className="text-primary font-semibold text-sm sm:text-base">{BOT_CONFIG.prefix}{mainCmd[0]}</code>
+                </div>
+                {mainCmd[1].aliases?.length > 0 && (
+                  <div className="flex gap-1 flex-wrap">
+                    {mainCmd[1].aliases.slice(0, 2).map((alias, i) => (
+                      <span key={i} className="px-1.5 py-0.5 bg-dark-700 text-gray-400 rounded text-xs font-mono">
+                        {BOT_CONFIG.prefix}{alias}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <span className="text-xs text-gray-500 bg-dark-700 px-2 py-0.5 rounded-full">
+                  {subCmds.length} subcommand{subCmds.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <p className="text-gray-400 text-sm mt-1.5 leading-relaxed">
+                {expandedCommand === mainCmd[0] ? '' : getPreviewDescription(mainCmd[1].description || 'No description available.')}
+              </p>
+            </div>
+            <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 mt-1 ${expandedCommand === mainCmd[0] ? 'rotate-180' : ''}`} />
+          </button>
+
+          {expandedCommand === mainCmd[0] && (
+            <div className="px-4 pb-4 space-y-4 animate-fade-in border-t border-dark-700 pt-4 mx-4 -mt-2">
+              <p className="text-gray-300 text-sm whitespace-pre-line leading-relaxed">{mainCmd[1].description || 'No description available.'}</p>
+              {mainCmd[1].example && (
+                <div>
+                  <span className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">Usage</span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 p-2.5 bg-dark-900 rounded-lg font-mono text-sm text-green-400 overflow-x-auto">
+                      {mainCmd[1].example.replace(/\{\}/g, BOT_CONFIG.prefix).replace(/\{prefix\}/g, BOT_CONFIG.prefix)}
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onCopy(mainCmd[0]); }}
+                      className="p-2 rounded-lg bg-dark-700 hover:bg-primary/20 transition-colors flex-shrink-0"
+                      title="Copy command"
+                    >
+                      {copiedCommand === mainCmd[0] ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4 text-gray-400" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       
-      {/* Commands inside group */}
-      <div className="p-3 space-y-2">
-        {/* Main command first if exists */}
-        {mainCmd && (
-          <CommandItem
-            cmdName={mainCmd[0]}
-            cmd={mainCmd[1]}
-            isExpanded={expandedCommand === mainCmd[0]}
-            onToggle={() => onToggle(mainCmd[0])}
-            onCopy={() => onCopy(mainCmd[0])}
-            isCopied={copiedCommand === mainCmd[0]}
-          />
-        )}
-        {/* Subcommands */}
-        {subCmds.map(([cmdName, cmd]) => (
-          <CommandItem
-            key={cmdName}
-            cmdName={cmdName}
-            cmd={cmd}
-            isExpanded={expandedCommand === cmdName}
-            onToggle={() => onToggle(cmdName)}
-            onCopy={() => onCopy(cmdName)}
-            isCopied={copiedCommand === cmdName}
-            isSubcommand
-          />
-        ))}
-      </div>
+      {/* Subcommands - Tree Branches */}
+      {subCmds.length > 0 && (
+        <div className="ml-4 mt-1 space-y-1">
+          {subCmds.map(([cmdName, cmd], index) => (
+            <TreeCommandItem
+              key={cmdName}
+              cmdName={cmdName}
+              cmd={cmd}
+              isExpanded={expandedCommand === cmdName}
+              onToggle={() => onToggle(cmdName)}
+              onCopy={() => onCopy(cmdName)}
+              isCopied={copiedCommand === cmdName}
+              isLast={index === subCmds.length - 1}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
 
 const CommandsPage = () => {
   const [commands, setCommands] = useState<CommandsData>({});
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [expandedCommand, setExpandedCommand] = useState<string | null>(null);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
+  const categoryRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   // Load commands
   useEffect(() => {
@@ -212,49 +387,67 @@ const CommandsPage = () => {
     return categories.reduce((sum, cat) => sum + cat.count, 0);
   }, [categories]);
 
-  // Filtered commands based on search and category
-  const filteredCommands = useMemo(() => {
-    let categoryCommands: [string, BotCommand][] = [];
+  // Filtered commands based on search - returns commands per category
+  const filteredCommandsByCategory = useMemo(() => {
+    const result: { [category: string]: [string, BotCommand][] } = {};
+    const query = searchQuery.toLowerCase().trim();
     
-    if (selectedCategory === 'All') {
-      // Combine all commands from all categories
-      for (const [, catCommands] of Object.entries(commands)) {
-        if (typeof catCommands === 'object') {
-          for (const [cmdName, cmd] of Object.entries(catCommands)) {
-            categoryCommands.push([cmdName, cmd]);
-          }
-        }
+    for (const [category, catCommands] of Object.entries(commands)) {
+      if (typeof catCommands !== 'object') continue;
+      
+      let categoryCommandsList = Object.entries(catCommands) as [string, BotCommand][];
+      
+      if (query) {
+        categoryCommandsList = categoryCommandsList.filter(([name, cmd]) => 
+          name.toLowerCase().includes(query) ||
+          cmd.description?.toLowerCase().includes(query) ||
+          cmd.aliases?.some(a => a.toLowerCase().includes(query))
+        );
       }
-    } else if (commands[selectedCategory]) {
-      categoryCommands = Object.entries(commands[selectedCategory]);
+      
+      if (categoryCommandsList.length > 0) {
+        result[category] = categoryCommandsList;
+      }
     }
     
-    if (!searchQuery.trim()) return categoryCommands;
-    
-    const query = searchQuery.toLowerCase();
-    return categoryCommands.filter(([name, cmd]) => 
-      name.toLowerCase().includes(query) ||
-      cmd.description?.toLowerCase().includes(query) ||
-      cmd.aliases?.some(a => a.toLowerCase().includes(query))
-    );
-  }, [commands, selectedCategory, searchQuery]);
+    return result;
+  }, [commands, searchQuery]);
 
-  // Group commands by their prefix (e.g., "pt", "pt help", "pt config" -> grouped under "pt")
-  const groupedCommands = useMemo(() => {
+  // Toggle category expansion
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  };
+
+  // Scroll to category
+  const scrollToCategory = (category: string) => {
+    setSelectedCategory(category);
+    if (!expandedCategories.has(category)) {
+      setExpandedCategories(prev => new Set([...prev, category]));
+    }
+    categoryRefs.current[category]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // Group commands by their prefix for a specific category
+  const groupCommandsForCategory = (categoryCommands: [string, BotCommand][]) => {
     const groups: { [key: string]: [string, BotCommand][] } = {};
     const standalone: [string, BotCommand][] = [];
 
-    // First pass: identify potential group prefixes (only root-level groups)
-    const commandNames = filteredCommands.map(([name]) => name);
+    const commandNames = categoryCommands.map(([name]) => name);
     const groupPrefixes = new Set<string>();
     
     commandNames.forEach(name => {
-      // Check if this command has subcommands (other commands start with this name + space)
       const hasSubcommands = commandNames.some(other => 
         other !== name && other.startsWith(name + ' ')
       );
       if (hasSubcommands) {
-        // Only add if it's not already a subcommand of another group
         const isSubcommandOfAnother = [...groupPrefixes].some(prefix => 
           name.startsWith(prefix + ' ')
         );
@@ -264,9 +457,7 @@ const CommandsPage = () => {
       }
     });
 
-    // Second pass: assign commands to groups or standalone
-    filteredCommands.forEach(([name, cmd]) => {
-      // Find if this command belongs to a group (use the shortest matching prefix)
+    categoryCommands.forEach(([name, cmd]) => {
       let belongsToGroup: string | null = null;
       
       for (const prefix of groupPrefixes) {
@@ -287,7 +478,7 @@ const CommandsPage = () => {
     });
 
     return { groups, standalone };
-  }, [filteredCommands]);
+  };
 
   // Copy command to clipboard
   const copyCommand = (cmd: string) => {
@@ -336,89 +527,117 @@ const CommandsPage = () => {
           </div>
         </div>
 
-        {/* Category Tabs */}
-        <div className="flex flex-wrap gap-2 mb-8">
-          {/* All Commands Tab */}
-          <button
-            onClick={() => {
-              setSelectedCategory('All');
-              setExpandedCommand(null);
-            }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-              selectedCategory === 'All' 
-                ? 'bg-gradient-to-r from-primary to-purple-600 text-white' 
-                : 'bg-dark-800 text-gray-400 hover:text-white hover:bg-dark-700'
-            }`}
-          >
-            <Command className="w-4 h-4" />
-            <span className="text-sm font-medium">All</span>
-            <span className={`text-xs px-1.5 py-0.5 rounded ${selectedCategory === 'All' ? 'bg-white/20' : 'bg-dark-700'}`}>
-              {totalCommands}
-            </span>
-          </button>
-          
-          {categories.map((cat) => {
-            const Icon = cat.icon;
-            const isActive = selectedCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => {
-                  setSelectedCategory(cat.id);
-                  setExpandedCommand(null);
-                }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                  isActive 
-                    ? `bg-gradient-to-r ${cat.gradient} text-white` 
-                    : 'bg-dark-800 text-gray-400 hover:text-white hover:bg-dark-700'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                <span className="text-sm font-medium">{cat.id}</span>
-                <span className={`text-xs px-1.5 py-0.5 rounded ${isActive ? 'bg-white/20' : 'bg-dark-700'}`}>
-                  {cat.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Commands List - Clean single column with expandable items */}
-        <div className="max-w-3xl mx-auto space-y-4">
-          {filteredCommands.length === 0 ? (
-            <div className="text-center py-16 text-gray-400">
-              <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>No commands found matching "{searchQuery}"</p>
+        {/* Two-column layout: Sidebar + Commands */}
+        <div className="flex gap-8">
+          {/* Sticky Sidebar Navigation */}
+          <div className="hidden lg:block w-64 flex-shrink-0">
+            <div className="sticky top-24 space-y-2 max-h-[calc(100vh-8rem)] overflow-y-auto pr-2">
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-3">Categories</div>
+              {categories.map((cat) => {
+                const Icon = cat.icon;
+                const isActive = selectedCategory === cat.id;
+                const commandCount = filteredCommandsByCategory[cat.id]?.length || 0;
+                if (commandCount === 0 && searchQuery) return null;
+                
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => scrollToCategory(cat.id)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
+                      isActive 
+                        ? `bg-gradient-to-r ${cat.gradient} text-white shadow-lg` 
+                        : 'text-gray-400 hover:text-white hover:bg-dark-800'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 flex-shrink-0" />
+                    <span className="text-sm font-medium flex-1 truncate">{cat.id}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      isActive ? 'bg-white/20' : 'bg-dark-700'
+                    }`}>
+                      {commandCount || cat.count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-          ) : (
-            <>
-              {/* Render grouped commands */}
-              {Object.entries(groupedCommands.groups).map(([groupName, cmds]) => (
-                <CommandGroup
-                  key={groupName}
-                  groupName={groupName}
-                  commands={cmds}
-                  expandedCommand={expandedCommand}
-                  onToggle={(cmd) => setExpandedCommand(expandedCommand === cmd ? null : cmd)}
-                  onCopy={copyCommand}
-                  copiedCommand={copiedCommand}
-                />
-              ))}
-              
-              {/* Render standalone commands */}
-              {groupedCommands.standalone.map(([cmdName, cmd]) => (
-                <CommandItem
-                  key={cmdName}
-                  cmdName={cmdName}
-                  cmd={cmd}
-                  isExpanded={expandedCommand === cmdName}
-                  onToggle={() => setExpandedCommand(expandedCommand === cmdName ? null : cmdName)}
-                  onCopy={() => copyCommand(cmdName)}
-                  isCopied={copiedCommand === cmdName}
-                />
-              ))}
-            </>
-          )}
+          </div>
+
+          {/* Main Content - Collapsible Categories */}
+          <div className="flex-1 min-w-0 space-y-4">
+            {Object.keys(filteredCommandsByCategory).length === 0 ? (
+              <div className="text-center py-16 text-gray-400">
+                <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>No commands found matching "{searchQuery}"</p>
+              </div>
+            ) : (
+              Object.entries(filteredCommandsByCategory).map(([category, categoryCommands]) => {
+                const catConfig = categoryConfig[category] || { icon: Command, gradient: 'from-gray-500 to-gray-600' };
+                const Icon = catConfig.icon;
+                const isExpanded = expandedCategories.has(category);
+                const { groups, standalone } = groupCommandsForCategory(categoryCommands);
+                
+                return (
+                  <div 
+                    key={category} 
+                    ref={(el) => { categoryRefs.current[category] = el; }}
+                    className="border border-dark-600 rounded-2xl bg-dark-900/50 overflow-hidden scroll-mt-24"
+                  >
+                    {/* Category Header - Clickable to expand/collapse */}
+                    <button
+                      onClick={() => toggleCategory(category)}
+                      className={`w-full flex items-center gap-3 px-5 py-4 text-left transition-all hover:bg-dark-800/50 ${
+                        isExpanded ? 'border-b border-dark-600' : ''
+                      }`}
+                    >
+                      <div className={`p-2 rounded-lg bg-gradient-to-br ${catConfig.gradient}`}>
+                        <Icon className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-lg font-semibold text-white">{category}</h3>
+                        <p className="text-sm text-gray-500">{categoryCommands.length} command{categoryCommands.length !== 1 ? 's' : ''}</p>
+                      </div>
+                      {isExpanded ? (
+                        <ChevronDown className="w-5 h-5 text-gray-400" />
+                      ) : (
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                      )}
+                    </button>
+                    
+                    {/* Commands inside category - only show when expanded */}
+                    {isExpanded && (
+                      <div className="p-4 space-y-3 animate-fade-in">
+                        {/* Render grouped commands */}
+                        {Object.entries(groups).map(([groupName, cmds]) => (
+                          <CommandGroup
+                            key={groupName}
+                            groupName={groupName}
+                            commands={cmds}
+                            expandedCommand={expandedCommand}
+                            onToggle={(cmd) => setExpandedCommand(expandedCommand === cmd ? null : cmd)}
+                            onCopy={copyCommand}
+                            copiedCommand={copiedCommand}
+                          />
+                        ))}
+                        
+                        {/* Render standalone commands */}
+                        {standalone.map(([cmdName, cmd]) => (
+                          <CommandItem
+                            key={cmdName}
+                            cmdName={cmdName}
+                            cmd={cmd}
+                            isExpanded={expandedCommand === cmdName}
+                            onToggle={() => setExpandedCommand(expandedCommand === cmdName ? null : cmdName)}
+                            onCopy={() => copyCommand(cmdName)}
+                            isCopied={copiedCommand === cmdName}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
     </div>

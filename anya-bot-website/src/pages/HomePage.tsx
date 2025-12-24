@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react';
-import { ArrowRight, Shield, Star, Users, Server, Heart, FileText, Gamepad2, Image, Sparkles } from 'lucide-react';
+import { ArrowRight, Shield, Users, Server, Heart, FileText, Sparkles, MessageCircle, Zap, Trophy, Gamepad2 } from 'lucide-react';
 
-// Progress bar utility
+import { BOT_CONFIG } from '../config/bot';
+import BotAvatar from '../components/BotAvatar';
+import SlidingFeatures from '../components/SlidingFeatures';
+import DiscordPreviewCard from '../components/DiscordPreviewCard';
+import { fetchBotStats } from '../services/botStatsService';
+
+// Progress bar emoji utility
 const getEmojiUrl = (emojiId: string, size: number = 16): string => {
   return `https://cdn.discordapp.com/emojis/${emojiId}.webp?size=${size}&quality=lossless`;
 };
@@ -20,35 +26,30 @@ const generateProgressBar = (current: number, max: number, length: number = 10):
     back_full: '1421225912657252452',
   };
   
-  // Start with current/max HP
   let bar = `<span style="color: #dbdee1; font-family: monospace;">${current}/${max}</span> `;
   
-  // Add front emoji (use full if there's any progress)
   const frontEmojiId = filledSegments > 0 ? emojiIds.front_full : emojiIds.front_empty;
   bar += `<img src="${getEmojiUrl(frontEmojiId)}" alt="[" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />`;
   
-  // Add middle emojis (filled or empty)
   for (let i = 1; i < length - 1; i++) {
     const isFilled = i < filledSegments;
     const emojiId = isFilled ? emojiIds.mid_full : emojiIds.mid_empty;
     bar += `<img src="${getEmojiUrl(emojiId)}" alt="${isFilled ? '█' : ' '}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />`;
   }
   
-  // Add back emoji (always visible)
   const backEmojiId = emojiIds.back_empty;
   bar += `<img src="${getEmojiUrl(backEmojiId)}" alt="]" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />`;
-  
-  // Add percentage
   bar += ` <span style="color: #dbdee1; font-family: monospace; vertical-align: middle;">${percentage}%</span>`;
   
   return bar;
 };
-import { BOT_CONFIG } from '../config/bot';
-import { SAMPLE_EMBEDS } from '../config/embedTemplates';
-import BotAvatar from '../components/BotAvatar';
-import SlidingFeatures from '../components/SlidingFeatures';
-import DiscordPreviewCard from '../components/DiscordPreviewCard';
-import { fetchBotStats } from '../services/botStatsService';
+
+// Feature tag component for showcase sections
+const FeatureTag = ({ children, color = 'primary' }: { children: React.ReactNode; color?: string }) => (
+  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-${color}/10 text-${color} border border-${color}/20`}>
+    {children}
+  </span>
+);
 
 // Stat display component - warm style with responsive design
 interface StatCardProps {
@@ -108,29 +109,69 @@ const parseStatValue = (raw: number | string): ParsedStat => {
   return { value, suffix };
 };
 
-// Feature sections using exact embed templates from bot cogs
-const anyaStory = [
+// Feature showcase data - Wick Bot style sections
+const featureShowcases = [
   {
-    icon: Heart,
-    title: 'Cozy Actions',
-    summary: 'Hugs, pats, cuddles, and wholesome interactions. Every action comes with an animated GIF and tracks how many times you\'ve sent and received each action.',
+    id: 'quests',
+    icon: Trophy,
+    title: 'Quest System',
+    description: 'I created this bot so people can complete quests by talking to each other and being active. Members earn rewards for chatting, reacting, and engaging naturally. The goal is simple: get people talking.',
+    tags: ['Daily Quests', 'Message Rewards', 'Reaction Tracking', 'Leaderboards', 'Custom Rewards'],
     preview: {
-      command: SAMPLE_EMBEDS.action.command,
-      // Exact format from utils/cogs/fun.py line 68:
-      // embed = discord.Embed(title=msg, color=primary_color()).set_image(url=gif).set_footer(text=f"Sent: {sent} | Received: {received}")
-      title: SAMPLE_EMBEDS.action.title,
-      hasGif: true,
-      gifUrl: SAMPLE_EMBEDS.action.image,
-      embedColor: SAMPLE_EMBEDS.action.color,
-      footer: SAMPLE_EMBEDS.action.footer,
-      userAvatar: SAMPLE_EMBEDS.action.userAvatar,
-      userName: 'Yor'
+      command: '.quest',
+      title: 'Your Quests',
+      embedColor: '#FF6B9D',
+      fields: [
+        { 
+          name: '', 
+          value: '**#1** - Send: Hello {user}\n' +
+            '`0/5` ' +
+            `<img src="${getEmojiUrl('1421229056946470993')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421228774761959464')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            ' `0%`\n' +
+            '📍 In this channel • ' +
+            `<img src="https://cdn.discordapp.com/emojis/1247800150479339581.gif" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            ' `100 stp`',
+          inline: false 
+        },
+        { 
+          name: '', 
+          value: '**#2** - React with: :thumbsup:\n' +
+            '`2/10` ' +
+            `<img src="${getEmojiUrl('1421224992263114905')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421222542596771891')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421222542596771891')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            `<img src="${getEmojiUrl('1421228774761959464')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            ' `20%`\n' +
+            '📍 In this channel • ' +
+            `<img src="https://cdn.discordapp.com/emojis/1247800150479339581.gif" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` +
+            ' `250 stp`',
+          inline: false 
+        }
+      ],
+      footer: "User's quests • Page 1/1",
     }
   },
   {
+    id: 'characters',
     icon: Heart,
-    title: 'Character Companions',
-    summary: 'Adopt and raise Spy x Family characters with unique stats and abilities. Feed, interact, and bond with them as they grow stronger.',
+    title: 'Spy x Family Characters',
+    description: 'Buy characters from the shop, feed them, customize their appearance, play mini-games, and battle with other members. Each character has unique stats and abilities.',
+    tags: ['Character Shop', 'Feeding System', 'Customization', 'Mini-Games', 'PvP Battles'],
     preview: {
       command: '.character',
       title: '👤 Anya Forger',
@@ -154,81 +195,35 @@ const anyaStory = [
           inline: true 
         }
       ],
-      footer: 'Use .feed, .play, or .pet to interact with your companion!'
     }
   },
   {
+    id: 'poketwo',
+    icon: Shield,
+    title: 'Pokétwo Helper',
+    description: 'Never miss a spawn again. Get pinged for specific Pokémon types, protect your shiny hunts, and track your collection. Built for servers that love catching Pokémon together.',
+    tags: ['Spawn Alerts', 'Shiny Protection', 'Type Pings', 'Collection Tracking', 'Quest Pings'],
+    preview: {
+      command: '.pt sh alolan vulpix',
+      title: '✓ Shiny Hunt Set',
+      description: "You'll be pinged when **Alolan Vulpix** spawns in protected channels.",
+      embedColor: '#34D399',
+      footer: 'Use .pt sh remove to clear',
+    }
+  },
+  {
+    id: 'fun',
     icon: Gamepad2,
-    title: 'Quest System',
-    summary: 'Go on missions, complete objectives, and earn rewards. Track your progress with detailed quest logs and visual progress bars.',
+    title: 'Fun & Social Commands',
+    description: 'Hugs, pats, bites, and other action commands to interact with friends. Anime lookups, 8ball, and more ways to have fun and keep the chat active.',
+    tags: ['Action Commands', 'Anime Search', '8Ball', 'Social Interactions'],
     preview: {
-      command: '.quest',
-      title: 'Your Quests',
+      command: '.hug @Anya',
+      title: 'Yor hugs Anya',
       embedColor: '#FF6B9D',
-      image: '/images/quest/quest-preview.png',
-      fields: [
-        { 
-          name: '', 
-          value: '**#1** - Send: Hello {user}\n' +
-            '`0/5` ' +
-            // 10-segment progress bar (0% complete)
-            `<img src="${getEmojiUrl('1421224992263114905')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // front_full (always show)
-            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
-            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
-            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
-            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
-            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
-            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
-            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
-            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
-            `<img src="${getEmojiUrl('1421228774761959464')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // back_empty
-            ' `0%`\n' +
-            '📍 In this channel • ' +
-            `<img src="https://cdn.discordapp.com/emojis/1247800150479339581.gif" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // stella (animated gif)
-            ' `100 stp`',
-          inline: false 
-        },
-        { 
-          name: '', 
-          value: '**#2** - React with: :thumbsup:\n' +
-            '`2/10` ' +
-            // 10-segment progress bar (20% complete - 2/10)
-            `<img src="${getEmojiUrl('1421224992263114905')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // front_full (always show)
-            // 2 out of 10 segments filled (20%)
-            `<img src="${getEmojiUrl('1421222542596771891')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_full (filled)
-            `<img src="${getEmojiUrl('1421222542596771891')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_full (filled)
-            // Remaining empty segments
-            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
-            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
-            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
-            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
-            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
-            `<img src="${getEmojiUrl('1421229540444737727')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // mid_empty
-            `<img src="${getEmojiUrl('1421228774761959464')}" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // back_empty
-            ' `20%`\n' +
-            '📍 In this channel • ' +
-            `<img src="https://cdn.discordapp.com/emojis/1247800150479339581.gif" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" />` + // stella (animated gif)
-            ' `250 stp`',
-          inline: false 
-        }
-      ],
-      footer: "User's quests • Page 1/1",
-      footerIcon: 'https://cdn.discordapp.com/embed/avatars/0.png', // Default Discord user avatar
-      allowMarkdown: true
-    }
-  },
-  {
-    icon: Image,
-    title: 'AI Art Studio',
-    summary: 'Generate anime-styled images using Animagine XL 4.0. Detailed prompts create stunning artwork delivered directly to your Discord channel.',
-    preview: {
-      command: '.imagine 1girl, pink hair, green eyes, school uniform, cherry blossoms, masterpiece, high quality, detailed',
-      // Exact format from bot/cogs/ai.py with visual progress bar
-      title: SAMPLE_EMBEDS.imagine.title,
-      description: SAMPLE_EMBEDS.imagine.description,
-      embedColor: SAMPLE_EMBEDS.imagine.color,
-      progress: SAMPLE_EMBEDS.imagine.progress,
-      footer: SAMPLE_EMBEDS.imagine.footer
+      hasGif: true,
+      gifUrl: 'https://media1.tenor.com/m/sQ_isTxT-EEAAAAd/anya-hug.gif',
+      footer: 'Sent: 42 | Received: 38',
     }
   }
 ];
@@ -286,26 +281,15 @@ const HomePage = () => {
 
               {/* Subtitle - responsive */}
               <p className="text-base sm:text-lg md:text-xl text-gray-400 mb-6 sm:mb-8 max-w-lg mx-auto lg:mx-0 leading-relaxed">
-                Your cozy companion for Discord. Bringing{' '}
-                <span className="text-primary">warmth</span>,{' '}
-                <span className="text-primary">joy</span>, and a little bit of{' '}
-                <span className="text-primary">magic</span> to every server.
+                A Discord bot made for people to <span className="text-primary">talk</span>, <span className="text-primary">complete quests</span>, and <span className="text-primary">be active together</span>. 
+                Built to keep your community engaged.
               </p>
 
-              {/* Features list - hidden on mobile, shown on sm+ */}
-              <div className="hidden sm:flex flex-col gap-2 sm:gap-3 mb-6 sm:mb-8 text-left max-w-md mx-auto lg:mx-0">
-                {[
-                  { icon: Heart, text: "Fun interactions that bring people together" },
-                  { icon: Shield, text: "Keep your community safe and happy" },
-                  { icon: Star, text: "Anime, games, and endless entertainment" },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-2 sm:gap-3 text-gray-400">
-                    <div className="p-1 sm:p-1.5 rounded-lg bg-primary/10">
-                      <item.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary" />
-                    </div>
-                    <span className="text-xs sm:text-sm">{item.text}</span>
-                  </div>
-                ))}
+              {/* Quick pitch - hidden on mobile, shown on sm+ */}
+              <div className="hidden sm:block mb-6 sm:mb-8 text-left max-w-md mx-auto lg:mx-0">
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  Quests reward chatting • Pokétwo spawn helper • Spy x Family characters to collect & battle
+                </p>
               </div>
 
               {/* CTA Buttons - responsive sizing */}
@@ -367,57 +351,90 @@ const HomePage = () => {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          OVERVIEW - Why Anya Exists
+          WHY ANYA - Brief intro
       ═══════════════════════════════════════════════════════════════════════ */}
-      <section className="py-20 sm:py-28 relative">
+      <section className="py-16 sm:py-24 relative">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary/90 text-sm font-display mb-6">
             <Sparkles className="w-4 h-4" />
-            Why Anya was made
+            Why I Made Anya
           </div>
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold text-white mb-6">
-            A companion built for Discord communities
+            A bot with a purpose
           </h2>
           <p className="text-base sm:text-lg text-gray-400 leading-relaxed max-w-3xl mx-auto">
-            Papa created Anya because every server deserves a friend who can make people smile, 
-            help with anime lookups, alert Pokémon hunters, and keep the chat safe—all while being cute about it. 
-            She learns new tricks every day to bring communities closer together.
+            I created Anya so people can complete quests by talking to each other and being active. 
+            No other bot does exactly what Anya does - she's built to keep your community <span className="text-primary">engaging</span> and <span className="text-primary">alive</span>. 
+            The developer is constantly adding new features to keep things fresh.
           </p>
         </div>
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          FEATURE SECTIONS - Each gets its own section
+          FEATURE SHOWCASES - Wick Bot style sections
       ═══════════════════════════════════════════════════════════════════════ */}
-      {anyaStory.map((item, idx) => (
+      {featureShowcases.map((feature, idx) => (
         <section 
-          key={item.title} 
-          className={`py-16 sm:py-24 relative ${idx % 2 === 1 ? 'bg-dark-800/30' : ''}`}
+          key={feature.id}
+          className={`py-16 sm:py-24 relative overflow-hidden ${
+            idx % 2 === 0 ? 'bg-dark-800/30' : ''
+          }`}
         >
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-              {/* Text side */}
-              <div className={`space-y-6 ${idx % 2 === 1 ? 'lg:order-2' : ''}`}>
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-2xl bg-primary/10 text-primary">
-                    <item.icon className="w-7 h-7" />
-                  </div>
-                  <h3 className="text-2xl sm:text-3xl font-display font-bold text-white">{item.title}</h3>
-                </div>
-                <p className="text-gray-400 text-base sm:text-lg leading-relaxed">
-                  {item.summary}
-                </p>
-                <div className="pt-2">
-                  <span className="text-xs text-gray-500 uppercase tracking-wider">Try it →</span>
-                  <code className="ml-2 px-3 py-1.5 bg-dark-700/60 rounded-lg text-primary text-sm font-mono">
-                    {item.preview.command}
-                  </code>
+          {/* Background accent */}
+          <div className="absolute inset-0 pointer-events-none">
+            <div className={`absolute ${idx % 2 === 0 ? 'right-0' : 'left-0'} top-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[100px]`} />
+          </div>
+
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+            <div className={`grid lg:grid-cols-2 gap-12 lg:gap-16 items-center ${
+              idx % 2 === 1 ? 'lg:grid-flow-dense' : ''
+            }`}>
+              {/* Discord Preview Side */}
+              <div className={`${idx % 2 === 1 ? 'lg:col-start-2' : ''}`}>
+                <div className="relative">
+                  {/* Decorative elements */}
+                  <div className="absolute -inset-4 bg-gradient-to-br from-primary/10 to-transparent rounded-2xl blur-xl" />
+                  <DiscordPreviewCard 
+                    {...feature.preview} 
+                    className="relative shadow-2xl transform hover:scale-[1.02] transition-transform duration-300"
+                  />
                 </div>
               </div>
-              
-              {/* Discord preview side */}
-              <div className={idx % 2 === 1 ? 'lg:order-1' : ''}>
-                <DiscordPreviewCard {...item.preview} className="shadow-2xl" />
+
+              {/* Content Side */}
+              <div className={`space-y-6 ${idx % 2 === 1 ? 'lg:col-start-1' : ''}`}>
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-2xl bg-primary/10 text-primary">
+                    <feature.icon className="w-8 h-8" />
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl lg:text-4xl font-display font-bold text-white">
+                    {feature.title}
+                  </h2>
+                </div>
+
+                <p className="text-gray-400 text-base sm:text-lg leading-relaxed">
+                  {feature.description}
+                </p>
+
+                {/* Feature Tags */}
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {feature.tags.map((tag) => (
+                    <span 
+                      key={tag}
+                      className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Try it hint */}
+                <div className="pt-4">
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">Try it →</span>
+                  <code className="ml-2 px-3 py-1.5 bg-dark-700/60 rounded-lg text-primary text-sm font-mono">
+                    {feature.preview.command}
+                  </code>
+                </div>
               </div>
             </div>
           </div>
@@ -425,41 +442,31 @@ const HomePage = () => {
       ))}
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          QUEST SYSTEM - Coming Soon
+          ALWAYS GROWING - Brief section
       ═══════════════════════════════════════════════════════════════════════ */}
-      <section className="py-20 sm:py-28 relative bg-gradient-to-b from-amber-500/5 to-transparent">
+      <section className="py-16 sm:py-24 relative">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-sm font-display mb-6">
-            <Sparkles className="w-4 h-4" />
-            Coming Soon
+          <div className="p-4 rounded-2xl bg-primary/10 text-primary inline-block mb-6">
+            <Zap className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold text-white mb-6">
-            Quest System
+          <h2 className="text-2xl sm:text-3xl font-display font-bold text-white mb-4">
+            Always Growing
           </h2>
-          <p className="text-base sm:text-lg text-gray-400 leading-relaxed max-w-2xl mx-auto mb-8">
-            This is the feature that will bring communities together like never before. 
-            Server-wide quests, collaborative challenges, rewards, and events that make every member feel like part of something special.
+          <p className="text-gray-400 text-base sm:text-lg leading-relaxed max-w-2xl mx-auto">
+            The developer is constantly adding new features. More characters, more quests, more ways to keep your community engaged. 
+            Anya can already do a lot, and she'll be able to do even more in the future.
           </p>
-          <div className="inline-flex items-center gap-3 px-6 py-3 bg-dark-800/60 border border-amber-500/20 rounded-2xl">
-            <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/30">
-              <BotAvatar className="w-full h-full object-cover" size={40} />
-            </div>
-            <p className="text-sm text-gray-400 italic">
-              "Anya and Papa are working very hard on this. Please wait a little longer~"
-            </p>
-          </div>
         </div>
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════════
           LIVE PREVIEW CAROUSEL
       ═══════════════════════════════════════════════════════════════════════ */}
-      <section className="py-16 sm:py-24 relative">
+      <section className="py-16 sm:py-24 relative bg-dark-800/30">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <p className="text-sm uppercase tracking-[0.4em] text-primary/70 mb-3">Live Preview</p>
-            <h3 className="text-xl sm:text-2xl font-semibold text-white">More examples of Anya in action</h3>
-            <p className="text-gray-400 text-sm sm:text-base mt-2">Slide through demo conversations.</p>
+            <p className="text-sm uppercase tracking-[0.4em] text-primary/70 mb-3">See It In Action</p>
+            <h3 className="text-xl sm:text-2xl font-semibold text-white">A glimpse of what Anya can do</h3>
           </div>
           <SlidingFeatures />
         </div>
@@ -485,8 +492,8 @@ const HomePage = () => {
           </h2>
           
           <p className="text-base sm:text-lg text-gray-400 mb-8 sm:mb-10 max-w-lg mx-auto px-4">
-            Anya would be very happy to join your server~
-            <span className="text-primary/80"> Let's have fun together! </span>
+            Keep your community active with quests, help with Pokétwo, and have fun with Spy x Family characters.
+            <span className="text-primary/80"> Let's build something great together! </span>
           </p>
           
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4">
@@ -505,16 +512,16 @@ const HomePage = () => {
           {/* Trust indicators - elegant */}
           <div className="mt-10 sm:mt-12 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-gray-500 text-xs sm:text-sm">
             <span className="flex items-center gap-2">
-              <Shield className="w-4 h-4 text-primary/50" />
-              Trusted
+              <MessageCircle className="w-4 h-4 text-primary/50" />
+              Community Focused
+            </span>
+            <span className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-primary/50" />
+              Always Improving
             </span>
             <span className="flex items-center gap-2">
               <Heart className="w-4 h-4 text-primary/50" />
-              With Love
-            </span>
-            <span className="flex items-center gap-2">
-              <Star className="w-4 h-4 text-primary/50" />
-              Growing
+              Made With Love
             </span>
           </div>
         </div>
