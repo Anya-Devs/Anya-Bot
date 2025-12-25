@@ -852,7 +852,7 @@ class Moderation(commands.Cog):
         count = await self.mod_db.clear_warnings(ctx.guild.id, member.id)
         
         embed = discord.Embed(
-            title="📝 Notes Cleared",
+            title="Notes Cleared",
             description=f"Cleared **{count}** note(s) for {member.mention}",
             color=discord.Color.green()
         )

@@ -467,7 +467,7 @@ class QnAConfigView(ui.View):
         if not self.message:
             return
         embed = discord.Embed(
-            title="📝 Q&A Configuration",
+            title="Q&A Configuration",
             description="Use the dropdowns to select channels and press Confirm when ready.",
             color=discord.Color.blue(),
             timestamp=datetime.now()

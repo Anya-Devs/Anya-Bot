@@ -901,14 +901,14 @@ class MangaSession(View):
         progress_bar = "█"*(int(progress)//10) + "░"*(10-int(progress)//10)
         tags_list = attrs.get("tags", [])
         tags_str = ", ".join([t.get("attributes", {}).get("name", {}).get("en") or next(iter(t.get("attributes", {}).get("name", {}).values()), "Unknown") for t in tags_list]) or "No tags"
-        embed = Embed(title="📋 Chapter Information", color=discord.Color.blue())
-        embed.add_field(name="📖 Manga", value=self._get_manga_title(), inline=False)
-        embed.add_field(name="📄 Chapter", value=f"Chapter {chap_num}", inline=True)
-        embed.add_field(name="📝 Title", value=chap_title, inline=True)
-        embed.add_field(name="📊 Pages", value=f"{pages_count}", inline=True)
-        embed.add_field(name="🎯 Current Page", value=f"{self.current_page_index+1}/{pages_count}", inline=True)
-        embed.add_field(name="📈 Progress", value=f"{progress_bar} {progress:.1f}%", inline=False)
-        embed.add_field(name="🏷️ Tags", value=tags_str, inline=False)
+        embed = Embed(title="Chapter Information", color=discord.Color.blue())
+        embed.add_field(name="Manga", value=self._get_manga_title(), inline=False)
+        embed.add_field(name="Chapter", value=f"Chapter {chap_num}", inline=True)
+        embed.add_field(name="Title", value=chap_title, inline=True)
+        embed.add_field(name="Pages", value=f"{pages_count}", inline=True)
+        embed.add_field(name="Current Page", value=f"{self.current_page_index+1}/{pages_count}", inline=True)
+        embed.add_field(name="Progress", value=f"{progress_bar} {progress:.1f}%", inline=False)
+        embed.add_field(name="Tags", value=tags_str, inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def _restart_manga_selection(self, interaction: Interaction):
