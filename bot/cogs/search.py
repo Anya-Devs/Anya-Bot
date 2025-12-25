@@ -2,139 +2,589 @@
 # Commands: search, google, youtube, video, art, translate, weather, define, urban, wiki, image
 from imports.discord_imports import *
 from datetime import datetime, timezone
-from typing import Optional, Literal
+from typing import Optional, Literal, Set
 from io import BytesIO
 from utils.cogs.search import (
     GoogleSearch, YouTubeSearch, TranslationAPI, WeatherAPI,
     DictionaryAPI, WikipediaAPI, ArtGalleryAPI, UrbanDictionaryAPI,
     SearchViews
 )
+from utils.cogs.art import ART_SOURCES, ArtAggregator
 from data.local.const import primary_color
 
 
-class ArtView(discord.ui.View):
-    """Interactive view for art search results with save functionality"""
+# ═══════════════════════════════════════════════════════════════
+# ART GALLERY VIEW - Multi-source, multi-image gallery with filters
+# ═══════════════════════════════════════════════════════════════
+
+class ArtSourceSelect(discord.ui.Select):
+    """Multi-select dropdown for choosing art sources"""
     
-    def __init__(self, results, author, query, is_nsfw, ctx):
-        super().__init__(timeout=180)
-        self.results = results
+    def __init__(self, available_sources: dict, selected_sources: Set[str], is_nsfw: bool, row: int = 0):
+        # Get available sources based on NSFW and safety requirements
+        self.available_sources = {}
+        for key, meta in ART_SOURCES.items():
+            # Block NSFW-only sources if not in NSFW channel
+            if meta["nsfw_only"] and not is_nsfw:
+                continue
+            # Block mixed-content sources if not in NSFW channel
+            if meta.get("requires_nsfw_channel") and not is_nsfw:
+                continue
+            self.available_sources[key] = meta
+        
+        options = []
+        for key, meta in self.available_sources.items():
+            options.append(discord.SelectOption(
+                label=meta["name"],
+                value=key,
+                description=meta["description"][:50],
+                default=key in selected_sources
+            ))
+        
+        # Limit to 25 options (Discord limit)
+        options = options[:25]
+        
+        super().__init__(
+            placeholder="Select art sources...",
+            min_values=1,
+            max_values=len(options),
+            options=options,
+            row=row
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        view: ArtGalleryView = self.view
+        if interaction.user != view.author:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        
+        # Update selected sources
+        view.selected_sources = set(self.values)
+        
+        # Update select defaults
+        for opt in self.options:
+            opt.default = opt.value in view.selected_sources
+        
+        # Refetch results with new sources
+        await interaction.response.defer()
+        view.page = 0
+        view.results = []
+        await view.fetch_results()
+        
+        embeds = view.build_embeds()
+        view.update_buttons()
+        await interaction.edit_original_response(embeds=embeds, view=view)
+
+
+class ArtViewModeSelect(discord.ui.Select):
+    """Select for switching between single and gallery view modes"""
+    
+    def __init__(self, current_mode: str = "gallery", row: int = 1):
+        options = [
+            discord.SelectOption(
+                label="Gallery Mode",
+                value="gallery",
+                description="Show 4 images per page",
+                default=current_mode == "gallery"
+            ),
+            discord.SelectOption(
+                label="Single Mode",
+                value="single",
+                description="Show 1 large image per page",
+                default=current_mode == "single"
+            ),
+            discord.SelectOption(
+                label="Preview Mode",
+                value="preview",
+                description="Show 6 thumbnail previews",
+                default=current_mode == "preview"
+            )
+        ]
+        super().__init__(
+            placeholder="View mode...",
+            options=options,
+            row=row
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        view: ArtGalleryView = self.view
+        if interaction.user != view.author:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        
+        view.view_mode = self.values[0]
+        view.page = 0
+        
+        # Update select defaults
+        for opt in self.options:
+            opt.default = opt.value == view.view_mode
+        
+        embeds = view.build_embeds()
+        view.update_buttons()
+        await interaction.response.edit_message(embeds=embeds, view=view)
+
+
+class ArtGalleryView(discord.ui.View):
+    """Advanced art gallery with multi-source selection and gallery mode"""
+    
+    def __init__(
+        self, 
+        cog,
+        author: discord.Member,
+        query: str,
+        is_nsfw: bool,
+        ctx,
+        initial_results: list = None,
+        selected_sources: Set[str] = None
+    ):
+        super().__init__(timeout=300)  # 5 minute timeout
+        self.cog = cog
         self.author = author
         self.query = query
         self.is_nsfw = is_nsfw
         self.ctx = ctx
+        self.results = initial_results or []
         self.page = 0
-        self.max_page = len(results) - 1
+        self.view_mode = "gallery"  # gallery, single, preview
+        self.loading_more = False
+        self.api_page = 0  # Track API pagination
+        self.total_loaded = len(initial_results) if initial_results else 0
+        self.background_loading = False
+        self.all_loaded = False
         
-        self._update_buttons()
+        self.available_sources = self.get_available_sources(self.is_nsfw)
+        
+        # Default to all available sources
+        if selected_sources is None:
+            self.selected_sources = set(self.available_sources.keys())
+        else:
+            self.selected_sources = selected_sources
+        
+        self._setup_components()
     
-    def _update_buttons(self):
+    def _setup_components(self):
+        """Setup all UI components"""
         self.clear_items()
         
-        # Navigation buttons
-        if self.page > 0:
-            self.add_item(PreviousButton())
-        if self.page < self.max_page:
-            self.add_item(NextButton())
+        # Row 0: Source selection
+        self.source_select = ArtSourceSelect(
+            self.available_sources, 
+            self.selected_sources,
+            self.is_nsfw,
+            row=0
+        )
+        self.add_item(self.source_select)
         
-        # Save button
-        self.add_item(SaveArtButton())
+        # Row 1: View mode selection
+        self.mode_select = ArtViewModeSelect(self.view_mode, row=1)
+        self.add_item(self.mode_select)
         
-        # Source filter button (if NSFW)
-        if self.is_nsfw:
-            self.add_item(SourceButton())
+        # Row 2: Navigation buttons
+        self.add_item(self.first_btn)
+        self.add_item(self.prev_btn)
+        self.add_item(self.page_indicator)
+        self.add_item(self.next_btn)
+        self.add_item(self.last_btn)
+        
+        # Row 3: Action buttons
+        self.add_item(self.save_btn)
+        self.add_item(self.refresh_btn)
+        self.add_item(self.info_btn)
     
-    def build_embed(self):
+    @property
+    def images_per_page(self) -> int:
+        """Number of images per page based on view mode"""
+        return {"gallery": 3, "single": 1, "preview": 6}.get(self.view_mode, 3)
+    
+    @property
+    def max_pages(self) -> int:
+        """Calculate max pages"""
         if not self.results:
-            return discord.Embed(
-                title="No Results",
-                description="No artwork found",
-                color=discord.Color.red()
-            )
+            return 1
+        return max(1, (len(self.results) + self.images_per_page - 1) // self.images_per_page)
+    
+    async def fetch_results(self, aggressive: bool = True):
+        """Fetch art results from selected sources
         
-        art = self.results[self.page]
+        Args:
+            aggressive: If True, fetches multiple pages from all sources at once
+        """
+        if not hasattr(self.cog, 'art_aggregator'):
+            import aiohttp
+            if not hasattr(self.cog, 'session'):
+                self.cog.session = aiohttp.ClientSession()
+            self.cog.art_aggregator = ArtAggregator(self.cog.session)
         
-        embed = discord.Embed(
-            title=f"{self.query}",
-            color=discord.Color.from_rgb(255, 105, 180) if self.is_nsfw else primary_color()
+        new_results = await self.cog.art_aggregator.search_all(
+            self.query,
+            limit=500,  # Higher limit for aggressive loading
+            nsfw=self.is_nsfw,
+            selected_sources=self.selected_sources,
+            page=self.api_page,
+            aggressive_load=aggressive,
+            max_pages_per_source=5 if aggressive else 1
         )
         
-        # NSFW indicator
-        if self.is_nsfw and art.get("rating") in ["e", "q", "explicit", "questionable"]:
-            embed.description = "🔞 **NSFW Content**"
+        if new_results:
+            # Add new results, avoiding duplicates
+            existing_ids = {(r.get("source"), r.get("id")) for r in self.results}
+            added = 0
+            for r in new_results:
+                if (r.get("source"), r.get("id")) not in existing_ids:
+                    self.results.append(r)
+                    existing_ids.add((r.get("source"), r.get("id")))
+                    added += 1
+            
+            self.total_loaded = len(self.results)
+            
+            # If we got fewer than expected, we might be done
+            if added < 50:
+                self.all_loaded = True
+            
+            return added
+        else:
+            self.all_loaded = True
+            return 0
+    
+    async def fetch_more(self, aggressive: bool = False):
+        """Fetch more results when approaching the end"""
+        if self.loading_more or self.all_loaded:
+            return 0
+        self.loading_more = True
+        try:
+            self.api_page += 1
+            added = await self.fetch_results(aggressive=aggressive)
+            return added
+        finally:
+            self.loading_more = False
+    
+    async def start_background_loading(self):
+        """Start background task to continuously load more results"""
+        if self.background_loading or self.all_loaded:
+            return
         
-        # Art info
-        embed.add_field(name="Source", value=art.get("source", "Unknown"), inline=True)
-        embed.add_field(name="Artist", value=art.get("artist", "Unknown"), inline=True)
-        embed.add_field(name="Score", value=f"⭐ {art.get('score', 0)}", inline=True)
+        self.background_loading = True
+        
+        # Continue fetching in background
+        while not self.all_loaded and self.background_loading:
+            try:
+                added = await self.fetch_more(aggressive=True)
+                if added == 0:
+                    break
+                # Small delay to avoid overwhelming the APIs
+                await asyncio.sleep(2)
+            except Exception:
+                break
+        
+        self.background_loading = False
+    
+    def get_available_sources(self, nsfw: bool = False) -> dict:
+        """Get available sources based on NSFW setting and channel safety"""
+        available = {}
+        for key, meta in ART_SOURCES.items():
+            # Block NSFW-only sources if not in NSFW channel
+            if meta["nsfw_only"] and not nsfw:
+                continue
+            # Block mixed-content sources if not in NSFW channel
+            if meta.get("requires_nsfw_channel") and not nsfw:
+                continue
+            available[key] = meta
+        return available
+    
+    def get_page_results(self) -> list:
+        """Get results for current page"""
+        start = self.page * self.images_per_page
+        end = start + self.images_per_page
+        return self.results[start:end]
+    
+    def build_embeds(self) -> list:
+        """Build embeds for current page based on view mode"""
+        page_results = self.get_page_results()
+        
+        if not page_results:
+            loading_msg = "Loading more results..." if self.background_loading else "No artwork found. Try different sources or search terms."
+            embed = discord.Embed(
+                title=f"🎨 Art Search: {self.query[:40]}",
+                description=loading_msg,
+                color=discord.Color.orange() if not self.background_loading else discord.Color.blue()
+            )
+            embed.add_field(
+                name="Selected Sources",
+                value=", ".join([ART_SOURCES.get(s, {}).get("name", s) for s in self.selected_sources][:5]) or "None",
+                inline=False
+            )
+            if self.total_loaded > 0:
+                embed.add_field(
+                    name="Progress",
+                    value=f"Loaded {self.total_loaded} results" + (" (still loading...)" if self.background_loading else ""),
+                    inline=False
+                )
+            return [embed]
+        
+        embeds = []
+        base_color = discord.Color.from_rgb(255, 105, 180) if self.is_nsfw else primary_color()
+        
+        if self.view_mode == "single":
+            # Single large image mode
+            art = page_results[0]
+            embed = self._build_single_embed(art, base_color)
+            embeds.append(embed)
+            
+        elif self.view_mode == "gallery":
+            # Gallery mode - up to 4 images with embeds
+            for i, art in enumerate(page_results):
+                embed = self._build_gallery_embed(art, i, len(page_results), base_color)
+                embeds.append(embed)
+                
+        elif self.view_mode == "preview":
+            # Preview mode - compact list with thumbnails
+            embed = self._build_preview_embed(page_results, base_color)
+            embeds.append(embed)
+        
+        return embeds
+    
+    def _build_single_embed(self, art: dict, color) -> discord.Embed:
+        """Build embed for single image view"""
+        embed = discord.Embed(
+            title=f"🎨 {self.query[:50]}",
+            url=art.get("page_url"),
+            color=color
+        )
+        
+        # Content safety warning system
+        rating = art.get("rating", "s")
+        source = art.get("source", "Unknown")
+        source_meta = ART_SOURCES.get(source.lower().replace(" ", "_").replace(".", ""), {})
+        requires_nsfw = source_meta.get("requires_nsfw_channel", False)
+        
+        # Build safety warning
+        warnings = []
+        if rating in ["e", "explicit"]:
+            warnings.append("🔞 **Explicit NSFW Content**")
+        elif rating in ["q", "questionable"]:
+            warnings.append("⚠️ **Questionable Content**")
+        
+        # Warn about mixed-content sources
+        if requires_nsfw and not self.is_nsfw:
+            warnings.append("⚠️ **Warning: This source may contain unsafe content**")
+        
+        if warnings:
+            embed.description = " | ".join(warnings)
+        else:
+            embed.description = "✅ Safe content"
+        
+        # Art info in compact format
+        info_parts = [
+            f"**Source:** {art.get('source', 'Unknown')}",
+            f"**Artist:** {art.get('artist', 'Unknown')[:30]}",
+            f"**Score:** ⭐ {art.get('score', 0)}"
+        ]
+        
+        if art.get("width") and art.get("height"):
+            info_parts.append(f"**Size:** {art.get('width')}x{art.get('height')}")
+        
+        embed.add_field(name="Info", value=" • ".join(info_parts), inline=False)
         
         # Tags
-        tags = art.get("tags", [])[:15]
+        tags = art.get("tags", [])[:12]
         if tags:
-            tag_str = ", ".join([f"`{tag}`" for tag in tags])
+            tag_str = " ".join([f"`{tag}`" for tag in tags])
             embed.add_field(name="Tags", value=tag_str[:1024], inline=False)
-        
-        # Art ID for saving
-        art_id = f"{art.get('source', 'unknown').lower()}_{art.get('id', 'unknown')}"
-        embed.add_field(
-            name="Save this art",
-            value=f"Use: `.art save {art_id}` or click the button below",
-            inline=False
-        )
         
         # Image
         embed.set_image(url=art.get("url"))
         
-        # Footer
-        embed.set_footer(text=f"Page {self.page + 1}/{self.max_page + 1} • {art.get('page_url', '')}")
+        # Footer with loading indicator
+        art_id = f"{art.get('source', 'unknown').lower()}_{art.get('id', 'unknown')}"
+        footer_text = f"Page {self.page + 1}/{self.max_pages} • {len(self.results)} total"
+        if self.background_loading:
+            footer_text += " • 🔄 Loading more..."
+        elif self.all_loaded:
+            footer_text += " • ✅ All loaded"
+        footer_text += f" • ID: {art_id}"
+        embed.set_footer(text=footer_text)
         
         return embed
-
-
-class PreviousButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(style=discord.ButtonStyle.primary, label="◀ Previous", custom_id="art_prev")
     
-    async def callback(self, interaction: discord.Interaction):
-        view: ArtView = self.view
-        if interaction.user != view.author:
-            return await interaction.response.send_message("This is not your search.", ephemeral=True)
+    def _build_gallery_embed(self, art: dict, index: int, total: int, color) -> discord.Embed:
+        """Build embed for gallery mode (multiple images)"""
+        # Only first embed gets full info
+        if index == 0:
+            desc_parts = [f"Showing {total} images • Page {self.page + 1}/{self.max_pages}"]
+            if self.is_nsfw:
+                desc_parts.insert(0, "🔞 NSFW")
+            if self.background_loading:
+                desc_parts.append("🔄 Loading more...")
+            elif self.all_loaded:
+                desc_parts.append(f"✅ {len(self.results)} total loaded")
+            
+            embed = discord.Embed(
+                title=f"🖼️ {self.query[:40]} - Gallery",
+                description=" • ".join(desc_parts),
+                color=color
+            )
+        else:
+            embed = discord.Embed(color=color)
         
-        view.page = max(0, view.page - 1)
-        view._update_buttons()
-        embed = view.build_embed()
-        await interaction.response.edit_message(embed=embed, view=view)
-
-
-class NextButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(style=discord.ButtonStyle.primary, label="Next ▶", custom_id="art_next")
+        # Compact info for each image
+        embed.add_field(
+            name=f"{art.get('source', 'Unknown')}",
+            value=f"⭐ {art.get('score', 0)} • {art.get('artist', 'Unknown')[:20]}",
+            inline=True
+        )
+        
+        embed.set_image(url=art.get("url"))
+        
+        return embed
     
-    async def callback(self, interaction: discord.Interaction):
-        view: ArtView = self.view
-        if interaction.user != view.author:
-            return await interaction.response.send_message("This is not your search.", ephemeral=True)
+    def _build_preview_embed(self, arts: list, color) -> discord.Embed:
+        """Build embed for preview mode (thumbnails list)"""
+        embed = discord.Embed(
+            title=f"📋 {self.query[:40]} - Preview",
+            description=f"Page {self.page + 1}/{self.max_pages} • {len(self.results)} total results",
+            color=color
+        )
         
-        view.page = min(view.max_page, view.page + 1)
-        view._update_buttons()
-        embed = view.build_embed()
-        await interaction.response.edit_message(embed=embed, view=view)
-
-
-class SaveArtButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(style=discord.ButtonStyle.success, label="💾 Save to Favorites", custom_id="art_save")
+        if self.is_nsfw:
+            embed.description = f"🔞 NSFW • " + embed.description
+        
+        for i, art in enumerate(arts, 1):
+            art_id = f"{art.get('source', '?').lower()}_{art.get('id', '?')}"
+            embed.add_field(
+                name=f"{i}. {art.get('source', 'Unknown')}",
+                value=f"⭐ {art.get('score', 0)} • [{art.get('artist', 'Unknown')[:15]}]({art.get('page_url', '')})",
+                inline=True
+            )
+        
+        # Set first image as thumbnail
+        if arts:
+            embed.set_thumbnail(url=arts[0].get("preview_url") or arts[0].get("url"))
+        
+        embed.set_footer(text="Use Single Mode to view full images")
+        
+        return embed
     
-    async def callback(self, interaction: discord.Interaction):
-        view: ArtView = self.view
-        if interaction.user != view.author:
-            return await interaction.response.send_message("This is not your search.", ephemeral=True)
+    def update_buttons(self):
+        """Update button states"""
+        self.first_btn.disabled = self.page <= 0
+        self.prev_btn.disabled = self.page <= 0
+        self.next_btn.disabled = self.page >= self.max_pages - 1
+        self.last_btn.disabled = self.page >= self.max_pages - 1
         
-        art = view.results[view.page]
+        # Update page indicator
+        self.page_indicator.label = f"{self.page + 1}/{self.max_pages}"
+    
+    # Navigation buttons (Row 2)
+    @discord.ui.button(label="⏮️", style=discord.ButtonStyle.secondary, row=2)
+    async def first_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.author:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        self.page = 0
+        self.update_buttons()
+        embeds = self.build_embeds()
+        await interaction.response.edit_message(embeds=embeds, view=self)
+    
+    @discord.ui.button(label="◀️", style=discord.ButtonStyle.primary, row=2)
+    async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.author:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        self.page = max(0, self.page - 1)
+        self.update_buttons()
+        embeds = self.build_embeds()
+        await interaction.response.edit_message(embeds=embeds, view=self)
+    
+    @discord.ui.button(label="1/1", style=discord.ButtonStyle.secondary, disabled=True, row=2)
+    async def page_indicator(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pass  # Just a display button
+    
+    @discord.ui.button(label="▶️", style=discord.ButtonStyle.primary, row=2)
+    async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.author:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        
+        self.page = min(self.max_pages - 1, self.page + 1)
+        
+        # Fetch more if approaching end
+        if self.page >= self.max_pages - 2 and len(self.results) < 500:
+            await interaction.response.defer()
+            await self.fetch_more()
+            self.update_buttons()
+            embeds = self.build_embeds()
+            await interaction.edit_original_response(embeds=embeds, view=self)
+        else:
+            self.update_buttons()
+            embeds = self.build_embeds()
+            await interaction.response.edit_message(embeds=embeds, view=self)
+    
+    @discord.ui.button(label="⏭️", style=discord.ButtonStyle.secondary, row=2)
+    async def last_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.author:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        self.page = self.max_pages - 1
+        self.update_buttons()
+        embeds = self.build_embeds()
+        await interaction.response.edit_message(embeds=embeds, view=self)
+    
+    # Action buttons (Row 3)
+    @discord.ui.button(label="💾 Save", style=discord.ButtonStyle.success, row=3)
+    async def save_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.author:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        
+        page_results = self.get_page_results()
+        if not page_results:
+            return await interaction.response.send_message("❌ No art to save!", ephemeral=True)
+        
+        # Save first/current image
+        art = page_results[0]
         art_id = f"{art.get('source', 'unknown').lower()}_{art.get('id', 'unknown')}"
-        
-        # Create modal for folder selection
         modal = SaveArtModal(art_id, art)
         await interaction.response.send_modal(modal)
+    
+    @discord.ui.button(label="🔄 Refresh", style=discord.ButtonStyle.secondary, row=3)
+    async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.author:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        
+        await interaction.response.defer()
+        self.results = []
+        self.page = 0
+        self.api_page = 0
+        await self.fetch_results()
+        self.update_buttons()
+        embeds = self.build_embeds()
+        await interaction.edit_original_response(embeds=embeds, view=self)
+    
+    @discord.ui.button(label="ℹ️ Info", style=discord.ButtonStyle.secondary, row=3)
+    async def info_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.author:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        
+        # Show source statistics
+        sources_count = {}
+        for art in self.results:
+            source = art.get("source", "Unknown")
+            sources_count[source] = sources_count.get(source, 0) + 1
+        
+        embed = discord.Embed(
+            title="📊 Search Statistics",
+            description=f"**Query:** {self.query}\n**Total Results:** {len(self.results)}",
+            color=primary_color()
+        )
+        
+        # Source breakdown
+        source_text = "\n".join([
+            f"{ART_SOURCES.get(s.lower().replace('.', '').replace('-', '_').replace(' ', '_'), {}).get('emoji', '🎨')} **{s}:** {c}"
+            for s, c in sorted(sources_count.items(), key=lambda x: x[1], reverse=True)
+        ])
+        embed.add_field(name="Results by Source", value=source_text or "No results", inline=False)
+        
+        # Selected sources
+        selected_text = ", ".join([
+            f"{ART_SOURCES.get(s, {}).get('emoji', '')} {ART_SOURCES.get(s, {}).get('name', s)}"
+            for s in self.selected_sources
+        ][:8])
+        embed.add_field(name="Active Sources", value=selected_text or "None", inline=False)
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 class SaveArtModal(discord.ui.Modal, title="Save Art to Favorites"):
@@ -169,6 +619,7 @@ class SaveArtModal(discord.ui.Modal, title="Save Art to Favorites"):
                             "id": self.art_id,
                             "source": self.art_data.get("source"),
                             "url": self.art_data.get("url"),
+                            "preview_url": self.art_data.get("preview_url"),
                             "artist": self.art_data.get("artist"),
                             "tags": self.art_data.get("tags", [])[:10],
                             "saved_at": discord.utils.utcnow().timestamp()
@@ -179,41 +630,28 @@ class SaveArtModal(discord.ui.Modal, title="Save Art to Favorites"):
             )
             
             embed = discord.Embed(
-                title="Art Saved",
-                description=f"Saved to folder: **{folder_name}**\n"
-                           f"Art ID: `{self.art_id}`",
+                title="✅ Art Saved!",
+                description=f"Saved to folder: **{folder_name}**\nArt ID: `{self.art_id}`",
                 color=discord.Color.green()
             )
-            embed.set_thumbnail(url=self.art_data.get("url"))
+            embed.set_thumbnail(url=self.art_data.get("preview_url") or self.art_data.get("url"))
             await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ Failed to save: {e}", ephemeral=True)
 
 
-class SourceButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(style=discord.ButtonStyle.secondary, label="🔍 Filter by Source", custom_id="art_source")
-    
-    async def callback(self, interaction: discord.Interaction):
-        view: ArtView = self.view
-        if interaction.user != view.author:
-            return await interaction.response.send_message("This is not your search.", ephemeral=True)
-        
-        # Show source info
-        sources_count = {}
-        for art in view.results:
-            source = art.get("source", "Unknown")
-            sources_count[source] = sources_count.get(source, 0) + 1
-        
-        embed = discord.Embed(
-            title="📊 Results by Source",
-            color=primary_color()
+# Legacy ArtView for backwards compatibility
+class ArtView(ArtGalleryView):
+    """Legacy wrapper - redirects to new ArtGalleryView"""
+    def __init__(self, results, author, query, is_nsfw, ctx):
+        super().__init__(
+            cog=None,
+            author=author,
+            query=query,
+            is_nsfw=is_nsfw,
+            ctx=ctx,
+            initial_results=results
         )
-        
-        for source, count in sorted(sources_count.items(), key=lambda x: x[1], reverse=True):
-            embed.add_field(name=source, value=f"{count} results", inline=True)
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 class GoogleSearchTypeSelect(discord.ui.Select):
@@ -607,42 +1045,132 @@ class Search(commands.Cog):
         embed = view.build_embed()
         await ctx.reply(embed=embed, view=view, mention_author=False)
 
+    async def _background_load_and_update(self, view: ArtGalleryView, message: discord.Message):
+        """Background task to continue loading results and update the message"""
+        try:
+            await view.start_background_loading()
+            
+            # Update the message periodically as more results load
+            last_count = len(view.results)
+            update_count = 0
+            
+            while view.background_loading and update_count < 10:  # Max 10 updates
+                await asyncio.sleep(3)  # Wait 3 seconds between updates
+                
+                # Only update if we got new results
+                if len(view.results) > last_count:
+                    last_count = len(view.results)
+                    update_count += 1
+                    
+                    try:
+                        # Update buttons and embeds
+                        view.update_buttons()
+                        embeds = view.build_embeds()
+                        await message.edit(embeds=embeds, view=view)
+                    except discord.HTTPException:
+                        # Message might be deleted or we hit rate limit
+                        break
+                
+                if view.all_loaded:
+                    break
+            
+            # Final update when done
+            if not view.all_loaded:
+                view.all_loaded = True
+            
+            view.update_buttons()
+            embeds = view.build_embeds()
+            try:
+                await message.edit(embeds=embeds, view=view)
+            except discord.HTTPException:
+                pass
+                
+        except Exception:
+            # Silently fail - background loading is not critical
+            pass
+    
     # ═══════════════════════════════════════════════════════════════
     # ART SEARCH - Multiple sources with NSFW support and favorites
     # ═══════════════════════════════════════════════════════════════
     @commands.group(name="art", aliases=["artwork"], invoke_without_command=True)
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def art_search(self, ctx, *, query: str = None):
-        """🎨 Search anime/manga art from multiple sources
+        """🎨 Search anime/manga art from 12+ sources with gallery view
         
-        Supports: Danbooru, Gelbooru, Safebooru, Konachan, Yande.re
-        Use in NSFW channels for adult content access
+        **Features:**
+        • Multi-source search (Danbooru, Gelbooru, Safebooru, Konachan, Yande.re, Zerochan, Waifu.im, Nekos.best, and more)
+        • Gallery mode with 4 images per page
+        • Single image mode for detailed view
+        • Preview mode for quick browsing
+        • Source filter dropdown to pick which sources to use
+        • Save favorites to folders
+        
+        Use in NSFW channels for adult content access (Rule34, e621, Realbooru)
         """
         if not query:
+            # Check if in NSFW channel for help display
+            is_nsfw_channel = isinstance(ctx.channel, discord.TextChannel) and ctx.channel.is_nsfw()
+            
+            # Build source lists by safety level
+            guaranteed_safe = [m['name'] for k, m in ART_SOURCES.items() if not m['nsfw_only'] and not m.get('requires_nsfw_channel')]
+            mixed_content = [m['name'] for k, m in ART_SOURCES.items() if not m['nsfw_only'] and m.get('requires_nsfw_channel')]
+            nsfw_only = [m['name'] for k, m in ART_SOURCES.items() if m['nsfw_only']]
+            
             embed = discord.Embed(
-                title="Art Search",
-                description="Search anime and manga art from multiple sources!",
+                title="Art Search - Multi-Source Gallery",
+                description="Search anime and manga art with **content safety guarantees**",
                 color=primary_color()
             )
             embed.add_field(
                 name="Usage",
-                value=f"`{ctx.prefix}art <search query>`\n"
-                      f"`{ctx.prefix}art source <source> <query>`\n"
+                value=f"`{ctx.prefix}art <search query>` - Search all sources\n"
+                      f"`{ctx.prefix}art source <source> <query>` - Search specific source\n"
                       f"`{ctx.prefix}art save <art_id>` - Save to favorites\n"
-                      f"`{ctx.prefix}art folder create <name>`\n"
                       f"`{ctx.prefix}art favorites` - View saved art",
                 inline=False
             )
             embed.add_field(
-                name="Sources",
-                value="Danbooru, Gelbooru, Safebooru, Konachan, Yande.re, Rule34 (NSFW only)",
-                inline=False
+                name="View Modes",
+                value="**Gallery** - 4 images per page\n"
+                      "**Single** - 1 large image with details\n"
+                      "**Preview** - 6 thumbnails for quick browse",
+                inline=True
             )
             embed.add_field(
-                name="NSFW Mode",
-                value="🔞 Use in NSFW channels to access adult content",
+                name="Features",
+                value="- Multi-select source filter\n"
+                      "- Content safety warnings\n"
+                      "- Infinite scroll pagination\n"
+                      "- Save to custom folders",
+                inline=True
+            )
+            
+            # Show guaranteed safe sources
+            embed.add_field(
+                name="✅ Guaranteed Safe (All Channels)",
+                value=", ".join(guaranteed_safe) if guaranteed_safe else "None",
                 inline=False
             )
+            
+            # Show mixed-content sources (only in NSFW channels)
+            if is_nsfw_channel:
+                embed.add_field(
+                    name="⚠️ Mixed Content (NSFW Channel Only)",
+                    value=", ".join(mixed_content) if mixed_content else "None",
+                    inline=False
+                )
+                embed.add_field(
+                    name="🔞 NSFW Only (NSFW Channel Only)",
+                    value=", ".join(nsfw_only) if nsfw_only else "None",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="⚠️ Safety Notice",
+                    value="Mixed-content and NSFW sources are **only available in NSFW channels** for your protection.",
+                    inline=False
+                )
+            
             return await ctx.reply(embed=embed, mention_author=False)
         
         # Check if in NSFW channel
@@ -651,50 +1179,89 @@ class Search(commands.Cog):
             is_nsfw = ctx.channel.is_nsfw()
         
         async with ctx.typing():
-            from utils.cogs.art import ArtAggregator
             if not hasattr(self, 'art_aggregator'):
                 self.art_aggregator = ArtAggregator(self.session)
             
-            results = await self.art_aggregator.search_all(query, limit=20, nsfw=is_nsfw)
-        
-        if not results:
-            embed = discord.Embed(
-                title="Art Search",
-                description=f"No artwork found for **{query}**",
-                color=discord.Color.orange()
+            # Fetch initial results with aggressive loading (5 pages per source)
+            results = await self.art_aggregator.search_all(
+                query, 
+                limit=500, 
+                nsfw=is_nsfw,
+                aggressive_load=True,
+                max_pages_per_source=5
             )
-            return await ctx.reply(embed=embed, mention_author=False)
         
-        view = ArtView(results, ctx.author, query, is_nsfw, ctx)
-        embed = view.build_embed()
-        await ctx.reply(embed=embed, view=view, mention_author=False)
+        # Create the new gallery view
+        view = ArtGalleryView(
+            cog=self,
+            author=ctx.author,
+            query=query,
+            is_nsfw=is_nsfw,
+            ctx=ctx,
+            initial_results=results
+        )
+        view.update_buttons()
+        embeds = view.build_embeds()
+        
+        # Send initial message
+        message = await ctx.reply(embeds=embeds, view=view, mention_author=False)
+        
+        # Start background loading task to continue fetching more results
+        import asyncio
+        asyncio.create_task(self._background_load_and_update(view, message))
     
-    @art_search.command(name="source")
+    @art_search.command(name="source", aliases=["src"])
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def art_source(self, ctx, source: str, *, query: str):
-        """Search a specific art source"""
+        """Search a specific art source
+        
+        Available sources: danbooru, gelbooru, safebooru, konachan, yandere, 
+        zerochan, anime_pictures, waifu_im, nekos_best, rule34, e621, realbooru
+        """
         is_nsfw = False
         if isinstance(ctx.channel, discord.TextChannel):
             is_nsfw = ctx.channel.is_nsfw()
         
-        from utils.cogs.art import ArtAggregator
+        # Validate source
+        source_key = source.lower().replace("-", "_").replace(" ", "_")
+        if source_key not in ART_SOURCES:
+            available = ", ".join([f"`{k}`" for k in ART_SOURCES.keys()])
+            embed = discord.Embed(
+                title="❌ Invalid Source",
+                description=f"**{source}** is not a valid source.\n\n**Available sources:**\n{available}",
+                color=discord.Color.red()
+            )
+            return await ctx.reply(embed=embed, mention_author=False)
+        
+        # Check NSFW restriction
+        if ART_SOURCES[source_key]["nsfw_only"] and not is_nsfw:
+            embed = discord.Embed(
+                title="🔞 NSFW Source",
+                description=f"**{ART_SOURCES[source_key]['name']}** is only available in NSFW channels.",
+                color=discord.Color.red()
+            )
+            return await ctx.reply(embed=embed, mention_author=False)
+        
         if not hasattr(self, 'art_aggregator'):
             self.art_aggregator = ArtAggregator(self.session)
         
         async with ctx.typing():
-            results = await self.art_aggregator.search_source(source, query, limit=20, nsfw=is_nsfw)
+            results = await self.art_aggregator.search_source(source_key, query, limit=100, nsfw=is_nsfw)
         
-        if not results:
-            embed = discord.Embed(
-                title=f"{source.title()} Search",
-                description=f"No artwork found for **{query}**",
-                color=discord.Color.orange()
-            )
-            return await ctx.reply(embed=embed, mention_author=False)
+        # Create gallery view with only this source selected
+        view = ArtGalleryView(
+            cog=self,
+            author=ctx.author,
+            query=f"{ART_SOURCES[source_key]['name']}: {query}",
+            is_nsfw=is_nsfw,
+            ctx=ctx,
+            initial_results=results,
+            selected_sources={source_key}
+        )
+        view.update_buttons()
+        embeds = view.build_embeds()
         
-        view = ArtView(results, ctx.author, f"{source}: {query}", is_nsfw, ctx)
-        embed = view.build_embed()
-        await ctx.reply(embed=embed, view=view, mention_author=False)
+        await ctx.reply(embeds=embeds, view=view, mention_author=False)
     
     @art_search.command(name="save", aliases=["favorite", "fav"])
     async def art_save(self, ctx, art_id: str = None, folder: str = "default"):
