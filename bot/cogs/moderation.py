@@ -13,7 +13,7 @@ from data.local.const import primary_color
 
 
 class Moderation(commands.Cog):
-    """🔨 Server Moderation - Complete moderation toolkit for server management"""
+    """Server Moderation - Complete moderation toolkit for server management"""
     
     def __init__(self, bot):
         self.bot = bot
@@ -39,7 +39,7 @@ class Moderation(commands.Cog):
     @commands.group(name="mod", invoke_without_command=True)
     @commands.has_permissions(manage_messages=True)
     async def mod_group(self, ctx):
-        """🔨 Moderation command hub - View all moderation commands"""
+        """Moderation command hub - View all moderation commands"""
         embed = discord.Embed(
             title="Moderation Commands",
             description="Complete server moderation toolkit",
@@ -99,19 +99,19 @@ class Moderation(commands.Cog):
             current = await self.get_log_channel(ctx.guild)
             if current:
                 embed = discord.Embed(
-                    description=f"📋 Current mod log channel: {current.mention}",
+                    description=f"Current mod log channel: {current.mention}",
                     color=primary_color()
                 )
             else:
                 embed = discord.Embed(
-                    description=f"📋 No mod log channel set. Use `{ctx.prefix}mod log #channel` to set one.",
+                    description=f"No mod log channel set. Use `{ctx.prefix}mod log #channel` to set one.",
                     color=discord.Color.orange()
                 )
             return await ctx.reply(embed=embed, mention_author=False)
         
         await self.mod_db.set_config(ctx.guild.id, "log_channel", channel.id)
         embed = discord.Embed(
-            title="✅ Mod Log Channel Set",
+            title="Mod Log Channel Set",
             description=f"Moderation actions will now be logged to {channel.mention}",
             color=discord.Color.green()
         )
@@ -127,11 +127,11 @@ class Moderation(commands.Cog):
             if role_id:
                 mute_role = ctx.guild.get_role(role_id)
                 if mute_role:
-                    return await ctx.reply(f"📋 Current mute role: {mute_role.mention}", mention_author=False)
-            return await ctx.reply(f"📋 No mute role set. Use `{ctx.prefix}mod muterole @Role` to set one.", mention_author=False)
+                    return await ctx.reply(f"Current mute role: {mute_role.mention}", mention_author=False)
+            return await ctx.reply(f"No mute role set. Use `{ctx.prefix}mod muterole @Role` to set one.", mention_author=False)
         
         await self.mod_db.set_config(ctx.guild.id, "mute_role", role.id)
-        await ctx.reply(f"✅ Mute role set to {role.mention}", mention_author=False)
+        await ctx.reply(f"Mute role set to {role.mention}", mention_author=False)
 
     @mod_group.command(name="cases")
     @commands.has_permissions(manage_messages=True)
@@ -153,7 +153,7 @@ class Moderation(commands.Cog):
     @commands.group(name="warn", invoke_without_command=True)
     @commands.has_permissions(manage_messages=True)
     async def warn(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
-        """⚠️ Warn a member"""
+        """Warn a member"""
         can_mod, msg = ModerationUtils.can_moderate(ctx.author, member)
         if not can_mod:
             return await ctx.reply(f"❌ {msg}", mention_author=False)
@@ -168,7 +168,7 @@ class Moderation(commands.Cog):
         
         # Try to DM the user
         dm_embed = discord.Embed(
-            title=f"⚠️ Warning in {ctx.guild.name}",
+            title=f"Warning in {ctx.guild.name}",
             description=f"**Reason:** {reason}",
             color=discord.Color.yellow()
         )
@@ -195,7 +195,7 @@ class Moderation(commands.Cog):
         """Clear all warnings for a member"""
         count = await self.mod_db.clear_warnings(ctx.guild.id, member.id)
         embed = discord.Embed(
-            title="✅ Warnings Cleared",
+            title="Warnings Cleared",
             description=f"Cleared **{count}** warning(s) for {member.mention}",
             color=discord.Color.green()
         )
@@ -208,13 +208,13 @@ class Moderation(commands.Cog):
         success = await self.mod_db.remove_warning(ctx.guild.id, member.id, index - 1)
         if success:
             embed = discord.Embed(
-                title="✅ Warning Removed",
+                title="Warning Removed",
                 description=f"Removed warning #{index} from {member.mention}",
                 color=discord.Color.green()
             )
         else:
             embed = discord.Embed(
-                title="❌ Error",
+                title="Error",
                 description=f"Could not find warning #{index} for {member.mention}",
                 color=discord.Color.red()
             )
@@ -226,14 +226,14 @@ class Moderation(commands.Cog):
     @commands.command(name="kick")
     @commands.has_permissions(kick_members=True)
     async def kick(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
-        """👢 Kick a member from the server"""
+        """Kick a member from the server"""
         can_mod, msg = ModerationUtils.can_moderate(ctx.author, member)
         if not can_mod:
             return await ctx.reply(f"❌ {msg}", mention_author=False)
         
         # DM before kick
         dm_embed = discord.Embed(
-            title=f"👢 Kicked from {ctx.guild.name}",
+            title=f"Kicked from {ctx.guild.name}",
             description=f"**Reason:** {reason}",
             color=discord.Color.orange()
         )
@@ -252,7 +252,7 @@ class Moderation(commands.Cog):
     @commands.command(name="ban")
     @commands.has_permissions(ban_members=True)
     async def ban(self, ctx, member: Union[discord.Member, discord.User], *, reason: str = "No reason provided"):
-        """🔨 Ban a member from the server"""
+        """Ban a member from the server"""
         if isinstance(member, discord.Member):
             can_mod, msg = ModerationUtils.can_moderate(ctx.author, member)
             if not can_mod:
@@ -260,7 +260,7 @@ class Moderation(commands.Cog):
             
             # DM before ban
             dm_embed = discord.Embed(
-                title=f"🔨 Banned from {ctx.guild.name}",
+                title=f"Banned from {ctx.guild.name}",
                 description=f"**Reason:** {reason}",
                 color=discord.Color.red()
             )
@@ -276,7 +276,7 @@ class Moderation(commands.Cog):
     @commands.command(name="unban")
     @commands.has_permissions(ban_members=True)
     async def unban(self, ctx, user: discord.User, *, reason: str = "No reason provided"):
-        """🔓 Unban a user from the server"""
+        """Unban a user from the server"""
         try:
             await ctx.guild.unban(user, reason=f"{ctx.author}: {reason}")
             case_num = await self.mod_db.add_case(ctx.guild.id, "unban", user.id, ctx.author.id, reason)
@@ -290,7 +290,7 @@ class Moderation(commands.Cog):
     @commands.command(name="softban")
     @commands.has_permissions(ban_members=True)
     async def softban(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
-        """🔨 Softban (ban + unban) to delete messages"""
+        """Softban (ban + unban) to delete messages"""
         can_mod, msg = ModerationUtils.can_moderate(ctx.author, member)
         if not can_mod:
             return await ctx.reply(f"❌ {msg}", mention_author=False)
@@ -310,7 +310,7 @@ class Moderation(commands.Cog):
     @commands.command(name="timeout")
     @commands.has_permissions(moderate_members=True)
     async def timeout(self, ctx, member: discord.Member, duration: str, *, reason: str = "No reason provided"):
-        """⏰ Timeout a member (e.g., 1h, 30m, 7d)"""
+        """Timeout a member (e.g., 1h, 30m, 7d)"""
         can_mod, msg = ModerationUtils.can_moderate(ctx.author, member)
         if not can_mod:
             return await ctx.reply(f"❌ {msg}", mention_author=False)
@@ -331,7 +331,7 @@ class Moderation(commands.Cog):
         
         # DM user
         dm_embed = discord.Embed(
-            title=f"⏰ Timed out in {ctx.guild.name}",
+            title=f"Timed out in {ctx.guild.name}",
             description=f"**Duration:** {duration_str}\n**Reason:** {reason}",
             color=discord.Color.dark_gray()
         )
@@ -343,7 +343,7 @@ class Moderation(commands.Cog):
     @commands.command(name="untimeout", aliases=["removetimeout"])
     @commands.has_permissions(moderate_members=True)
     async def untimeout(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
-        """⏰ Remove timeout from a member"""
+        """Remove timeout from a member"""
         await member.timeout(None, reason=f"{ctx.author}: {reason}")
         case_num = await self.mod_db.add_case(ctx.guild.id, "untimeout", member.id, ctx.author.id, reason)
         
@@ -354,7 +354,7 @@ class Moderation(commands.Cog):
     @commands.command(name="mute")
     @commands.has_permissions(manage_roles=True)
     async def mute(self, ctx, member: discord.Member, duration: str = None, *, reason: str = "No reason provided"):
-        """🔇 Mute a member using mute role"""
+        """Mute a member using mute role"""
         can_mod, msg = ModerationUtils.can_moderate(ctx.author, member)
         if not can_mod:
             return await ctx.reply(f"❌ {msg}", mention_author=False)
@@ -389,7 +389,7 @@ class Moderation(commands.Cog):
     @commands.command(name="unmute")
     @commands.has_permissions(manage_roles=True)
     async def unmute(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
-        """🔊 Unmute a member"""
+        """Unmute a member"""
         config = await self.mod_db.get_config(ctx.guild.id)
         mute_role_id = config.get("mute_role")
         
@@ -413,7 +413,7 @@ class Moderation(commands.Cog):
     @commands.group(name="purge", aliases=["clear", "prune"], invoke_without_command=True)
     @commands.has_permissions(manage_messages=True)
     async def purge(self, ctx, amount: int):
-        """🗑️ Delete messages from the channel"""
+        """Delete messages from the channel"""
         if amount <= 0:
             return await ctx.reply("❌ Amount must be positive.", mention_author=False)
         if amount > 1000:
@@ -423,7 +423,7 @@ class Moderation(commands.Cog):
         deleted = await ctx.channel.purge(limit=amount)
         
         embed = discord.Embed(
-            title="🗑️ Messages Purged",
+            title="Messages Purged",
             description=f"Deleted **{len(deleted)}** messages",
             color=discord.Color.green(),
             timestamp=datetime.now(timezone.utc)
@@ -450,7 +450,7 @@ class Moderation(commands.Cog):
         deleted = await ctx.channel.purge(limit=amount, check=lambda m: m.author == member)
         
         embed = discord.Embed(
-            title="🗑️ User Messages Purged",
+            title="User Messages Purged",
             description=f"Deleted **{len(deleted)}** messages from {member.mention}",
             color=discord.Color.green()
         )
@@ -472,7 +472,7 @@ class Moderation(commands.Cog):
         deleted = await ctx.channel.purge(limit=amount, check=lambda m: m.author.bot)
         
         embed = discord.Embed(
-            title="🗑️ Bot Messages Purged",
+            title="Bot Messages Purged",
             description=f"Deleted **{len(deleted)}** bot messages",
             color=discord.Color.green()
         )
@@ -494,7 +494,7 @@ class Moderation(commands.Cog):
         deleted = await ctx.channel.purge(limit=amount, check=lambda m: len(m.embeds) > 0)
         
         embed = discord.Embed(
-            title="🗑️ Embed Messages Purged",
+            title="Embed Messages Purged",
             description=f"Deleted **{len(deleted)}** messages with embeds",
             color=discord.Color.green()
         )
@@ -516,7 +516,7 @@ class Moderation(commands.Cog):
         deleted = await ctx.channel.purge(limit=amount, check=lambda m: len(m.attachments) > 0)
         
         embed = discord.Embed(
-            title="🗑️ Image Messages Purged",
+            title="Image Messages Purged",
             description=f"Deleted **{len(deleted)}** messages with attachments",
             color=discord.Color.green()
         )
@@ -538,7 +538,7 @@ class Moderation(commands.Cog):
         deleted = await ctx.channel.purge(limit=amount, check=lambda m: text.lower() in m.content.lower())
         
         embed = discord.Embed(
-            title="🗑️ Messages Purged",
+            title="Messages Purged",
             description=f"Deleted **{len(deleted)}** messages containing `{text}`",
             color=discord.Color.green()
         )
@@ -555,7 +555,7 @@ class Moderation(commands.Cog):
     @commands.command(name="slowmode")
     @commands.has_permissions(manage_channels=True)
     async def slowmode(self, ctx, seconds: int = 0, channel: discord.TextChannel = None):
-        """🐌 Set slowmode for a channel (0 to disable)"""
+        """Set slowmode for a channel (0 to disable)"""
         channel = channel or ctx.channel
         
         if seconds < 0 or seconds > 21600:
@@ -565,13 +565,13 @@ class Moderation(commands.Cog):
         
         if seconds == 0:
             embed = discord.Embed(
-                title="🐌 Slowmode Disabled",
+                title="Slowmode Disabled",
                 description=f"Slowmode has been disabled in {channel.mention}",
                 color=discord.Color.green()
             )
         else:
             embed = discord.Embed(
-                title="🐌 Slowmode Set",
+                title="Slowmode Set",
                 description=f"Slowmode set to **{seconds}** seconds in {channel.mention}",
                 color=discord.Color.green()
             )
@@ -581,13 +581,13 @@ class Moderation(commands.Cog):
     @commands.command(name="lock")
     @commands.has_permissions(manage_channels=True)
     async def lock(self, ctx, channel: discord.TextChannel = None, *, reason: str = "No reason provided"):
-        """🔒 Lock a channel"""
+        """Lock a channel"""
         channel = channel or ctx.channel
         
         await channel.set_permissions(ctx.guild.default_role, send_messages=False, reason=f"{ctx.author}: {reason}")
         
         embed = discord.Embed(
-            title="🔒 Channel Locked",
+            title="Channel Locked",
             description=f"{channel.mention} has been locked.\n**Reason:** {reason}",
             color=discord.Color.red(),
             timestamp=datetime.now(timezone.utc)
@@ -600,13 +600,13 @@ class Moderation(commands.Cog):
     @commands.command(name="unlock")
     @commands.has_permissions(manage_channels=True)
     async def unlock(self, ctx, channel: discord.TextChannel = None, *, reason: str = "No reason provided"):
-        """🔓 Unlock a channel"""
+        """Unlock a channel"""
         channel = channel or ctx.channel
         
         await channel.set_permissions(ctx.guild.default_role, send_messages=None, reason=f"{ctx.author}: {reason}")
         
         embed = discord.Embed(
-            title="🔓 Channel Unlocked",
+            title="Channel Unlocked",
             description=f"{channel.mention} has been unlocked.\n**Reason:** {reason}",
             color=discord.Color.green(),
             timestamp=datetime.now(timezone.utc)
@@ -619,11 +619,11 @@ class Moderation(commands.Cog):
     @commands.command(name="nuke")
     @commands.has_permissions(manage_channels=True)
     async def nuke(self, ctx):
-        """💥 Clone and delete channel (reset all messages)"""
+        """Clone and delete channel (reset all messages)"""
         view = ModerationViews.ConfirmAction(ctx.author)
         
         embed = discord.Embed(
-            title="⚠️ Confirm Channel Nuke",
+            title="Confirm Channel Nuke",
             description=f"This will **delete** {ctx.channel.mention} and create an identical copy.\n"
                         f"All messages will be permanently lost.\n\n"
                         f"**Are you sure?**",
@@ -634,13 +634,13 @@ class Moderation(commands.Cog):
         await view.wait()
         
         if view.value is None:
-            embed.title = "⏰ Timed Out"
+            embed.title = "Timed Out"
             embed.description = "Nuke cancelled - no response received."
             embed.color = discord.Color.orange()
             return await msg.edit(embed=embed, view=None)
         
         if not view.value:
-            embed.title = "❌ Cancelled"
+            embed.title = "Cancelled"
             embed.description = "Channel nuke has been cancelled."
             embed.color = discord.Color.green()
             return await msg.edit(embed=embed, view=None)
@@ -650,7 +650,7 @@ class Moderation(commands.Cog):
         await ctx.channel.delete(reason=f"Channel nuked by {ctx.author}")
         
         embed = discord.Embed(
-            title="💥 Channel Nuked",
+            title="Channel Nuked",
             description=f"Channel has been reset by {ctx.author.mention}",
             color=discord.Color.red()
         )
@@ -688,7 +688,7 @@ class Moderation(commands.Cog):
         await member.add_roles(role, reason=f"{ctx.author}: {reason}")
         
         embed = discord.Embed(
-            title="✅ Role Added",
+            title="Role Added",
             description=f"Added {role.mention} to {member.mention}",
             color=discord.Color.green()
         )
@@ -704,7 +704,7 @@ class Moderation(commands.Cog):
         await member.remove_roles(role, reason=f"{ctx.author}: {reason}")
         
         embed = discord.Embed(
-            title="✅ Role Removed",
+            title="Role Removed",
             description=f"Removed {role.mention} from {member.mention}",
             color=discord.Color.green()
         )
@@ -729,7 +729,7 @@ class Moderation(commands.Cog):
                     pass
         
         embed = discord.Embed(
-            title="✅ Mass Role Add Complete",
+            title="Mass Role Add Complete",
             description=f"Added {role.mention} to **{count}** members",
             color=discord.Color.green()
         )
@@ -754,7 +754,7 @@ class Moderation(commands.Cog):
                     pass
         
         embed = discord.Embed(
-            title="✅ Bot Role Add Complete",
+            title="Bot Role Add Complete",
             description=f"Added {role.mention} to **{count}** bots",
             color=discord.Color.green()
         )
@@ -779,7 +779,7 @@ class Moderation(commands.Cog):
                     pass
         
         embed = discord.Embed(
-            title="✅ Human Role Add Complete",
+            title="Human Role Add Complete",
             description=f"Added {role.mention} to **{count}** humans",
             color=discord.Color.green()
         )
@@ -804,7 +804,7 @@ class Moderation(commands.Cog):
                     pass
         
         embed = discord.Embed(
-            title="✅ Mass Role Remove Complete",
+            title="Mass Role Remove Complete",
             description=f"Removed {role.mention} from **{count}** members",
             color=discord.Color.green()
         )
@@ -816,7 +816,7 @@ class Moderation(commands.Cog):
     @commands.group(name="notes", invoke_without_command=True)
     @commands.has_permissions(manage_messages=True)
     async def notes_group(self, ctx, member: discord.Member = None):
-        """📝 Manage notes for members"""
+        """Manage notes for members"""
         if member:
             warnings = await self.mod_db.get_warnings(ctx.guild.id, member.id)
             embed = ModerationEmbeds.warnings_embed(member, warnings, ctx.guild)

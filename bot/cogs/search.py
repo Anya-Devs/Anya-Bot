@@ -46,7 +46,7 @@ class ArtView(discord.ui.View):
     def build_embed(self):
         if not self.results:
             return discord.Embed(
-                title="🎨 No Results",
+                title="No Results",
                 description="No artwork found",
                 color=discord.Color.red()
             )
@@ -54,7 +54,7 @@ class ArtView(discord.ui.View):
         art = self.results[self.page]
         
         embed = discord.Embed(
-            title=f"🎨 {self.query}",
+            title=f"{self.query}",
             color=discord.Color.from_rgb(255, 105, 180) if self.is_nsfw else primary_color()
         )
         
@@ -179,7 +179,7 @@ class SaveArtModal(discord.ui.Modal, title="Save Art to Favorites"):
             )
             
             embed = discord.Embed(
-                title="✅ Art Saved!",
+                title="Art Saved",
                 description=f"Saved to folder: **{folder_name}**\n"
                            f"Art ID: `{self.art_id}`",
                 color=discord.Color.green()
@@ -319,7 +319,7 @@ class GoogleSearchView(discord.ui.View):
         
         if not results:
             embed = discord.Embed(
-                title=f"🔍 Google Search: {self.query[:50]}",
+                title=f"Google Search: {self.query[:50]}",
                 description=f"No {self.search_type} results found for **{self.query}**\n\n"
                            f"Try a different search term or type.",
                 color=discord.Color.orange()
@@ -337,7 +337,7 @@ class GoogleSearchView(discord.ui.View):
     
     def _build_web_embed(self, results: list) -> discord.Embed:
         embed = discord.Embed(
-            title=f"🔗 Web Results: {self.query[:40]}",
+            title=f"Web Results: {self.query[:40]}",
             color=primary_color(),
             timestamp=datetime.now(timezone.utc)
         )
@@ -369,7 +369,7 @@ class GoogleSearchView(discord.ui.View):
         image = results[self.page]
         
         embed = discord.Embed(
-            title=f"🖼️ Images: {self.query[:40]}",
+            title=f"Images: {self.query[:40]}",
             color=primary_color(),
             timestamp=datetime.now(timezone.utc)
         )
@@ -485,7 +485,7 @@ class GoogleSearchView(discord.ui.View):
         
         # Send the image as a standalone message
         embed = discord.Embed(
-            title=f"🖼️ Selected Image",
+            title=f"Selected Image",
             description=f"**Search:** {self.query}\n**Image {self.page + 1}** of {len(self.results['images'])}+",
             color=discord.Color.green(),
             timestamp=datetime.now(timezone.utc)
@@ -597,7 +597,7 @@ class Search(commands.Cog):
         
         if not results:
             embed = discord.Embed(
-                title="📺 YouTube Search",
+                title="YouTube Search",
                 description=f"No videos found for **{query}**",
                 color=discord.Color.orange()
             )
@@ -620,7 +620,7 @@ class Search(commands.Cog):
         """
         if not query:
             embed = discord.Embed(
-                title="🎨 Art Search",
+                title="Art Search",
                 description="Search anime and manga art from multiple sources!",
                 color=primary_color()
             )
@@ -659,7 +659,7 @@ class Search(commands.Cog):
         
         if not results:
             embed = discord.Embed(
-                title="🎨 Art Search",
+                title="Art Search",
                 description=f"No artwork found for **{query}**",
                 color=discord.Color.orange()
             )
@@ -686,7 +686,7 @@ class Search(commands.Cog):
         
         if not results:
             embed = discord.Embed(
-                title=f"🎨 {source.title()} Search",
+                title=f"{source.title()} Search",
                 description=f"No artwork found for **{query}**",
                 color=discord.Color.orange()
             )
@@ -726,7 +726,7 @@ class Search(commands.Cog):
             )
             
             embed = discord.Embed(
-                title="✅ Art Saved",
+                title="Art Saved",
                 description=f"Saved art `{art_id}` to folder **{folder}**",
                 color=discord.Color.green()
             )
@@ -742,7 +742,7 @@ class Search(commands.Cog):
         """
         if not action:
             embed = discord.Embed(
-                title="📁 Art Folders",
+                title="Art Folders",
                 description="Organize your favorite art into folders!",
                 color=primary_color()
             )
@@ -775,7 +775,7 @@ class Search(commands.Cog):
                 )
                 
                 embed = discord.Embed(
-                    title="✅ Folder Created",
+                    title="Folder Created",
                     description=f"Created folder **{name}**",
                     color=discord.Color.green()
                 )
@@ -796,7 +796,7 @@ class Search(commands.Cog):
                     return await ctx.reply("📁 You don't have any folders yet.", mention_author=False)
                 
                 embed = discord.Embed(
-                    title="📁 Your Art Folders",
+                    title="Your Art Folders",
                     color=primary_color()
                 )
                 
@@ -832,7 +832,7 @@ class Search(commands.Cog):
             
             if not favorites:
                 embed = discord.Embed(
-                    title="🖼️ Favorites",
+                    title="Favorites",
                     description="You haven't saved any art yet!\n"
                                f"Use `{ctx.prefix}art save <id>` to save art.",
                     color=primary_color()
@@ -845,7 +845,7 @@ class Search(commands.Cog):
                     return await ctx.reply(f"📁 Folder **{folder}** is empty.", mention_author=False)
                 
                 embed = discord.Embed(
-                    title=f"📁 {folder}",
+                    title=f"{folder}",
                     description=f"**{len(items)}** saved items",
                     color=primary_color()
                 )
@@ -861,7 +861,7 @@ class Search(commands.Cog):
                 await ctx.reply(embed=embed, mention_author=False)
             else:
                 embed = discord.Embed(
-                    title="🖼️ Your Favorites",
+                    title="Your Favorites",
                     description=f"Use `{ctx.prefix}art favorites <folder>` to view a specific folder",
                     color=primary_color()
                 )
@@ -922,7 +922,7 @@ class Search(commands.Cog):
         
         if not result.get("success"):
             embed = discord.Embed(
-                title="❌ Translation Failed",
+                title="Translation Failed",
                 description="Could not translate the text. Please try again.",
                 color=discord.Color.red()
             )
@@ -950,7 +950,7 @@ class Search(commands.Cog):
         lang_name = TranslationAPI.LANGUAGES.get(lang, lang.upper())
         
         embed = discord.Embed(
-            title="🔍 Language Detection",
+            title="Language Detection",
             description=f"Detected language: **{lang_name}** (`{lang}`)",
             color=primary_color()
         )
@@ -970,7 +970,7 @@ class Search(commands.Cog):
         
         if not data:
             embed = discord.Embed(
-                title="🌤️ Weather",
+                title="Weather",
                 description=f"Could not find weather for **{location}**",
                 color=discord.Color.orange()
             )
@@ -1256,7 +1256,7 @@ class Search(commands.Cog):
         """🎨 Designer's color toolkit - analyze colors, extract from images, check contrast & more!"""
         if color_input is None:
             embed = discord.Embed(
-                title="🎨 Color Toolkit",
+                title="Color Toolkit",
                 description="Your designer's best friend for all things color!",
                 color=discord.Color.from_rgb(255, 105, 180)
             )
@@ -1340,7 +1340,7 @@ class Search(commands.Cog):
         best_text = "White" if white_contrast > black_contrast else "Black"
         
         embed = discord.Embed(
-            title=f"🎨 {color_name}",
+            title=f"{color_name}",
             color=discord.Color.from_rgb(r, g, b)
         )
         
@@ -1438,7 +1438,7 @@ class Search(commands.Cog):
             
             # Build embed
             embed = discord.Embed(
-                title=f"🎨 {member.display_name}'s Colors",
+                title=f"{member.display_name}'s Colors",
                 color=colored_role.color if colored_role else discord.Color.blurple()
             )
             
@@ -1660,7 +1660,7 @@ class Search(commands.Cog):
         file = discord.File(BytesIO(image_bytes), filename="palette.png")
         
         embed = discord.Embed(
-            title=f"🎨 Color Palette for #{color}",
+            title=f"Color Palette for #{color}",
             color=discord.Color.from_rgb(r, g, b)
         )
         
@@ -1823,7 +1823,7 @@ class Search(commands.Cog):
         # Check for attachment
         if not ctx.message.attachments:
             embed = discord.Embed(
-                title="🖼️ Image Color Extraction",
+                title="Image Color Extraction",
                 description="Attach an image to extract its colors!\n\n"
                            f"**Usage:** `{ctx.prefix}color image` (with image attached)",
                 color=primary_color()

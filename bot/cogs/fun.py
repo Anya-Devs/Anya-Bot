@@ -79,9 +79,9 @@ class Fun(commands.Cog):
             description=(
                 "Welcome! Configure your Q&A channels using the dropdowns below.\n\n"
                 "**Steps:**\n"
-                "1️⃣ Select the Question channel.\n"
-                "2️⃣ Select the Answer channel.\n"
-                "3️⃣ Click Confirm to save your configuration.\n\n"
+                "1. Select the Question channel.\n"
+                "2. Select the Answer channel.\n"
+                "3. Click Confirm to save your configuration.\n\n"
                 "You can always re-run this command to update channels."
             ),
             color=discord.Color.blue(),
@@ -107,7 +107,7 @@ class Fun(commands.Cog):
                 return
 
             embed = discord.Embed(
-                title="❓ Question",
+                title="Question",
                 description=f"```{message.content}```",
                 color=primary_color(),
                 timestamp=datetime.now()
@@ -145,7 +145,7 @@ class Fun(commands.Cog):
     # ---------------- Riddle Group Commands ----------------
     @commands.group(name="riddle", invoke_without_command=True)
     async def riddle_group(self, ctx):
-        await ctx.send("❌ Invalid subcommand. Use `setup` or `post`.")
+        await ctx.send("Invalid subcommand. Use `setup` or `post`.")
 
     @riddle_group.command(name="setup")
     @commands.has_permissions(administrator=True)
@@ -157,7 +157,7 @@ class Fun(commands.Cog):
             {"$set": {"answer_channel_id": channel.id}},
             upsert=True
         )
-        await ctx.send(f"✅ Riddle answers will now be collected in {channel.mention}.")
+        await ctx.send(f"Riddle answers will now be collected in {channel.mention}.")
 
     @riddle_group.command(name="post")
     async def riddle_post(self, ctx):
@@ -166,11 +166,11 @@ class Fun(commands.Cog):
         collection = client["Commands"]["riddles"]
         data = await collection.find_one({"guild_id": ctx.guild.id})
         if not data or "answer_channel_id" not in data:
-            return await ctx.send("❌ Riddle answers channel not set. Use `riddle setup` first.")
+            return await ctx.send("Riddle answers channel not set. Use `riddle setup` first.")
 
         view = PostRiddleButton(self.bot, ctx.guild.id, self.mongo_url)
         embed = discord.Embed(
-            title="🧩 Post a Riddle",
+            title="Post a Riddle",
             description="Click the button below to submit a new riddle via modal.",
             color=primary_color()
         )

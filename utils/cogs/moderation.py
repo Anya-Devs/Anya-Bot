@@ -144,7 +144,7 @@ class ModerationEmbeds:
         }
         
         embed = discord.Embed(
-            title=f"🔨 {action.title()}",
+            title=f"{action.title()}",
             color=color or colors.get(action.lower(), primary_color()),
             timestamp=datetime.now(timezone.utc)
         )
@@ -171,7 +171,7 @@ class ModerationEmbeds:
     def warnings_embed(user: discord.Member, warnings: List[dict], guild: discord.Guild) -> discord.Embed:
         """Create warnings list embed"""
         embed = discord.Embed(
-            title=f"⚠️ Warnings for {user.display_name}",
+            title=f"Warnings for {user.display_name}",
             color=discord.Color.yellow(),
             timestamp=datetime.now(timezone.utc)
         )
@@ -249,7 +249,7 @@ class ModerationViews:
         
         def build_embed(self) -> discord.Embed:
             embed = discord.Embed(
-                title="📋 Moderation Cases",
+                title="Moderation Cases",
                 color=primary_color(),
                 timestamp=datetime.now(timezone.utc)
             )
