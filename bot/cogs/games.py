@@ -1132,7 +1132,7 @@ class Games(commands.Cog):
         
         # Classic Games
         embed.add_field(
-            name="📝 **CLASSIC**",
+            name="**CLASSIC**",
             value=f"`{ctx.prefix}hangman` - Word Game\n"
                   f"`{ctx.prefix}wordle` - 5-Letter Puzzle",
             inline=True
@@ -1708,7 +1708,7 @@ class Games(commands.Cog):
     @commands.command(name="hangman", aliases=["hm"])
     @commands.cooldown(1, 5, commands.BucketType.channel)
     async def hangman_game(self, ctx):
-        """📝 Multiplayer Hangman! Play in DMs, results shown in channel."""
+        """Multiplayer Hangman! Play in DMs, results shown in channel."""
         guild_id = str(ctx.guild.id)
         game_id = f"{guild_id}_{ctx.channel.id}_hangman_{int(datetime.now(timezone.utc).timestamp())}"
         

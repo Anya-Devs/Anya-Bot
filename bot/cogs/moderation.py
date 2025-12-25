@@ -820,11 +820,11 @@ class Moderation(commands.Cog):
         if member:
             warnings = await self.mod_db.get_warnings(ctx.guild.id, member.id)
             embed = ModerationEmbeds.warnings_embed(member, warnings, ctx.guild)
-            embed.title = f"📝 Notes for {member.display_name}"
+            embed.title = f"Notes for {member.display_name}"
             await ctx.reply(embed=embed, mention_author=False)
         else:
             embed = discord.Embed(
-                title="📝 Notes Commands",
+                title="Notes Commands",
                 description=f"`{ctx.prefix}notes @member` - View notes for a member\n"
                             f"`{ctx.prefix}notes add @member <note>` - Add a note\n"
                             f"`{ctx.prefix}notes clear @member` - Clear all notes",
@@ -839,7 +839,7 @@ class Moderation(commands.Cog):
         await self.mod_db.add_warning(ctx.guild.id, member.id, ctx.author.id, f"[NOTE] {note}")
         
         embed = discord.Embed(
-            title="📝 Note Added",
+            title="Note Added",
             description=f"Added note for {member.mention}:\n```{note}```",
             color=discord.Color.green()
         )

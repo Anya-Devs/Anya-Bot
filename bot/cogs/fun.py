@@ -75,7 +75,7 @@ class Fun(commands.Cog):
         view = QnAConfigView(self.bot, ctx.guild, current_config, self.collection, ctx.author)
 
         embed = discord.Embed(
-            title="📝 Q&A Setup",
+            title="Q&A Setup",
             description=(
                 "Welcome! Configure your Q&A channels using the dropdowns below.\n\n"
                 "**Steps:**\n"

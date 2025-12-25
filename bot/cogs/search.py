@@ -259,6 +259,8 @@ class GoogleSearchView(discord.ui.View):
         self.page = 0
         self.results = {"web": [], "images": [], "videos": []}
         self.per_page = {"web": 5, "images": 1, "videos": 1}
+        self.image_fetch_offset = 0  # Track how many batches we've fetched for images
+        self.loading_more = False  # Prevent duplicate fetches
         
         # Add select menu
         self.type_select = GoogleSearchTypeSelect(search_type)
@@ -269,9 +271,30 @@ class GoogleSearchView(discord.ui.View):
         if self.search_type == "web" and not self.results["web"]:
             self.results["web"] = await self.cog.google.search(self.query, num=10, safe=self.safe_search)
         elif self.search_type == "images" and not self.results["images"]:
-            self.results["images"] = await self.cog.google.image_search(self.query, num=20, safe=self.safe_search)
+            self.results["images"] = await self.cog.google.image_search(self.query, num=50, safe=self.safe_search)
+            self.image_fetch_offset = 50
         elif self.search_type == "videos" and not self.results["videos"]:
             self.results["videos"] = await self.cog.google.video_search(self.query, num=10, safe=self.safe_search)
+    
+    async def fetch_more_images(self):
+        """Fetch more images when user reaches near the end (infinite scroll)"""
+        if self.loading_more:
+            return
+        self.loading_more = True
+        try:
+            new_images = await self.cog.google.image_search(
+                self.query, num=50, start=self.image_fetch_offset, safe=self.safe_search
+            )
+            if new_images:
+                # Filter out duplicates
+                existing_urls = {img.get("link") for img in self.results["images"]}
+                for img in new_images:
+                    if img.get("link") not in existing_urls:
+                        self.results["images"].append(img)
+                        existing_urls.add(img.get("link"))
+                self.image_fetch_offset += 50
+        finally:
+            self.loading_more = False
     
     def get_current_results(self):
         return self.results.get(self.search_type, [])
@@ -283,7 +306,13 @@ class GoogleSearchView(discord.ui.View):
     
     def update_buttons(self):
         self.prev_btn.disabled = self.page <= 0
-        self.next_btn.disabled = self.page >= self.get_max_pages() - 1
+        # For images, never disable next button (infinite scroll)
+        if self.search_type == "images":
+            self.next_btn.disabled = False
+        else:
+            self.next_btn.disabled = self.page >= self.get_max_pages() - 1
+        # Show/hide set image button based on search type
+        self.set_image_btn.disabled = self.search_type != "images" or not self.get_current_results()
     
     def build_embed(self) -> discord.Embed:
         results = self.get_current_results()
@@ -352,7 +381,7 @@ class GoogleSearchView(discord.ui.View):
         if image.get("source"):
             embed.add_field(name="Source", value=f"[View Source]({image['source']})", inline=True)
         
-        embed.set_footer(text=f"Image {self.page + 1}/{len(results)} • Click arrows to browse")
+        embed.set_footer(text=f"Image {self.page + 1}/{len(results)}+ • Click 📌 Set Image to select • Infinite scroll enabled")
         return embed
     
     def _build_video_embed(self, results: list) -> discord.Embed:
@@ -406,7 +435,20 @@ class GoogleSearchView(discord.ui.View):
         if interaction.user.id != self.author.id:
             return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
         
-        self.page = min(self.get_max_pages() - 1, self.page + 1)
+        # For images, implement infinite scroll
+        if self.search_type == "images":
+            self.page += 1
+            # Fetch more images when approaching the end
+            if self.page >= len(self.results["images"]) - 5:
+                await interaction.response.defer()
+                await self.fetch_more_images()
+                self.update_buttons()
+                embed = self.build_embed()
+                await interaction.edit_original_response(embed=embed, view=self)
+                return
+        else:
+            self.page = min(self.get_max_pages() - 1, self.page + 1)
+        
         self.update_buttons()
         embed = self.build_embed()
         await interaction.response.edit_message(embed=embed, view=self)
@@ -418,12 +460,41 @@ class GoogleSearchView(discord.ui.View):
         
         # Clear cached results for current type and refetch
         self.results[self.search_type] = []
+        self.image_fetch_offset = 0
         await interaction.response.defer()
         await self.fetch_results()
         self.page = 0
         self.update_buttons()
         embed = self.build_embed()
         await interaction.edit_original_response(embed=embed, view=self)
+    
+    @discord.ui.button(label="📌 Set Image", style=discord.ButtonStyle.success, row=1)
+    async def set_image_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        
+        if self.search_type != "images" or not self.results["images"]:
+            return await interaction.response.send_message("❌ No image to set!", ephemeral=True)
+        
+        # Get current image
+        image = self.results["images"][self.page]
+        image_url = image.get("link", "")
+        
+        if not image_url:
+            return await interaction.response.send_message("❌ Could not get image URL!", ephemeral=True)
+        
+        # Send the image as a standalone message
+        embed = discord.Embed(
+            title=f"🖼️ Selected Image",
+            description=f"**Search:** {self.query}\n**Image {self.page + 1}** of {len(self.results['images'])}+",
+            color=discord.Color.green(),
+            timestamp=datetime.now(timezone.utc)
+        )
+        embed.set_image(url=image_url)
+        embed.add_field(name="Direct Link", value=f"[Click to open]({image_url})", inline=False)
+        embed.set_footer(text=f"Selected by {interaction.user.display_name}")
+        
+        await interaction.response.send_message(embed=embed)
 
 
 class Search(commands.Cog):
@@ -1688,19 +1759,6 @@ class Search(commands.Cog):
             inline=True
         )
         embed.add_field(name="\u200b", value="\u200b", inline=True)
-        
-        embed.add_field(
-            name="📝 WCAG AA",
-            value=f"Normal Text: {aa_normal}\nLarge Text: {aa_large}",
-            inline=True
-        )
-        embed.add_field(
-            name="🏅 WCAG AAA",
-            value=f"Normal Text: {aaa_normal}\nLarge Text: {aaa_large}",
-            inline=True
-        )
-        
-        embed.set_footer(text="AA: Min 4.5:1 normal, 3:1 large | AAA: 7:1 normal, 4.5:1 large")
         await ctx.reply(embed=embed, mention_author=False)
     
     @color_group.command(name="preview", aliases=["demo", "show"])
@@ -1711,7 +1769,7 @@ class Search(commands.Cog):
             color = "".join([c*2 for c in color])
         
         if len(color) != 6 or not all(c in "0123456789ABCDEF" for c in color):
-            return await ctx.reply("❌ Invalid hex color!", mention_author=False)
+            return await ctx.reply("Invalid hex color!", mention_author=False)
         
         r, g, b = self._hex_to_rgb(color)
         
@@ -1721,19 +1779,19 @@ class Search(commands.Cog):
         text_color = "FFFFFF" if white_contrast > black_contrast else "000000"
         
         embed = discord.Embed(
-            title=f"👁️ Color Preview: #{color}",
+            title=f"Color Preview: #{color}",
             description=f"See how `#{color}` looks in different contexts!",
             color=discord.Color.from_rgb(r, g, b)
         )
         
         embed.add_field(
-            name="💬 As Embed Color",
+            name="As Embed Color",
             value="← This embed uses your color!",
             inline=False
         )
         
         embed.add_field(
-            name="📋 Copy-Paste Codes",
+            name="Copy-Paste Codes",
             value=f"**CSS:** `background-color: #{color};`\n"
                   f"**Tailwind:** `bg-[#{color}]`\n"
                   f"**Discord:** `color=discord.Color.from_rgb({r}, {g}, {b})`",
@@ -1741,14 +1799,14 @@ class Search(commands.Cog):
         )
         
         embed.add_field(
-            name="🎨 Best Text Color",
+            name="Best Text Color",
             value=f"Use **{'White' if text_color == 'FFFFFF' else 'Black'}** text\n"
                   f"Contrast ratio: `{max(white_contrast, black_contrast):.1f}:1`",
             inline=True
         )
         
         embed.add_field(
-            name="🔗 Color Name",
+            name="Color Name",
             value=f"**{self._get_color_name(r, g, b)}**",
             inline=True
         )
@@ -1808,7 +1866,7 @@ class Search(commands.Cog):
                 top_colors = color_counts.most_common(5)
                 
                 embed = discord.Embed(
-                    title="🖼️ Extracted Colors",
+                    title="Extracted Colors",
                     color=discord.Color.from_rgb(*top_colors[0][0])
                 )
                 
@@ -1851,7 +1909,7 @@ class Search(commands.Cog):
         import urllib.parse
         
         if len(text) > 500:
-            return await ctx.reply("❌ Text too long! Max 500 characters.", mention_author=False)
+            return await ctx.reply("Text too long! Max 500 characters.", mention_author=False)
         
         # URL encode the text
         encoded = urllib.parse.quote(text)
