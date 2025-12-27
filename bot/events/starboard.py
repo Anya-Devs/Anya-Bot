@@ -16,6 +16,7 @@ class StarboardConfig:
 
     patterns = {
         "shiny_indicator": r"These colors seem unusual\.{3} ✨",
+        "unknown_emoji": r"<:unknown:\d+>|:unknown:",
         "congrats_message": re.compile(
             r"Congratulations\s+"
             r"(?:<@!?(\d+)>|@([\w_]+))\s*!"
@@ -35,13 +36,13 @@ class StarboardConfig:
         "default": 0x131416,
     }
 
-    congrats_thumbnail = "data/events/starboard/images/congrats_thumbnail.png"
+    congrats_thumbnail = "attachment://congrats_thumbnail.png"
 
     embed_layout = {
         "congrats": {
             "title": "<a:tada:1401401635439251587> Congrats!",
             "description_template": (
-                "{mention}, you've caught a {type_label} **{shiny}{pokemon_name}**!"
+                "{mention}, you've caught a {type_label} {shiny} **{pokemon_name}**!"
                
             ),
             "show_thumbnail": True,
@@ -89,17 +90,14 @@ class StarboardProcessor:
         return name.lower() in StarboardConfig.regional_names
 
     def determine_color(self, shiny: bool, name: str) -> int:
-        if shiny:
-            return StarboardConfig.colors["shiny"]
-        if self.is_rare_name(name):
-            return StarboardConfig.colors["rare"]
-        if self.is_regional_name(name):
-            return StarboardConfig.colors["regional"]
         return StarboardConfig.colors["default"]
 
     async def process_message(self, bot, message: discord.Message):
         try:
-            shiny = bool(re.search(StarboardConfig.patterns["shiny_indicator"], message.content))
+            shiny = bool(
+                re.search(StarboardConfig.patterns["shiny_indicator"], message.content) or
+                re.search(StarboardConfig.patterns["unknown_emoji"], message.content)
+            )
 
             # Process all catch messages in the content
             matches = list(StarboardConfig.patterns["congrats_message"].finditer(message.content))
@@ -191,7 +189,10 @@ class StarboardProcessor:
         shiny, spawn_color, spawn_jump_url
     ):
         cfg = StarboardConfig.embed_layout["starboard"]
-        title = cfg["title_template"].format(pokemon_name=pokemon_name.title(), sparkle_emoji=sparkle_emoji)
+        if sparkle_emoji:
+            title = f"✨ {pokemon_name.title()}"
+        else:
+            title = pokemon_name.title()
         
         # Ensure we have a valid spawn jump URL
         if not spawn_jump_url or spawn_jump_url == "N/A":
@@ -204,7 +205,7 @@ class StarboardProcessor:
                 pokemon_name=pokemon_name.title(),
                 spawn_location=spawn_jump_url
             ),
-            color=spawn_color or self.determine_color(shiny, pokemon_name),
+            color=StarboardConfig.colors["default"],
         )
         
         # Set the spawn image from the Pokétwo spawn embed
@@ -222,21 +223,28 @@ class StarboardProcessor:
      # Use channel mention from spawn message
      spawn_channel_mention = f"<#{spawn_msg.channel.id}>" if spawn_msg else "N/A"
 
+     mention = f"<@{catcher_id}>"
+     shiny_label = " shiny" if shiny else ""
+     type_label = "rare" if is_rare else ("regional" if is_regional else "")
+
+     starboard_channel_id = await self.config_db.get_starboard_channel(message.guild.id)
+     starboard_mention = f"<#{starboard_channel_id}>" if starboard_channel_id else "N/A"
+
      embed = discord.Embed(
         title=cfg["title"],
-        description=cfg["description_template"].format(
-            mention=f"<@{catcher_id}>",
-            type_label="rare" if is_rare else "regional",
-            shiny="Shiny " if shiny else "",
-            pokemon_name=pokemon_name.title(),
-          
-        ),
-        color=spawn_color or self.determine_color(shiny, pokemon_name),
+        description=f"{mention}, you've caught a{' ' + type_label if type_label else ''}{shiny_label} **{pokemon_name.title()}**!\n> Posted momment to {starboard_mention}",
+        color=StarboardConfig.colors["default"],
         #timestamp=message.created_at if cfg.get("show_timestamp") else None,
     )
-     if cfg.get("show_thumbnail"):
+     if cfg.get("show_thumbnail") and cfg["thumbnail_url"].startswith(('http://', 'https://', 'attachment://')):
         embed.set_thumbnail(url=cfg["thumbnail_url"])
-     await message.channel.send(embed=embed) 
+    
+     thumbnail_path = "data/events/starboard/images/congrats_thumbnail.png"
+     if os.path.exists(thumbnail_path):
+         file = discord.File(thumbnail_path, filename="congrats_thumbnail.png")
+         await message.channel.send(embed=embed, file=file)
+     else:
+         await message.channel.send(embed=embed) 
 
     async def find_spawn_message(self, bot, message: discord.Message):
         try:
