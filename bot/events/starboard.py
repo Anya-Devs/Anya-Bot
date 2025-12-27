@@ -191,18 +191,26 @@ class StarboardProcessor:
         shiny, spawn_color, spawn_jump_url
     ):
         cfg = StarboardConfig.embed_layout["starboard"]
-        title = cfg["title_template"].format(pokemon_name=pokemon_name, sparkle_emoji=sparkle_emoji)
+        title = cfg["title_template"].format(pokemon_name=pokemon_name.title(), sparkle_emoji=sparkle_emoji)
+        
+        # Ensure we have a valid spawn jump URL
+        if not spawn_jump_url or spawn_jump_url == "N/A":
+            spawn_jump_url = "N/A"
+        
         embed = discord.Embed(
             title=title,
             description=cfg["description_template"].format(
                 mention=f"<@{catcher_id}>",
-                pokemon_name=pokemon_name,
-                spawn_location=spawn_jump_url or "N/A"
+                pokemon_name=pokemon_name.title(),
+                spawn_location=spawn_jump_url
             ),
             color=spawn_color or self.determine_color(shiny, pokemon_name),
         )
+        
+        # Set the spawn image from the Pokétwo spawn embed
         if spawn_image_url:
             embed.set_image(url=spawn_image_url)
+        
         await self.send_to_starboard(bot, embed, guild_id)
 
     async def _send_congrats_embed(
@@ -220,7 +228,7 @@ class StarboardProcessor:
             mention=f"<@{catcher_id}>",
             type_label="rare" if is_rare else "regional",
             shiny="Shiny " if shiny else "",
-            pokemon_name=pokemon_name.tite(),
+            pokemon_name=pokemon_name.title(),
           
         ),
         color=spawn_color or self.determine_color(shiny, pokemon_name),
