@@ -703,7 +703,7 @@ class PoketwoSpawnDetector(commands.Cog):
             )
 
             if not os.path.exists(temp_path):
-                logger.error(f"Generated file not found: {temp_path}")
+                #logger.error(f"Generated file not found: {temp_path}")
                 return None
 
             from functools import partial

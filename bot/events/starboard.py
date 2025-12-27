@@ -35,9 +35,7 @@ class StarboardConfig:
         "default": 0x131416,
     }
 
-    congrats_thumbnail = (
-        "https://media.discordapp.net/attachments/1279353553110040596/1418799577867227176/image-removebg-preview_33.png"
-    )
+    congrats_thumbnail = "data/events/starboard/images/congrats_thumbnail.png"
 
     embed_layout = {
         "congrats": {
@@ -52,7 +50,7 @@ class StarboardConfig:
         },
         "starboard": {
             "title_template": "{sparkle_emoji} {pokemon_name}",
-            "description_template": "Cachter: {mention}\n> [Go to spawn]({spawn_location})",
+            "description_template": "Catcher: {mention}\n> [Go to spawn]({spawn_location})",
         },
     }
 
@@ -127,7 +125,16 @@ class StarboardProcessor:
             if catcher_id is None:
                 return
 
-            pokemon_name = match.group(4).strip() if match else "Unknown"
+            pokemon_name = match.group(4).strip()
+
+            # Clean name by removing type and variant prefixes
+            types = ["Normal", "Fire", "Water", "Electric", "Grass", "Ice", "Fighting", "Poison", "Ground", "Flying", "Psychic", "Bug", "Rock", "Ghost", "Dragon", "Dark", "Steel", "Fairy"]
+            variants = ["Alolan", "Galarian", "Hisuian", "Paldean", "Terastal", "Hisui", "Galar", "Alola", "Unova", "Kalos", "Sinnoh", "Hoenn", "Johto", "Kanto"]
+            for prefix in types + variants:
+                if pokemon_name.lower().startswith(prefix.lower() + " "):
+                    pokemon_name = pokemon_name[len(prefix) + 1:].strip()
+                    break
+            pokemon_name = pokemon_name.lower() if match else "Unknown"
             is_rare = self.is_rare_name(pokemon_name)
             is_regional = self.is_regional_name(pokemon_name)
             if not (shiny or is_rare or is_regional):
@@ -213,7 +220,7 @@ class StarboardProcessor:
             mention=f"<@{catcher_id}>",
             type_label="rare" if is_rare else "regional",
             shiny="Shiny " if shiny else "",
-            pokemon_name=pokemon_name,
+            pokemon_name=pokemon_name.tite(),
           
         ),
         color=spawn_color or self.determine_color(shiny, pokemon_name),
