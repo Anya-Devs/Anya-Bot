@@ -29,10 +29,10 @@ class StarboardConfig:
     }
 
     colors = {
-        "shiny": 0xFFD700,
-        "rare": 0xFF4500,
-        "regional": 0xADD8E6,
-        "default": 0x00BFFF,
+        "shiny": 0x131416,
+        "rare": 0x131416,
+        "regional": 0x131416,
+        "default": 0x131416,
     }
 
     congrats_thumbnail = (
@@ -52,7 +52,7 @@ class StarboardConfig:
         },
         "starboard": {
             "title_template": "{sparkle_emoji} {pokemon_name}",
-            "description_template": "Caught by {mention}\n> [Go to spawn]({spawn_location})",
+            "description_template": "Cachter: {mention}\n> [Go to spawn]({spawn_location})",
         },
     }
 

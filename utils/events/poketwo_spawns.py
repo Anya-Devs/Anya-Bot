@@ -302,10 +302,11 @@ class PokemonUtils:
             if not self.bot:
                 logger.warning("Bot instance not set in PokemonUtils; cannot fetch pokemon_types")
                 return {}
+            normalized_name = pokemon_name.lower().replace('_', '-').replace(' ', '-')
             pokemon_types_data = await self.pp.data_manager.pokemon_types
-            pokemon_types = pokemon_types_data.get(pokemon_name.lower(), [])
+            pokemon_types = pokemon_types_data.get(normalized_name, [])
             if not pokemon_types:
-                pokemon_types = self.get_pokemon_types(pokemon_name)
+                pokemon_types = self.get_pokemon_types(normalized_name)
             if not pokemon_types:
                 return {}
             type_pings = {}
@@ -328,8 +329,9 @@ class PokemonUtils:
 
     async def get_quest_ping_users(self, guild, pokemon_name):
         try:
+            normalized_name = pokemon_name.lower().replace('_', '-').replace(' ', '-')
             with open(self.pokemon_description_file, 'r', encoding='utf-8') as f:
-                region = next((row['region'].lower() for row in csv.DictReader(f) if row.get("slug", "").lower() == pokemon_name.lower()), None)
+                region = next((row['region'].lower() for row in csv.DictReader(f) if row.get("slug", "").lower() == normalized_name), None)
             if not region:
                 return []
             users = await self.mongo.db["quest_ping"].find({}).to_list(None)
@@ -339,12 +341,27 @@ class PokemonUtils:
             return []
 
     async def get_ping_users(self, guild, pokemon_name):
+        def normalize(name): return name.lower().replace('_', '-').replace(' ', '-')
         def fuzzy(t, n): return t == n or fuzz.ratio(t, n) > 85
         try:
+            normalized_name = normalize(pokemon_name)
+            logger.info(f"[get_ping_users] Looking for: '{normalized_name}' (original: '{pokemon_name}')")
             shiny = await self.mongo.db["shiny_hunt"].find({}).to_list(None)
             collect = await self.mongo.db["collection"].find({}).to_list(None)
-            shiny_mentions = [f"<@{u['user_id']}>" for u in shiny if any(fuzzy(pokemon_name.lower(), p.lower()) for p in u.get("pokemon", [])) and guild.get_member(u["user_id"])]
-            collect_mentions = [f"<@{u['user_id']}>" for u in collect if any(fuzzy(pokemon_name.lower(), p.lower()) for p in u.get("pokemon", [])) and guild.get_member(u["user_id"])]
+            logger.info(f"[get_ping_users] Found {len(collect)} collection entries")
+            
+            # Debug: check each collection entry
+            for u in collect:
+                user_pokemon = [normalize(p) for p in u.get("pokemon", [])]
+                matches = [p for p in user_pokemon if fuzzy(normalized_name, p)]
+                if matches:
+                    uid = int(u['user_id'])
+                    member = guild.get_member(uid)
+                    logger.info(f"[get_ping_users] User {uid} has matching pokemon {matches}, member={member}")
+            
+            shiny_mentions = [f"<@{int(u['user_id'])}>" for u in shiny if any(fuzzy(normalized_name, normalize(p)) for p in u.get("pokemon", [])) and guild.get_member(int(u["user_id"]))]
+            collect_mentions = [f"<@{int(u['user_id'])}>" for u in collect if any(fuzzy(normalized_name, normalize(p)) for p in u.get("pokemon", [])) and guild.get_member(int(u["user_id"]))]
+            logger.info(f"[get_ping_users] Result: shiny={shiny_mentions}, collect={collect_mentions}")
             return shiny_mentions, collect_mentions
         except Exception as e:
             logger.warning(f"Error in get_ping_users: {e}")

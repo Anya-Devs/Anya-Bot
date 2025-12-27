@@ -94,6 +94,7 @@ class PoketwoSpawnDetector(commands.Cog):
         self.full_pokemon_data = self.pokemon_utils.load_full_pokemon_data()
         self.image_builder = PokemonImageBuilder()
         self._pokemon_ids = self.pokemon_utils.load_pokemon_ids()
+        self._variant_slugs = self._load_variant_slugs()
 
         # Caches
         self.base_cache = lru_cache(maxsize=self.MAX_DYNAMIC_CACHE_SIZE)(self._get_base_name)
@@ -269,6 +270,24 @@ class PoketwoSpawnDetector(commands.Cog):
     # --------------------------------------------------------------------- #
     # Static helper methods (sync)
     # --------------------------------------------------------------------- #
+    def _load_variant_slugs(self) -> set:
+        """Load variant Pokemon slugs from the variant CSV file"""
+        import csv
+        variant_slugs = set()
+        variant_csv = "data/commands/pokemon/variant_pokemon_entries.csv"
+        try:
+            if os.path.exists(variant_csv):
+                with open(variant_csv, newline="", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        slug = row.get("slug", "").lower().strip()
+                        if slug:
+                            variant_slugs.add(slug)
+                logger.info(f"Loaded {len(variant_slugs)} variant Pokemon slugs")
+        except Exception as e:
+            logger.warning(f"Failed to load variant slugs: {e}")
+        return variant_slugs
+
     def _get_default_ext(self) -> str:
         """Determine default image extension from config"""
         try:
@@ -589,6 +608,13 @@ class PoketwoSpawnDetector(commands.Cog):
             return self.predictor.predict(image_url)
 
     def _get_base_name(self, raw_name: str) -> str:
+        # First, check if the raw name (normalized) is a variant Pokemon
+        normalized = raw_name.lower().replace('_', '-').replace(' ', '-')
+        # Check if it's in the variant slugs set
+        if normalized in self._variant_slugs:
+            return normalized
+        
+        # Fall back to original logic for base Pokemon
         base = self.pokemon_utils.get_base_pokemon_name(raw_name)
         if base not in self._pokemon_ids:
             full = self.pokemon_utils.find_full_name_for_slug(raw_name)
