@@ -654,8 +654,25 @@ class DatabaseManager:
             except PyMongoError as e:
                 logger.error(f"Error occurred while initializing balance: {e}")
 
+        async def increment_quests_done(self, user_id: str, guild_id: str):
+            """Increment the quests_done counter for a user."""
+            try:
+                db = self.mongoConnect[self.DB_NAME]
+                server_collection = db["Servers"]
+
+                quests_done_key = f"members.{user_id}.quests_done"
+
+                await server_collection.update_one(
+                    {"guild_id": guild_id},
+                    {"$inc": {quests_done_key: 1}},
+                    upsert=True,
+                )
+                logger.debug(f"Incremented quests_done for user {user_id} in guild {guild_id}")
+            except PyMongoError as e:
+                logger.error(f"Error occurred while incrementing quests_done: {e}")
+
         async def get_leaderboard(self, guild_id: str, limit: int = 10):
-            """Get top users by stella_points for a guild."""
+            """Get top users by stella_points for a guild, including quests_done count."""
             try:
                 db = self.mongoConnect[self.DB_NAME]
                 server_collection = db["Servers"]
@@ -672,10 +689,12 @@ class DatabaseManager:
 
                 for user_id, user_data in members.items():
                     stella_points = user_data.get("stella_points", 0)
+                    quests_done = user_data.get("quests_done", 0)
                     if stella_points > 0:
                         leaderboard.append({
                             "user_id": user_id,
-                            "stella_points": stella_points
+                            "stella_points": stella_points,
+                            "quests_done": quests_done
                         })
 
                 # Sort by stella_points descending

@@ -144,6 +144,7 @@ class Quest_Events(commands.Cog):
             if channel:
                 await self.quest_data.initialize_balance(user_id, guild_id)
                 await self.quest_data.add_balance(user_id, guild_id, quest["reward"])
+                await self.quest_data.increment_quests_done(user_id, guild_id)
                 balance = await self.quest_data.get_balance(user_id, guild_id)
                 embed = await Quest_Completed_Embed.create_embed(self.bot, quest["content"], channel.mention, times, user_mention, quest_id, method, reward, balance)
                 await channel.send(embed=embed, reference=message)

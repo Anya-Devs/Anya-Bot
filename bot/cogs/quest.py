@@ -6,6 +6,7 @@ from data.local.const import *
 from imports.discord_imports import *
 from imports.log_imports import *
 from utils.cogs.quest import *
+from utils.cogs.leaderboard_image import LeaderboardImageGenerator
 from utils.character_utils import format_character_name
 from utils.cogs.quest import _safe_select_emoji
 from utils.character_utils import get_character_def
@@ -418,8 +419,8 @@ class Quest(commands.Cog):
         try:
             guild_id = str(ctx.guild.id)
             
-            # Cap limit between 1 and 25
-            limit = max(1, min(25, limit))
+            # Cap limit between 1 and 15 for image
+            limit = max(1, min(15, limit))
             
             leaderboard_data = await self.quest_data.get_leaderboard(guild_id, limit)
             
@@ -432,60 +433,60 @@ class Quest(commands.Cog):
                 await ctx.reply(embed=embed, mention_author=False)
                 return
             
-            # Build leaderboard embed
-            embed = discord.Embed(
-                title="🥜 Anya's Super Cool Leaderboard",
-                description="*Waku waku! Who has the most stella stars?*\n",
-                color=discord.Color.from_rgb(255, 182, 193),
-                timestamp=datetime.now()
-            )
-            embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
-            
-            # Medal emojis for top 3
-            medals = ["🥇", "🥈", "🥉"]
-            
-            description_lines = ["*Waku waku! Who has the most stella stars?*\n"]
+            # Build entries for image generator
+            entries = []
             author_rank = None
             author_points = None
             
             for i, entry in enumerate(leaderboard_data):
-                user_id = entry["user_id"]
-                points = entry["stella_points"]
+                user_id = entry.get("user_id")
+                points = int(entry.get("stella_points", 0))
+                quests_done = int(entry.get("quests_done", 0))
                 
-                # Check if this is the author
                 if user_id == str(ctx.author.id):
                     author_rank = i + 1
                     author_points = points
                 
-                # Get medal or number
-                rank_display = medals[i] if i < 3 else f"`#{i + 1}`"
-                
-                # Format points with commas
-                points_formatted = "{:,}".format(points)
-                
-                # Try to get user, fallback to ID if not found
                 try:
-                    member = ctx.guild.get_member(int(user_id))
-                    user_display = member.mention if member else f"<@{user_id}>"
-                except:
-                    user_display = f"<@{user_id}>"
+                    member = ctx.guild.get_member(int(user_id)) if user_id else None
+                except Exception:
+                    member = None
                 
-                description_lines.append(f"{rank_display} {user_display} — **{points_formatted}** ⭐")
+                username = member.display_name if member else f"User {user_id[-4:]}" if user_id else "Unknown"
+                avatar_url = str(member.display_avatar.url) if member and member.display_avatar else None
+                
+                entries.append({
+                    "rank": i + 1,
+                    "username": username,
+                    "points": points,
+                    "quests_done": quests_done,
+                    "avatar_url": avatar_url
+                })
             
-            embed.description = "\n".join(description_lines)
+            # Generate leaderboard image
+            generator = LeaderboardImageGenerator()
+            image_buffer = await generator.generate(entries)
             
-            # Show author's rank if not in top list
+            # Build embed
+            embed = discord.Embed(
+                title="Stella Points Leaderboard",
+                color=discord.Color.from_rgb(255, 105, 180)
+            )
+            embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+            embed.set_image(url="attachment://leaderboard.png")
+            
+            # Show author's rank in footer
             if author_rank:
                 embed.set_footer(text=f"Your rank: #{author_rank} • {author_points:,} points", icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
             else:
-                # Find author's actual rank
                 user_balance = await self.quest_data.get_balance(str(ctx.author.id), guild_id)
                 if user_balance > 0:
-                    embed.set_footer(text=f"Your points: {user_balance:,} ⭐", icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
+                    embed.set_footer(text=f"Your points: {user_balance:,}", icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
                 else:
                     embed.set_footer(text="Complete quests to earn stella points!", icon_url=self.bot.user.avatar.url)
             
-            await ctx.reply(embed=embed, mention_author=False)
+            file = discord.File(image_buffer, filename="leaderboard.png")
+            await ctx.reply(embed=embed, file=file, mention_author=False)
             
         except Exception as e:
             logger.error(f"Error in leaderboard command: {e}")

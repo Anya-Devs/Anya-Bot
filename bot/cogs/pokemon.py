@@ -327,7 +327,7 @@ class PoketwoCommands(commands.Cog):
     # -------------------
     # Type Ping
     # -------------------
-    @pt.command(name="tp")
+    @pt.command(name="tp", help="Select Pokémon types to get pinged for when they spawn.")
     async def type_ping(self, ctx):
         user_id = ctx.author.id
         try:
@@ -345,7 +345,7 @@ class PoketwoCommands(commands.Cog):
     # -------------------
     # Quest Ping
     # -------------------
-    @pt.command(name="qp")
+    @pt.command(name="qp", help="Select Pokémon regions to get pinged for when they spawn.")
     async def quest_ping(self, ctx):
         user_id = ctx.author.id
         try:
@@ -364,7 +364,7 @@ class PoketwoCommands(commands.Cog):
     # -------------------
     # Shiny Hunt
     # -------------------
-    @pt.command(name="shiny", aliases=["sh"])
+    @pt.command(name="shiny", aliases=["sh"], help="Manage your shiny hunt targets. View, add, or remove Pokémon from your hunt.")
     async def shiny_hunt(self, ctx, action: str = None, *, pokemon: str = None):
         try:
             user_id = ctx.author.id
@@ -398,7 +398,7 @@ class PoketwoCommands(commands.Cog):
     # -------------------
     # Collection
     # -------------------
-    @pt.command(name="collection", aliases=["cl", "col"])
+    @pt.command(name="collection", aliases=["cl", "col"], help="Manage your Pokémon collection. Add, remove, or view Pokémon in your collection.")
     async def collection_manage(self, ctx, *, args: str = "list"):
         action = "list"
         remaining = args

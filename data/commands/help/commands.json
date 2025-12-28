@@ -1,4 +1,4 @@
-{
+﻿{
     "AI": {
         "imagine": {
             "aliases": ["i"],
@@ -262,7 +262,7 @@
     "PoketwoCommands": {
         "pt": {
             "aliases": [],
-            "description": "Main PokéTwo command group. Access type, quest, special, shiny, collection, and server settings.",
+            "description": "Main PokÃ©Two command group. Access type, quest, special, shiny, collection, and server settings.",
             "example": "pt type",
             "related_commands": "Use subcommands: type, quest, special, shiny, collection, settings"
         },
@@ -271,7 +271,7 @@
                 "type_ping",
                 "tp"
             ],
-            "description": "Set or view type ping preferences for Pokémon.",
+            "description": "Set or view type ping preferences for PokÃ©mon.",
             "example": "pt type",
             "related_commands": "pt quest, pt special"
         },
@@ -280,7 +280,7 @@
                 "quest_ping",
                 "qp"
             ],
-            "description": "Set or view quest region pings for legendary or mythical Pokémon.",
+            "description": "Set or view quest region pings for legendary or mythical PokÃ©mon.",
             "example": "pt quest",
             "related_commands": "pt type, pt special"
         },
@@ -289,7 +289,7 @@
                 "special_ping",
                 "sp"
             ],
-            "description": "Set roles for rare or regional Pokémon pings.",
+            "description": "Set roles for rare or regional PokÃ©mon pings.",
             "example": "pt special rare @Role",
             "related_commands": "pt type, pt quest"
         },
@@ -307,7 +307,7 @@
                 "cl",
                 "collection_manage"
             ],
-            "description": "Manage your Pokémon collection. Add, remove, list, or clear Pokémon.",
+            "description": "Manage your PokÃ©mon collection. Add, remove, list, or clear PokÃ©mon.",
             "example": "pt collection add Pikachu",
             "related_commands": "pt shiny"
         },
@@ -316,7 +316,7 @@
                 "server_config",
                 "sc"
             ],
-            "description": "View or configure server-wide Pokémon ping settings.",
+            "description": "View or configure server-wide PokÃ©mon ping settings.",
             "example": "pt settings",
             "related_commands": "pt special"
         }
@@ -359,7 +359,7 @@
                 "dex",
                 "d"
             ],
-            "description": "Display detailed Pokémon information including stats, types, abilities, and sprites. Supports shiny and regional forms.",
+            "description": "Display detailed PokÃ©mon information including stats, types, abilities, and sprites. Supports shiny and regional forms.",
             "example": "{}pokedex pikachu\n{}pokedex shiny eevee\n{}pokedex alolan vulpix",
             "related_commands": "{}pt"
         }
@@ -616,7 +616,7 @@
         "translate": {
             "aliases": ["tr"],
             "description": "Translate text between languages. Auto-detects source language.",
-            "example": "{}translate Hello, how are you?\n{}tr こんにちは",
+            "example": "{}translate Hello, how are you?\n{}tr ã“ã‚“ã«ã¡ã¯",
             "result": "Shows translated text with detected source language.",
             "related_commands": "{}define"
         },

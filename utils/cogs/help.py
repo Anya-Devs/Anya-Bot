@@ -144,8 +144,8 @@ class Select_Help(discord.ui.Select):
         for module, cogs in self.module_to_cogs.items():
             cog_name = cogs[0].qualified_name.lower() if cogs else "unknown"
             emoji = Help_Select_Embed_Mapping.emojis.get(cog_name)
-            if not emoji:
-                continue
+            if emoji and emoji.startswith("<"):
+                emoji = None  # Skip custom emojis as Discord SelectOption doesn't support them
             label = module.replace("_", " ").replace(".py", "").title()
             label = f"{label} Commands" if "Help" not in label else label
             opts.append(discord.SelectOption(label=label, value=module, emoji=emoji))
@@ -180,7 +180,7 @@ class Select_Help(discord.ui.Select):
             
             commands_str = "\n".join(cmd_parts) if cmd_parts else "No commands."
             inline = False
-            fields.append((cog.__class__.__name__.replace("_", " "), commands_str, inline))
+            fields.append((module.replace("_", " "), commands_str, inline))
         return fields
 
     async def callback(self, interaction: discord.Interaction):
@@ -635,7 +635,8 @@ class CommandHelpView(discord.ui.View):
         return interaction.user == self.ctx.author
     
     def build_embed(self) -> discord.Embed:
-        """Build a modern, spread-out embed for command help"""
+        """Build a modern embed inspired by the website design"""
+        import inspect
         cmd = self.command
         info = self.command_info
         
@@ -649,48 +650,23 @@ class CommandHelpView(discord.ui.View):
         signature = cmd.signature.replace('[', '<').replace(']', '>').replace('=None', '') if hasattr(cmd, 'signature') else ""
         usage = f"{self.prefix}{cmd.qualified_name} {signature}".strip()
         
-        # Build embed with website-inspired styling
-        embed = discord.Embed(color=self.primary_color)
+        # Get module for thumbnail
+        module = inspect.getmodule(cmd.__class__).__name__.split('.')[-1]
+        thumbs = Help_Thumbnails("data/commands/help/thumbnails.json")
+        thumbnail_url = thumbs.get_image_url(module)
         
-        # Header section
-        embed.set_author(
-            name=f"📖 Command: {cmd.qualified_name}",
-            icon_url=self.bot.user.display_avatar.url if self.bot.user.avatar else None
+        # Build embed with modern styling
+        embed = discord.Embed(
+            title=f"📖 {cmd.qualified_name}",
+            description=f"```\n{usage}\n```\n{description[:1024]}",
+            color=self.primary_color
         )
         
-        # Usage section - prominent display
-        embed.add_field(
-            name="⌨️ Usage",
-            value=f"```\n{usage}\n```",
-            inline=False
-        )
+        # Set thumbnail if available
+        if thumbnail_url:
+            embed.set_thumbnail(url=thumbnail_url)
         
-        # Aliases section
-        if aliases:
-            alias_str = " • ".join([f"`{a}`" for a in aliases])
-            embed.add_field(
-                name="Aliases",
-                value=alias_str,
-                inline=True
-            )
-        
-        # Cooldown info if exists
-        if hasattr(cmd, '_buckets') and cmd._buckets and cmd._buckets._cooldown:
-            cooldown = cmd._buckets._cooldown
-            embed.add_field(
-                name="Cooldown",
-                value=f"⏱️ - {cooldown.rate} use / {int(cooldown.per)}s",
-                inline=True
-            )
-        
-        # Description section - full width
-        embed.add_field(
-            name="Description",
-            value=description[:1024],
-            inline=False
-        )
-        
-        # Example section
+        # Add example field
         if example and example != "No example provided.":
             formatted_example = example.format(*[self.prefix] * example.count('{}')) if '{}' in example else example
             embed.add_field(
@@ -699,7 +675,25 @@ class CommandHelpView(discord.ui.View):
                 inline=False
             )
         
-        # Result section
+        # Add aliases field
+        if aliases:
+            alias_str = " • ".join([f"`{a}`" for a in aliases])
+            embed.add_field(
+                name="Aliases",
+                value=alias_str,
+                inline=True
+            )
+        
+        # Add cooldown if exists
+        if hasattr(cmd, '_buckets') and cmd._buckets and cmd._buckets._cooldown:
+            cooldown = cmd._buckets._cooldown
+            embed.add_field(
+                name="Cooldown",
+                value=f"⏱️ {cooldown.rate} use / {int(cooldown.per)}s",
+                inline=True
+            )
+        
+        # Add result if available
         if result and result != "No result provided.":
             embed.add_field(
                 name="Result",
@@ -707,7 +701,7 @@ class CommandHelpView(discord.ui.View):
                 inline=False
             )
         
-        # Subcommands section if group command
+        # Add subcommands if group
         if hasattr(cmd, 'commands') and cmd.commands:
             subcommands = [c for c in cmd.commands if not c.hidden]
             if subcommands:
@@ -718,7 +712,7 @@ class CommandHelpView(discord.ui.View):
                     inline=False
                 )
         
-        # Footer with helpful info
+        # Footer
         embed.set_footer(
             text=f"<> = required • [] = optional • Use {self.prefix}help for all commands",
             icon_url=self.ctx.author.display_avatar.url
@@ -742,8 +736,7 @@ class SubcommandSelect(discord.ui.Select):
             options.append(discord.SelectOption(
                 label=cmd.name,
                 description=desc,
-                value=cmd.qualified_name,
-                emoji="▸"
+                value=cmd.qualified_name
             ))
         
         super().__init__(
@@ -776,16 +769,16 @@ class Sub_Helper:
     def _ensure_file_exists(self):
         os.makedirs(os.path.dirname(self.help_json_path), exist_ok=True)
         if not os.path.exists(self.help_json_path):
-            with open(self.help_json_path, "w") as f:
+            with open(self.help_json_path, "w", encoding="utf-8") as f:
                 json.dump({}, f, indent=4)
 
     def _load_help_json(self):
         self._ensure_file_exists()
-        with open(self.help_json_path, "r") as f:
+        with open(self.help_json_path, "r", encoding="utf-8-sig") as f:
             return json.load(f)
 
     def _save_help_json(self, data):
-        with open(self.help_json_path, "w") as f:
+        with open(self.help_json_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
 
     def create_command_help_json(self):
