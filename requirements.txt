@@ -1,5 +1,4 @@
 emoji==1.7.0
-onnxruntime
 opencv-python-headless
 numpy
 requests
@@ -24,3 +23,7 @@ pilmoji
 tqdm
 colorlog
 colorama
+python-Levenshtein
+yt-dlp>=2023.12.30
+PyNaCl
+onnxruntime
