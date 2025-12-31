@@ -264,7 +264,7 @@ class ArtGalleryView(discord.ui.View):
         self._setup_components()
     
     def _setup_components(self):
-        """Setup all UI components"""
+        """Setup all UI components - simplified layout"""
         self.clear_items()
         
         # Row 0: Source selection (filtered by category)
@@ -282,23 +282,11 @@ class ArtGalleryView(discord.ui.View):
         self.mode_select = ArtViewModeSelect(self.view_mode, row=1)
         self.add_item(self.mode_select)
         
-        # Row 2: Category filter buttons + Navigation
-        self.add_item(self.safe_filter_btn)
-        self.add_item(self.mix_filter_btn)
-        if self.is_nsfw:
-            self.add_item(self.nsfw_filter_btn)
+        # Row 2: Navigation buttons (simplified)
         self.add_item(self.prev_btn)
-        self.add_item(self.next_btn)
-        
-        # Row 3: Extended Navigation
-        self.add_item(self.first_btn)
         self.add_item(self.page_indicator)
-        self.add_item(self.last_btn)
-        
-        # Row 4: Action buttons
+        self.add_item(self.next_btn)
         self.add_item(self.load_more_btn)
-        self.add_item(self.refresh_btn)
-        self.add_item(self.info_btn)
     
     @property
     def images_per_page(self) -> int:
@@ -680,97 +668,13 @@ class ArtGalleryView(discord.ui.View):
     
     def update_buttons(self):
         """Update button states"""
-        self.first_btn.disabled = self.page <= 0
         self.prev_btn.disabled = self.page <= 0
         self.next_btn.disabled = self.page >= self.max_pages - 1
-        self.last_btn.disabled = self.page >= self.max_pages - 1
         
         # Update page indicator
         self.page_indicator.label = f"{self.page + 1}/{self.max_pages}"
-        
-        # Update category filter button styles - use primary for active, secondary for inactive
-        self.safe_filter_btn.style = discord.ButtonStyle.primary if self.source_category == "safe" else discord.ButtonStyle.secondary
-        self.mix_filter_btn.style = discord.ButtonStyle.primary if self.source_category == "mix" else discord.ButtonStyle.secondary
-        if hasattr(self, 'nsfw_filter_btn'):
-            self.nsfw_filter_btn.style = discord.ButtonStyle.primary if self.source_category == "nsfw" else discord.ButtonStyle.secondary
     
-    # Category filter buttons (Row 2)
-    @discord.ui.button(label="✅ Safe", style=discord.ButtonStyle.secondary, row=2)
-    async def safe_filter_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user != self.author:
-            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
-        
-        await interaction.response.defer()
-        
-        # Toggle safe filter
-        self.source_category = "safe" if self.source_category != "safe" else "mix"
-        
-        # Update selected sources to match new category
-        filtered_sources = self.get_sources_by_category()
-        self.selected_sources = set(filtered_sources.keys())
-        
-        # Reset results and fetch new ones
-        self.results = []
-        self.page = 0
-        self.api_page = 0
-        await self.fetch_results()
-        
-        self._setup_components()
-        self.update_buttons()
-        embeds = self.build_embeds()
-        await interaction.edit_original_response(embeds=embeds, view=self)
-    
-    @discord.ui.button(label="⚠️ Mix", style=discord.ButtonStyle.primary, row=2)
-    async def mix_filter_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user != self.author:
-            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
-        
-        await interaction.response.defer()
-        
-        # Toggle mix filter
-        self.source_category = "mix" if self.source_category != "mix" else "mix"
-        
-        # Update selected sources to match new category
-        filtered_sources = self.get_sources_by_category()
-        self.selected_sources = set(filtered_sources.keys())
-        
-        # Reset results and fetch new ones
-        self.results = []
-        self.page = 0
-        self.api_page = 0
-        await self.fetch_results()
-        
-        self._setup_components()
-        self.update_buttons()
-        embeds = self.build_embeds()
-        await interaction.edit_original_response(embeds=embeds, view=self)
-    
-    @discord.ui.button(label="🔞 NSFW", style=discord.ButtonStyle.secondary, row=2)
-    async def nsfw_filter_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user != self.author:
-            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
-        
-        await interaction.response.defer()
-        
-        # Toggle nsfw filter
-        self.source_category = "nsfw" if self.source_category != "nsfw" else "mix"
-        
-        # Update selected sources to match new category
-        filtered_sources = self.get_sources_by_category()
-        self.selected_sources = set(filtered_sources.keys())
-        
-        # Reset results and fetch new ones
-        self.results = []
-        self.page = 0
-        self.api_page = 0
-        await self.fetch_results()
-        
-        self._setup_components()
-        self.update_buttons()
-        embeds = self.build_embeds()
-        await interaction.edit_original_response(embeds=embeds, view=self)
-    
-    # Navigation buttons (Row 2)
+    # Navigation buttons (Row 2) - Simplified
     @discord.ui.button(label="◀️", style=discord.ButtonStyle.primary, row=2)
     async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user != self.author:
@@ -779,6 +683,10 @@ class ArtGalleryView(discord.ui.View):
         self.update_buttons()
         embeds = self.build_embeds()
         await interaction.response.edit_message(embeds=embeds, view=self)
+    
+    @discord.ui.button(label="1/1", style=discord.ButtonStyle.secondary, disabled=True, row=2)
+    async def page_indicator(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pass  # Just a display button
     
     @discord.ui.button(label="▶️", style=discord.ButtonStyle.primary, row=2)
     async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -799,31 +707,7 @@ class ArtGalleryView(discord.ui.View):
             embeds = self.build_embeds()
             await interaction.response.edit_message(embeds=embeds, view=self)
     
-    # Navigation buttons (Row 3)
-    @discord.ui.button(label="⏮️", style=discord.ButtonStyle.secondary, row=3)
-    async def first_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user != self.author:
-            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
-        self.page = 0
-        self.update_buttons()
-        embeds = self.build_embeds()
-        await interaction.response.edit_message(embeds=embeds, view=self)
-    
-    @discord.ui.button(label="1/1", style=discord.ButtonStyle.secondary, disabled=True, row=3)
-    async def page_indicator(self, interaction: discord.Interaction, button: discord.ui.Button):
-        pass  # Just a display button
-    
-    @discord.ui.button(label="⏭️", style=discord.ButtonStyle.secondary, row=3)
-    async def last_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user != self.author:
-            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
-        self.page = self.max_pages - 1
-        self.update_buttons()
-        embeds = self.build_embeds()
-        await interaction.response.edit_message(embeds=embeds, view=self)
-    
-    # Action buttons (Row 4)
-    @discord.ui.button(label="📥 Load More", style=discord.ButtonStyle.primary, row=4)
+    @discord.ui.button(label="📥 More", style=discord.ButtonStyle.secondary, row=2)
     async def load_more_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user != self.author:
             return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
@@ -840,56 +724,8 @@ class ArtGalleryView(discord.ui.View):
             self.update_buttons()
             embeds = self.build_embeds()
             await interaction.edit_original_response(embeds=embeds, view=self)
-            await interaction.followup.send(f"✅ Loaded {added} more results!", ephemeral=True)
         else:
-            await interaction.followup.send("ℹ️ No more results available from selected sources.", ephemeral=True)
-    
-    @discord.ui.button(label="🔄 Refresh", style=discord.ButtonStyle.secondary, row=4)
-    async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user != self.author:
-            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
-        
-        await interaction.response.defer()
-        self.results = []
-        self.page = 0
-        self.api_page = 0
-        await self.fetch_results()
-        self.update_buttons()
-        embeds = self.build_embeds()
-        await interaction.edit_original_response(embeds=embeds, view=self)
-    
-    @discord.ui.button(label="ℹ️ Info", style=discord.ButtonStyle.secondary, row=4)
-    async def info_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user != self.author:
-            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
-        
-        # Show source statistics
-        sources_count = {}
-        for art in self.results:
-            source = art.get("source", "Unknown")
-            sources_count[source] = sources_count.get(source, 0) + 1
-        
-        embed = discord.Embed(
-            title="📊 Search Statistics",
-            description=f"**Query:** {self.query}\n**Total Results:** {len(self.results)}",
-            color=primary_color()
-        )
-        
-        # Source breakdown
-        source_text = "\n".join([
-            f"{ART_SOURCES.get(s.lower().replace('.', '').replace('-', '_').replace(' ', '_'), {}).get('emoji', '🎨')} **{s}:** {c}"
-            for s, c in sorted(sources_count.items(), key=lambda x: x[1], reverse=True)
-        ])
-        embed.add_field(name="Results by Source", value=source_text or "No results", inline=False)
-        
-        # Selected sources
-        selected_text = ", ".join([
-            f"{ART_SOURCES.get(s, {}).get('emoji', '')} {ART_SOURCES.get(s, {}).get('name', s)}"
-            for s in self.selected_sources
-        ][:8])
-        embed.add_field(name="Active Sources", value=selected_text or "None", inline=False)
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send("ℹ️ No more results available.", ephemeral=True)
 
 
 class SaveArtModal(discord.ui.Modal, title="Save Art to Favorites"):

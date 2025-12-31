@@ -449,22 +449,22 @@ class NewQuestButton(discord.ui.Button):
                     quests_created += 1
 
             if quests_created > 0:
-                # Fetch updated quests and show them
+                # Fetch updated quests and show them normally
                 user_id = str(button_user.id)
                 quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
                 
-                embed = discord.Embed(
-                    title="🎉 New Quests Created!",
-                    description=f"*Waku waku!* Created **{quests_created}** new quests for you!\n\nUse `{self.ctx.prefix}quest` to view them.",
-                    color=discord.Color.green()
-                )
-                
                 view = Quest_View(self.bot, quests if quests else [], self.ctx, 0)
+                embed = await view.generate_messages()
+                
+                # Generate quest image
+                image_buffer = await Quest_Progress.generate_quest_image(quests if quests else [], self.bot)
+                file = discord.File(image_buffer, filename="image.png")
+                
                 await interaction.followup.edit_message(
                     message_id=interaction.message.id,
                     embed=embed,
                     view=view,
-                    attachments=[]
+                    attachments=[file]
                 )
             else:
                 await interaction.followup.send(
@@ -612,22 +612,22 @@ class Quest_Button1(discord.ui.View):
                 if result:
                     quests_created += 1
 
-            # Fetch updated quests
+            # Fetch updated quests and show them normally
             user_id = str(button_user.id)
             quests = await self.quest_data.find_quests_by_user_and_server(user_id, guild_id)
             
-            embed = discord.Embed(
-                title="🎉 New Quests Created!",
-                description=f"*Waku waku!* Created **{quests_created}** new quests for you!\n\nUse `{self.ctx.prefix}quest` to view them.",
-                color=discord.Color.green()
-            )
-            
             view = Quest_View(self.bot, quests if quests else [], self.ctx, 0)
+            embed = await view.generate_messages()
+            
+            # Generate quest image
+            image_buffer = await Quest_Progress.generate_quest_image(quests if quests else [], self.bot)
+            file = discord.File(image_buffer, filename="image.png")
+            
             await interaction.followup.edit_message(
                 message_id=interaction.message.id,
                 embed=embed,
                 view=view,
-                attachments=[]
+                attachments=[file]
             )
 
         except Exception as e:

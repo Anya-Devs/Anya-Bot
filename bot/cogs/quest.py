@@ -395,7 +395,7 @@ class Quest(commands.Cog):
             
             # Get leaderboard position
             leaderboard = await self.quest_data.get_leaderboard(guild_id)
-            position = next((i+1 for i, (user_id, _) in enumerate(leaderboard) if user_id == target_id), None)
+            position = next((i+1 for i, entry in enumerate(leaderboard) if entry["user_id"] == target_id), None)
             
             embed = discord.Embed(color=primary_color())
             embed.set_author(name=f"{target_member.display_name}'s Balance", icon_url=target_member.display_avatar.url)

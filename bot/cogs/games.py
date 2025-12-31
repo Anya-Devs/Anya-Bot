@@ -82,6 +82,319 @@ SLOT_SYMBOL_COLORS = {
     "🥜": (139, 69, 19)    # Peanut - Brown
 }
 
+# Wordle colors for Pillow image generation
+WORDLE_COLORS = {
+    "correct": (106, 170, 100),    # Green - correct position
+    "present": (201, 180, 88),     # Yellow - wrong position
+    "absent": (120, 124, 126),     # Gray - not in word
+    "empty": (58, 58, 60),         # Dark gray - empty cell
+    "background": (18, 18, 19),    # Dark background
+    "text": (255, 255, 255),       # White text
+    "border": (58, 58, 60),        # Cell border
+}
+
+WORDLE_CELL_SIZE = 62
+WORDLE_CELL_GAP = 5
+WORDLE_PADDING = 10
+
+
+async def fetch_avatar_bytes(session, avatar_url: str, size: int = 64) -> Optional[bytes]:
+    """Fetch user avatar and return as bytes."""
+    try:
+        async with session.get(str(avatar_url)) as resp:
+            if resp.status == 200:
+                return await resp.read()
+    except:
+        pass
+    return None
+
+
+def generate_wordle_board_image(attempts: list, word: str, show_word: bool = False, 
+                                 avatar_bytes: bytes = None, player_name: str = None) -> io.BytesIO:
+    """Generate a Wordle board image using Pillow.
+    
+    Args:
+        attempts: List of dicts with 'word' and 'result' keys
+        word: The target word (for calculating results if needed)
+        show_word: Whether to reveal the word at the bottom
+        avatar_bytes: Optional avatar image bytes to display
+        player_name: Optional player name to display
+    
+    Returns:
+        BytesIO buffer containing the PNG image
+    """
+    rows = 6
+    cols = 5
+    
+    # Calculate dimensions - add space for avatar header if provided
+    header_height = 70 if avatar_bytes or player_name else 0
+    width = WORDLE_PADDING * 2 + cols * WORDLE_CELL_SIZE + (cols - 1) * WORDLE_CELL_GAP
+    height = WORDLE_PADDING * 2 + rows * WORDLE_CELL_SIZE + (rows - 1) * WORDLE_CELL_GAP + header_height
+    if show_word:
+        height += 40  # Extra space for revealed word
+    
+    # Create image
+    img = Image.new('RGB', (width, height), WORDLE_COLORS["background"])
+    draw = ImageDraw.Draw(img)
+    
+    # Try to load a font, fallback to default
+    try:
+        font_path = Path(__file__).parent.parent.parent / "data" / "assets" / "fonts" / "arial.ttf"
+        if font_path.exists():
+            font = ImageFont.truetype(str(font_path), 36)
+            small_font = ImageFont.truetype(str(font_path), 20)
+            name_font = ImageFont.truetype(str(font_path), 18)
+        else:
+            font = ImageFont.load_default()
+            small_font = font
+            name_font = font
+    except:
+        font = ImageFont.load_default()
+        small_font = font
+        name_font = font
+    
+    # Draw avatar and player name header if provided
+    if avatar_bytes or player_name:
+        avatar_size = 50
+        avatar_x = WORDLE_PADDING
+        avatar_y = 10
+        
+        # Draw avatar if available
+        if avatar_bytes:
+            try:
+                avatar_img = Image.open(io.BytesIO(avatar_bytes)).convert('RGBA')
+                avatar_img = avatar_img.resize((avatar_size, avatar_size), Image.Resampling.LANCZOS)
+                
+                # Create circular mask
+                mask = Image.new('L', (avatar_size, avatar_size), 0)
+                mask_draw = ImageDraw.Draw(mask)
+                mask_draw.ellipse((0, 0, avatar_size, avatar_size), fill=255)
+                
+                # Apply circular mask
+                output = Image.new('RGBA', (avatar_size, avatar_size), (0, 0, 0, 0))
+                output.paste(avatar_img, (0, 0), mask)
+                
+                # Paste onto main image
+                img.paste(output, (avatar_x, avatar_y), output)
+            except:
+                pass
+        
+        # Draw player name
+        if player_name:
+            name_x = avatar_x + avatar_size + 10 if avatar_bytes else WORDLE_PADDING
+            name_y = avatar_y + (avatar_size - 20) // 2 if avatar_bytes else 25
+            draw.text((name_x, name_y), player_name[:20], fill=WORDLE_COLORS["text"], font=name_font)
+    
+    # Draw grid (offset by header height)
+    grid_offset_y = header_height
+    for row in range(rows):
+        for col in range(cols):
+            x = WORDLE_PADDING + col * (WORDLE_CELL_SIZE + WORDLE_CELL_GAP)
+            y = WORDLE_PADDING + row * (WORDLE_CELL_SIZE + WORDLE_CELL_GAP) + grid_offset_y
+            
+            # Determine cell color and letter
+            if row < len(attempts):
+                attempt = attempts[row]
+                letter = attempt["word"][col] if col < len(attempt["word"]) else ""
+                result_char = attempt["result"][col] if col < len(attempt["result"]) else "⬜"
+                
+                if result_char == "🟩":
+                    color = WORDLE_COLORS["correct"]
+                elif result_char == "🟨":
+                    color = WORDLE_COLORS["present"]
+                else:
+                    color = WORDLE_COLORS["absent"]
+            else:
+                letter = ""
+                color = WORDLE_COLORS["empty"]
+            
+            # Draw cell
+            draw.rectangle(
+                [x, y, x + WORDLE_CELL_SIZE, y + WORDLE_CELL_SIZE],
+                fill=color,
+                outline=WORDLE_COLORS["border"],
+                width=2
+            )
+            
+            # Draw letter
+            if letter:
+                bbox = draw.textbbox((0, 0), letter, font=font)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+                text_x = x + (WORDLE_CELL_SIZE - text_width) // 2
+                text_y = y + (WORDLE_CELL_SIZE - text_height) // 2 - 5
+                draw.text((text_x, text_y), letter, fill=WORDLE_COLORS["text"], font=font)
+    
+    # Show revealed word if game over
+    if show_word:
+        text = f"Word: {word}"
+        bbox = draw.textbbox((0, 0), text, font=small_font)
+        text_width = bbox[2] - bbox[0]
+        text_x = (width - text_width) // 2
+        text_y = height - 35
+        draw.text((text_x, text_y), text, fill=WORDLE_COLORS["text"], font=small_font)
+    
+    # Save to buffer
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG')
+    buffer.seek(0)
+    return buffer
+
+
+def generate_wordle_live_image(players_data: dict, bot) -> io.BytesIO:
+    """Generate a combined image showing all players' Wordle boards.
+    
+    Args:
+        players_data: Dict of user_id -> player data with attempts
+        bot: Bot instance to fetch usernames
+    
+    Returns:
+        BytesIO buffer containing the PNG image
+    """
+    if not players_data:
+        # Return empty placeholder
+        img = Image.new('RGB', (300, 100), WORDLE_COLORS["background"])
+        draw = ImageDraw.Draw(img)
+        draw.text((50, 40), "No players yet", fill=WORDLE_COLORS["text"])
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+        return buffer
+    
+    # Individual board dimensions - increased header for avatar
+    rows, cols = 6, 5
+    avatar_size = 32
+    header_height = 40  # Space for avatar + name
+    board_width = WORDLE_PADDING * 2 + cols * WORDLE_CELL_SIZE + (cols - 1) * WORDLE_CELL_GAP
+    board_height = WORDLE_PADDING * 2 + rows * WORDLE_CELL_SIZE + (rows - 1) * WORDLE_CELL_GAP + header_height
+    
+    # Calculate grid layout (max 3 per row)
+    num_players = len(players_data)
+    cols_layout = min(num_players, 3)
+    rows_layout = (num_players + cols_layout - 1) // cols_layout
+    
+    # Total image dimensions
+    total_width = cols_layout * board_width + (cols_layout - 1) * 10
+    total_height = rows_layout * board_height + (rows_layout - 1) * 10
+    
+    # Create combined image
+    combined = Image.new('RGB', (total_width, total_height), WORDLE_COLORS["background"])
+    draw = ImageDraw.Draw(combined)
+    
+    # Try to load font
+    try:
+        font_path = Path(__file__).parent.parent.parent / "data" / "assets" / "fonts" / "arial.ttf"
+        if font_path.exists():
+            name_font = ImageFont.truetype(str(font_path), 14)
+            cell_font = ImageFont.truetype(str(font_path), 28)
+        else:
+            name_font = ImageFont.load_default()
+            cell_font = name_font
+    except:
+        name_font = ImageFont.load_default()
+        cell_font = name_font
+    
+    # Draw each player's board
+    for idx, (user_id, player_data) in enumerate(players_data.items()):
+        col_pos = idx % cols_layout
+        row_pos = idx // cols_layout
+        
+        offset_x = col_pos * (board_width + 10)
+        offset_y = row_pos * (board_height + 10)
+        
+        # Get player name
+        player_name = player_data.get("display_name", f"Player {idx + 1}")
+        if len(player_name) > 12:
+            player_name = player_name[:10] + ".."
+        
+        # Status indicator
+        status = player_data.get("status", "playing")
+        if status == "won":
+            status_emoji = "🏆"
+            name_color = (106, 170, 100)  # Green
+        elif status == "lost":
+            status_emoji = "💀"
+            name_color = (220, 20, 60)  # Red
+        else:
+            status_emoji = " "
+            name_color = WORDLE_COLORS["text"]
+        
+        # Draw avatar if available
+        avatar_bytes = player_data.get("avatar_bytes")
+        avatar_x = offset_x + 5
+        avatar_y = offset_y + 4
+        
+        if avatar_bytes:
+            try:
+                avatar_img = Image.open(io.BytesIO(avatar_bytes)).convert('RGBA')
+                avatar_img = avatar_img.resize((avatar_size, avatar_size), Image.Resampling.LANCZOS)
+                
+                # Create circular mask
+                mask = Image.new('L', (avatar_size, avatar_size), 0)
+                mask_draw = ImageDraw.Draw(mask)
+                mask_draw.ellipse((0, 0, avatar_size, avatar_size), fill=255)
+                
+                # Apply circular mask
+                output = Image.new('RGBA', (avatar_size, avatar_size), (0, 0, 0, 0))
+                output.paste(avatar_img, (0, 0), mask)
+                
+                # Paste onto combined image
+                combined.paste(output, (avatar_x, avatar_y), output)
+            except:
+                pass
+        
+        # Draw player name (offset by avatar if present)
+        name_x = avatar_x + avatar_size + 5 if avatar_bytes else offset_x + 10
+        name_y = offset_y + (avatar_size - 14) // 2 + 4 if avatar_bytes else offset_y + 12
+        name_text = f"{status_emoji} {player_name}"
+        draw.text((name_x, name_y), name_text, fill=name_color, font=name_font)
+        
+        # Draw mini board
+        attempts = player_data.get("attempts", [])
+        mini_cell_size = 45
+        mini_gap = 3
+        board_start_y = offset_y + header_height
+        
+        for row in range(6):
+            for col in range(5):
+                x = offset_x + WORDLE_PADDING + col * (mini_cell_size + mini_gap)
+                y = board_start_y + row * (mini_cell_size + mini_gap)
+                
+                if row < len(attempts):
+                    attempt = attempts[row]
+                    letter = attempt["word"][col] if col < len(attempt["word"]) else ""
+                    result_char = attempt["result"][col] if col < len(attempt["result"]) else "⬜"
+                    
+                    if result_char == "🟩":
+                        color = WORDLE_COLORS["correct"]
+                    elif result_char == "🟨":
+                        color = WORDLE_COLORS["present"]
+                    else:
+                        color = WORDLE_COLORS["absent"]
+                else:
+                    letter = ""
+                    color = WORDLE_COLORS["empty"]
+                
+                draw.rectangle(
+                    [x, y, x + mini_cell_size, y + mini_cell_size],
+                    fill=color,
+                    outline=WORDLE_COLORS["border"],
+                    width=1
+                )
+                
+                if letter:
+                    bbox = draw.textbbox((0, 0), letter, font=cell_font)
+                    tw = bbox[2] - bbox[0]
+                    th = bbox[3] - bbox[1]
+                    tx = x + (mini_cell_size - tw) // 2
+                    ty = y + (mini_cell_size - th) // 2 - 3
+                    draw.text((tx, ty), letter, fill=WORDLE_COLORS["text"], font=cell_font)
+    
+    buffer = io.BytesIO()
+    combined.save(buffer, format='PNG')
+    buffer.seek(0)
+    return buffer
+
 
 # ═══════════════════════════════════════════════════════════════
 # MULTIPLAYER GAME VIEWS
@@ -458,6 +771,17 @@ class WordleGuessModal(discord.ui.Modal, title="Submit Your Guess"):
         # Check win/lose
         payouts = {1: 500, 2: 400, 3: 300, 4: 200, 5: 150, 6: 100}
         
+        # Fetch user avatar for the image
+        user = interaction.user
+        player_name = user.display_name
+        avatar_bytes = None
+        try:
+            session = await self.cog.get_session()
+            avatar_url = user.display_avatar.with_size(64).url
+            avatar_bytes = await fetch_avatar_bytes(session, avatar_url)
+        except:
+            pass
+        
         if guess == game["word"]:
             player["status"] = "won"
             attempt_num = len(player["attempts"])
@@ -465,47 +789,68 @@ class WordleGuessModal(discord.ui.Modal, title="Submit Your Guess"):
             guild_id = game["guild_id"]
             await self.cog.quest_data.add_balance(self.user_id, guild_id, winnings)
             
-            grid = [att["result"] + f" `{att['word']}`" for att in player["attempts"]]
+            # Generate win image with avatar
+            img_buffer = generate_wordle_board_image(
+                player["attempts"], game["word"], show_word=False,
+                avatar_bytes=avatar_bytes, player_name=player_name
+            )
+            file = discord.File(img_buffer, filename="wordle_win.png")
             
             embed = discord.Embed(
                 title="🏆 You Won!",
-                description="\n".join(grid) + f"\n\n💰 Won **+{winnings}** stella points!",
+                description=f"💰 Won **+{winnings}** stella points!",
                 color=discord.Color.gold()
             )
-            await interaction.response.edit_message(embed=embed, view=None)
+            embed.set_image(url="attachment://wordle_win.png")
+            await interaction.response.edit_message(embed=embed, attachments=[file], view=None)
+            
+            # End game for everyone and ping winner in channel
+            await self.cog._end_wordle_game(self.game_id, self.user_id)
         elif len(player["attempts"]) >= 6:
             player["status"] = "lost"
-            grid = [att["result"] + f" `{att['word']}`" for att in player["attempts"]]
+            
+            # Generate loss image with avatar
+            img_buffer = generate_wordle_board_image(
+                player["attempts"], game["word"], show_word=True,
+                avatar_bytes=avatar_bytes, player_name=player_name
+            )
+            file = discord.File(img_buffer, filename="wordle_loss.png")
             
             embed = discord.Embed(
                 title="💀 Game Over!",
-                description="\n".join(grid) + f"\n\n**Word was:** {game['word']}",
+                description=f"**Word was:** {game['word']}",
                 color=discord.Color.red()
             )
-            await interaction.response.edit_message(embed=embed, view=None)
+            embed.set_image(url="attachment://wordle_loss.png")
+            await interaction.response.edit_message(embed=embed, attachments=[file], view=None)
+            
+            # Check if all players are done
+            await self.cog._check_wordle_game_end(self.game_id)
         else:
-            # Continue playing
-            grid = [att["result"] + f" `{att['word']}`" for att in player["attempts"]]
-            for _ in range(6 - len(player["attempts"])):
-                grid.append("⬜⬜⬜⬜⬜")
+            # Continue playing - generate board image with avatar
+            img_buffer = generate_wordle_board_image(
+                player["attempts"], game["word"],
+                avatar_bytes=avatar_bytes, player_name=player_name
+            )
+            file = discord.File(img_buffer, filename="wordle_board.png")
             
             embed = discord.Embed(
                 title="🟩 Your Wordle Game",
-                description="\n".join(grid) + "\n\n"
-                           f"Click **Submit Guess** to enter a 5-letter word!\n"
+                description=f"Click **Submit Guess** to enter a 5-letter word!\n"
                            f"❌ Wrong guess = **-15 stella points**",
                 color=discord.Color.green()
             )
+            embed.set_image(url="attachment://wordle_board.png")
             embed.add_field(name="Attempts", value=f"{len(player['attempts'])}/6", inline=True)
             
-            await interaction.response.edit_message(embed=embed)
+            await interaction.response.edit_message(embed=embed, attachments=[file])
         
-        # Update leaderboard
+        # Update leaderboard with live image
         await self.cog._update_wordle_leaderboard(self.game_id)
 
 
 class WordleGuessView(discord.ui.View):
-    """View for wordle game with submit button"""
+    """View for wordle game with submit button and view others"""
     def __init__(self, cog, game_id: str, user_id: str):
         super().__init__(timeout=300)
         self.cog = cog
@@ -516,6 +861,60 @@ class WordleGuessView(discord.ui.View):
     async def submit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = WordleGuessModal(self.cog, self.game_id, self.user_id)
         await interaction.response.send_modal(modal)
+    
+    @discord.ui.button(label="View Others", style=discord.ButtonStyle.secondary, emoji="👀")
+    async def view_others_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """View other players' Wordle boards"""
+        if self.game_id not in self.cog.active_games:
+            return await interaction.response.send_message("❌ Game ended!", ephemeral=True)
+        
+        game = self.cog.active_games[self.game_id]
+        other_players = {uid: pdata for uid, pdata in game["players"].items() if uid != self.user_id}
+        
+        if not other_players:
+            return await interaction.response.send_message("👤 No other players in this game!", ephemeral=True)
+        
+        await interaction.response.defer(ephemeral=True)
+        
+        # Generate live image showing all other players' boards
+        players_with_names = {}
+        for uid, pdata in other_players.items():
+            players_with_names[uid] = pdata.copy()
+            if "display_name" not in players_with_names[uid]:
+                try:
+                    user = await self.cog.bot.fetch_user(int(uid))
+                    players_with_names[uid]["display_name"] = user.display_name
+                except:
+                    players_with_names[uid]["display_name"] = "Player"
+        
+        img_buffer = generate_wordle_live_image(players_with_names, self.cog.bot)
+        file = discord.File(img_buffer, filename="wordle_others.png")
+        
+        # Build status summary
+        status_lines = []
+        for uid, pdata in other_players.items():
+            name = pdata.get("display_name", "Player")
+            status = pdata.get("status", "playing")
+            attempts = len(pdata.get("attempts", []))
+            
+            if status == "won":
+                status_lines.append(f"🏆 **{name}** - Won!")
+            elif status == "lost":
+                status_lines.append(f"**{name}** - Lost ({attempts}/6)")
+            elif status == "ended":
+                status_lines.append(f"**{name}** - Game ended ({attempts}/6)")
+            else:
+                status_lines.append(f"**{name}** - Playing ({attempts}/6)")
+        
+        embed = discord.Embed(
+            title="👀 Other Players' Progress",
+            description="\n".join(status_lines) if status_lines else "No other players",
+            color=discord.Color.blue()
+        )
+        embed.set_image(url="attachment://wordle_others.png")
+        embed.set_footer(text="Their boards are hidden - only showing progress!")
+        
+        await interaction.followup.send(embed=embed, file=file, ephemeral=True)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1119,7 +1518,7 @@ class Games(commands.Cog):
         else:
             return f"{seconds}s"
     
-    async def get_daily_plays(self, user_id: str, guild_id: str, game: str) -> int:
+    async def _get_daily_game_plays(self, user_id: str, guild_id: str, game: str) -> int:
         """Get how many times user played a game today."""
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
@@ -1139,7 +1538,7 @@ class Games(commands.Cog):
             logger.error(f"Error getting daily plays: {e}")
             return 0
     
-    async def increment_daily_plays(self, user_id: str, guild_id: str, game: str):
+    async def _increment_daily_game_plays(self, user_id: str, guild_id: str, game: str):
         """Increment the daily play count for a game."""
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
@@ -1154,6 +1553,14 @@ class Games(commands.Cog):
             )
         except Exception as e:
             logger.error(f"Error incrementing daily plays: {e}")
+    
+    async def get_daily_plays(self, user_id: str, guild_id: str, game: str) -> int:
+        """Get how many times user played a game today."""
+        return await self._get_daily_game_plays(user_id, guild_id, game)
+    
+    async def increment_daily_plays(self, user_id: str, guild_id: str, game: str):
+        """Increment the daily play count for a game."""
+        await self._increment_daily_game_plays(user_id, guild_id, game)
     
     def get_random_rarity(self) -> str:
         """Get a random rarity based on chances (gacha-style)."""
@@ -1294,6 +1701,11 @@ class Games(commands.Cog):
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
         
+        # Check daily limit
+        daily_plays = await self._get_daily_game_plays(user_id, guild_id, "slots")
+        if daily_plays >= DAILY_LIMITS["slots"]:
+            return await ctx.reply(f"❌ Daily limit reached! You've played **{daily_plays}/{DAILY_LIMITS['slots']}** times today. Try again tomorrow!", mention_author=False)
+        
         # Validate bet
         if bet < 10:
             return await ctx.reply("❌ Minimum bet is **10** stella points!", mention_author=False)
@@ -1304,6 +1716,9 @@ class Games(commands.Cog):
         balance = await self.quest_data.get_balance(user_id, guild_id)
         if balance < bet:
             return await ctx.reply(f"❌ You need **{bet:,}** but only have **{balance:,}** stella points!", mention_author=False)
+        
+        # Increment daily play count
+        await self._increment_daily_game_plays(user_id, guild_id, "slots")
         
         await self._run_slot_machine(ctx.channel, ctx.author, bet)
     
@@ -1722,6 +2137,11 @@ class Games(commands.Cog):
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
         
+        # Check daily limit
+        daily_plays = await self._get_daily_game_plays(user_id, guild_id, "guess")
+        if daily_plays >= DAILY_LIMITS["guess"]:
+            return await ctx.reply(f"❌ Daily limit reached! You've played **{daily_plays}/{DAILY_LIMITS['guess']}** times today. Try again tomorrow!", mention_author=False)
+        
         # Validate bet
         if bet < 20:
             return await ctx.reply("❌ Minimum bet is **20** stella points!", mention_author=False)
@@ -1733,8 +2153,8 @@ class Games(commands.Cog):
         if balance < bet:
             return await ctx.reply(f"❌ You need **{bet:,}** but only have **{balance:,}** stella points!", mention_author=False)
         
-        # Deduct bet
-        await self.quest_data.add_balance(user_id, guild_id, -bet)
+        # Increment daily play count
+        await self._increment_daily_game_plays(user_id, guild_id, "guess")
         
         # Generate secret number
         secret = random.randint(1, 100)
@@ -2046,6 +2466,14 @@ class Games(commands.Cog):
     async def hangman_game(self, ctx):
         """Multiplayer Hangman! Play in DMs, results shown in channel."""
         guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        # Check daily limit
+        daily_plays = await self._get_daily_game_plays(user_id, guild_id, "hangman")
+        if daily_plays >= DAILY_LIMITS["hangman"]:
+            return await ctx.reply(f"❌ Daily limit reached! You've played **{daily_plays}/{DAILY_LIMITS['hangman']}** times today. Try again tomorrow!", mention_author=False)
+        
+        guild_id = str(ctx.guild.id)
         game_id = f"{guild_id}_{ctx.channel.id}_hangman_{int(datetime.now(timezone.utc).timestamp())}"
         
         # Get word from API or fallback
@@ -2337,22 +2765,40 @@ class Games(commands.Cog):
         channel = game["channel"]
         failed_users = []
         
-        # Send DMs to all players
+        # Send DMs to all players with Pillow image
         for user_id, player_data in game["players"].items():
             try:
                 user = await self.bot.fetch_user(int(user_id))
+                player_data["display_name"] = user.display_name
                 view = WordleGuessView(self, game_id, user_id)
+                
+                # Fetch avatar for the image
+                avatar_bytes = None
+                try:
+                    session = await self.get_session()
+                    avatar_url = user.display_avatar.with_size(64).url
+                    avatar_bytes = await fetch_avatar_bytes(session, avatar_url)
+                    player_data["avatar_bytes"] = avatar_bytes
+                except:
+                    pass
+                
+                # Generate empty board image with avatar
+                img_buffer = generate_wordle_board_image(
+                    [], game["word"],
+                    avatar_bytes=avatar_bytes, player_name=user.display_name
+                )
+                file = discord.File(img_buffer, filename="wordle_board.png")
                 
                 embed = discord.Embed(
                     title="🟩 Your Wordle Game",
-                    description="⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n\n"
-                               f"Click **Submit Guess** to enter a 5-letter word!\n"
+                    description=f"Click **Submit Guess** to enter a 5-letter word!\n"
                                f"❌ Wrong guess = **-15 stella points**",
                     color=discord.Color.green()
                 )
+                embed.set_image(url="attachment://wordle_board.png")
                 embed.add_field(name="Attempts", value="0/6", inline=True)
                 
-                dm_msg = await user.send(embed=embed, view=view)
+                dm_msg = await user.send(embed=embed, file=file, view=view)
                 player_data["dm_msg"] = dm_msg
                 player_data["view"] = view
             except discord.Forbidden:
@@ -2383,61 +2829,297 @@ class Games(commands.Cog):
             except:
                 pass
         
-        # Update channel message
+        # Update channel message with live image
         await self._update_wordle_leaderboard(game_id)
     
-    async def _update_wordle_leaderboard(self, game_id: str):
-        """Update the wordle leaderboard in the channel"""
+    async def _end_wordle_game(self, game_id: str, winner_id: str):
+        """End the wordle game when someone wins - stops for everyone and pings winner"""
         if game_id not in self.active_games:
             return
         
         game = self.active_games[game_id]
+        channel = game["channel"]
+        
+        # Mark game as ended
+        game["ended"] = True
+        
+        # Get winner info
+        try:
+            winner = await self.bot.fetch_user(int(winner_id))
+            winner_mention = winner.mention
+            winner_name = winner.display_name
+        except:
+            winner_mention = f"<@{winner_id}>"
+            winner_name = "Unknown"
+        
+        # End game for all other players - delete old DM and send new final one
+        for user_id, player_data in game["players"].items():
+            if user_id == winner_id:
+                continue
+            
+            if player_data["status"] == "playing":
+                player_data["status"] = "ended"
+            
+            # Delete old DM and send new final embed
+            try:
+                dm_msg = player_data.get("dm_msg")
+                if dm_msg:
+                    # Delete the old message
+                    try:
+                        await dm_msg.delete()
+                    except:
+                        pass
+                    
+                    # Send new final message
+                    avatar_bytes = player_data.get("avatar_bytes")
+                    player_name = player_data.get("display_name", "Player")
+                    
+                    img_buffer = generate_wordle_board_image(
+                        player_data["attempts"], 
+                        game["word"], 
+                        show_word=True,
+                        avatar_bytes=avatar_bytes,
+                        player_name=player_name
+                    )
+                    file = discord.File(img_buffer, filename="wordle_final.png")
+                    
+                    embed = discord.Embed(
+                        title="🏁 Game Over!",
+                        description=f"**Word was:** {game['word']}",
+                        color=discord.Color.orange()
+                    )
+                    embed.set_image(url="attachment://wordle_final.png")
+                    
+                    # Get user to send DM
+                    try:
+                        user = await self.bot.fetch_user(int(user_id))
+                        await user.send(
+                            content=f"🏆 **{winner_name}** won the Wordle game!",
+                            embed=embed,
+                            file=file
+                        )
+                    except:
+                        pass
+            except Exception as e:
+                logger.error(f"Error updating DM for {user_id}: {e}")
+        
+        # Also update winner's DM - delete old and send new
+        winner_data = game["players"].get(winner_id)
+        if winner_data:
+            try:
+                dm_msg = winner_data.get("dm_msg")
+                if dm_msg:
+                    try:
+                        await dm_msg.delete()
+                    except:
+                        pass
+            except:
+                pass
+        
+        # Generate final live image showing all boards
+        players_with_names = {}
+        for uid, pdata in game["players"].items():
+            players_with_names[uid] = pdata.copy()
+            if "display_name" not in players_with_names[uid]:
+                try:
+                    user = await self.bot.fetch_user(int(uid))
+                    players_with_names[uid]["display_name"] = user.display_name
+                except:
+                    players_with_names[uid]["display_name"] = f"Player"
+        
+        img_buffer = generate_wordle_live_image(players_with_names, self.bot)
+        file = discord.File(img_buffer, filename="wordle_final.png")
+        
+        # Create final embed
+        embed = discord.Embed(
+            title="🏆 Wordle Complete!",
+            description=f"**Word:** {game['word']}",
+            color=discord.Color.gold()
+        )
+        embed.set_image(url="attachment://wordle_final.png")
+        
+        # Delete old channel message and send new one with winner ping
+        try:
+            msg = game["game_msg"]
+            try:
+                await msg.delete()
+            except:
+                pass
+            
+            # Send new final message with winner ping in content
+            await channel.send(
+                content=f"🎉 Congratulations {winner_mention}! You won the Wordle!",
+                embed=embed,
+                file=file
+            )
+        except Exception as e:
+            logger.error(f"Error sending wordle final message: {e}")
+        
+    async def _check_wordle_game_end(self, game_id: str):
+        """Check if all players are done and end the game if so"""
+        if game_id not in self.active_games:
+            return
+        
+        game = self.active_games[game_id]
+        
+        # Check if all players are done
+        all_done = all(p["status"] != "playing" for p in game["players"].values())
+        if all_done:
+            # Mark game as ended
+            game["ended"] = True
+            
+            # No winner - everyone lost
+            channel = game["channel"]
+            
+            # Delete old DMs and send new final ones for all players
+            for user_id, player_data in game["players"].items():
+                try:
+                    dm_msg = player_data.get("dm_msg")
+                    if dm_msg:
+                        # Delete old message
+                        try:
+                            await dm_msg.delete()
+                        except:
+                            pass
+                        
+                        # Send new final message
+                        avatar_bytes = player_data.get("avatar_bytes")
+                        player_name = player_data.get("display_name", "Player")
+                        
+                        img_buffer = generate_wordle_board_image(
+                            player_data["attempts"], 
+                            game["word"], 
+                            show_word=True,
+                            avatar_bytes=avatar_bytes,
+                            player_name=player_name
+                        )
+                        file = discord.File(img_buffer, filename="wordle_final.png")
+                        
+                        embed = discord.Embed(
+                            title="💀 Game Over!",
+                            description=f"**Word was:** {game['word']}",
+                            color=discord.Color.red()
+                        )
+                        embed.set_image(url="attachment://wordle_final.png")
+                        
+                        try:
+                            user = await self.bot.fetch_user(int(user_id))
+                            await user.send(
+                                content="😔 No one won the Wordle game!",
+                                embed=embed,
+                                file=file
+                            )
+                        except:
+                            pass
+                except Exception as e:
+                    logger.error(f"Error updating DM for {user_id}: {e}")
+            
+            # Generate final live image
+            players_with_names = {}
+            for uid, pdata in game["players"].items():
+                players_with_names[uid] = pdata.copy()
+                if "display_name" not in players_with_names[uid]:
+                    try:
+                        user = await self.bot.fetch_user(int(uid))
+                        players_with_names[uid]["display_name"] = user.display_name
+                    except:
+                        players_with_names[uid]["display_name"] = f"Player"
+            
+            img_buffer = generate_wordle_live_image(players_with_names, self.bot)
+            file = discord.File(img_buffer, filename="wordle_final.png")
+            
+            embed = discord.Embed(
+                title="💀 Wordle - Game Over!",
+                description=f"**Word was:** {game['word']}",
+                color=discord.Color.red()
+            )
+            embed.set_image(url="attachment://wordle_final.png")
+            
+            # Delete old channel message and send new one
+            try:
+                msg = game["game_msg"]
+                try:
+                    await msg.delete()
+                except:
+                    pass
+                
+                # Send new final message with "no one won" in content
+                await channel.send(
+                    content="😔 **No one won the Wordle!** Better luck next time!",
+                    embed=embed,
+                    file=file
+                )
+            except Exception as e:
+                logger.error(f"Error sending wordle final message: {e}")
+            
+            # Clean up
+            await asyncio.sleep(60)
+            if game_id in self.active_games:
+                del self.active_games[game_id]
+
+    async def _update_wordle_leaderboard(self, game_id: str):
+        """Update the wordle leaderboard in the channel with live image"""
+        if game_id not in self.active_games:
+            return
+        
+        game = self.active_games[game_id]
+        
+        # Don't update if game already ended
+        if game.get("ended"):
+            return
+        
         msg = game["game_msg"]
         
-        # Build leaderboard
+        # Build player data with display names for image
+        players_with_names = {}
+        for user_id, player_data in game["players"].items():
+            players_with_names[user_id] = player_data.copy()
+            if "display_name" not in players_with_names[user_id]:
+                try:
+                    user = await self.bot.fetch_user(int(user_id))
+                    players_with_names[user_id]["display_name"] = user.display_name
+                    # Also store in original for future use
+                    player_data["display_name"] = user.display_name
+                except:
+                    players_with_names[user_id]["display_name"] = f"Player"
+        
+        # Generate live image showing all boards
+        img_buffer = generate_wordle_live_image(players_with_names, self.bot)
+        file = discord.File(img_buffer, filename="wordle_live.png")
+        
+        # Build text leaderboard as well
         leaderboard = []
         for user_id, player_data in game["players"].items():
             try:
-                user = await self.bot.fetch_user(int(user_id))
                 attempts = len(player_data["attempts"])
                 status = player_data["status"]
+                name = player_data.get("display_name", "Player")
                 
                 if status == "won":
                     emoji = "🏆"
                 elif status == "lost":
                     emoji = "💀"
+                elif status == "ended":
+                    emoji = "🏁"
                 else:
                     emoji = "🎮"
                 
-                # Show last attempt result
-                last_result = ""
-                if player_data["attempts"]:
-                    last_result = player_data["attempts"][-1]["result"]
-                
-                leaderboard.append(f"{emoji} **{user.display_name}** - {attempts}/6 {last_result}")
+                leaderboard.append(f"{emoji} **{name}** - {attempts}/6")
             except:
                 pass
         
         embed = discord.Embed(
             title="🟩 Wordle - Live Results",
-            description="\n".join(leaderboard) if leaderboard else "No players",
+            description="\n".join(leaderboard) if leaderboard else "Waiting for players...",
             color=discord.Color.green()
         )
-        
-        # Check if game is over
-        all_done = all(p["status"] != "playing" for p in game["players"].values())
-        if all_done:
-            winners = [uid for uid, p in game["players"].items() if p["status"] == "won"]
-            embed.add_field(name="Game Over!", value=f"Word was: **{game['word']}**", inline=False)
-            if winners:
-                embed.color = discord.Color.gold()
-            else:
-                embed.color = discord.Color.red()
+        embed.set_image(url="attachment://wordle_live.png")
+        embed.set_footer(text="First to guess correctly wins!")
         
         try:
-            await msg.edit(embed=embed)
-        except:
-            pass
+            await msg.edit(embed=embed, attachments=[file])
+        except Exception as e:
+            logger.error(f"Error updating wordle leaderboard: {e}")
     
     # ═══════════════════════════════════════════════════════════════
     # CLASSIC GAMES - WORDLE (OLD - KEEPING FOR COMPATIBILITY)
@@ -2913,7 +3595,7 @@ class Games(commands.Cog):
         msg = await ctx.reply(embed=embed, mention_author=False)
         await asyncio.sleep(2)
 
-        view = Memo(ctx, shuffled, chosen, msg, bot=self.bot)
+        view = Memo(ctx, shuffled, chosen, msg)
         future = int((datetime.now(timezone.utc) + timedelta(seconds=13)).timestamp())
         
         def timestamp_gen(ts: int) -> str:
@@ -2937,3 +3619,4 @@ class Games(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(Games(bot))
+r

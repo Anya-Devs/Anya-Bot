@@ -491,108 +491,6 @@ class AnimePictures(ArtSource):
         return []
 
 
-class WaifuIm(ArtSource):
-    """Waifu.im API - Waifu images"""
-    BASE_URL = "https://api.waifu.im"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            # Map common queries to waifu.im tags
-            tag_map = {
-                "waifu": "waifu", "maid": "maid", "marin": "marin-kitagawa",
-                "mori": "mori-calliope", "raiden": "raiden-shogun", "oppai": "oppai",
-                "selfies": "selfies", "uniform": "uniform", "ero": "ero"
-            }
-            
-            tag = None
-            query_lower = query.lower()
-            for key, value in tag_map.items():
-                if key in query_lower:
-                    tag = value
-                    break
-            
-            params = {"many": "true", "is_nsfw": str(nsfw).lower()}
-            if tag:
-                params["included_tags"] = tag
-            
-            async with self.session.get(f"{self.BASE_URL}/search", params=params) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    results = []
-                    images = data.get("images", [])
-                    for img in images[:limit]:
-                        results.append({
-                            "source": "Waifu.im",
-                            "url": img.get("url"),
-                            "preview_url": img.get("preview_url") or img.get("url"),
-                            "page_url": img.get("source") or img.get("url"),
-                            "artist": img.get("artist", {}).get("name") if img.get("artist") else "Unknown",
-                            "tags": [t.get("name") for t in img.get("tags", [])][:10],
-                            "rating": "e" if img.get("is_nsfw") else "s",
-                            "score": img.get("favorites") or 0,
-                            "id": img.get("image_id") or img.get("signature"),
-                            "width": img.get("width"),
-                            "height": img.get("height")
-                        })
-                    return results
-        except Exception:
-            return []
-        return []
-
-
-class NekosBest(ArtSource):
-    """Nekos.best API - Neko/anime images"""
-    BASE_URL = "https://nekos.best/api/v2"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            # Map queries to nekos.best endpoints
-            endpoint_map = {
-                "neko": "neko", "kitsune": "kitsune", "waifu": "waifu",
-                "husbando": "husbando", "hug": "hug", "pat": "pat",
-                "kiss": "kiss", "cry": "cry", "smile": "smile",
-                "wave": "wave", "thumbsup": "thumbsup", "stare": "stare",
-                "highfive": "highfive", "handhold": "handhold", "nom": "nom",
-                "bite": "bite", "slap": "slap", "happy": "happy",
-                "wink": "wink", "poke": "poke", "dance": "dance",
-                "cringe": "cringe", "blush": "blush", "bored": "bored",
-                "facepalm": "facepalm", "feed": "feed", "kick": "kick",
-                "laugh": "laugh", "lurk": "lurk", "nod": "nod",
-                "nope": "nope", "panic": "panic", "pout": "pout",
-                "punch": "punch", "shoot": "shoot", "shrug": "shrug",
-                "sleep": "sleep", "smug": "smug", "think": "think",
-                "yawn": "yawn", "yeet": "yeet"
-            }
-            
-            endpoint = "neko"  # default
-            query_lower = query.lower()
-            for key, value in endpoint_map.items():
-                if key in query_lower:
-                    endpoint = value
-                    break
-            
-            async with self.session.get(f"{self.BASE_URL}/{endpoint}?amount={min(limit, 20)}") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    results = []
-                    for img in data.get("results", []):
-                        results.append({
-                            "source": "Nekos.best",
-                            "url": img.get("url"),
-                            "preview_url": img.get("url"),
-                            "page_url": img.get("source_url") or img.get("url"),
-                            "artist": img.get("artist_name") or "Unknown",
-                            "tags": [endpoint],
-                            "rating": "s",
-                            "score": 0,
-                            "id": img.get("url", "").split("/")[-1].split(".")[0],
-                            "width": None,
-                            "height": None
-                        })
-                    return results
-        except Exception:
-            return []
-        return []
 
 
 class E621(ArtSource):
@@ -700,159 +598,6 @@ class Realbooru(ArtSource):
             art_logger.error(f"Realbooru error: {e}")
             return []
         return []
-
-
-class WaifuPics(ArtSource):
-    """Waifu.pics API - High quality waifu images"""
-    BASE_URL = "https://api.waifu.pics"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            # Map queries to waifu.pics categories
-            sfw_categories = ["waifu", "neko", "shinobu", "megumin", "bully", "cuddle", "cry", "hug", 
-                            "awoo", "kiss", "lick", "pat", "smug", "bonk", "yeet", "blush", "smile",
-                            "wave", "highfive", "handhold", "nom", "bite", "glomp", "slap", "kill",
-                            "kick", "happy", "wink", "poke", "dance", "cringe"]
-            
-            category = "waifu"
-            query_lower = query.lower()
-            for cat in sfw_categories:
-                if cat in query_lower:
-                    category = cat
-                    break
-            
-            results = []
-            for _ in range(min(limit, 30)):
-                async with self.session.get(f"{self.BASE_URL}/sfw/{category}") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("url"):
-                            results.append({
-                                "source": "Waifu.pics",
-                                "url": data.get("url"),
-                                "preview_url": data.get("url"),
-                                "page_url": data.get("url"),
-                                "artist": "Unknown",
-                                "tags": [category],
-                                "rating": "s",
-                                "score": 0,
-                                "id": data.get("url", "").split("/")[-1].split(".")[0],
-                                "width": None,
-                                "height": None
-                            })
-            return results
-        except Exception:
-            return []
-
-
-class NekosFun(ArtSource):
-    """Nekos.fun API - Neko and anime images"""
-    BASE_URL = "https://nekos.fun/api"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            endpoints = ["neko", "kiss", "hug", "pat", "cuddle", "tickle", "feed", "slap", "poke", "cry", "anime"]
-            
-            endpoint = "neko"
-            query_lower = query.lower()
-            for ep in endpoints:
-                if ep in query_lower:
-                    endpoint = ep
-                    break
-            
-            results = []
-            for _ in range(min(limit, 20)):
-                async with self.session.get(f"{self.BASE_URL}/{endpoint}") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("image"):
-                            results.append({
-                                "source": "Nekos.fun",
-                                "url": data.get("image"),
-                                "preview_url": data.get("image"),
-                                "page_url": data.get("image"),
-                                "artist": "Unknown",
-                                "tags": [endpoint],
-                                "rating": "s",
-                                "score": 0,
-                                "id": data.get("image", "").split("/")[-1].split(".")[0],
-                                "width": None,
-                                "height": None
-                            })
-            return results
-        except Exception:
-            return []
-
-
-class WaifuIt(ArtSource):
-    """Waifu.it API - Anime character images"""
-    BASE_URL = "https://waifu.it/api/v4"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            endpoints = ["waifu", "husbando", "neko", "kitsune", "pat", "hug", "kiss", "slap", "wink", "poke", "kill", "cuddle", "punch", "happy", "blush", "smile"]
-            
-            endpoint = "waifu"
-            query_lower = query.lower()
-            for ep in endpoints:
-                if ep in query_lower:
-                    endpoint = ep
-                    break
-            
-            results = []
-            headers = {"Authorization": ""}  # Public API
-            
-            for _ in range(min(limit, 15)):
-                async with self.session.get(f"{self.BASE_URL}/{endpoint}", headers=headers) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("url"):
-                            results.append({
-                                "source": "Waifu.it",
-                                "url": data.get("url"),
-                                "preview_url": data.get("url"),
-                                "page_url": data.get("url"),
-                                "artist": "Unknown",
-                                "tags": [endpoint],
-                                "rating": "s",
-                                "score": 0,
-                                "id": str(data.get("id", random.randint(1000, 9999))),
-                                "width": None,
-                                "height": None
-                            })
-            return results
-        except Exception:
-            return []
-
-
-class PicRe(ArtSource):
-    """pic.re API - Anime artwork collection"""
-    BASE_URL = "https://pic.re"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            results = []
-            for _ in range(min(limit, 20)):
-                async with self.session.get(f"{self.BASE_URL}/image.json") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("file_url"):
-                            results.append({
-                                "source": "pic.re",
-                                "url": data.get("file_url"),
-                                "preview_url": data.get("file_url"),
-                                "page_url": data.get("source") or data.get("file_url"),
-                                "artist": data.get("author") or "Unknown",
-                                "tags": data.get("tags", [])[:10] if isinstance(data.get("tags"), list) else [],
-                                "rating": "s",
-                                "score": 0,
-                                "id": str(data.get("id", random.randint(1000, 9999))),
-                                "width": data.get("width"),
-                                "height": data.get("height")
-                            })
-            return results
-        except Exception:
-            return []
 
 
 class E926(ArtSource):
@@ -970,426 +715,6 @@ class ArtStation(ArtSource):
         except Exception:
             return []
         return []
-
-
-class Catboys(ArtSource):
-    """Catboys API - Anime catboy images"""
-    BASE_URL = "https://api.catboys.com"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            results = []
-            for _ in range(min(limit, 20)):
-                async with self.session.get(f"{self.BASE_URL}/img") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("url"):
-                            results.append({
-                                "source": "Catboys",
-                                "url": data.get("url"),
-                                "preview_url": data.get("url"),
-                                "page_url": data.get("url"),
-                                "artist": data.get("artist") or "Unknown",
-                                "tags": ["catboy"],
-                                "rating": "s",
-                                "score": 0,
-                                "id": data.get("url", "").split("/")[-1].split(".")[0],
-                                "width": None,
-                                "height": None
-                            })
-            return results
-        except Exception:
-            return []
-
-
-class Purr(ArtSource):
-    """Purr API - Anime images and GIFs"""
-    BASE_URL = "https://purrbot.site/api"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            img_endpoints = ["neko", "kitsune", "hug", "pat", "kiss", "slap", "cuddle", "holo", "icon", "okami", "senko", "shiro"]
-            
-            endpoint = "neko"
-            query_lower = query.lower()
-            for ep in img_endpoints:
-                if ep in query_lower:
-                    endpoint = ep
-                    break
-            
-            results = []
-            for _ in range(min(limit, 20)):
-                async with self.session.get(f"{self.BASE_URL}/img/sfw/{endpoint}/img") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("link"):
-                            results.append({
-                                "source": "Purr",
-                                "url": data.get("link"),
-                                "preview_url": data.get("link"),
-                                "page_url": data.get("link"),
-                                "artist": "Unknown",
-                                "tags": [endpoint],
-                                "rating": "s",
-                                "score": 0,
-                                "id": data.get("link", "").split("/")[-1].split(".")[0],
-                                "width": None,
-                                "height": None
-                            })
-            return results
-        except Exception:
-            return []
-
-
-class NekoLove(ArtSource):
-    """Neko-Love API - Neko anime images"""
-    BASE_URL = "https://neko-love.xyz/api/v1"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            endpoints = ["neko", "kitsune", "pat", "hug", "slap", "kiss", "cry", "smug", "punch", "waifu"]
-            
-            endpoint = "neko"
-            query_lower = query.lower()
-            for ep in endpoints:
-                if ep in query_lower:
-                    endpoint = ep
-                    break
-            
-            results = []
-            for _ in range(min(limit, 20)):
-                async with self.session.get(f"{self.BASE_URL}/{endpoint}") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("url"):
-                            results.append({
-                                "source": "Neko-Love",
-                                "url": data.get("url"),
-                                "preview_url": data.get("url"),
-                                "page_url": data.get("url"),
-                                "artist": "Unknown",
-                                "tags": [endpoint],
-                                "rating": "s",
-                                "score": 0,
-                                "id": data.get("url", "").split("/")[-1].split(".")[0],
-                                "width": None,
-                                "height": None
-                            })
-            return results
-        except Exception:
-            return []
-
-
-class AnimeMoe(ArtSource):
-    """Anime-Moe API - Cute anime art"""
-    BASE_URL = "https://anime-moe.vercel.app/api"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            categories = ["waifu", "neko", "shinobu", "megumin", "cuddle", "cry", "hug", "kiss", "pat", "smug", "bonk", "blush", "smile", "wave", "happy", "dance"]
-            
-            category = "waifu"
-            query_lower = query.lower()
-            for cat in categories:
-                if cat in query_lower:
-                    category = cat
-                    break
-            
-            results = []
-            for _ in range(min(limit, 15)):
-                async with self.session.get(f"{self.BASE_URL}/{category}") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("url"):
-                            results.append({
-                                "source": "Anime-Moe",
-                                "url": data.get("url"),
-                                "preview_url": data.get("url"),
-                                "page_url": data.get("url"),
-                                "artist": "Unknown",
-                                "tags": [category],
-                                "rating": "s",
-                                "score": 0,
-                                "id": data.get("url", "").split("/")[-1].split(".")[0],
-                                "width": None,
-                                "height": None
-                            })
-            return results
-        except Exception:
-            return []
-
-
-class Kyoko(ArtSource):
-    """Kyoko API - Anime images"""
-    BASE_URL = "https://kyoko.rei.my.id/api"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            endpoints = ["waifu", "neko", "husbando", "kitsune", "anime", "hug", "pat", "kiss", "slap", "punch"]
-            
-            endpoint = "waifu"
-            query_lower = query.lower()
-            for ep in endpoints:
-                if ep in query_lower:
-                    endpoint = ep
-                    break
-            
-            results = []
-            for _ in range(min(limit, 15)):
-                async with self.session.get(f"{self.BASE_URL}/{endpoint}") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("url"):
-                            results.append({
-                                "source": "Kyoko",
-                                "url": data.get("url"),
-                                "preview_url": data.get("url"),
-                                "page_url": data.get("url"),
-                                "artist": "Unknown",
-                                "tags": [endpoint],
-                                "rating": "s",
-                                "score": 0,
-                                "id": data.get("url", "").split("/")[-1].split(".")[0],
-                                "width": None,
-                                "height": None
-                            })
-            return results
-        except Exception:
-            return []
-
-
-class HmtaiSfw(ArtSource):
-    """Hmtai SFW API - Anime images"""
-    BASE_URL = "https://hmtai.hatsunia.cfd/sfw"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            endpoints = ["wave", "wink", "tea", "bonk", "punch", "poke", "bully", "pat", "kiss", "kick", "blush", "feed", "smug", "hug", "cuddle", "cry", "cringe", "slap", "five", "glomp", "happy", "hold", "nom", "smile", "throw", "lick", "bite", "anime", "neko", "wallpaper"]
-            
-            endpoint = "neko"
-            query_lower = query.lower()
-            for ep in endpoints:
-                if ep in query_lower:
-                    endpoint = ep
-                    break
-            
-            results = []
-            for _ in range(min(limit, 20)):
-                async with self.session.get(f"{self.BASE_URL}/{endpoint}") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("url"):
-                            results.append({
-                                "source": "Hmtai SFW",
-                                "url": data.get("url"),
-                                "preview_url": data.get("url"),
-                                "page_url": data.get("url"),
-                                "artist": "Unknown",
-                                "tags": [endpoint],
-                                "rating": "s",
-                                "score": 0,
-                                "id": data.get("url", "").split("/")[-1].split(".")[0],
-                                "width": None,
-                                "height": None
-                            })
-            return results
-        except Exception:
-            return []
-
-
-class KawaiiRed(ArtSource):
-    """Kawaii.red API - Kawaii anime images"""
-    BASE_URL = "https://kawaii.red/api"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            endpoints = ["neko", "hug", "pat", "kiss", "slap", "poke", "wave", "wink", "smile", "cry"]
-            
-            endpoint = "neko"
-            query_lower = query.lower()
-            for ep in endpoints:
-                if ep in query_lower:
-                    endpoint = ep
-                    break
-            
-            results = []
-            for _ in range(min(limit, 15)):
-                async with self.session.get(f"{self.BASE_URL}/gif/{endpoint}/token=<API_KEY>/") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("response"):
-                            results.append({
-                                "source": "Kawaii",
-                                "url": data.get("response"),
-                                "preview_url": data.get("response"),
-                                "page_url": data.get("response"),
-                                "artist": "Unknown",
-                                "tags": [endpoint],
-                                "rating": "s",
-                                "score": 0,
-                                "id": data.get("response", "").split("/")[-1].split(".")[0],
-                                "width": None,
-                                "height": None
-                            })
-            return results
-        except Exception:
-            return []
-
-
-class PurrBot(ArtSource):
-    """PurrBot API - Anime/neko images"""
-    BASE_URL = "https://purrbot.site/api"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            endpoints = ["background", "bite", "blush", "comfy", "cry", "cuddle", "dance", "eevee", "feed", "fluff", "holo", "hug", "icon", "kiss", "kitsune", "lay", "lick", "neko", "okami", "pat", "poke", "pout", "senko", "shiro", "slap", "smile", "tail", "tickle"]
-            
-            endpoint = "neko"
-            query_lower = query.lower()
-            for ep in endpoints:
-                if ep in query_lower:
-                    endpoint = ep
-                    break
-            
-            results = []
-            for _ in range(min(limit, 20)):
-                async with self.session.get(f"{self.BASE_URL}/img/sfw/{endpoint}/img") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("link"):
-                            results.append({
-                                "source": "PurrBot",
-                                "url": data.get("link"),
-                                "preview_url": data.get("link"),
-                                "page_url": data.get("link"),
-                                "artist": "Unknown",
-                                "tags": [endpoint],
-                                "rating": "s",
-                                "score": 0,
-                                "id": data.get("link", "").split("/")[-1].split(".")[0],
-                                "width": None,
-                                "height": None
-                            })
-            return results
-        except Exception:
-            return []
-
-
-class NekosLife(ArtSource):
-    """Nekos.life API - Classic neko images"""
-    BASE_URL = "https://nekos.life/api/v2"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            endpoints = ["neko", "waifu", "pat", "hug", "kiss", "slap", "cuddle", "smug", "baka", "tickle", "poke", "feed", "gecg", "fox_girl", "lizard", "goose", "woof", "meow", "avatar"]
-            
-            endpoint = "neko"
-            query_lower = query.lower()
-            for ep in endpoints:
-                if ep in query_lower:
-                    endpoint = ep
-                    break
-            
-            results = []
-            for _ in range(min(limit, 20)):
-                async with self.session.get(f"{self.BASE_URL}/img/{endpoint}") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("url"):
-                            results.append({
-                                "source": "Nekos.life",
-                                "url": data.get("url"),
-                                "preview_url": data.get("url"),
-                                "page_url": data.get("url"),
-                                "artist": "Unknown",
-                                "tags": [endpoint],
-                                "rating": "s",
-                                "score": 0,
-                                "id": data.get("url", "").split("/")[-1].split(".")[0],
-                                "width": None,
-                                "height": None
-                            })
-            return results
-        except Exception:
-            return []
-
-
-class Shiro(ArtSource):
-    """Shiro API - Anime images"""
-    BASE_URL = "https://shiro.gg"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            endpoints = ["hug", "kiss", "pat", "slap", "neko", "waifu", "punch", "bite", "cry", "cuddle"]
-            
-            endpoint = "neko"
-            query_lower = query.lower()
-            for ep in endpoints:
-                if ep in query_lower:
-                    endpoint = ep
-                    break
-            
-            results = []
-            for _ in range(min(limit, 15)):
-                async with self.session.get(f"{self.BASE_URL}/api/images/{endpoint}") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("url"):
-                            results.append({
-                                "source": "Shiro",
-                                "url": data.get("url"),
-                                "preview_url": data.get("url"),
-                                "page_url": data.get("url"),
-                                "artist": "Unknown",
-                                "tags": [endpoint],
-                                "rating": "s",
-                                "score": 0,
-                                "id": data.get("url", "").split("/")[-1].split(".")[0],
-                                "width": None,
-                                "height": None
-                            })
-            return results
-        except Exception:
-            return []
-
-
-class Asuna(ArtSource):
-    """Asuna API - SAO-style anime images"""
-    BASE_URL = "https://asuna.ga/api"
-    
-    async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
-        try:
-            endpoints = ["neko", "hug", "kiss", "pat", "slap", "cuddle", "cry", "smile", "wink", "wave"]
-            
-            endpoint = "neko"
-            query_lower = query.lower()
-            for ep in endpoints:
-                if ep in query_lower:
-                    endpoint = ep
-                    break
-            
-            results = []
-            for _ in range(min(limit, 15)):
-                async with self.session.get(f"{self.BASE_URL}/{endpoint}") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("url"):
-                            results.append({
-                                "source": "Asuna",
-                                "url": data.get("url"),
-                                "preview_url": data.get("url"),
-                                "page_url": data.get("url"),
-                                "artist": "Unknown",
-                                "tags": [endpoint],
-                                "rating": "s",
-                                "score": 0,
-                                "id": data.get("url", "").split("/")[-1].split(".")[0],
-                                "width": None,
-                                "height": None
-                            })
-            return results
-        except Exception:
-            return []
 
 
 class AIBooru(ArtSource):
@@ -1787,7 +1112,15 @@ class BooruAllthefallen(ArtSource):
 
 
 class ArtAggregator:
-    """Aggregates results from multiple art sources"""
+    """SS+ Tier Art Aggregator - Maximum coverage, no missed results"""
+    
+    # SS+ Configuration
+    MAX_CONCURRENT_REQUESTS = 25  # Concurrent requests per batch
+    MAX_PAGES_PER_SOURCE = 25     # Pages to scrape per source
+    RESULTS_PER_PAGE = 100        # Max results per API call
+    RETRY_ATTEMPTS = 3            # Retry failed requests
+    RETRY_DELAY = 0.5             # Base delay between retries
+    BATCH_DELAY = 0.1             # Small delay between batches to avoid rate limits
     
     def __init__(self, session: aiohttp.ClientSession):
         self.session = session
@@ -1817,6 +1150,7 @@ class ArtAggregator:
             "e621": E621(session),
             "realbooru": Realbooru(session),
         }
+        self._semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_REQUESTS)
     
     def get_available_sources(self, nsfw: bool = False) -> Dict[str, dict]:
         """Get available sources based on NSFW setting"""
@@ -1827,6 +1161,47 @@ class ArtAggregator:
             available[key] = meta
         return available
     
+    def _generate_query_variations(self, query: str) -> List[str]:
+        """Generate tag variations to maximize search coverage"""
+        variations = set()
+        original = query.strip()
+        
+        # Original query
+        variations.add(original)
+        
+        # Underscore version (most boorus use this)
+        variations.add(original.replace(" ", "_"))
+        
+        # Lowercase versions
+        variations.add(original.lower())
+        variations.add(original.lower().replace(" ", "_"))
+        
+        # Handle common patterns like "anya forger" -> "anya_forger", "forger_anya"
+        parts = original.lower().replace("_", " ").split()
+        if len(parts) == 2:
+            variations.add(f"{parts[0]}_{parts[1]}")
+            variations.add(f"{parts[1]}_{parts[0]}")
+        
+        return list(variations)[:3]  # Limit to top 3 variations
+    
+    async def _fetch_with_retry(self, source, query: str, limit: int, nsfw: bool, page: int, source_name: str) -> List[Dict]:
+        """Fetch with retry logic and rate limit handling"""
+        async with self._semaphore:
+            for attempt in range(self.RETRY_ATTEMPTS):
+                try:
+                    results = await source.search(query, limit=limit, nsfw=nsfw, page=page)
+                    if results:
+                        art_logger.debug(f"SS+ {source_name} page {page}: Got {len(results)} results")
+                    return results
+                except Exception as e:
+                    if attempt < self.RETRY_ATTEMPTS - 1:
+                        delay = self.RETRY_DELAY * (2 ** attempt)  # Exponential backoff
+                        art_logger.warning(f"SS+ {source_name} retry {attempt + 1}/{self.RETRY_ATTEMPTS} after {delay}s: {e}")
+                        await asyncio.sleep(delay)
+                    else:
+                        art_logger.error(f"SS+ {source_name} failed after {self.RETRY_ATTEMPTS} attempts: {e}")
+            return []
+    
     async def search_all(
         self, 
         query: str, 
@@ -1835,20 +1210,24 @@ class ArtAggregator:
         selected_sources: Set[str] = None,
         page: int = 0,
         aggressive_load: bool = True,
-        max_pages_per_source: int = 10
+        max_pages_per_source: int = None
     ) -> List[Dict]:
-        """Search selected sources and aggregate results
+        """SS+ Tier Search - Scrapes every source thoroughly
         
         Args:
             query: Search query
-            limit: Maximum results to return (not enforced if aggressive_load=True)
+            limit: Ignored in SS+ mode - we get EVERYTHING
             nsfw: Whether NSFW content is allowed
             selected_sources: Set of source keys to search
             page: Starting page number
-            aggressive_load: If True, fetch multiple pages from all sources simultaneously
-            max_pages_per_source: Maximum pages to fetch per source when aggressive_load=True
+            aggressive_load: If True, enables SS+ mode (always recommended)
+            max_pages_per_source: Override default pages per source
         """
         results = []
+        
+        # SS+ defaults
+        pages_to_fetch = max_pages_per_source or self.MAX_PAGES_PER_SOURCE
+        per_source_limit = self.RESULTS_PER_PAGE
         
         # Default to all available sources if none selected
         if selected_sources is None:
@@ -1868,31 +1247,47 @@ class ArtAggregator:
         if not active_sources:
             return []
         
-        # Aggressive loading: fetch multiple pages from all sources at once
+        art_logger.info(f"SS+ Scraping: '{query}' across {len(active_sources)} sources, {pages_to_fetch} pages each")
+        
+        # Generate query variations for maximum coverage
+        query_variations = self._generate_query_variations(query) if aggressive_load else [query]
+        
+        # SS+ Mode: Aggressive parallel fetching with all variations
         if aggressive_load:
-            tasks = []
-            per_source_limit = 50  # Fetch 50 results per page per source
+            all_tasks = []
             
-            # Create tasks for multiple pages from each source
-            for name in active_sources:
-                source = self.sources.get(name)
+            # Create tasks for every source, every page, every query variation
+            for source_name in active_sources:
+                source = self.sources.get(source_name)
                 if source:
-                    # Fetch multiple pages simultaneously
-                    for page_num in range(page, page + max_pages_per_source):
-                        tasks.append(source.search(query, limit=per_source_limit, nsfw=nsfw, page=page_num))
+                    for q_var in query_variations:
+                        for page_num in range(page, page + pages_to_fetch):
+                            task = self._fetch_with_retry(
+                                source, q_var, per_source_limit, nsfw, page_num, source_name
+                            )
+                            all_tasks.append(task)
             
-            # Execute all tasks concurrently
-            source_results = await asyncio.gather(*tasks, return_exceptions=True)
+            total_tasks = len(all_tasks)
+            art_logger.info(f"SS+ Launching {total_tasks} parallel requests...")
             
-            # Collect all results
-            for res in source_results:
-                if isinstance(res, list):
-                    results.extend(res)
+            # Execute in batches to avoid overwhelming
+            batch_size = self.MAX_CONCURRENT_REQUESTS * 2
+            for i in range(0, len(all_tasks), batch_size):
+                batch = all_tasks[i:i + batch_size]
+                batch_results = await asyncio.gather(*batch, return_exceptions=True)
+                
+                for res in batch_results:
+                    if isinstance(res, list):
+                        results.extend(res)
+                
+                # Small delay between batches
+                if i + batch_size < len(all_tasks):
+                    await asyncio.sleep(self.BATCH_DELAY)
+            
+            art_logger.info(f"SS+ Raw results: {len(results)}")
         else:
-            # Standard loading: one page per source
+            # Standard loading: one page per source (fallback)
             tasks = []
-            per_source_limit = max(10, limit // len(active_sources)) if active_sources else 10
-            
             for name in active_sources:
                 source = self.sources.get(name)
                 if source:
@@ -1904,17 +1299,27 @@ class ArtAggregator:
                 if isinstance(res, list):
                     results.extend(res)
         
-        # Remove duplicates based on source + id
-        seen = set()
+        # SS+ Deduplication - by URL hash for true uniqueness
+        seen_urls = set()
+        seen_ids = set()
         unique_results = []
-        for r in results:
-            key = (r.get("source"), r.get("id"))
-            if key not in seen:
-                seen.add(key)
-                unique_results.append(r)
         
-        # Sort by score (handle None values)
+        for r in results:
+            url = r.get("url", "")
+            source_id = (r.get("source"), r.get("id"))
+            
+            # Skip if we've seen this exact URL or source+id combo
+            if url in seen_urls or source_id in seen_ids:
+                continue
+            
+            seen_urls.add(url)
+            seen_ids.add(source_id)
+            unique_results.append(r)
+        
+        # Sort by score (highest quality first)
         unique_results.sort(key=lambda x: x.get("score") or 0, reverse=True)
+        
+        art_logger.info(f"SS+ Final unique results: {len(unique_results)}")
         
         return unique_results
     
@@ -1922,12 +1327,55 @@ class ArtAggregator:
         self, 
         source_name: str, 
         query: str, 
-        limit: int = 50, 
+        limit: int = 100, 
         nsfw: bool = False,
         page: int = 0
     ) -> List[Dict]:
-        """Search a specific source"""
+        """Search a specific source with SS+ settings"""
         source = self.sources.get(source_name.lower())
         if not source:
             return []
-        return await source.search(query, limit=limit, nsfw=nsfw, page=page)
+        return await self._fetch_with_retry(source, query, limit, nsfw, page, source_name)
+    
+    async def deep_scrape(
+        self,
+        query: str,
+        nsfw: bool = False,
+        selected_sources: Set[str] = None,
+        max_results: int = 5000
+    ) -> List[Dict]:
+        """Ultra deep scrape - keeps fetching until no more results or max reached"""
+        all_results = []
+        page = 0
+        consecutive_empty = 0
+        
+        art_logger.info(f"SS+ Deep Scrape initiated for: '{query}'")
+        
+        while len(all_results) < max_results and consecutive_empty < 3:
+            batch = await self.search_all(
+                query=query,
+                nsfw=nsfw,
+                selected_sources=selected_sources,
+                page=page,
+                aggressive_load=True,
+                max_pages_per_source=5  # Smaller batches for deep scrape
+            )
+            
+            if not batch:
+                consecutive_empty += 1
+            else:
+                consecutive_empty = 0
+                # Deduplicate against existing results
+                existing_urls = {r.get("url") for r in all_results}
+                new_results = [r for r in batch if r.get("url") not in existing_urls]
+                all_results.extend(new_results)
+                art_logger.info(f"SS+ Deep Scrape page {page}: +{len(new_results)} new (total: {len(all_results)})")
+            
+            page += 5  # Jump ahead since we fetched 5 pages
+            
+            # Safety break
+            if page > 100:
+                break
+        
+        art_logger.info(f"SS+ Deep Scrape complete: {len(all_results)} total results")
+        return all_results
