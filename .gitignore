@@ -60,3 +60,6 @@ bot/token.py
 # Temporary files
 *.tmp
 *.temp
+
+# YouTube cookies for yt-dlp (sensitive!)
+cookies.txt

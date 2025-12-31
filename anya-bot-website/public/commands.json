@@ -309,7 +309,7 @@
     "game": {
       "description": "Anya's Game Corner! View all available mini-games organized by category. Shows your balance and character bonuses.",
       "example": ".game",
-      "aliases": ["games", "play"],
+      "aliases": ["games"],
       "related_commands": ".slots, .coinflip, .hangman, .work"
     },
     "game pokemon": {

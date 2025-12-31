@@ -9,6 +9,7 @@ import io
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 from pathlib import Path
+from PIL import Image, ImageDraw, ImageFont
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,24 @@ DAILY_LIMITS = {
     "job": 999,
     "rob": 999,
     "crime": 999,
+}
+
+# Slot machine colors
+SLOT_BG_COLOR = (30, 30, 40)
+SLOT_FRAME_COLOR = (255, 215, 0)  # Gold
+SLOT_REEL_BG = (20, 20, 30)
+SLOT_TEXT_COLOR = (255, 255, 255)
+
+# Slot symbol images (emoji text fallback)
+SLOT_SYMBOL_COLORS = {
+    "🍒": (220, 20, 60),   # Cherry - Red
+    "🍋": (255, 255, 0),   # Lemon - Yellow
+    "🍊": (255, 165, 0),   # Orange
+    "🍇": (128, 0, 128),   # Grape - Purple
+    "🔔": (255, 215, 0),   # Bell - Gold
+    "⭐": (255, 255, 100), # Star - Yellow
+    "💎": (0, 191, 255),   # Diamond - Blue
+    "🥜": (139, 69, 19)    # Peanut - Brown
 }
 
 
@@ -283,12 +302,20 @@ class HangmanLetterView(discord.ui.View):
                 winnings = 100 + (word_len * 10) + ((6 - player["wrong"]) * 20)
                 await self.cog.quest_data.add_balance(self.user_id, guild_id, winnings)
                 
+                # Check if this is the first winner
+                other_winners = [p for uid, p in game["players"].items() if uid != self.user_id and p["status"] == "won"]
+                is_first_winner = len(other_winners) == 0
+                
                 embed = discord.Embed(
                     title="🏆 You Won!",
                     description=f"{HANGMAN_STAGES[player['wrong']]}\n**Word:** {game['word']}\n\n💰 Won **+{winnings}** stella points!",
                     color=discord.Color.green()
                 )
                 await interaction.response.edit_message(embed=embed, view=None)
+                
+                # If first winner, notify channel and end game for all players
+                if is_first_winner:
+                    await self.cog._end_hangman_game(self.game_id, self.user_id)
             elif player["wrong"] >= 6:
                 player["status"] = "lost"
                 embed = discord.Embed(
@@ -489,6 +516,109 @@ class WordleGuessView(discord.ui.View):
     async def submit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = WordleGuessModal(self.cog, self.game_id, self.user_id)
         await interaction.response.send_modal(modal)
+
+
+# ═══════════════════════════════════════════════════════════════
+# SLOT MACHINE VIEW
+# ═══════════════════════════════════════════════════════════════
+
+class SlotMachineView(discord.ui.View):
+    """View for slot machine with Play Again button"""
+    def __init__(self, cog, user_id: str, guild_id: str, last_bet: int, results: list = None):
+        super().__init__(timeout=180)  # Extended timeout for cooldown
+        self.cog = cog
+        self.user_id = user_id
+        self.guild_id = guild_id
+        self.last_bet = last_bet
+        self.results = results or []
+        self.cooldown_end = None
+        
+        # Start cooldown immediately
+        import time
+        self.cooldown_end = time.time() + 3600  # 60 minutes
+    
+    @discord.ui.button(label="Play Again", style=discord.ButtonStyle.green, emoji="🎰")
+    async def play_again(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if str(interaction.user.id) != self.user_id:
+            return await interaction.response.send_message("❌ This isn't your game!", ephemeral=True)
+        
+        # Check cooldown
+        import time
+        if self.cooldown_end and time.time() < self.cooldown_end:
+            remaining = int(self.cooldown_end - time.time())
+            hours = remaining // 3600
+            minutes = (remaining % 3600) // 60
+            seconds = remaining % 60
+            
+            if hours > 0:
+                time_str = f"**{hours}h {minutes}m {seconds}s**"
+            else:
+                time_str = f"**{minutes}m {seconds}s**"
+                
+            return await interaction.response.send_message(
+                f"⏰ Slot machine is cooling down! Wait {time_str} before playing again.",
+                ephemeral=True
+            )
+        
+        # Check balance
+        balance = await self.cog.quest_data.get_balance(self.user_id, self.guild_id)
+        if balance < self.last_bet:
+            return await interaction.response.send_message(
+                f"❌ You need **{self.last_bet:,}** but only have **{balance:,}** stella points!", 
+                ephemeral=True
+            )
+        
+        # Disable button and start new game
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+        
+        # Run the slot machine
+        await self.cog._run_slot_machine(interaction.channel, interaction.user, self.last_bet)
+    
+    @discord.ui.button(label="Change Bet", style=discord.ButtonStyle.secondary, emoji="💰")
+    async def change_bet(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if str(interaction.user.id) != self.user_id:
+            return await interaction.response.send_message("❌ This isn't your game!", ephemeral=True)
+        
+        modal = SlotBetModal(self.cog, self.user_id, self.guild_id)
+        await interaction.response.send_modal(modal)
+
+
+class SlotBetModal(discord.ui.Modal, title="Change Bet Amount"):
+    """Modal for changing slot bet"""
+    bet_input = discord.ui.TextInput(
+        label="Enter bet amount (10 - 10,000)",
+        placeholder="100",
+        min_length=1,
+        max_length=6,
+        required=True
+    )
+    
+    def __init__(self, cog, user_id: str, guild_id: str):
+        super().__init__()
+        self.cog = cog
+        self.user_id = user_id
+        self.guild_id = guild_id
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            bet = int(self.bet_input.value.replace(",", ""))
+            if bet < 10:
+                return await interaction.response.send_message("❌ Minimum bet is **10** pts!", ephemeral=True)
+            if bet > 10000:
+                return await interaction.response.send_message("❌ Maximum bet is **10,000** pts!", ephemeral=True)
+            
+            balance = await self.cog.quest_data.get_balance(self.user_id, self.guild_id)
+            if balance < bet:
+                return await interaction.response.send_message(
+                    f"❌ You need **{bet:,}** but only have **{balance:,}** pts!", 
+                    ephemeral=True
+                )
+            
+            await interaction.response.defer()
+            await self.cog._run_slot_machine(interaction.channel, interaction.user, bet)
+        except ValueError:
+            await interaction.response.send_message("❌ Invalid bet amount!", ephemeral=True)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1093,7 +1223,7 @@ class Games(commands.Cog):
         
         return None
     
-    @commands.group(name="game", aliases=["games", "play"], invoke_without_command=True)
+    @commands.group(name="game", aliases=["games"], invoke_without_command=True)
     async def game(self, ctx):
         """🎮 Play mini-games to win stella points!"""
         guild_id = str(ctx.guild.id)
@@ -1175,97 +1305,297 @@ class Games(commands.Cog):
         if balance < bet:
             return await ctx.reply(f"❌ You need **{bet:,}** but only have **{balance:,}** stella points!", mention_author=False)
         
+        await self._run_slot_machine(ctx.channel, ctx.author, bet)
+    
+    def _generate_slot_gif(self, results: list) -> io.BytesIO:
+        """Generate hyper-realistic slot machine GIF with physics-based animation"""
+        import math
+        
+        frames = []
+        durations = []
+        all_symbols = list(SLOT_SYMBOLS.keys())
+        num_symbols = len(all_symbols)
+        
+        # Determine result type for outline colors
+        is_jackpot = results[0] == results[1] == results[2]
+        is_two_match = (results[0] == results[1] or results[1] == results[2] or results[0] == results[2]) and not is_jackpot
+        
+        # Dimensions
+        width, height = 360, 140
+        reel_width = 80
+        reel_height = 90
+        symbol_height = 45  # Height per symbol in the reel strip
+        reel_y = 25
+        reel_positions = [40, 140, 240]
+        
+        # Colors
+        bg_dark = (15, 12, 20)
+        frame_gold = (200, 170, 60)
+        frame_shadow = (90, 75, 35)
+        reel_bg = (5, 5, 10)
+        
+        # Result colors
+        if is_jackpot:
+            result_color = (255, 215, 0)
+            result_glow = (255, 255, 120)
+        elif is_two_match:
+            result_color = (50, 220, 50)
+            result_glow = (120, 255, 120)
+        else:
+            result_color = (200, 50, 50)
+            result_glow = (255, 100, 100)
+        
+        # Load font
+        try:
+            font = ImageFont.truetype("data/assets/fonts/seguiemj.ttf", 28)
+        except:
+            try:
+                font = ImageFont.truetype("data/assets/fonts/arial.ttf", 28)
+            except:
+                font = ImageFont.load_default()
+        
+        # Physics: each reel has its own spin state
+        # Reel positions are in "symbol units" (0 = first symbol at center)
+        # We'll track continuous position and velocity for each reel
+        
+        # Find the index of each result symbol
+        result_indices = []
+        for r in results:
+            result_indices.append(all_symbols.index(r))
+        
+        # Animation parameters - smoother physics
+        initial_velocity = 18.0  # symbols per second at start
+        
+        # Each reel stops at different times
+        reel_stop_times = [1.6, 2.6, 3.8]  # seconds
+        
+        # Higher fps for smoother animation
+        fps = 30
+        total_duration = 5.0  # seconds
+        total_frames = int(total_duration * fps)
+        
+        # Initialize reel states - track target position for smooth landing
+        reel_positions_anim = [0.0, 0.0, 0.0]  # Current position in symbol units
+        reel_velocities = [initial_velocity, initial_velocity, initial_velocity]
+        reel_stopped = [False, False, False]
+        reel_landing = [False, False, False]  # True when easing into final position
+        
+        for frame_idx in range(total_frames):
+            current_time = frame_idx / fps
+            
+            img = Image.new('RGB', (width, height), bg_dark)
+            draw = ImageDraw.Draw(img)
+            
+            # Draw machine frame with 3D effect
+            # Outer shadow
+            draw.rounded_rectangle([3, 3, width-1, height-1], radius=15, fill=frame_shadow)
+            # Main frame
+            draw.rounded_rectangle([0, 0, width-4, height-4], radius=15, fill=bg_dark, outline=frame_gold, width=4)
+            # Inner highlight
+            draw.rounded_rectangle([8, 8, width-12, height-12], radius=12, outline=(40, 35, 50), width=1)
+            
+            # Update physics for each reel
+            for reel_idx in range(3):
+                stop_time = reel_stop_times[reel_idx]
+                target_pos = result_indices[reel_idx]
+                
+                if reel_stopped[reel_idx]:
+                    # Already stopped - stay at target
+                    reel_positions_anim[reel_idx] = target_pos
+                    reel_velocities[reel_idx] = 0
+                elif current_time >= stop_time - 0.4 and not reel_landing[reel_idx]:
+                    # Start landing phase - smooth ease to target
+                    reel_landing[reel_idx] = True
+                
+                if reel_landing[reel_idx] and not reel_stopped[reel_idx]:
+                    # Smooth interpolation to target position
+                    landing_progress = (current_time - (stop_time - 0.4)) / 0.4
+                    landing_progress = min(1.0, max(0.0, landing_progress))
+                    
+                    # Smooth step function (ease in-out)
+                    smooth = landing_progress * landing_progress * (3 - 2 * landing_progress)
+                    
+                    # Get current spinning position
+                    spin_pos = reel_positions_anim[reel_idx]
+                    
+                    # Interpolate toward target
+                    # Make sure we approach from the right direction (wrapping)
+                    diff = target_pos - (spin_pos % num_symbols)
+                    if diff < -num_symbols / 2:
+                        diff += num_symbols
+                    elif diff > num_symbols / 2:
+                        diff -= num_symbols
+                    
+                    reel_positions_anim[reel_idx] = spin_pos + diff * smooth * 0.15
+                    reel_velocities[reel_idx] = initial_velocity * (1 - smooth) * 0.3
+                    
+                    if landing_progress >= 1.0:
+                        reel_stopped[reel_idx] = True
+                        reel_positions_anim[reel_idx] = target_pos
+                        reel_velocities[reel_idx] = 0
+                        
+                elif not reel_landing[reel_idx]:
+                    # Normal spinning with gradual slowdown
+                    time_to_landing = (stop_time - 0.4) - current_time
+                    if time_to_landing < 0.8:
+                        # Gradual slowdown before landing
+                        ease = time_to_landing / 0.8
+                        ease = 0.4 + ease * 0.6  # Never go below 40% speed
+                        current_vel = initial_velocity * ease
+                    else:
+                        current_vel = initial_velocity
+                    
+                    reel_velocities[reel_idx] = current_vel
+                    reel_positions_anim[reel_idx] += current_vel / fps
+                    
+                    # Wrap position
+                    reel_positions_anim[reel_idx] = reel_positions_anim[reel_idx] % num_symbols
+            
+            # Draw each reel
+            for reel_idx, x in enumerate(reel_positions):
+                # Reel background with depth
+                draw.rounded_rectangle([x-3, reel_y-3, x + reel_width+3, reel_y + reel_height+3], 
+                                       radius=8, fill=(3, 3, 6))
+                draw.rounded_rectangle([x, reel_y, x + reel_width, reel_y + reel_height], 
+                                       radius=6, fill=reel_bg)
+                
+                # Create a clipping region for the reel
+                reel_center_y = reel_y + reel_height // 2
+                
+                # Get current position
+                pos = reel_positions_anim[reel_idx]
+                is_stopped = reel_stopped[reel_idx]
+                velocity = reel_velocities[reel_idx]
+                
+                # Draw 3 symbols: above, center, below
+                for offset in [-1, 0, 1]:
+                    symbol_idx = int(pos + offset) % num_symbols
+                    symbol = all_symbols[symbol_idx]
+                    
+                    # Calculate y position based on fractional position
+                    frac = pos - int(pos)
+                    symbol_y = reel_center_y + (offset - frac) * symbol_height
+                    
+                    # Only draw if visible in reel window
+                    if reel_y - symbol_height < symbol_y < reel_y + reel_height + symbol_height:
+                        symbol_color = SLOT_SYMBOL_COLORS.get(symbol, (255, 255, 255))
+                        
+                        # Motion blur effect when spinning fast
+                        if velocity > 5 and not is_stopped:
+                            # Fade based on speed
+                            fade = max(0.3, 1.0 - (velocity / initial_velocity) * 0.6)
+                            symbol_color = tuple(int(c * fade) for c in symbol_color)
+                        
+                        # Center symbol in reel
+                        bbox = draw.textbbox((0, 0), symbol, font=font)
+                        text_w = bbox[2] - bbox[0]
+                        text_x = x + (reel_width - text_w) // 2
+                        text_y = int(symbol_y - symbol_height // 2 + 5)
+                        
+                        # Only draw center symbol with full opacity, others faded
+                        if offset == 0 and is_stopped:
+                            # Glow effect for stopped center symbol
+                            glow = tuple(min(255, int(c * 0.4)) for c in symbol_color)
+                            for glow_offset in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                                draw.text((text_x + glow_offset[0], text_y + glow_offset[1]), 
+                                         symbol, font=font, fill=glow)
+                        
+                        draw.text((text_x, text_y), symbol, font=font, fill=symbol_color)
+                
+                # Reel window overlay - gradient fade at top and bottom
+                for i in range(12):
+                    alpha = int((12 - i) / 12 * 200)
+                    fade_color = (bg_dark[0], bg_dark[1], bg_dark[2])
+                    # Top fade
+                    draw.line([(x, reel_y + i), (x + reel_width, reel_y + i)], 
+                             fill=tuple(int(c * (1 - i/12)) for c in fade_color), width=1)
+                    # Bottom fade
+                    draw.line([(x, reel_y + reel_height - i), (x + reel_width, reel_y + reel_height - i)], 
+                             fill=tuple(int(c * (1 - i/12)) for c in fade_color), width=1)
+                
+                # Result highlight when stopped
+                if is_stopped:
+                    draw.rounded_rectangle([x-1, reel_y-1, x + reel_width+1, reel_y + reel_height+1], 
+                                           radius=7, outline=result_color, width=2)
+            
+            # Center payline indicator
+            line_y = reel_y + reel_height // 2
+            # Left arrow
+            draw.polygon([(32, line_y), (18, line_y - 10), (18, line_y + 10)], fill=frame_gold)
+            # Right arrow
+            draw.polygon([(width - 32, line_y), (width - 18, line_y - 10), (width - 18, line_y + 10)], fill=frame_gold)
+            # Payline
+            draw.line([(35, line_y), (width - 35, line_y)], fill=(frame_gold[0]//3, frame_gold[1]//3, frame_gold[2]//3), width=1)
+            
+            frames.append(img)
+            
+            # Consistent frame timing for smooth playback (33ms = ~30fps)
+            durations.append(33)
+        
+        # Add final hold frames to show result
+        for _ in range(12):
+            frames.append(frames[-1])
+            durations.append(120)
+        
+        # Save GIF
+        gif_buffer = io.BytesIO()
+        frames[0].save(
+            gif_buffer,
+            format='GIF',
+            save_all=True,
+            append_images=frames[1:],
+            duration=durations,
+            loop=0  # Loop forever so user can watch again
+        )
+        gif_buffer.seek(0)
+        return gif_buffer
+    
+    async def _run_slot_machine(self, channel, user, bet: int):
+        """Run the slot machine game with anticipation-building progressive reveals"""
+        guild_id = str(channel.guild.id)
+        user_id = str(user.id)
+        
+        # Get balance before deducting
+        balance = await self.quest_data.get_balance(user_id, guild_id)
+        
         # Deduct bet
         await self.quest_data.add_balance(user_id, guild_id, -bet)
         
         # Pre-generate final results
         results = [self.get_slot_symbol() for _ in range(3)]
         
-        # Send initial spinning message
-        spinning_embed = discord.Embed(
-            title="🎰 Spinning...",
-            description="```\n╔══════════════╗\n║  🎲  │  🎲  │  🎲  ║\n╚══════════════╝\n```",
+        # Generate the GIF in background while spinning
+        gif_task = asyncio.get_event_loop().run_in_executor(
+            None, self._generate_slot_gif, results
+        )
+        
+        # Simple spinning message
+        spin_embed = discord.Embed(
+            title="🎰 Slot Machine",
+            description=f"**{user.display_name}** is spinning...\n💰 Bet: **{bet:,}** pts",
             color=discord.Color.blue()
         )
-        spinning_embed.set_footer(text=f"Bet: {bet:,} pts")
-        message = await ctx.reply(embed=spinning_embed, mention_author=False)
+        spin_msg = await channel.send(embed=spin_embed)
         
-        # Animate each reel spinning one at a time
-        spinning_symbols = ["🎲", "🎪", "🎭", "🎨", "🎬", "🎯"]
+        # Wait for gif to be ready
+        gif_buffer = await gif_task
         
-        # Reel 1 spinning
-        for _ in range(4):
-            reel1 = random.choice(spinning_symbols)
-            anim_embed = discord.Embed(
-                title="🎰 Spinning...",
-                description=f"```\n╔══════════════╗\n║  {reel1}  │  🎲  │  🎲  ║\n╚══════════════╝\n```",
-                color=discord.Color.blue()
-            )
-            anim_embed.set_footer(text=f"Bet: {bet:,} pts")
-            await message.edit(embed=anim_embed)
-            await asyncio.sleep(0.3)
-        
-        # Reel 1 stops
-        anim_embed = discord.Embed(
-            title="🎰 Spinning...",
-            description=f"```\n╔══════════════╗\n║  {results[0]}  │  🎲  │  🎲  ║\n╚══════════════╝\n```",
-            color=discord.Color.blue()
-        )
-        anim_embed.set_footer(text=f"Bet: {bet:,} pts")
-        await message.edit(embed=anim_embed)
-        await asyncio.sleep(0.5)
-        
-        # Reel 2 spinning
-        for _ in range(4):
-            reel2 = random.choice(spinning_symbols)
-            anim_embed = discord.Embed(
-                title="🎰 Spinning...",
-                description=f"```\n╔══════════════╗\n║  {results[0]}  │  {reel2}  │  🎲  ║\n╚══════════════╝\n```",
-                color=discord.Color.blue()
-            )
-            anim_embed.set_footer(text=f"Bet: {bet:,} pts")
-            await message.edit(embed=anim_embed)
-            await asyncio.sleep(0.3)
-        
-        # Reel 2 stops
-        anim_embed = discord.Embed(
-            title="🎰 Spinning...",
-            description=f"```\n╔══════════════╗\n║  {results[0]}  │  {results[1]}  │  🎲  ║\n╚══════════════╝\n```",
-            color=discord.Color.blue()
-        )
-        anim_embed.set_footer(text=f"Bet: {bet:,} pts")
-        await message.edit(embed=anim_embed)
-        await asyncio.sleep(0.5)
-        
-        # Reel 3 spinning
-        for _ in range(4):
-            reel3 = random.choice(spinning_symbols)
-            anim_embed = discord.Embed(
-                title="🎰 Spinning...",
-                description=f"```\n╔══════════════╗\n║  {results[0]}  │  {results[1]}  │  {reel3}  ║\n╚══════════════╝\n```",
-                color=discord.Color.blue()
-            )
-            anim_embed.set_footer(text=f"Bet: {bet:,} pts")
-            await message.edit(embed=anim_embed)
-            await asyncio.sleep(0.3)
-        
-        # Reel 3 stops - show final result
-        await asyncio.sleep(0.3)
-        
-        # Calculate winnings
+        # Determine outcome
         winnings = 0
         if results[0] == results[1] == results[2]:
+            # JACKPOT!
             multiplier = SLOT_SYMBOLS[results[0]]["multiplier"]
             winnings = bet * multiplier
-            title = f"🎉 JACKPOT! {SLOT_SYMBOLS[results[0]]['name']}!"
-            color = discord.Color.gold()
+            final_title = "🎰 Jackpot!"
+            final_color = discord.Color.gold()
         elif results[0] == results[1] or results[1] == results[2] or results[0] == results[2]:
+            # Two match
             winnings = int(bet * 1.5)
-            title = "✨ Two Match!"
-            color = discord.Color.green()
+            final_title = "🎰 Double Match!"
+            final_color = discord.Color.green()
         else:
-            title = "💨 No Match..."
-            color = discord.Color.red()
+            final_title = "🎰 No Match"
+            final_color = discord.Color.red()
         
         if winnings > 0:
             await self.quest_data.add_balance(user_id, guild_id, winnings)
@@ -1273,20 +1603,26 @@ class Games(commands.Cog):
         new_balance = balance - bet + winnings
         profit = winnings - bet
         
-        # Create final embed
-        slot_display = f"╔══════════════╗\n║  {results[0]}  │  {results[1]}  │  {results[2]}  ║\n╚══════════════╝"
-        
-        embed = discord.Embed(title=title, description=f"```{slot_display}```", color=color)
+        # Create clean final embed with GIF
+        final_embed = discord.Embed(
+            title=final_title,
+            #description=f"{results[0]} {results[1]} {results[2]}",
+            color=final_color
+        )
         
         if profit > 0:
-            embed.add_field(name="💰 Won", value=f"+**{profit:,}** pts", inline=True)
+            final_embed.add_field(name="Won", value=f"+{profit:,} pts", inline=True)
         else:
-            embed.add_field(name="📉 Lost", value=f"**{profit:,}** pts", inline=True)
+            final_embed.add_field(name="Lost", value=f"{abs(profit):,} pts", inline=True)
         
-        embed.add_field(name="💳 Balance", value=f"**{new_balance:,}** pts", inline=True)
-        embed.set_footer(text=f"Bet: {bet:,} pts")
+        final_embed.add_field(name="Balance", value=f"{new_balance:,} pts", inline=True)
+        final_embed.set_image(url="attachment://slots.gif")
         
-        await message.edit(embed=embed)
+        # Create view with Play Again button
+        view = SlotMachineView(self, user_id, guild_id, bet, results)
+        
+        file = discord.File(gif_buffer, filename="slots.gif")
+        await spin_msg.edit(embed=final_embed, attachments=[file], view=view)
     
     def parse_bet(self, bet_str: str) -> int:
         """Parse a bet string that may contain commas (e.g., '5,000' -> 5000)."""
@@ -1879,6 +2215,50 @@ class Games(commands.Cog):
             await msg.edit(embed=embed)
         except:
             pass
+    
+    async def _end_hangman_game(self, game_id: str, winner_user_id: str):
+        """End the hangman game when someone wins and notify all players"""
+        if game_id not in self.active_games:
+            return
+        
+        game = self.active_games[game_id]
+        channel = game["channel"]
+        
+        try:
+            # Get winner info
+            winner = await self.bot.fetch_user(int(winner_user_id))
+            winner_name = winner.display_name
+            
+            # Send notification to channel
+            embed = discord.Embed(
+                title="🏆 Hangman Game Won!",
+                description=f"**{winner_name}** solved the word first!\n\n**Word:** `{game['word']}`\n\nGame ended automatically for all players.",
+                color=discord.Color.green()
+            )
+            await channel.send(embed=embed)
+            
+            # End game for all remaining players
+            for user_id, player_data in game["players"].items():
+                if player_data["status"] == "playing":
+                    player_data["status"] = "ended"
+                    
+                    # Update their DM to show game ended
+                    try:
+                        if player_data.get("dm_msg") and player_data.get("view"):
+                            end_embed = discord.Embed(
+                                title="🏁 Game Ended",
+                                description=f"**{winner_name}** won the game!\n\n**Word was:** `{game['word']}`\n\nBetter luck next time!",
+                                color=discord.Color.orange()
+                            )
+                            await player_data["dm_msg"].edit(embed=end_embed, view=None)
+                    except Exception as e:
+                        logger.error(f"Error updating DM for user {user_id}: {e}")
+            
+            # Final leaderboard update
+            await self._update_hangman_leaderboard(game_id)
+            
+        except Exception as e:
+            logger.error(f"Error ending hangman game {game_id}: {e}")
     
     # ═══════════════════════════════════════════════════════════════
     # MULTIPLAYER GAMES - WORDLE

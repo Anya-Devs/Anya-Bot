@@ -1,3 +1,10 @@
+"""
+installing onnxruntime:
+& c:/Users/Owner/Anya-Bot-1/.venv/Scripts/python.exe -m pip install --pre onnxruntime --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-nightly/pypi/simple/
+& c:/Users/Owner/Anya-Bot-1/.venv/Scripts/python.exe -m pip install python-Levenshtein
+& c:/Users/Owner/Anya-Bot-1/.venv/Scripts/python.exe -m pip install yt-dlp
+"""
+
 import sys, os, time, subprocess, asyncio
 from concurrent.futures import ThreadPoolExecutor
 

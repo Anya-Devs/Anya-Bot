@@ -1,5 +1,5 @@
 #import asyncio;from data.setup import SetupManager;asyncio.run(SetupManager().run_setup())  
-import os, sys, gc, importlib, pkgutil, threading, signal, traceback, asyncio  
+import os, sys, gc, importlib, pkgutil, threading, signal, traceback, asyncio, shutil, glob
 from dotenv import load_dotenv  
 import aiohttp, yarl, discord  
 from flask import Flask, send_from_directory  
@@ -15,7 +15,115 @@ from utils.cogs.fun import setup_persistent_views_fun
 from art import text2art  
 from bot.token import get_bot_token as ut  
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))  
-load_dotenv(dotenv_path=os.path.join(".github", ".env"))  
+load_dotenv(dotenv_path=os.path.join(".github", ".env"))
+
+# Check and install FFmpeg on startup
+#from utils.ffmpeg_installer import install_ffmpeg
+#install_ffmpeg()
+
+
+
+# Disk cleanup functionality
+class DiskCleanup:
+    """Handles disk cleanup for temporary files and cache"""
+    
+    @staticmethod
+    def cleanup_temp_files():
+        """Clean up temporary audio files, cache, and other temporary data"""
+        cleaned_files = 0
+        cleaned_size = 0
+        
+        try:
+            # Clean yt-dlp cache
+            import tempfile
+            temp_dir = tempfile.gettempdir()
+            
+            # Clean yt-dlp temporary files
+            yt_patterns = [
+                os.path.join(temp_dir, "yt-dlp-*"),
+                os.path.join(temp_dir, "youtube-dl-*"),
+                "*.part",
+                "*.ytdl",
+                "*.f4m",
+                "*.f4f"
+            ]
+            
+            for pattern in yt_patterns:
+                for file_path in glob.glob(pattern):
+                    try:
+                        if os.path.isfile(file_path):
+                            size = os.path.getsize(file_path)
+                            os.remove(file_path)
+                            cleaned_files += 1
+                            cleaned_size += size
+                    except (OSError, PermissionError) as e:
+                        logger.warning(f"Could not remove {file_path}: {e}")
+            
+            # Clean project-specific temp files
+            project_temp_patterns = [
+                "youtube-search-server-*.db",
+                "*.tmp",
+                "*.temp",
+                "cache_*.json",
+                "*.pyc",
+                "__pycache__",
+            ]
+            
+            for pattern in project_temp_patterns:
+                for file_path in glob.glob(pattern):
+                    try:
+                        if os.path.isfile(file_path):
+                            size = os.path.getsize(file_path)
+                            os.remove(file_path)
+                            cleaned_files += 1
+                            cleaned_size += size
+                        elif os.path.isdir(file_path) and file_path.endswith("__pycache__"):
+                            shutil.rmtree(file_path, ignore_errors=True)
+                            cleaned_files += 1
+                    except (OSError, PermissionError) as e:
+                        logger.warning(f"Could not remove {file_path}: {e}")
+            
+            # Clean .pyc files recursively
+            for root, dirs, files in os.walk("."):
+                for file in files:
+                    if file.endswith(".pyc"):
+                        file_path = os.path.join(root, file)
+                        try:
+                            size = os.path.getsize(file_path)
+                            os.remove(file_path)
+                            cleaned_files += 1
+                            cleaned_size += size
+                        except (OSError, PermissionError):
+                            pass
+                
+                # Remove empty __pycache__ directories
+                dirs[:] = [d for d in dirs if not d.startswith("__pycache__") or 
+                          (any(os.scandir(os.path.join(root, d))) if os.path.exists(os.path.join(root, d)) else False)]
+            
+            if cleaned_files > 0:
+                size_mb = cleaned_size / (1024 * 1024)
+                logger.info(f"Disk cleanup: Removed {cleaned_files} files ({size_mb:.2f} MB)")
+            
+        except Exception as e:
+            logger.error(f"Disk cleanup error: {e}")
+    
+    @staticmethod
+    async def periodic_cleanup():
+        """Run periodic disk cleanup every 2 hours"""
+        while True:
+            await asyncio.sleep(7200)  # 2 hours
+            DiskCleanup.cleanup_temp_files()
+    
+    @staticmethod
+    def startup_cleanup():
+        """Run cleanup on startup"""
+        logger.info("Running startup disk cleanup...")
+        DiskCleanup.cleanup_temp_files()
+        logger.info("Startup disk cleanup completed")
+
+# Run startup cleanup
+DiskCleanup.startup_cleanup()
+
 def patch_discord_gateway(env_gateway="wss://gateway.discord.gg/"):  
     class CustomHTTP(discord.http.HTTPClient):  
         async def get_gateway(self, **_):  
@@ -113,6 +221,8 @@ class ClusteredBot(commands.AutoShardedBot):
             }  
         )  
         self._gc_task = asyncio.create_task(self._run_periodic_gc())  
+        # Start periodic disk cleanup task
+        self._cleanup_task = asyncio.create_task(DiskCleanup.periodic_cleanup())
     async def _run_periodic_gc(self):  
         while True:  
             gc.collect()  
@@ -181,6 +291,14 @@ class ClusteredBot(commands.AutoShardedBot):
                 await self._gc_task  
             except asyncio.CancelledError:  
                 pass  
+        if hasattr(self, '_cleanup_task') and self._cleanup_task:  
+            self._cleanup_task.cancel()  
+            try:  
+                await self._cleanup_task  
+            except asyncio.CancelledError:  
+                pass  
+        # Run final disk cleanup on shutdown
+        DiskCleanup.cleanup_temp_files()
         if self.http_session and not self.http_session.closed:  
             await self.http_session.close()  
         await super().close()  

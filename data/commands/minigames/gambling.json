@@ -14,7 +14,8 @@
       "🍇": {"name": "Grape", "multiplier": 5, "weight": 15},
       "🔔": {"name": "Bell", "multiplier": 10, "weight": 7},
       "⭐": {"name": "Star", "multiplier": 25, "weight": 2},
-      "💎": {"name": "Diamond", "multiplier": 50, "weight": 1}
+      "💎": {"name": "Diamond", "multiplier": 50, "weight": 1},
+      "🥜": {"name": "Peanut", "multiplier": 100, "weight": 0.5}
     },
     "payouts": {
       "three_match": "bet * symbol_multiplier",

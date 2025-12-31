@@ -50,67 +50,77 @@ class TrackSelectMenu(discord.ui.Select):
         )
     
     async def callback(self, interaction: discord.Interaction):
-        # Auto-join functionality
-        voice_channel = None
-        if interaction.user.voice and interaction.user.voice.channel:
-            voice_channel = interaction.user.voice.channel
-        else:
-            for channel in interaction.guild.voice_channels:
-                if interaction.user in channel.members:
-                    voice_channel = channel
-                    break
-            
-            if not voice_channel:
-                return await interaction.response.send_message(
-                    embed=MusicEmbed.error("Please join a voice channel first!"),
-                    ephemeral=True
-                )
-        
-        await interaction.response.defer()
-        
-        # Delete the search message immediately
         try:
-            await interaction.message.delete()
-        except:
-            pass
-        
-        state = self.cog.manager.get_state(interaction.guild.id)
-        
-        # Auto-connect to voice channel
-        if not state.voice_client or not state.voice_client.is_connected():
+            # Auto-join functionality
+            voice_channel = None
+            if interaction.user.voice and interaction.user.voice.channel:
+                voice_channel = interaction.user.voice.channel
+            else:
+                for channel in interaction.guild.voice_channels:
+                    if interaction.user in channel.members:
+                        voice_channel = channel
+                        break
+                
+                if not voice_channel:
+                    return await interaction.response.send_message(
+                        embed=MusicEmbed.error("Please join a voice channel first!"),
+                        ephemeral=True
+                    )
+            
+            await interaction.response.defer()
+            
+            # Delete the search message immediately
             try:
-                state.voice_client = await voice_channel.connect()
-            except Exception as e:
-                return await interaction.followup.send(
-                    embed=MusicEmbed.error(f"Failed to connect: {str(e)}"),
+                await interaction.message.delete()
+            except:
+                pass
+            
+            state = self.cog.manager.get_state(interaction.guild.id)
+            
+            # Auto-connect to voice channel
+            if not state.voice_client or not state.voice_client.is_connected():
+                try:
+                    state.voice_client = await voice_channel.connect()
+                except Exception as e:
+                    return await interaction.followup.send(
+                        embed=MusicEmbed.error(f"Failed to connect: {str(e)}"),
+                        ephemeral=True
+                    )
+            
+            # Add all selected tracks to queue
+            added_tracks = []
+            for value in self.values:
+                track_index = int(value)
+                selected_track = self.tracks[track_index]
+                state.queue.append(selected_track)
+                added_tracks.append(selected_track)
+            
+            # Create summary embed
+            if len(added_tracks) == 1:
+                embed = MusicEmbed.added_to_queue(added_tracks[0], len(state.queue))
+            else:
+                embed = discord.Embed(
+                    title=f"✅ Added {len(added_tracks)} songs to queue",
+                    description="\n".join([f"• **{t.title[:40]}**" for t in added_tracks[:5]]) + 
+                               (f"\n*...and {len(added_tracks) - 5} more*" if len(added_tracks) > 5 else ""),
+                    color=discord.Color.green()
+                )
+                embed.set_footer(text=f"Queue now has {len(state.queue)} tracks")
+            
+            # Start playing if not already
+            if not state.voice_client.is_playing() and not state.is_paused:
+                await self.cog.play_next(interaction.guild, interaction.channel)
+            else:
+                await interaction.followup.send(embed=embed)
+        except Exception as e:
+            print(f"Error in TrackSelectMenu callback: {e}")
+            try:
+                await interaction.followup.send(
+                    embed=MusicEmbed.error("An error occurred while adding tracks to queue."),
                     ephemeral=True
                 )
-        
-        # Add all selected tracks to queue
-        added_tracks = []
-        for value in self.values:
-            track_index = int(value)
-            selected_track = self.tracks[track_index]
-            state.queue.append(selected_track)
-            added_tracks.append(selected_track)
-        
-        # Create summary embed
-        if len(added_tracks) == 1:
-            embed = MusicEmbed.added_to_queue(added_tracks[0], len(state.queue))
-        else:
-            embed = discord.Embed(
-                title=f"✅ Added {len(added_tracks)} songs to queue",
-                description="\n".join([f"• **{t.title[:40]}**" for t in added_tracks[:5]]) + 
-                           (f"\n*...and {len(added_tracks) - 5} more*" if len(added_tracks) > 5 else ""),
-                color=discord.Color.green()
-            )
-            embed.set_footer(text=f"Queue now has {len(state.queue)} tracks")
-        
-        # Start playing if not already
-        if not state.voice_client.is_playing() and not state.is_paused:
-            await self.cog.play_next(interaction.guild, interaction.channel)
-        else:
-            await interaction.followup.send(embed=embed)
+            except:
+                pass
 
 
 class TrackSelectView(discord.ui.View):
@@ -1079,6 +1089,48 @@ class Music(commands.Cog):
                     except:
                         pass
                 self.manager.remove_state(member.guild.id)
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        """Automatically handle cookies.txt uploads"""
+        if message.author.bot or not message.guild:
+            return
+        
+        # Check if user has manage_guild permission
+        if not message.author.guild_permissions.manage_guild:
+            return
+        
+        if not message.attachments:
+            return
+        
+        for attachment in message.attachments:
+            if attachment.filename.lower() == "cookies.txt":
+                from utils.cogs.music import AudioSource
+                
+                cookies_path = AudioSource._get_cookies_file()
+                if not cookies_path:
+                    continue
+                
+                try:
+                    import os
+                    cookies_data = await attachment.read()
+                    cookies_text = cookies_data.decode('utf-8')
+                    
+                    os.makedirs(os.path.dirname(cookies_path), exist_ok=True)
+                    with open(cookies_path, 'w', encoding='utf-8') as f:
+                        f.write(cookies_text)
+                    
+                    await message.reply(
+                        embed=MusicEmbed.success("✅ YouTube cookies updated successfully from uploaded file!"),
+                        mention_author=False
+                    )
+                    break  # Only process one cookies.txt per message
+                except Exception as e:
+                    await message.reply(
+                        embed=MusicEmbed.error(f"Failed to save cookies: {str(e)}"),
+                        mention_author=False
+                    )
+                    break
 
 
 async def setup(bot: commands.Bot):

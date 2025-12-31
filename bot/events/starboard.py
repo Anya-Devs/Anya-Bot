@@ -61,19 +61,77 @@ class StarboardConfig:
 
     rare_names: set[str] = set()
     regional_names: set[str] = set()
+    # Mapping from variant names to base names
+    variant_to_base: dict[str, str] = {}
 
     @classmethod
     def load_special_names(cls):
         try:
             with cls.special_names_file.open("r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
-                cls.rare_names = {row.get("Rare Pokémon", "").strip().lower() for row in reader if row.get("Rare Pokémon")}
-                f.seek(0)
-                reader = csv.DictReader(f)
-                cls.regional_names = {row.get("Regional Pokémon", "").strip().lower() for row in reader if row.get("Regional Pokémon")}
+                for row in reader:
+                    rare_name = row.get("Rare Pokémon", "").strip()
+                    regional_name = row.get("Regional Pokémon", "").strip()
+                    
+                    if rare_name:
+                        cls.rare_names.add(rare_name.lower())
+                    
+                    if regional_name:
+                        cls.regional_names.add(regional_name.lower())
+                        # Create mapping from variant to base name
+                        base_name = cls._extract_base_name(regional_name)
+                        if base_name != regional_name.lower():
+                            cls.variant_to_base[regional_name.lower()] = base_name
+                            
         except Exception as e:
             print(f"[ERROR] Failed loading special names CSV: {e}")
             cls.rare_names, cls.regional_names = set(), set()
+
+    @classmethod
+    def _extract_base_name(cls, pokemon_name: str) -> str:
+        """Extract base Pokémon name from variant forms."""
+        name = pokemon_name.lower().strip()
+        
+        # Regional/form prefixes and suffixes to remove
+        prefixes = [
+            "alolan", "galarian", "hisuian", "paldean", 
+            "fire", "water", "grass", "electric", "ice", "fighting", "poison", 
+            "ground", "flying", "psychic", "bug", "rock", "ghost", "dragon", 
+            "dark", "steel", "fairy", "normal"
+        ]
+        
+        suffixes = [
+            "alola", "galar", "hisui", "paldea", "totem", "standard", "zen",
+            "cap", "original-cap", "hoenn-cap", "sinnoh-cap", "unova-cap",
+            "kalos-cap", "alola-cap", "partner-cap", "world-cap",
+            "busted", "disguised", "aqua-breed", "blaze-breed", "combat-breed"
+        ]
+        
+        # Remove prefixes
+        for prefix in prefixes:
+            if name.startswith(prefix + " "):
+                name = name[len(prefix) + 1:].strip()
+                break
+        
+        # Remove suffixes (connected with hyphens)
+        for suffix in suffixes:
+            if name.endswith("-" + suffix):
+                name = name[:-len(suffix)-1].strip()
+                break
+        
+        return name
+
+    @classmethod
+    def normalize_pokemon_name(cls, pokemon_name: str) -> str:
+        """Convert variant Pokémon names to their base forms for rarity checking."""
+        name_lower = pokemon_name.lower().strip()
+        
+        # Check if we have a direct mapping
+        if name_lower in cls.variant_to_base:
+            return cls.variant_to_base[name_lower]
+        
+        # Extract base name using our extraction logic
+        return cls._extract_base_name(name_lower)
 
 
 class StarboardProcessor:
@@ -84,10 +142,24 @@ class StarboardProcessor:
         StarboardConfig.load_special_names()
 
     def is_rare_name(self, name: str) -> bool:
-        return name.lower() in StarboardConfig.rare_names
+        """Check if a Pokémon name is rare, including variant forms."""
+        name_lower = name.lower().strip()
+        # Check exact match first
+        if name_lower in StarboardConfig.rare_names:
+            return True
+        # Check normalized base name
+        base_name = StarboardConfig.normalize_pokemon_name(name)
+        return base_name in StarboardConfig.rare_names
 
     def is_regional_name(self, name: str) -> bool:
-        return name.lower() in StarboardConfig.regional_names
+        """Check if a Pokémon name is regional, including variant forms."""
+        name_lower = name.lower().strip()
+        # Check exact match first
+        if name_lower in StarboardConfig.regional_names:
+            return True
+        # Check normalized base name
+        base_name = StarboardConfig.normalize_pokemon_name(name)
+        return base_name in StarboardConfig.regional_names
 
     def determine_color(self, shiny: bool, name: str) -> int:
         return StarboardConfig.colors["default"]
@@ -95,8 +167,7 @@ class StarboardProcessor:
     async def process_message(self, bot, message: discord.Message):
         try:
             shiny = bool(
-                re.search(StarboardConfig.patterns["shiny_indicator"], message.content) or
-                re.search(StarboardConfig.patterns["unknown_emoji"], message.content)
+                re.search(StarboardConfig.patterns["shiny_indicator"], message.content)
             )
 
             # Process all catch messages in the content
@@ -123,18 +194,14 @@ class StarboardProcessor:
             if catcher_id is None:
                 return
 
-            pokemon_name = match.group(4).strip()
+            pokemon_name_display = match.group(4).strip()
 
-            # Clean name by removing type and variant prefixes
-            types = ["Normal", "Fire", "Water", "Electric", "Grass", "Ice", "Fighting", "Poison", "Ground", "Flying", "Psychic", "Bug", "Rock", "Ghost", "Dragon", "Dark", "Steel", "Fairy"]
-            variants = ["Alolan", "Galarian", "Hisuian", "Paldean", "Terastal", "Hisui", "Galar", "Alola", "Unova", "Kalos", "Sinnoh", "Hoenn", "Johto", "Kanto"]
-            for prefix in types + variants:
-                if pokemon_name.lower().startswith(prefix.lower() + " "):
-                    pokemon_name = pokemon_name[len(prefix) + 1:].strip()
-                    break
-            pokemon_name = pokemon_name.lower() if match else "Unknown"
-            is_rare = self.is_rare_name(pokemon_name)
-            is_regional = self.is_regional_name(pokemon_name)
+            # Check if this Pokémon is rare or regional using our improved name matching
+            # The normalize_pokemon_name function handles variant forms automatically
+            is_rare = self.is_rare_name(pokemon_name_display)
+            is_regional = self.is_regional_name(pokemon_name_display)
+            
+            # Only add to starboard if it's shiny, rare, or regional
             if not (shiny or is_rare or is_regional):
                 return
 
@@ -143,12 +210,12 @@ class StarboardProcessor:
             spawn_image_url, spawn_jump_url = self._extract_spawn_info(spawn_msg)
 
             await self._send_starboard_embed(
-                bot, message.guild.id, catcher_id, pokemon_name,
+                bot, message.guild.id, catcher_id, pokemon_name_display,
                 sparkle_emoji if shiny else "", catcher_avatar_url,
                 spawn_image_url, shiny, spawn_color, spawn_jump_url
             )
             await self._send_congrats_embed(
-                message, catcher_id, pokemon_name, shiny, is_rare, is_regional,
+                message, catcher_id, pokemon_name_display, shiny, is_rare, is_regional,
                 spawn_color, spawn_msg
             )
 
@@ -242,9 +309,9 @@ class StarboardProcessor:
      thumbnail_path = "data/events/starboard/images/congrats_thumbnail.png"
      if os.path.exists(thumbnail_path):
          file = discord.File(thumbnail_path, filename="congrats_thumbnail.png")
-         await message.channel.send(embed=embed, file=file)
+         await message.channel.send(embed=embed, file=file, allowed_mentions=discord.AllowedMentions.none())
      else:
-         await message.channel.send(embed=embed) 
+         await message.channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none()) 
 
     async def find_spawn_message(self, bot, message: discord.Message):
         try:
@@ -266,7 +333,7 @@ class StarboardProcessor:
                 return
             channel = bot.get_channel(channel_id)
             if channel:
-                await channel.send(embed=embed)
+                await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
         except Exception as e:
             print(f"[ERROR] send_to_starboard: {e}")
             traceback.print_exc()

@@ -467,26 +467,19 @@ class Quest(commands.Cog):
             generator = LeaderboardImageGenerator()
             image_buffer = await generator.generate(entries)
             
-            # Build embed
-            embed = discord.Embed(
-                title="Stella Points Leaderboard",
-                color=discord.Color.from_rgb(255, 105, 180)
-            )
-            embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
-            embed.set_image(url="attachment://leaderboard.png")
+            # Send image directly without embed
+            file = discord.File(image_buffer, filename="leaderboard.png")
             
-            # Show author's rank in footer
+            # Add user's rank info as text content
+            content = None
             if author_rank:
-                embed.set_footer(text=f"Your rank: #{author_rank} • {author_points:,} points", icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
+                content = f"-# Your rank: **#{author_rank}** with **{author_points:,}** stella points"
             else:
                 user_balance = await self.quest_data.get_balance(str(ctx.author.id), guild_id)
                 if user_balance > 0:
-                    embed.set_footer(text=f"Your points: {user_balance:,}", icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
-                else:
-                    embed.set_footer(text="Complete quests to earn stella points!", icon_url=self.bot.user.avatar.url)
+                    content = f"-# Your stella points: **{user_balance:,}**"
             
-            file = discord.File(image_buffer, filename="leaderboard.png")
-            await ctx.reply(embed=embed, file=file, mention_author=False)
+            await ctx.reply(content=content, file=file, mention_author=False)
             
         except Exception as e:
             logger.error(f"Error in leaderboard command: {e}")
@@ -705,6 +698,40 @@ class Quest(commands.Cog):
     async def character(self, ctx: commands.Context):
         """View your active character (standalone command)."""
         await self.quest_character(ctx)
+
+    @commands.command(name="feedback", aliases=["fb"])
+    async def quest_feedback(self, ctx: commands.Context):
+        """Toggle quest feedback messages on/off."""
+        try:
+            # Get the Quest_Events cog to access feedback settings
+            quest_events = self.bot.get_cog("Quest_Events")
+            if not quest_events:
+                await ctx.reply("Quest system not available.", mention_author=False)
+                return
+            
+            user_id = str(ctx.author.id)
+            new_state = quest_events._toggle_feedback(user_id)
+            
+            embed = discord.Embed(color=0xff6b9d)  # Anya pink
+            if new_state:
+                embed.title = "✅ Quest Feedback Enabled"
+                embed.description = f"{ctx.author.mention}, you will now receive helpful tips when working on quests!"
+                embed.add_field(name="What you'll see:", 
+                               value="• Reminders to reply to messages\n• Cooldown notifications\n• Duplicate reply warnings", 
+                               inline=False)
+            else:
+                embed.title = "🔕 Quest Feedback Disabled"
+                embed.description = f"{ctx.author.mention}, quest feedback messages are now turned off."
+                embed.add_field(name="Note:", 
+                               value="You can still complete quests, but won't get guidance tips.", 
+                               inline=False)
+            
+            embed.set_footer(text="Use -q feedback again to toggle this setting")
+            await ctx.reply(embed=embed, mention_author=False)
+            
+        except Exception as e:
+            logger.error(f"Error in quest feedback command: {e}")
+            await ctx.reply("An error occurred while toggling feedback settings.", mention_author=False)
 
     @staticmethod
     def read_shop_file(filename):

@@ -106,6 +106,9 @@ class Quest_View(View):
                         self.all_quests,
                     )
                 )
+                
+                # Add Quest Tips button
+                self.add_item(QuestTipsButton())
             else:
                 # Only show New Quest button when user has NO quests at all
                 self.add_item(NewQuestButton(bot, ctx))
@@ -368,6 +371,39 @@ class QuestButton(discord.ui.Button):
                 await interaction.followup.send(
                     f":x: An error occurred: `{e}`", ephemeral=True
                 )
+
+
+class QuestTipsButton(discord.ui.Button):
+    """Button to show quest completion tips."""
+    def __init__(self):
+        super().__init__(label="Tips", emoji="💡", style=discord.ButtonStyle.secondary)
+
+    async def callback(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="💡 How to Complete Quests",
+            color=0xff6b9d  # Anya pink
+        )
+        embed.add_field(
+            name="Message Quests",
+            value="Send the quest message and **mention someone** (ping them).\n"
+                  "- Type the message with @username\n"
+                  "- Send it in the quest channel!",
+            inline=False
+        )
+        embed.add_field(
+            name="Emoji Quests", 
+            value="Send the required emoji in the quest channel.\n"
+                  "- **2x BONUS:** Reply to someone's message for double points!",
+            inline=False
+        )
+        embed.add_field(
+            name="Reaction Quests",
+            value="- React to any message with the required emoji.",
+            inline=False
+        )
+        embed.set_footer(text="Complete quests to earn Stella Points!")
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 class NewQuestButton(discord.ui.Button):
@@ -1103,6 +1139,10 @@ class Quest_Data(commands.Cog):
 
     async def get_leaderboard(self, guild_id: str, limit: int = 10):
         return await self.db_manager.balance.get_leaderboard(guild_id, limit)
+
+    async def increment_quests_done(self, user_id: str, guild_id: str):
+        """Increment the quest completion count for a user."""
+        return await self.db_manager.balance.increment_quests_done(user_id, guild_id)
 
     # -------------------------------
     # Quest methods
