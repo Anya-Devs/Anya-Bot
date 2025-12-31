@@ -78,6 +78,33 @@ def filter_prohibited_results(results: list) -> list:
 # ART GALLERY VIEW - Multi-source, multi-image gallery with filters
 # ═══════════════════════════════════════════════════════════════
 
+class PageSelectorModal(discord.ui.Modal, title="Go to Page"):
+    """Modal for jumping to a specific page"""
+    page_input = discord.ui.TextInput(
+        label="Page Number",
+        placeholder="Enter page number...",
+        required=True,
+        max_length=5
+    )
+    
+    def __init__(self, max_pages: int):
+        super().__init__()
+        self.max_pages = max_pages
+        self.selected_page = None
+        self.page_input.placeholder = f"Enter 1-{max_pages}"
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            page_num = int(self.page_input.value)
+            if 1 <= page_num <= self.max_pages:
+                self.selected_page = page_num - 1  # Convert to 0-indexed
+                await interaction.response.defer()
+            else:
+                await interaction.response.send_message(f"❌ Page must be between 1 and {self.max_pages}", ephemeral=True)
+        except ValueError:
+            await interaction.response.send_message("❌ Please enter a valid number", ephemeral=True)
+
+
 class ArtSourceSelect(discord.ui.Select):
     """Multi-select dropdown for choosing art sources"""
     
@@ -684,9 +711,22 @@ class ArtGalleryView(discord.ui.View):
         embeds = self.build_embeds()
         await interaction.response.edit_message(embeds=embeds, view=self)
     
-    @discord.ui.button(label="1/1", style=discord.ButtonStyle.secondary, disabled=True, row=2)
+    @discord.ui.button(label="1/1", style=discord.ButtonStyle.secondary, row=2)
     async def page_indicator(self, interaction: discord.Interaction, button: discord.ui.Button):
-        pass  # Just a display button
+        """Page selector - opens modal to jump to specific page"""
+        if interaction.user != self.author:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        
+        # Show page selector modal
+        modal = PageSelectorModal(self.max_pages)
+        await interaction.response.send_modal(modal)
+        await modal.wait()
+        
+        if modal.selected_page is not None:
+            self.page = modal.selected_page
+            self.update_buttons()
+            embeds = self.build_embeds()
+            await interaction.edit_original_response(embeds=embeds, view=self)
     
     @discord.ui.button(label="▶️", style=discord.ButtonStyle.primary, row=2)
     async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -706,6 +746,19 @@ class ArtGalleryView(discord.ui.View):
             self.update_buttons()
             embeds = self.build_embeds()
             await interaction.response.edit_message(embeds=embeds, view=self)
+    
+    @discord.ui.button(label="🔀", style=discord.ButtonStyle.secondary, row=2)
+    async def shuffle_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Shuffle/randomize results order"""
+        if interaction.user != self.author:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        
+        import random
+        random.shuffle(self.results)
+        self.page = 0  # Reset to first page after shuffle
+        self.update_buttons()
+        embeds = self.build_embeds()
+        await interaction.response.edit_message(embeds=embeds, view=self)
     
     @discord.ui.button(label="📥 More", style=discord.ButtonStyle.secondary, row=2)
     async def load_more_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1259,6 +1312,8 @@ class Search(commands.Cog):
     async def art_search(self, ctx, *, query: str = None):
         """🎨 Search anime/manga art from 12+ sources with gallery view
         
+        Use --random or -r flag to randomize results order.
+        
         **Features:**
         • Multi-source search (Danbooru, Gelbooru, Safebooru, Konachan, Yande.re, Zerochan, Waifu.im, Nekos.best, and more)
         • Gallery mode with 4 images per page
@@ -1269,6 +1324,19 @@ class Search(commands.Cog):
         
         Use in NSFW channels for adult content access (Rule34, e621, Realbooru)
         """
+        # Check for --random or -r flag
+        randomize = False
+        if query:
+            if query.endswith(" --random") or query.endswith(" -r"):
+                randomize = True
+                query = query.rsplit(" ", 1)[0].strip()
+            elif " --random " in query:
+                randomize = True
+                query = query.replace(" --random ", " ").strip()
+            elif " -r " in query:
+                randomize = True
+                query = query.replace(" -r ", " ").strip()
+        
         if not query:
             # Check if in NSFW channel for help display
             is_nsfw_channel = isinstance(ctx.channel, discord.TextChannel) and ctx.channel.is_nsfw()
@@ -1404,6 +1472,11 @@ class Search(commands.Cog):
                 
                 # Filter out prohibited content from results
                 results = filter_prohibited_results(results)
+                
+                # Randomize order if --random flag was used
+                if randomize:
+                    import random
+                    random.shuffle(results)
             
             # Create the new gallery view
             view = ArtGalleryView(
