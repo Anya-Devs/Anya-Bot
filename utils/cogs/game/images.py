@@ -13,18 +13,9 @@ Creates professional, emoji-compatible visuals for Discord embeds and interactio
     • Avatar integration with circular masking
     • Animated GIF generation for dynamic games
     • Multiplayer game visualizations
-    • Real-time leaderboard updates
-    • Achievement and statistics cards
 
-🎮 SUPPORTED GAMES:
-    • Wordle - Word guessing with visual boards and multiplayer leaderboards
-    • Hangman - Letter guessing with hangman ASCII art
-    • Gacha System - Character cards with rarity frames
-    • Slot Machine - Animated reels with symbol rendering
-    • Number Guessing - Thermometer visualizations
-    • Coin Flip - Animated coin toss GIFs
-    • Dice Rolling - Animated dice with various sides
-    • Work/Jobs - Professional paycheck generation
+📦 DEPENDENCIES:
+    - PIL (Pillow): Image processing and font rendering
     • Crime Games - Scene visualization with overlays
     • Profile Cards - User statistics and achievements
 
@@ -47,10 +38,13 @@ Creates professional, emoji-compatible visuals for Discord embeds and interactio
 
 import io
 import random
+import logging
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
 import aiohttp
 from .fonts import _load_emoji_font
+
+logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════
 # 🎨 WORDLE GAME COLORS & CONSTANTS
@@ -88,6 +82,56 @@ async def fetch_avatar_bytes(session, avatar_url: str, size: int = 64) -> Option
                 return await resp.read()
     except:
         pass
+    return None
+
+
+async def fetch_anisearch_screenshot(session, character_name: str) -> Optional[str]:
+    """Fetch anisearch screenshot for a character.
+    
+    Args:
+        session: aiohttp ClientSession
+        character_name: Name of the character to search for
+        
+    Returns:
+        URL of the screenshot image or None if not found
+    """
+    try:
+        # Search for character on anisearch
+        search_url = f"https://anisearch.org/character/index.html?char={character_name}&q=character"
+        async with session.get(search_url) as resp:
+            if resp.status == 200:
+                html = await resp.text()
+                
+                # Simple regex to find screenshot images
+                import re
+                # Look for image URLs that appear to be screenshots
+                screenshot_pattern = r'<img[^>]+src="([^"]+)"[^>]+alt="[^"]*screenshot[^"]*"'
+                matches = re.findall(screenshot_pattern, html, re.IGNORECASE)
+                
+                if matches:
+                    # Return the first screenshot found
+                    screenshot_url = matches[0]
+                    # Make sure it's a full URL
+                    if screenshot_url.startswith('//'):
+                        screenshot_url = 'https:' + screenshot_url
+                    elif screenshot_url.startswith('/'):
+                        screenshot_url = 'https://anisearch.org' + screenshot_url
+                    return screenshot_url
+                    
+                # Alternative: look for character images
+                image_pattern = r'<img[^>]+src="([^"]+)"[^>]+class="[^"]*character[^"]*"'
+                matches = re.findall(image_pattern, html, re.IGNORECASE)
+                
+                if matches:
+                    image_url = matches[0]
+                    if image_url.startswith('//'):
+                        image_url = 'https:' + image_url
+                    elif image_url.startswith('/'):
+                        image_url = 'https://anisearch.org' + image_url
+                    return image_url
+    except Exception as e:
+        logger.error(f"Error fetching anisearch screenshot for {character_name}: {e}")
+    
     return None
 
 

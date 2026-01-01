@@ -91,6 +91,38 @@ class Games(commands.Cog):
         except Exception as e:
             logger.error(f"Set cooldown error: {e}")
     
+    async def check_timer(self, ctx, command: str) -> Optional[str]:
+        """Check command cooldown and usage limits. Returns error message or None."""
+        user_id = str(ctx.author.id)
+        guild_id = str(ctx.guild.id)
+        config = get_timer_config(command)
+        
+        # Always check command cooldown first (short delay between uses)
+        command_cooldown = config.get("command_cooldown", 5)
+        remaining = await self.check_cooldown(user_id, f"{command}_command", command_cooldown)
+        if remaining:
+            return format_cooldown_message(remaining, command)
+        
+        # For non-daily commands, check if user has reached usage limit
+        if not uses_daily_reset(command):
+            current_uses = await self.get_current_uses(user_id, guild_id, command)
+            if current_uses >= config["max_uses"]:
+                # Check if main cooldown is active
+                main_remaining = await self.check_cooldown(user_id, f"{command}_main", config["cooldown"])
+                if main_remaining:
+                    return format_cooldown_message(main_remaining, command)
+                else:
+                    # User has reached limit but cooldown expired, reset uses
+                    await self.reset_uses(user_id, guild_id, command)
+                    return None
+        else:
+            # Only check daily limits for true daily commands (like claim)
+            daily_plays = await self.get_daily_plays(user_id, guild_id, command)
+            if daily_plays >= config["max_uses"]:
+                return f"⏰ {command.replace('_', ' ').title()} is limited to {config['max_uses']} uses per day. You've used all {config['max_uses']} uses today."
+        
+        return None
+    
     async def get_daily_streak(self, user_id: str, guild_id: str) -> int:
         """Get user's daily claim streak."""
         try:
@@ -175,6 +207,63 @@ class Games(commands.Cog):
     async def increment_daily_plays(self, user_id: str, guild_id: str, game: str):
         """Increment the daily play count for a game."""
         await self._increment_daily_game_plays(user_id, guild_id, game)
+    
+    async def increment_plays(self, user_id: str, guild_id: str, command: str):
+        """Unified function to increment play count for any command."""
+        config = get_timer_config(command)
+        
+        # For daily commands, use daily tracking
+        if uses_daily_reset(command):
+            await self.increment_daily_plays(user_id, guild_id, command)
+        else:
+            # For usage-based commands, track current session uses
+            await self.increment_current_uses(user_id, guild_id, command)
+            current_uses = await self.get_current_uses(user_id, guild_id, command)
+            
+            # If reached max uses, set main cooldown
+            if current_uses >= config["max_uses"]:
+                await self.set_cooldown(user_id, f"{command}_main")
+    
+    async def get_current_uses(self, user_id: str, guild_id: str, command: str) -> int:
+        """Get current usage count for a command in this session."""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.game_uses.{command}": 1}
+            )
+            if result:
+                return result.get("members", {}).get(user_id, {}).get("game_uses", {}).get(command, 0)
+        except Exception as e:
+            logger.error(f"Error getting current uses: {e}")
+        return 0
+    
+    async def increment_current_uses(self, user_id: str, guild_id: str, command: str):
+        """Increment current usage count for a command."""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            await server_col.update_one(
+                {"guild_id": guild_id},
+                {"$inc": {f"members.{user_id}.game_uses.{command}": 1}},
+                upsert=True
+            )
+        except Exception as e:
+            logger.error(f"Error incrementing current uses: {e}")
+    
+    async def reset_uses(self, user_id: str, guild_id: str, command: str):
+        """Reset usage count for a command when cooldown expires."""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            await server_col.update_one(
+                {"guild_id": guild_id},
+                {"$set": {f"members.{user_id}.game_uses.{command}": 0}},
+                upsert=True
+            )
+        except Exception as e:
+            logger.error(f"Error resetting uses: {e}")
     
     def get_random_rarity(self) -> str:
         """Get a random rarity based on chances (gacha-style)."""
@@ -560,12 +649,65 @@ class Games(commands.Cog):
         return uuid.uuid4().hex[:8].upper()
     
     def calculate_release_value(self, favorites: int, rarity: str) -> int:
-        """Calculate stella points for releasing a character based on favorites."""
-        base_values = {"common": 10, "uncommon": 25, "rare": 75, "epic": 200, "legendary": 500}
-        base = base_values.get(rarity, 10)
-        # Add bonus based on favorites (1 point per 100 favorites, max 500 bonus)
-        bonus = min(favorites // 100, 500)
-        return base + bonus
+        """Calculate stella points for releasing a character based on rarity and favorites (likeness) with random seed."""
+        import random
+        
+        # Enhanced base values for each rarity tier
+        base_values = {
+            "common": 50,      # Increased from 10
+            "uncommon": 150,   # Increased from 25  
+            "rare": 400,        # Increased from 75
+            "epic": 1200,       # Increased from 200
+            "legendary": 3000   # Increased from 500
+        }
+        base = base_values.get(rarity, 50)
+        
+        # Enhanced favorites bonus with exponential scaling
+        # 1 point per 10 favorites (instead of 100), with higher multipliers for popular characters
+        if favorites == 0:
+            favorites_bonus = 0
+        elif favorites <= 50:
+            favorites_bonus = favorites * 1  # 1 point per favorite
+        elif favorites <= 200:
+            favorites_bonus = 50 + (favorites - 50) * 2  # 2 points per favorite after 50
+        elif favorites <= 1000:
+            favorites_bonus = 350 + (favorites - 200) * 3  # 3 points per favorite after 200
+        elif favorites <= 5000:
+            favorites_bonus = 2150 + (favorites - 1000) * 5  # 5 points per favorite after 1000
+        else:
+            # Ultra popular characters get massive bonuses
+            favorites_bonus = 17150 + (favorites - 5000) * 10  # 10 points per favorite after 5000
+        
+        # Rarity multiplier on favorites bonus (rarer characters get more value from popularity)
+        rarity_multipliers = {
+            "common": 1.0,
+            "uncommon": 1.2,
+            "rare": 1.5,
+            "epic": 2.0,
+            "legendary": 3.0
+        }
+        rarity_mult = rarity_multipliers.get(rarity, 1.0)
+        favorites_bonus = int(favorites_bonus * rarity_mult)
+        
+        # Add random seed factor for variability (±20% of base value)
+        # Create a deterministic seed based on character properties for consistency per character
+        seed_input = f"{rarity}_{favorites}_{base}"
+        random.seed(hash(seed_input) % (2**32))  # Use hash to create seed
+        
+        random_factor = random.uniform(0.8, 1.2)  # ±20% variation
+        random_bonus = int(base * (random_factor - 1.0))  # Convert to bonus/penalty
+        
+        # Reset random seed to avoid affecting other random operations
+        random.seed()
+        
+        # Minimum and maximum caps
+        min_value = max(base, 100)  # Minimum 100 points
+        max_value = 50000  # Maximum 50,000 points
+        
+        total_value = base + favorites_bonus + random_bonus
+        total_value = max(min_value, min(total_value, max_value))
+        
+        return total_value
     
     async def add_character_to_inventory(self, user_id: str, guild_id: str, character: dict) -> str:
         """Add a character to user's inventory in MongoDB. Returns the UID."""
@@ -816,10 +958,10 @@ class Games(commands.Cog):
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
         
-        # Check daily limit
-        daily_plays = await self._get_daily_game_plays(user_id, guild_id, "slots")
-        if daily_plays >= DAILY_LIMITS["slots"]:
-            return await ctx.reply(f"❌ Daily limit reached! You've played **{daily_plays}/{DAILY_LIMITS['slots']}** times today. Try again tomorrow!", mention_author=False)
+        # Check timer (cooldown + daily limit)
+        timer_error = await self.check_timer(ctx, "slots")
+        if timer_error:
+            return await ctx.reply(timer_error, mention_author=False)
         
         # Validate bet
         if bet < 10:
@@ -832,8 +974,9 @@ class Games(commands.Cog):
         if balance < bet:
             return await ctx.reply(f"❌ You need **{bet:,}** but only have **{balance:,}** stella points!", mention_author=False)
         
-        # Increment daily play count
-        await self._increment_daily_game_plays(user_id, guild_id, "slots")
+        # Set command cooldown and increment plays
+        await self.set_cooldown(user_id, "slots_command")
+        await self.increment_plays(user_id, guild_id, "slots")
         
         await self._run_slot_machine(ctx.channel, ctx.author, bet)
     
@@ -1192,6 +1335,11 @@ class Games(commands.Cog):
         else:
             return await ctx.reply("❌ Choose **heads** or **tails**!", mention_author=False)
         
+        # Check timer (cooldown + daily limit)
+        timer_error = await self.check_timer(ctx, "coinflip")
+        if timer_error:
+            return await ctx.reply(timer_error, mention_author=False)
+        
         # Validate bet
         if bet < 10:
             return await ctx.reply("❌ Minimum bet is **10** stella points!", mention_author=False)
@@ -1203,7 +1351,9 @@ class Games(commands.Cog):
         if balance < bet:
             return await ctx.reply(f"❌ You need **{bet:,}** but only have **{balance:,}** stella points!", mention_author=False)
         
-        # Deduct bet
+        # Set command cooldown, deduct bet and increment plays
+        await self.set_cooldown(user_id, "coinflip_command")
+        await self.increment_plays(user_id, guild_id, "coinflip")
         await self.quest_data.add_balance(user_id, guild_id, -bet)
         
         # Flip!
@@ -1289,10 +1439,18 @@ class Games(commands.Cog):
         if bet < 10 or bet > 5000:
             return await ctx.reply("❌ Bet between **10** and **5,000** pts!", mention_author=False)
         
+        # Check timer (cooldown + daily limit)
+        timer_error = await self.check_timer(ctx, "dice")
+        if timer_error:
+            return await ctx.reply(timer_error, mention_author=False)
+        
         balance = await self.quest_data.get_balance(user_id, guild_id)
         if balance < bet:
             return await ctx.reply(f"❌ Need **{bet:,}** but have **{balance:,}** pts!", mention_author=False)
         
+        # Set command cooldown, deduct bet and increment plays
+        await self.set_cooldown(user_id, "dice_command")
+        await self.increment_plays(user_id, guild_id, "dice")
         await self.quest_data.add_balance(user_id, guild_id, -bet)
         
         # Roll!
@@ -1341,9 +1499,9 @@ class Games(commands.Cog):
         )
         
         if winnings > 0:
-            embed.add_field(name="💰 Won", value=f"+**{winnings:,}** pts", inline=True)
+            embed.add_field(name="Won", value=f"+**{winnings:,}** pts", inline=True)
         else:
-            embed.add_field(name="📉 Lost", value=f"**-{bet:,}** pts", inline=True)
+            embed.add_field(name="Lost", value=f"**-{bet:,}** pts", inline=True)
         
         embed.add_field(name="💳 Balance", value=f"**{new_balance:,}** pts", inline=True)
         
@@ -1356,10 +1514,10 @@ class Games(commands.Cog):
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
         
-        # Check daily limit
-        daily_plays = await self._get_daily_game_plays(user_id, guild_id, "guess")
-        if daily_plays >= DAILY_LIMITS["guess"]:
-            return await ctx.reply(f"❌ Daily limit reached! You've played **{daily_plays}/{DAILY_LIMITS['guess']}** times today. Try again tomorrow!", mention_author=False)
+        # Check timer (cooldown + daily limit)
+        timer_error = await self.check_timer(ctx, "guess")
+        if timer_error:
+            return await ctx.reply(timer_error, mention_author=False)
         
         # Validate bet
         if bet < 20:
@@ -1372,8 +1530,9 @@ class Games(commands.Cog):
         if balance < bet:
             return await ctx.reply(f"❌ You need **{bet:,}** but only have **{balance:,}** stella points!", mention_author=False)
         
-        # Increment daily play count
-        await self._increment_daily_game_plays(user_id, guild_id, "guess")
+        # Set command cooldown and increment plays
+        await self.set_cooldown(user_id, "guess_command")
+        await self.increment_plays(user_id, guild_id, "guess")
         
         # Deduct bet upfront - no refunds!
         await self.quest_data.add_balance(user_id, guild_id, -bet)
@@ -1514,13 +1673,12 @@ class Games(commands.Cog):
         user_id = str(ctx.author.id)
         cost = 100
         
-        # Check daily limit
-        plays_today = await self.get_daily_plays(user_id, guild_id, "pokemon")
-        if plays_today >= DAILY_LIMITS["pokemon"]:
+        # Check timer (cooldown + daily limit)
+        timer_error = await self.check_timer(ctx, "pokemon")
+        if timer_error:
             embed = discord.Embed(
                 title="⏰ Daily Limit Reached!",
-                description=f"You've used all **{DAILY_LIMITS['pokemon']}** Pokémon draws today.\n"
-                           f"Come back tomorrow!",
+                description=timer_error,
                 color=discord.Color.orange()
             )
             return await ctx.reply(embed=embed, mention_author=False)
@@ -1536,9 +1694,10 @@ class Games(commands.Cog):
             )
             return await ctx.reply(embed=embed, mention_author=False)
         
-        # Deduct cost and increment plays
+        # Set command cooldown, deduct cost and increment plays
+        await self.set_cooldown(user_id, "pokemon_command")
         await self.quest_data.add_balance(user_id, guild_id, -cost)
-        await self.increment_daily_plays(user_id, guild_id, "pokemon")
+        await self.increment_plays(user_id, guild_id, "pokemon")
         
         # Random rarity (gacha-style)
         rarity = self.get_random_rarity()
@@ -1586,8 +1745,6 @@ class Games(commands.Cog):
         embed.add_field(name=result_name, value=f"**{profit:+,}** pts", inline=True)
         embed.add_field(name="💳 Balance", value=f"**{new_balance:,}** pts", inline=True)
         
-        plays_left = DAILY_LIMITS["pokemon"] - plays_today - 1
-        embed.set_footer(text=f"Draws left today: {plays_left}")
         await ctx.reply(embed=embed, file=file, mention_author=False)
     
     # ═══════════════════════════════════════════════════════════════
@@ -1678,9 +1835,11 @@ class Games(commands.Cog):
         )
         
         # Cost info
+        gacha_config = get_timer_config("gacha")
+        cooldown_minutes = gacha_config['cooldown'] // 60
         embed.add_field(
             name="Cost & Limits",
-            value=f"**{GACHA_COST}** pts per draw\n**{DAILY_LIMITS['gacha']}** draws per day",
+            value=f"**{GACHA_COST}** pts per draw\n**{gacha_config['max_uses']}** draws, then {cooldown_minutes} min cooldown",
             inline=True
         )
         
@@ -1758,7 +1917,7 @@ class Games(commands.Cog):
         release_value = self.calculate_release_value(favorites, rarity)
         embed.set_footer(text=f"Release value: {release_value} pts")
         
-        # Add cover art view button (not ready yet)
+        # Add cover art view button (commented out)
         # view = CharacterCoverArtView(char['uid'], ctx.author.id)
         # await ctx.reply(embed=embed, view=view, mention_author=False)
         await ctx.reply(embed=embed, mention_author=False)
@@ -1885,25 +2044,20 @@ class Games(commands.Cog):
         user_id = str(ctx.author.id)
         cost = GACHA_COST
         
-        # Check daily limit
-        plays_today = await self.get_daily_plays(user_id, guild_id, "gacha")
-        if plays_today >= DAILY_LIMITS["gacha"]:
-            return await ctx.reply(
-                embed=discord.Embed(
-                    title="⏰ Daily Limit!",
-                    description=f"Used all **{DAILY_LIMITS['gacha']}** draws today.\nCome back tomorrow!",
-                    color=discord.Color.orange()
-                ), mention_author=False
-            )
+        # Check timer (cooldown + daily limit)
+        timer_error = await self.check_timer(ctx, "gacha")
+        if timer_error:
+            return await ctx.reply(timer_error, mention_author=False)
         
         # Check balance
         balance = await self.quest_data.get_balance(user_id, guild_id)
         if balance < cost:
             return await ctx.reply(f"❌ Need **{cost}** but have **{balance:,}** pts!", mention_author=False)
         
-        # Deduct cost and increment plays
+        # Set command cooldown, deduct cost and increment plays
+        await self.set_cooldown(user_id, "gacha_command")
         await self.quest_data.add_balance(user_id, guild_id, -cost)
-        await self.increment_daily_plays(user_id, guild_id, "gacha")
+        await self.increment_plays(user_id, guild_id, "gacha")
         
         # Filter text for title
         filter_text = ""
@@ -1924,7 +2078,9 @@ class Games(commands.Cog):
         
         # Send image directly without embed
         new_balance = balance - cost
-        draws_left = DAILY_LIMITS['gacha'] - plays_today - 1
+        gacha_config = get_timer_config("gacha")
+        current_uses = await self.get_current_uses(user_id, guild_id, "gacha")
+        draws_left = gacha_config['max_uses'] - current_uses
         # Clean, natural block output for draw summary
         content = (
             "```\n"
@@ -2024,10 +2180,14 @@ class Games(commands.Cog):
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
         
-        # Check daily limit
-        daily_plays = await self._get_daily_game_plays(user_id, guild_id, "hangman")
-        if daily_plays >= DAILY_LIMITS["hangman"]:
-            return await ctx.reply(f"❌ Daily limit reached! You've played **{daily_plays}/{DAILY_LIMITS['hangman']}** times today. Try again tomorrow!", mention_author=False)
+        # Check timer (cooldown + daily limit)
+        timer_error = await self.check_timer(ctx, "hangman")
+        if timer_error:
+            return await ctx.reply(timer_error, mention_author=False)
+        
+        # Set command cooldown for starting a hangman game
+        await self.set_cooldown(user_id, "hangman_command")
+        await self.increment_plays(user_id, guild_id, "hangman")
         
         guild_id = str(ctx.guild.id)
         game_id = f"{guild_id}_{ctx.channel.id}_hangman_{int(datetime.now(timezone.utc).timestamp())}"
@@ -2116,7 +2276,7 @@ class Games(commands.Cog):
                 
                 word_display = " ".join("_" for _ in game["word"])
                 embed = discord.Embed(
-                    title="🕵️ Hangman",
+                    title="Hangman",
                     description=f"{HANGMAN_STAGES[0]}\n**Word:** `{word_display}`",
                     color=discord.Color.blue()
                 )

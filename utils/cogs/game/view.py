@@ -16,8 +16,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from motor.motor_asyncio import AsyncIOMotorClient
 from utils.cogs.cover_art import CoverArtVariantView, CoverArtDatabase
 from .const import *
-from .images import fetch_avatar_bytes, generate_gacha_draw_image
-
+from .images import *
 logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════
@@ -274,7 +273,7 @@ class CharacterCoverArtView(discord.ui.View):
             await interaction.response.send_message("You can only use your own character buttons!", ephemeral=True)
             return
         
-        # Defer early to keep interaction alive during DB lookups
+        # Defer early to keep interaction alive during API lookups
         send = interaction.response.send_message
         if not interaction.response.is_done():
             try:
@@ -287,123 +286,63 @@ class CharacterCoverArtView(discord.ui.View):
             send = interaction.followup.send
         
         try:
-            cover_art_cog = interaction.client.get_cog("CoverArt")
-            if cover_art_cog and getattr(cover_art_cog, "db", None):
-                db = cover_art_cog.db
-            else:
-                try:
-                    db = self._get_cover_art_db()
-                except RuntimeError as env_err:
-                    await send(
-                        "Cover art database is not configured (MONGO_URL is missing).",
-                        ephemeral=True,
-                    )
-                    logger.error("CoverArt button env error: %s", env_err)
-                    return
-        
-            # Resolve UID to character name first
-            character_name = await db.resolve_character_id_from_uid(self.character_uid)
-            if not character_name:
-                # Character not found in gacha inventory, create minimal entry
-                await send(
-                    "⏳ Character not found in inventory. Creating entry...",
-                    ephemeral=True
-                )
-                # Create minimal character entry in cover art DB
-                character_data = await db.ensure_character_exists(
-                    f"UID_{self.character_uid}",
-                    interaction.guild.id,
-                    interaction.user.id,
-                    extra={
-                        "series": "Unknown",
-                        "rarity": "C",
-                        "favorites": 0
-                    }
-                )
-                normalized_id = db.normalize_key(f"UID_{self.character_uid}")
-                owned_covers = await db.get_user_cover_inventory(interaction.user.id, normalized_id)
-                
-                cover_view = CoverArtVariantView(
-                    interaction.user.id,
-                    normalized_id,
-                    character_data,
-                    owned_covers,
-                    db,
-                )
-                
-                content = cover_view.create_content_message()
-                image_url = cover_view.get_image_url()
-                guidance = (
-                    "\n\n__How to buy new cover art__\n"
-                    "1. Use the Cover Art Shop button to browse SFW covers.\n"
-                    "2. Click Buy on a cover and confirm the purchase.\n"
-                    "3. Switch between owned covers with the Previous/Next buttons."
-                )
-                content_with_help = content + guidance
-                
-                if image_url:
-                    await interaction.followup.send(content=content_with_help, view=cover_view, ephemeral=True)
-                    await interaction.followup.send(image_url, ephemeral=True)
-                else:
-                    await interaction.followup.send(content=content_with_help, view=cover_view, ephemeral=True)
+            # Get character data from the games cog
+            games_cog = interaction.client.get_cog("Games")
+            if not games_cog:
+                await send("❌ Games cog not found!", ephemeral=True)
                 return
             
-            normalized_id = db.normalize_key(character_name)
-            character_data = await db.get_character_by_id(normalized_id, interaction.guild.id, interaction.user.id)
+            # Get character data from UID
+            guild_id = str(interaction.guild.id)
+            owner_id, character_data = await games_cog.get_character_by_uid(guild_id, self.character_uid)
             
-            # Auto-create character if not found with actual gacha data
             if not character_data:
-                # Try to get metadata from gacha inventory first (server-specific)
-                metadata = await db.find_character_metadata(character_name, interaction.guild.id)
-                if metadata:
-                    extra = {
-                        "series": metadata.get("anime", "Unknown"),
-                        "rarity": "C",  # Will be enriched later
-                        "favorites": metadata.get("favorites", 0),
-                        "default_image": metadata.get("image_url"),
-                        "description": metadata.get("about", "")
-                    }
-                else:
-                    extra = {"series": "Unknown", "rarity": "C"}
-                
-                character_data = await db.ensure_character_exists(
-                    character_name,
-                    interaction.guild.id,
-                    interaction.user.id,
-                    extra=extra
+                await send("❌ Character not found!", ephemeral=True)
+                return
+            
+            character_name = character_data.get("name", "Unknown")
+            
+            # Fetch anisearch screenshot
+            async with aiohttp.ClientSession() as session:
+                screenshot_url = await fetch_anisearch_screenshot(session, character_name)
+            
+            if screenshot_url:
+                # Create embed with screenshot
+                embed = discord.Embed(
+                    title=f"🎨 {character_name} - Cover Art",
+                    description=f"From: {character_data.get('anime', 'Unknown')}",
+                    color=discord.Color.blue()
                 )
-                    
-            owned_covers = await db.get_user_cover_inventory(interaction.user.id, normalized_id)
-            
-            cover_view = CoverArtVariantView(
-                interaction.user.id,
-                normalized_id,
-                character_data,
-                owned_covers,
-                db,
-            )
-            
-            content = cover_view.create_content_message()
-            image_url = cover_view.get_image_url()
-            guidance = (
-                "\n\n__How to buy new cover art__\n"
-                "1. Use the Cover Art Shop button to browse SFW covers.\n"
-                "2. Click Buy on a cover and confirm the purchase.\n"
-                "3. Switch between owned covers with the Previous/Next buttons."
-            )
-            content_with_help = content + guidance
-            
-            if image_url:
-                await send(content=content_with_help, view=cover_view, ephemeral=True)
-                await interaction.followup.send(image_url, ephemeral=True)
+                embed.set_image(url=screenshot_url)
+                embed.set_footer(text="Image source: anisearch.org")
+                
+                view = discord.ui.View()
+                view.add_item(discord.ui.Button(
+                    label="View Full Image",
+                    style=discord.ButtonStyle.link,
+                    url=screenshot_url
+                ))
+                
+                await send(embed=embed, view=view, ephemeral=True)
             else:
-                await send(content=content_with_help, view=cover_view, ephemeral=True)
-        except Exception as exc:
-            logger.exception(f"CoverArt button failed for %s: %s", self.character_uid, exc)
-            await send(
-                "Cover art view failed to load. Please try again in a moment.",
-                ephemeral=True,
-            )
+                # Fallback to original image if available
+                original_image = character_data.get("image_url")
+                if original_image:
+                    embed = discord.Embed(
+                        title=f"🎨 {character_name} - Cover Art",
+                        description=f"From: {character_data.get('anime', 'Unknown')}",
+                        color=discord.Color.blue()
+                    )
+                    embed.set_image(url=original_image)
+                    embed.set_footer(text="Original character image")
+                    
+                    await send(embed=embed, ephemeral=True)
+                else:
+                    await send(f"❌ No cover art found for {character_name}", ephemeral=True)
+                    
+        except Exception as e:
+            logger.error(f"Error in cover_art_button: {e}")
+            await send("❌ An error occurred while fetching cover art!", ephemeral=True)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -748,7 +687,7 @@ class HangmanLetterView(discord.ui.View):
             guessed_str = ", ".join(sorted(player["guessed"])) or "None"
             
             embed = discord.Embed(
-                title="🕵️ Hangman",
+                title="Hangman",
                 description=f"{HANGMAN_STAGES[player['wrong']]}\n**Word:** `{player['display']}`",
                 color=discord.Color.blue()
             )
@@ -768,7 +707,7 @@ class HangmanLetterView(discord.ui.View):
             guessed_str = ", ".join(sorted(player["guessed"])) or "None"
             
             embed = discord.Embed(
-                title="🕵️ Hangman",
+                title="Hangman",
                 description=f"{HANGMAN_STAGES[player['wrong']]}\n**Word:** `{player['display']}`",
                 color=discord.Color.blue()
             )
@@ -842,7 +781,7 @@ class HangmanLetterView(discord.ui.View):
                 guessed_str = ", ".join(sorted(player["guessed"])) or "None"
                 
                 embed = discord.Embed(
-                    title="🕵️ Hangman",
+                    title="Hangman",
                     description=f"{HANGMAN_STAGES[player['wrong']]}\n**Word:** `{player['display']}`",
                     color=discord.Color.blue()
                 )

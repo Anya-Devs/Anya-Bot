@@ -7,6 +7,7 @@
 import logging
 import json
 from pathlib import Path
+from datetime import timedelta
 from PIL import ImageFont
 import discord
 
@@ -99,34 +100,34 @@ SLOT_SYMBOLS = GAMBLING_CONFIG.get("slots", {}).get("symbols", {
 # ═══════════════════════════════════════════════════════════════
 
 # Rarity configuration for gacha and card games
-# Heavier weight on commons/uncommons to make rares feel special
+# Extremely difficult to get rares - designed for long-term collection
 RARITY_CONFIG = {
     "common": {
-        "chance": 0.65, 
+        "chance": 0.85, 
         "color": discord.Color.light_grey(), 
         "multiplier": 1, 
         "stars": "⭐"
     },
     "uncommon": {
-        "chance": 0.23, 
+        "chance": 0.12, 
         "color": discord.Color.green(), 
         "multiplier": 2, 
         "stars": "⭐⭐"
     },
     "rare": {
-        "chance": 0.09, 
+        "chance": 0.025, 
         "color": discord.Color.blue(), 
         "multiplier": 5, 
         "stars": "⭐⭐⭐"
     },
     "epic": {
-        "chance": 0.02, 
+        "chance": 0.004, 
         "color": discord.Color.purple(), 
         "multiplier": 15, 
         "stars": "⭐⭐⭐⭐"
     },
     "legendary": {
-        "chance": 0.01, 
+        "chance": 0.001, 
         "color": discord.Color.gold(), 
         "multiplier": 50, 
         "stars": "⭐⭐⭐⭐⭐"
@@ -134,37 +135,82 @@ RARITY_CONFIG = {
 }
 
 # ═══════════════════════════════════════════════════════════════
-# 📊 DAILY LIMITS & ECONOMY
+# ⏰ FLEXIBLE TIMER SYSTEM
 # ═══════════════════════════════════════════════════════════════
 
-# Daily usage limits for different game commands
-DAILY_LIMITS = {
-    "pokemon": 15,      # Pokémon-related commands
-    "anime": 15,        # Anime-related commands  
-    "slots": 50,        # Slot machine plays
-    "dice": 50,         # Dice rolls
-    "coinflip": 100,    # Coin flips
-    "guess": 30,        # Number guessing games
-    "hangman": 20,      # Hangman games
-    "wordle": 10,       # Wordle games
-    "work": 999,        # Work commands (effectively unlimited)
-    "job": 999,         # Job applications
-    "rob": 999,         # Robbery attempts
-    "crime": 999,       # Crime attempts
-    "gacha": 200,       # Gacha pulls
+# Timer configuration for different game commands
+# Each command can have: max_uses (usage limit), command_cooldown (short delay between uses), and cooldown (main cooldown after limit reached)
+# Only claim is a true daily command - others use usage-based limits
+TIMER_CONFIG = {
+    "pokemon": {"max_uses": 5, "command_cooldown": 5, "cooldown": 1800},      # 5 draws, 5s between, 30min cooldown after limit
+    "anime": {"max_uses": 5, "command_cooldown": 5, "cooldown": 1800},        # 5 draws, 5s between, 30min cooldown after limit  
+    "slots": {"max_uses": 3, "command_cooldown": 5, "cooldown": 1800},        # 3 plays, 5s between, 30min cooldown after limit
+    "dice": {"max_uses": 5, "command_cooldown": 5, "cooldown": 300},          # 5 rolls, 5s between, 5min cooldown after limit
+    "coinflip": {"max_uses": 5, "command_cooldown": 5, "cooldown": 300},      # 5 flips, 5s between, 5min cooldown after limit
+    "guess": {"max_uses": 5, "command_cooldown": 5, "cooldown": 600},         # 5 guesses, 5s between, 10min cooldown after limit
+    "hangman": {"max_uses": 20, "command_cooldown": 5, "cooldown": 300},      # 20 games, 5s between, 5min cooldown after limit
+    "wordle": {"max_uses": 10, "command_cooldown": 5, "cooldown": 1800},      # 10 games, 5s between, 30min cooldown after limit
+    "work": {"max_uses": 999, "command_cooldown": 5, "cooldown": 3600},       # Effectively unlimited, 5s between, 1h cooldown after limit
+    "job": {"max_uses": 10, "command_cooldown": 5, "cooldown": 3600},         # 10 applications, 5s between, 1h cooldown after limit
+    "rob": {"max_uses": 5, "command_cooldown": 5, "cooldown": 7200},          # 5 attempts, 5s between, 2h cooldown after limit
+    "crime": {"max_uses": 999, "command_cooldown": 5, "cooldown": 3600},      # Effectively unlimited, 5s between, 1h cooldown after limit
+    "gacha": {"max_uses": 5, "command_cooldown": 5, "cooldown": 1800},       # 5 draws, 5s between, 30min cooldown after limit
+    "claim": {"max_uses": 1, "command_cooldown": 5, "cooldown": 86400},        # TRUE DAILY: 1 claim per day
 }
+
+# Helper function to get timer config for a command
+def get_timer_config(command: str) -> dict:
+    """Get timer configuration for a specific command."""
+    return TIMER_CONFIG.get(command, {"max_uses": 5, "command_cooldown": 5, "cooldown": 300})
+
+# Helper function to format cooldown message
+def format_cooldown_message(remaining: timedelta, command: str = "") -> str:
+    """Format a cooldown message with the remaining time."""
+    total_seconds = int(remaining.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    
+    if hours > 0:
+        time_str = f"{hours}h {minutes}m {seconds}s"
+    elif minutes > 0:
+        time_str = f"{minutes}m {seconds}s"
+    else:
+        time_str = f"{seconds}s"
+    
+    command_name = command.replace("_", " ").title()
+    return f"⏰ {command_name} is cooling down! Wait {time_str} before playing again."
+
+# Helper function to determine if command uses daily reset or cooldown reset
+def uses_daily_reset(command: str) -> bool:
+    """Determine if a command should reset daily or based on cooldown."""
+    config = get_timer_config(command)
+    # Commands with 24+ hour cooldowns use daily reset
+    return config["cooldown"] >= 86400
+
+# Helper function to get time period description
+def get_time_period_description(cooldown_seconds: int) -> str:
+    """Get human-readable time period description based on cooldown."""
+    cooldown_hours = cooldown_seconds / 3600
+    if cooldown_hours >= 24:
+        return "per day"
+    elif cooldown_hours >= 1:
+        return f"per {int(cooldown_hours)} hour{'s' if int(cooldown_hours) > 1 else ''}"
+    else:
+        minutes = cooldown_seconds // 60
+        return f"per {minutes} minute{'s' if minutes > 1 else ''}"
 
 # ═══════════════════════════════════════════════════════════════
 # 🎰 GACHA SYSTEM CONFIGURATION
 # ═══════════════════════════════════════════════════════════════
 
 # Gacha rarity tiers with weights and visual styling
+# Extremely rare system - designed for long-term collection goals
 GACHA_RARITY_TIERS = {
-    "common": {"weight": 50, "color": 0x9E9E9E, "stars": 1, "emoji": "⚪"},      # 50% chance
-    "uncommon": {"weight": 25, "color": 0x4CAF50, "stars": 2, "emoji": "🟢"},    # 25% chance
-    "rare": {"weight": 15, "color": 0x2196F3, "stars": 3, "emoji": "🔵"},        # 15% chance
-    "epic": {"weight": 7, "color": 0x9C27B0, "stars": 4, "emoji": "🟣"},         # 7% chance
-    "legendary": {"weight": 3, "color": 0xFFD700, "stars": 5, "emoji": "🌟"},     # 3% chance
+    "common": {"weight": 850, "color": 0x9E9E9E, "stars": 1, "emoji": "⚪"},      # 85% chance
+    "uncommon": {"weight": 120, "color": 0x4CAF50, "stars": 2, "emoji": "🟢"},    # 12% chance
+    "rare": {"weight": 25, "color": 0x2196F3, "stars": 3, "emoji": "🔵"},         # 2.5% chance
+    "epic": {"weight": 4, "color": 0x9C27B0, "stars": 4, "emoji": "🟣"},          # 0.4% chance
+    "legendary": {"weight": 1, "color": 0xFFD700, "stars": 5, "emoji": "🌟"},       # 0.1% chance (1 in 1000)
 }
 
 # Gacha system economics
