@@ -1758,9 +1758,10 @@ class Games(commands.Cog):
         release_value = self.calculate_release_value(favorites, rarity)
         embed.set_footer(text=f"Release value: {release_value} pts")
         
-        # Add cover art view button
-        view = CharacterCoverArtView(char['uid'], ctx.author.id)
-        await ctx.reply(embed=embed, view=view, mention_author=False)
+        # Add cover art view button (not ready yet)
+        # view = CharacterCoverArtView(char['uid'], ctx.author.id)
+        # await ctx.reply(embed=embed, view=view, mention_author=False)
+        await ctx.reply(embed=embed, mention_author=False)
 
     @draw.command(name="release", aliases=["sell", "remove"])
     @commands.cooldown(1, 5, commands.BucketType.user)

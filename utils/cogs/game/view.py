@@ -15,7 +15,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from motor.motor_asyncio import AsyncIOMotorClient
 from utils.cogs.cover_art import CoverArtVariantView, CoverArtDatabase
-from .const import GACHA_CLAIM_TIMEOUT, GACHA_RARITY_TIERS
+from .const import *
 from .images import fetch_avatar_bytes, generate_gacha_draw_image
 
 logger = logging.getLogger(__name__)
@@ -581,7 +581,7 @@ class HangmanJoinView(discord.ui.View):
         
         await message.edit(embed=embed, attachments=[file])
     
-    @discord.ui.button(label="Join Game", style=discord.ButtonStyle.green, emoji="🎮")
+    @discord.ui.button(label="Join Game", style=discord.ButtonStyle.green)
     async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.game_id not in self.cog.active_games:
             return await interaction.response.send_message("❌ Game no longer exists!", ephemeral=True)
@@ -590,6 +590,7 @@ class HangmanJoinView(discord.ui.View):
         user_id = str(interaction.user.id)
         
         if game["started"]:
+            self._remove_join_button()
             return await interaction.response.send_message("❌ Game already started!", ephemeral=True)
         
         if user_id in game["players"]:
@@ -616,8 +617,15 @@ class HangmanJoinView(discord.ui.View):
         # Start early if 5 players
         if len(game["players"]) >= 5:
             game["started"] = True
+            self._remove_join_button()
             self.stop()
             await self.cog._start_hangman_game(self.game_id)
+    
+    def _remove_join_button(self):
+        """Completely remove the join button when game starts."""
+        for item in list(self.children):
+            if isinstance(item, discord.ui.Button) and item.label == "Join Game":
+                self.remove_item(item)
     
     async def on_timeout(self):
         """Handle timeout with proper cleanup and logging."""
@@ -902,7 +910,7 @@ class WordleJoinView(discord.ui.View):
         
         await message.edit(embed=embed, attachments=[file])
     
-    @discord.ui.button(label="Join Game", style=discord.ButtonStyle.green, emoji="🎮")
+    @discord.ui.button(label="Join Game", style=discord.ButtonStyle.green)
     async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.game_id not in self.cog.active_games:
             return await interaction.response.send_message("❌ Game no longer exists!", ephemeral=True)
@@ -911,6 +919,7 @@ class WordleJoinView(discord.ui.View):
         user_id = str(interaction.user.id)
         
         if game["started"]:
+            self._remove_join_button()
             return await interaction.response.send_message("❌ Game already started!", ephemeral=True)
         
         if user_id in game["players"]:
@@ -935,8 +944,15 @@ class WordleJoinView(discord.ui.View):
         # Start early if 5 players
         if len(game["players"]) >= 5:
             game["started"] = True
+            self._remove_join_button()
             self.stop()
             await self.cog._start_wordle_game(self.game_id)
+    
+    def _remove_join_button(self):
+        """Completely remove the join button when game starts."""
+        for item in list(self.children):
+            if isinstance(item, discord.ui.Button) and item.label == "Join Game":
+                self.remove_item(item)
     
     async def on_timeout(self):
         """Handle timeout with proper cleanup and logging."""
@@ -1310,6 +1326,17 @@ class JobSelectMenu(discord.ui.Select):
                 emoji=job.get("emoji", "💼")
             ))
         
+        # Fallback option if no jobs are configured
+        if not options:
+            options = [
+                discord.SelectOption(
+                    label="No jobs available",
+                    value="no_jobs",
+                    description="Jobs system not configured",
+                    emoji="❌"
+                )
+            ]
+        
         super().__init__(
             placeholder="Select a job to apply for...",
             min_values=1,
@@ -1322,6 +1349,13 @@ class JobSelectMenu(discord.ui.Select):
             return await interaction.response.send_message("❌ This isn't your job board!", ephemeral=True)
         
         job_id = self.values[0]
+        
+        if job_id == "no_jobs":
+            return await interaction.response.send_message(
+                "❌ No jobs are currently available. The jobs system needs to be configured.",
+                ephemeral=True
+            )
+        
         job_data = self.cog.get_job_by_id(job_id)
         
         if not job_data:

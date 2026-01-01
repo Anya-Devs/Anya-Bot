@@ -64,7 +64,8 @@ def load_config(filename: str) -> dict:
         - Graceful fallback to defaults
     """
     try:
-        path = Path(__file__).parent.parent.parent / "data" / "commands" / "minigames" / filename
+        # Fix the path calculation - go up 4 levels from utils/cogs/game to root
+        path = Path(__file__).parent.parent.parent.parent / "data" / "commands" / "minigames" / filename
         if path.exists():
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
