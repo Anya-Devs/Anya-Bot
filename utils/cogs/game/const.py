@@ -154,7 +154,7 @@ TIMER_CONFIG = {
     "job": {"max_uses": 10, "command_cooldown": 5, "cooldown": 3600},         # 10 applications, 5s between, 1h cooldown after limit
     "rob": {"max_uses": 5, "command_cooldown": 5, "cooldown": 7200},          # 5 attempts, 5s between, 2h cooldown after limit
     "crime": {"max_uses": 999, "command_cooldown": 5, "cooldown": 3600},      # Effectively unlimited, 5s between, 1h cooldown after limit
-    "gacha": {"max_uses": 5, "command_cooldown": 5, "cooldown": 1800},       # 5 draws, 5s between, 30min cooldown after limit
+    "gacha": {"max_uses": 5, "command_cooldown": 5, "cooldown": 1},       # 5 draws, 5s between, 30min cooldown after limit
     "claim": {"max_uses": 1, "command_cooldown": 5, "cooldown": 86400},        # TRUE DAILY: 1 claim per day
 }
 
@@ -204,19 +204,95 @@ def get_time_period_description(cooldown_seconds: int) -> str:
 # ═══════════════════════════════════════════════════════════════
 
 # Gacha rarity tiers with weights and visual styling
-# Extremely rare system - designed for long-term collection goals
+# EXTREMELY RARE SYSTEM - designed for long-term collection goals
+# Total weight: 10,000 (for precise control)
 GACHA_RARITY_TIERS = {
-    "common": {"weight": 850, "color": 0x9E9E9E, "stars": 1, "emoji": "⚪"},      # 85% chance
-    "uncommon": {"weight": 120, "color": 0x4CAF50, "stars": 2, "emoji": "🟢"},    # 12% chance
-    "rare": {"weight": 25, "color": 0x2196F3, "stars": 3, "emoji": "🔵"},         # 2.5% chance
-    "epic": {"weight": 4, "color": 0x9C27B0, "stars": 4, "emoji": "🟣"},          # 0.4% chance
-    "legendary": {"weight": 1, "color": 0xFFD700, "stars": 5, "emoji": "🌟"},       # 0.1% chance (1 in 1000)
+    "common": {"weight": 7000, "color": 0x9E9E9E, "stars": 1, "emoji": "⚪"},      # 70% chance
+    "uncommon": {"weight": 2500, "color": 0x4CAF50, "stars": 2, "emoji": "🟢"},    # 25% chance
+    "rare": {"weight": 400, "color": 0x2196F3, "stars": 3, "emoji": "🔵"},         # 4% chance (1 in 25)
+    "epic": {"weight": 90, "color": 0x9C27B0, "stars": 4, "emoji": "🟣"},          # 0.9% chance (1 in 111)
+    "legendary": {"weight": 10, "color": 0xFFD700, "stars": 5, "emoji": "🌟"},       # 0.1% chance (1 in 1000)
 }
 
-# Gacha system economics
-GACHA_COST = 50              # Cost per draw in stella points
-GACHA_CARDS_PER_DRAW = 3     # Number of cards shown per draw
-GACHA_CLAIM_TIMEOUT = 30     # Seconds to claim cards before they're lost
+# Gacha rarity calculation thresholds - EXTREMELY STRICT
+# Popular characters become nearly impossible to obtain
+GACHA_RARITY_THRESHOLDS = {
+    "legendary": 50000,      # 50k+ favorites = base legendary
+    "epic": 25000,           # 25k-49k = base epic  
+    "rare": 10000,           # 10k-24k = base rare
+    "uncommon": 5000,        # 5k-9,999 = base uncommon
+    "common": 0,             # <5k = base common
+}
+
+# REVERSED RARITY SYSTEM - More likes = RARER character
+# Popular characters are now EXTREMELY rare to obtain
+
+# EXTREMELY DIFFICULT RARITY SYSTEM - Takes 1000+ tries for rares/legendaries
+# Popular characters are nearly impossible to obtain
+RARITY_CHANCES = {
+    "common": 0.60,
+    "uncommon": 0.30,
+    "rare": 0.08,
+    "epic": 0.015,
+    "legendary": 0.005,
+}
+
+POPULARITY_MULTIPLIERS = {
+    (0, 999):       [1.2, 1.0, 0.5, 0.1, 0.01],
+    (1000, 2999):   [0.9, 1.3, 2.0, 3.0, 5.0],
+    (3000, 5999):   [0.5, 0.8, 5.0, 15.0, 30.0],
+    (6000, 9999):   [0.2, 0.4, 8.0, 40.0, 100.0],
+    (10000, float('inf')): [0.05, 0.1, 5.0, 80.0, 300.0],
+}
+
+GACHA_API_CONFIG = {
+    "jikan": {
+        "base_url": "https://api.jikan.moe/v4",
+        "character_endpoint": "/characters/{}/full",
+        "timeout": 5,
+        "bias_toward_low_favorites": 0.99,
+        "low_id_range": (5001, 20000),  # Swapped for low favorites
+        "high_id_range": (1, 5000),     # Swapped for high favorites
+    },
+    "anilist": {
+        "base_url": "https://graphql.anilist.co",
+        "pool_query": '''
+        query ($page: Int, $perPage: Int) {
+            Page(page: $page, perPage: $perPage) {
+                characters(sort: FAVOURITES_DESC) {
+                    id
+                    name { full }
+                    image { large }
+                    favourites
+                    gender
+                    media(sort: POPULARITY_DESC, perPage: 1) {
+                        nodes { title { romaji } }
+                    }
+                }
+            }
+        }
+        ''',
+        "timeout": 4,
+        "bias_toward_low_favorites": 0.99,
+        "low_page_range": (300, 1000),
+        "high_page_range": (1, 100)
+    },
+    "kitsu": {
+        "base_url": "https://kitsu.io/api/edge",
+        "character_endpoint": "/characters",
+        "timeout": 5,
+        "bias_toward_low_favorites": 0.99,
+        "low_offset_range": (5000, 15000),
+        "high_offset_range": (0, 5000),
+        "include_media": "mediaCharacters.media"
+    }
+}
+
+GACHA_COST = 50
+GACHA_CARDS_PER_DRAW = 3
+GACHA_CLAIM_TIMEOUT = 30
+
+COLLECTION_FILE = "data/cogs/games/gacha/collection.json"
 
 # ═══════════════════════════════════════════════════════════════
 # 🎰 SLOT MACHINE VISUAL CONFIGURATION

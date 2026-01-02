@@ -1,4 +1,3 @@
-import discord
 from discord.ext import commands
 import random
 import asyncio
@@ -12,35 +11,36 @@ from typing import Optional, List, Dict, Any
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from utils.cogs.game import *
-from utils.cogs.game.view import *
+from utils.cogs.game.images import *
 from utils.cogs.game.const import *
+from utils.cogs.game.draw.cover_art import *
 
 logger = logging.getLogger(__name__)
 
 class Games(commands.Cog):
     """🎮 Mini-games that use stella points - Gamble, Classic Games & Grounded Economy!"""
-    
+   
     def __init__(self, bot):
         self.bot = bot
         from utils.cogs.quest import Quest_Data
         self.quest_data = Quest_Data(bot)
         self.session: Optional[aiohttp.ClientSession] = None
-        self.active_games: Dict[str, Dict] = {}  # Track active hangman/wordle games
-        self.user_cooldowns: Dict[str, Dict[str, datetime]] = {}  # Track cooldowns
-    
+        self.active_games: Dict[str, Dict] = {}
+        self.user_cooldowns: Dict[str, Dict[str, datetime]] = {}
+        self.cover_art_system = CoverArtSystem(self.quest_data)
+        self.cover_queue: Dict[str, asyncio.Lock] = {}
+        self.active_searches: Dict[str, bool] = {}
+   
     async def get_session(self) -> aiohttp.ClientSession:
-        """Get or create aiohttp session."""
         if self.session is None or self.session.closed:
             self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
         return self.session
-    
+   
     def cog_unload(self):
-        """Cleanup when cog unloads."""
         if self.session and not self.session.closed:
             asyncio.create_task(self.session.close())
-    
+   
     async def get_user_character(self, user_id: str, guild_id: str) -> Optional[str]:
-        """Get the user's selected Spy x Family character if any."""
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
@@ -53,19 +53,17 @@ class Games(commands.Cog):
         except Exception as e:
             logger.error(f"Error getting character: {e}")
         return None
-    
+   
     async def check_cooldown(self, user_id: str, action: str, cooldown_seconds: int) -> Optional[timedelta]:
-        """Check if user is on cooldown. Returns remaining time or None if ready."""
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
-            
-            # Get last action time from DB
+           
             result = await server_col.find_one(
                 {"guild_id": "global_cooldowns"},
                 {f"cooldowns.{user_id}.{action}": 1}
             )
-            
+           
             if result:
                 last_time_str = result.get("cooldowns", {}).get(user_id, {}).get(action)
                 if last_time_str:
@@ -76,13 +74,12 @@ class Games(commands.Cog):
         except Exception as e:
             logger.error(f"Cooldown check error: {e}")
         return None
-    
+   
     async def set_cooldown(self, user_id: str, action: str):
-        """Set cooldown timestamp for an action."""
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
-            
+           
             await server_col.update_one(
                 {"guild_id": "global_cooldowns"},
                 {"$set": {f"cooldowns.{user_id}.{action}": datetime.now(timezone.utc).isoformat()}},
@@ -90,41 +87,49 @@ class Games(commands.Cog):
             )
         except Exception as e:
             logger.error(f"Set cooldown error: {e}")
-    
+   
     async def check_timer(self, ctx, command: str) -> Optional[str]:
-        """Check command cooldown and usage limits. Returns error message or None."""
         user_id = str(ctx.author.id)
         guild_id = str(ctx.guild.id)
         config = get_timer_config(command)
-        
-        # Always check command cooldown first (short delay between uses)
+       
         command_cooldown = config.get("command_cooldown", 5)
         remaining = await self.check_cooldown(user_id, f"{command}_command", command_cooldown)
         if remaining:
             return format_cooldown_message(remaining, command)
-        
-        # For non-daily commands, check if user has reached usage limit
+       
         if not uses_daily_reset(command):
             current_uses = await self.get_current_uses(user_id, guild_id, command)
             if current_uses >= config["max_uses"]:
-                # Check if main cooldown is active
                 main_remaining = await self.check_cooldown(user_id, f"{command}_main", config["cooldown"])
                 if main_remaining:
                     return format_cooldown_message(main_remaining, command)
                 else:
-                    # User has reached limit but cooldown expired, reset uses
                     await self.reset_uses(user_id, guild_id, command)
                     return None
         else:
-            # Only check daily limits for true daily commands (like claim)
             daily_plays = await self.get_daily_plays(user_id, guild_id, command)
             if daily_plays >= config["max_uses"]:
                 return f"⏰ {command.replace('_', ' ').title()} is limited to {config['max_uses']} uses per day. You've used all {config['max_uses']} uses today."
-        
+       
         return None
-    
+   
+    def get_user_lock(self, user_id: str) -> asyncio.Lock:
+        if user_id not in self.cover_queue:
+            self.cover_queue[user_id] = asyncio.Lock()
+        return self.cover_queue[user_id]
+   
+    async def check_cover_command_cooldown(self, ctx) -> bool:
+        user_id = str(ctx.author.id)
+        if self.active_searches.get(user_id, False):
+            await ctx.reply("⏳ You're already running a cover art command! Please wait for it to complete.", mention_author=False)
+            return False
+        return True
+   
+    async def set_cover_command_status(self, user_id: str, active: bool):
+        self.active_searches[user_id] = active
+   
     async def get_daily_streak(self, user_id: str, guild_id: str) -> int:
-        """Get user's daily claim streak."""
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
@@ -137,9 +142,8 @@ class Games(commands.Cog):
         except Exception as e:
             logger.error(f"Error getting streak: {e}")
         return 0
-    
+   
     async def update_daily_streak(self, user_id: str, guild_id: str, streak: int):
-        """Update user's daily claim streak."""
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
@@ -150,48 +154,39 @@ class Games(commands.Cog):
             )
         except Exception as e:
             logger.error(f"Error updating streak: {e}")
-    
+   
     def format_time(self, td: timedelta) -> str:
-        """Format timedelta to readable string."""
         total_seconds = int(td.total_seconds())
         hours, remainder = divmod(total_seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
-        
         if hours > 0:
             return f"{hours}h {minutes}m"
         elif minutes > 0:
             return f"{minutes}m {seconds}s"
         else:
             return f"{seconds}s"
-    
-    async def _get_daily_game_plays(self, user_id: str, guild_id: str, game: str) -> int:
-        """Get how many times user played a game today."""
+   
+    async def get_daily_plays(self, user_id: str, guild_id: str, game: str) -> int:
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_collection = db["Servers"]
-            
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            
             result = await server_collection.find_one(
                 {"guild_id": guild_id},
                 {f"members.{user_id}.games.{game}.{today}": 1}
             )
-            
             if result:
                 return result.get("members", {}).get(user_id, {}).get("games", {}).get(game, {}).get(today, 0)
             return 0
         except Exception as e:
             logger.error(f"Error getting daily plays: {e}")
             return 0
-    
-    async def _increment_daily_game_plays(self, user_id: str, guild_id: str, game: str):
-        """Increment the daily play count for a game."""
+   
+    async def increment_daily_plays(self, user_id: str, guild_id: str, game: str):
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_collection = db["Servers"]
-            
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            
             await server_collection.update_one(
                 {"guild_id": guild_id},
                 {"$inc": {f"members.{user_id}.games.{game}.{today}": 1}},
@@ -199,33 +194,18 @@ class Games(commands.Cog):
             )
         except Exception as e:
             logger.error(f"Error incrementing daily plays: {e}")
-    
-    async def get_daily_plays(self, user_id: str, guild_id: str, game: str) -> int:
-        """Get how many times user played a game today."""
-        return await self._get_daily_game_plays(user_id, guild_id, game)
-    
-    async def increment_daily_plays(self, user_id: str, guild_id: str, game: str):
-        """Increment the daily play count for a game."""
-        await self._increment_daily_game_plays(user_id, guild_id, game)
-    
+   
     async def increment_plays(self, user_id: str, guild_id: str, command: str):
-        """Unified function to increment play count for any command."""
         config = get_timer_config(command)
-        
-        # For daily commands, use daily tracking
         if uses_daily_reset(command):
             await self.increment_daily_plays(user_id, guild_id, command)
         else:
-            # For usage-based commands, track current session uses
             await self.increment_current_uses(user_id, guild_id, command)
             current_uses = await self.get_current_uses(user_id, guild_id, command)
-            
-            # If reached max uses, set main cooldown
             if current_uses >= config["max_uses"]:
                 await self.set_cooldown(user_id, f"{command}_main")
-    
+   
     async def get_current_uses(self, user_id: str, guild_id: str, command: str) -> int:
-        """Get current usage count for a command in this session."""
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
@@ -238,9 +218,8 @@ class Games(commands.Cog):
         except Exception as e:
             logger.error(f"Error getting current uses: {e}")
         return 0
-    
+   
     async def increment_current_uses(self, user_id: str, guild_id: str, command: str):
-        """Increment current usage count for a command."""
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
@@ -251,9 +230,8 @@ class Games(commands.Cog):
             )
         except Exception as e:
             logger.error(f"Error incrementing current uses: {e}")
-    
+   
     async def reset_uses(self, user_id: str, guild_id: str, command: str):
-        """Reset usage count for a command when cooldown expires."""
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
@@ -264,9 +242,203 @@ class Games(commands.Cog):
             )
         except Exception as e:
             logger.error(f"Error resetting uses: {e}")
-    
+
+    # ===================================================================
+    # REAL PROBABILISTIC GACHA SYSTEM
+    # ===================================================================
+    def get_popularity_multiplier(self, favorites: int, rarity: str) -> float:
+        for (low, high), multipliers in POPULARITY_MULTIPLIERS.items():
+            if low <= favorites < high or (high == float('inf') and favorites >= low):
+                idx = ["common", "uncommon", "rare", "epic", "legendary"].index(rarity)
+                return multipliers[idx]
+        return 1.0
+
+    def determine_rarity(self, favorites: int, pull_index: int = 0) -> str:
+        rarities = list(RARITY_CHANCES.keys())
+        weights = []
+
+        for rarity in rarities:
+            base = RARITY_CHANCES[rarity]
+            mult = self.get_popularity_multiplier(favorites, rarity)
+            if rarity == "legendary":
+                mult = min(mult, 10.0)
+            weights.append(base * mult)
+
+        if pull_index < 2:
+            weights = [w * (2.0 if r in ["common", "uncommon"] else 0.5) for r, w in zip(rarities, weights)]
+
+        total = sum(weights)
+        if total == 0:
+            return "common"
+
+        normalized = [w / total for w in weights]
+        return random.choices(rarities, weights=normalized, k=1)[0]
+
+    async def fetch_single_character(self) -> Optional[Dict]:
+        session = await self.get_session()
+        apis = [self._fetch_jikan, self._fetch_anilist, self._fetch_kitsu]
+        random.shuffle(apis)
+
+        for api_func in apis:
+            try:
+                char = await api_func(session)
+                if char:
+                    return char
+            except Exception as e:
+                logger.debug(f"Gacha API error ({api_func.__name__}): {e}")
+        return None
+
+    async def _fetch_jikan(self, session: aiohttp.ClientSession) -> Optional[Dict]:
+        config = GACHA_API_CONFIG["jikan"]
+        cid = random.randint(
+            *config["low_id_range"] if random.random() < config["bias_toward_low_favorites"]
+            else config["high_id_range"]
+        )
+        url = config["base_url"] + config["character_endpoint"].format(cid)
+        try:
+            async with session.get(url, timeout=config["timeout"]) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+                c = data.get("data")
+                if not c:
+                    return None
+
+                favorites = c.get("favorites", 0)
+                name = c.get("name", "Unknown")
+                anime = "Unknown Anime"
+                if c.get("anime"):
+                    anime = c["anime"][0]["anime"].get("title", anime)
+
+                return {
+                    "name": name,
+                    "anime": anime,
+                    "favorites": favorites,
+                    "image_url": c.get("images", {}).get("jpg", {}).get("image_url"),
+                    "api_source": "Jikan"
+                }
+        except:
+            return None
+
+    async def _fetch_anilist(self, session: aiohttp.ClientSession) -> Optional[Dict]:
+        config = GACHA_API_CONFIG["anilist"]
+        page_range = (
+            config["low_page_range"] if random.random() < config["bias_toward_low_favorites"]
+            else config["high_page_range"]
+        )
+        page = random.randint(*page_range)
+        variables = {"page": page, "perPage": 1}
+
+        try:
+            async with session.post(
+                config["base_url"],
+                json={"query": config["pool_query"], "variables": variables},
+                timeout=config["timeout"]
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                result = await resp.json()
+                chars = result.get("data", {}).get("Page", {}).get("characters", [])
+                if not chars:
+                    return None
+
+                c = chars[0]
+                media_title = "Unknown"
+                if c.get("media", {}).get("nodes"):
+                    media_title = c["media"]["nodes"][0]["title"]["romaji"]
+
+                return {
+                    "name": c["name"]["full"],
+                    "anime": media_title,
+                    "favorites": c.get("favourites", 0),
+                    "image_url": c["image"]["large"],
+                    "api_source": "AniList"
+                }
+        except:
+            return None
+
+    async def _fetch_kitsu(self, session: aiohttp.ClientSession) -> Optional[Dict]:
+        config = GACHA_API_CONFIG["kitsu"]
+        offset_range = (
+            config["low_offset_range"] if config["bias_toward_low_favorites"]
+            else config["high_offset_range"]
+        )
+        offset = random.randint(*offset_range)
+        params = {
+            "page[limit]": 1,
+            "page[offset]": offset,
+            "include": config["include_media"]
+        }
+
+        try:
+            async with session.get(
+                config["base_url"] + config["character_endpoint"],
+                params=params,
+                timeout=config["timeout"]
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+                if not data.get("data"):
+                    return None
+
+                char = data["data"][0]
+                attrs = char["attributes"]
+                name = attrs.get("canonicalName") or attrs.get("name") or "Unknown"
+                favorites = max(100, 18000 - int(char["id"]) * 2)
+
+                anime = "Unknown Anime"
+                for inc in data.get("included", []):
+                    if inc["type"] == "media":
+                        titles = inc["attributes"]["titles"]
+                        anime = titles.get("en") or titles.get("en_jp") or titles.get("ja_jp", anime)
+                        break
+
+                return {
+                    "name": name,
+                    "anime": anime,
+                    "favorites": favorites,
+                    "image_url": attrs.get("image", {}).get("original"),
+                    "api_source": "Kitsu"
+                }
+        except:
+            return None
+
+    async def pull_three_cards_real(self, gender_filter: Optional[str] = None) -> List[Dict]:
+        cards = []
+        for i in range(3):
+            char = None
+            attempts = 0
+            while char is None and attempts < 10:
+                char = await self.fetch_single_character()
+                attempts += 1
+
+                if char and gender_filter:
+                    name_lower = char["name"].lower()
+                    if gender_filter == "Female":
+                        if not any(k in name_lower for k in ["she", "her", "girl", "princess", "chan", "ko", "mi", "ka", "na"]):
+                            char = None
+                            continue
+                    elif gender_filter == "Male":
+                        if not any(k in name_lower for k in ["he", "him", "boy", "prince", "kun", "sei", "ji"]):
+                            char = None
+                            continue
+
+            if char:
+                char["rarity"] = self.determine_rarity(char["favorites"], pull_index=i)
+                cards.append(char)
+            else:
+                cards.append({
+                    "name": "Mystery Character",
+                    "anime": "Unknown",
+                    "favorites": 0,
+                    "image_url": None,
+                    "rarity": "common",
+                    "api_source": "Fallback"
+                })
+        return cards
+
     def get_random_rarity(self) -> str:
-        """Get a random rarity based on chances (gacha-style)."""
         roll = random.random()
         cumulative = 0
         for rarity, data in RARITY_CONFIG.items():
@@ -274,17 +446,14 @@ class Games(commands.Cog):
             if roll <= cumulative:
                 return rarity
         return "common"
-    
+   
     def get_slot_symbol(self) -> str:
-        """Get a weighted random slot symbol."""
         symbols = list(SLOT_SYMBOLS.keys())
         weights = [SLOT_SYMBOLS[s]["weight"] for s in symbols]
         return random.choices(symbols, weights=weights, k=1)[0]
-    
+   
     async def fetch_pokemon_info(self, pokemon_id: int) -> Optional[Dict[str, Any]]:
-        """Fetch Pokemon info from API (just for display, not rarity)."""
         session = await self.get_session()
-        
         try:
             async with session.get(f"https://pokeapi.co/api/v2/pokemon/{pokemon_id}") as resp:
                 if resp.status == 200:
@@ -292,393 +461,44 @@ class Games(commands.Cog):
                     return {
                         "name": data["name"].replace("-", " ").title(),
                         "id": data["id"],
-                        "sprite": data["sprites"]["other"]["official-artwork"]["front_default"] 
+                        "sprite": data["sprites"]["other"]["official-artwork"]["front_default"]
                                   or data["sprites"]["front_default"],
                         "types": [t["type"]["name"].title() for t in data.get("types", [])],
                     }
         except Exception as e:
             logger.debug(f"Pokemon API error (using fallback): {e}")
-        
         return None
-    
-    async def fetch_anime_character_info(self) -> Optional[Dict[str, Any]]:
-        """Fetch random anime character info from API (just for display, not rarity)."""
-        session = await self.get_session()
-        
-        try:
-            # Random character ID (1-5000 for faster response)
-            char_id = random.randint(1, 5000)
-            
-            async with session.get(f"https://api.jikan.moe/v4/characters/{char_id}") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    char = data.get("data", {})
-                    
-                    if char:
-                        # Get anime they're from
-                        anime_name = "Unknown Anime"
-                        if char.get("anime"):
-                            anime_list = char.get("anime", [])
-                            if anime_list:
-                                anime_name = anime_list[0].get("anime", {}).get("title", "Unknown Anime")
-                        
-                        return {
-                            "name": char.get("name", "Unknown"),
-                            "anime": anime_name,
-                            "image": char.get("images", {}).get("jpg", {}).get("image_url"),
-                            "favorites": char.get("favorites", 0),
-                        }
-        except Exception as e:
-            logger.debug(f"Jikan API error (using fallback): {e}")
-        
-        return None
-    
-    # ═══════════════════════════════════════════════════════════════
-    # GACHA SYSTEM METHODS
-    # ═══════════════════════════════════════════════════════════════
-    
-    def get_gacha_rarity(self, favorites: int = 0) -> str:
-        """Determine rarity primarily from favorites/likes with light randomness.
-        
-        Tiered by favorites:
-        - < 4,000: common
-        - 4,000 - 9,999: uncommon
-        - 10,000 - 24,999: rare
-        - 25,000 - 49,999: epic
-        - 50,000+: legendary
-        
-        A small random wiggle can bump up or down one tier to keep draws exciting,
-        but high-favorite characters stay rare.
-        """
-        # Determine base tier from favorites
-        if favorites >= 50000:
-            base = "legendary"
-        elif favorites >= 25000:
-            base = "epic"
-        elif favorites >= 10000:
-            base = "rare"
-        elif favorites >= 4000:
-            base = "uncommon"
-        else:
-            base = "common"
-        
-        tiers = ["common", "uncommon", "rare", "epic", "legendary"]
-        idx = tiers.index(base)
-        
-        # Light randomness (buffed ~10% overall): 12% chance to bump up, 8% to bump down (bounded)
-        roll = random.random()
-        if roll < 0.12 and idx < len(tiers) - 1:
-            idx += 1
-        elif roll > 0.92 and idx > 0:
-            idx -= 1
-        
-        return tiers[idx]
-    
-    async def fetch_gacha_characters(self, count: int = 3, gender_filter: str = None) -> list:
-        """Fetch multiple random anime characters FAST - parallel requests.
-        Prioritizes characters with under 9k favorites (75% spawn rate).
-        
-        Args:
-            count: Number of characters to fetch
-            gender_filter: "Female" or "Male" to filter by gender, None for all
-        """
-        session = await self.get_session()
-        
-        # Fetch all characters in parallel for speed
-        async def fetch_one_char(api_choice: str, force_low_favorites: bool = False):
-            try:
-                if api_choice == "jikan":
-                    # Bias character ID selection based on force_low_favorites
-                    if force_low_favorites:
-                        # Lower IDs tend to have fewer favorites
-                        char_id = random.randint(1, 5000)
-                    else:
-                        char_id = random.randint(1, 10000)
-                    
-                    # Use full endpoint to get anime info included
-                    async with session.get(f"https://api.jikan.moe/v4/characters/{char_id}/full", timeout=aiohttp.ClientTimeout(total=4)) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            char = data.get("data", {})
-                            
-                            if char and char.get("name"):
-                                # Get anime from the full response
-                                anime_name = "Original Character"
-                                anime_list = char.get("anime", [])
-                                if anime_list and len(anime_list) > 0:
-                                    first_anime = anime_list[0].get("anime", {})
-                                    anime_name = first_anime.get("title") or first_anime.get("name") or "Original Character"
-                                
-                                favorites = char.get("favorites", 0)
-                                
-                                # Quick gender check
-                                about = (char.get("about", "") or "").lower()
-                                gender = "Unknown"
-                                if any(x in about for x in ["she ", "her ", "female", "woman", "girl"]):
-                                    gender = "Female"
-                                elif any(x in about for x in ["he ", "his ", "male", "man ", "boy"]):
-                                    gender = "Male"
-                                
-                                if gender_filter and gender != gender_filter:
-                                    return None
-                                
-                                images = char.get("images", {}).get("jpg", {})
-                                image_url = images.get("large_image_url") or images.get("image_url")
-                                
-                                return {
-                                    "id": char.get("mal_id"),
-                                    "name": char.get("name", "Unknown"),
-                                    "anime": anime_name,
-                                    "image_url": image_url,
-                                    "favorites": favorites,
-                                    "rarity": self.get_gacha_rarity(favorites),
-                                    "gender": gender,
-                                }
-                
-                elif api_choice == "anilist":
-                    query = '''
-                    query ($page: Int) {
-                        Page(page: $page, perPage: 1) {
-                            characters(sort: FAVOURITES_DESC) {
-                                id
-                                name { full }
-                                image { large }
-                                favourites
-                                gender
-                                media(sort: POPULARITY_DESC, perPage: 1) {
-                                    nodes { title { romaji } }
-                                }
-                            }
-                        }
-                    }
-                    '''
-                    
-                    # Bias page selection for low favorites
-                    if force_low_favorites:
-                        # Higher page numbers tend to have lower favorites
-                        variables = {"page": random.randint(300, 800)}
-                    else:
-                        variables = {"page": random.randint(1, 500)}
-                    
-                    async with session.post(
-                        "https://graphql.anilist.co",
-                        json={"query": query, "variables": variables},
-                        timeout=aiohttp.ClientTimeout(total=3)
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            chars = data.get("data", {}).get("Page", {}).get("characters", [])
-                            
-                            if chars:
-                                char = chars[0]
-                                gender = char.get("gender", "Unknown")
-                                
-                                if gender_filter and gender != gender_filter:
-                                    return None
-                                
-                                anime_name = "Unlisted (AniList)"
-                                media = char.get("media", {}).get("nodes", [])
-                                if media:
-                                    anime_name = media[0].get("title", {}).get("romaji", "Unknown Anime")
-                                
-                                return {
-                                    "id": char.get("id"),
-                                    "name": char.get("name", {}).get("full", "Unknown"),
-                                    "anime": anime_name,
-                                    "image_url": char.get("image", {}).get("large"),
-                                    "favorites": char.get("favourites", 0),
-                                    "rarity": self.get_gacha_rarity(char.get("favourites", 0)),
-                                    "gender": gender,
-                                }
-                
-                elif api_choice == "kitsu":
-                    # Bias offset selection for low favorites
-                    if force_low_favorites:
-                        # Higher offsets tend to have lower favorites
-                        offset = random.randint(3000, 8000)
-                    else:
-                        offset = random.randint(0, 5000)
-                    
-                    # Include media castings to get anime name
-                    async with session.get(
-                        f"https://kitsu.io/api/edge/characters?page[limit]=1&page[offset]={offset}&include=mediaCharacters.media",
-                        timeout=aiohttp.ClientTimeout(total=4)
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            chars = data.get("data", [])
-                            
-                            if chars:
-                                char = chars[0]
-                                attrs = char.get("attributes", {})
-                                
-                                name = attrs.get("canonicalName") or attrs.get("name", "Unknown")
-                                image_url = None
-                                if attrs.get("image"):
-                                    image_url = attrs["image"].get("original") or attrs["image"].get("large")
-                                
-                                char_id = int(char.get("id", 0))
-                                favorites = max(100, 10000 - (char_id % 9000))
-                                
-                                desc = (attrs.get("description") or "").lower()
-                                gender = "Unknown"
-                                if any(x in desc for x in ["she ", "her ", "female", "woman", "girl"]):
-                                    gender = "Female"
-                                elif any(x in desc for x in ["he ", "his ", "male", "man ", "boy"]):
-                                    gender = "Male"
-                                
-                                if gender_filter and gender != gender_filter:
-                                    return None
-                                
-                                # Get anime name from included media
-                                anime_name = "Original Character"
-                                included = data.get("included", [])
-                                for inc in included:
-                                    if inc.get("type") == "anime" or inc.get("type") == "manga":
-                                        inc_attrs = inc.get("attributes", {})
-                                        title = inc_attrs.get("canonicalTitle") or inc_attrs.get("titles", {}).get("en") or inc_attrs.get("titles", {}).get("en_jp")
-                                        if title:
-                                            anime_name = title
-                                            break
-                                
-                                return {
-                                    "id": char_id,
-                                    "name": name,
-                                    "anime": anime_name,
-                                    "image_url": image_url,
-                                    "favorites": favorites,
-                                    "rarity": self.get_gacha_rarity(favorites),
-                                    "gender": gender,
-                                }
-            except:
-                return None
-        
-        # Determine how many characters should have under 9k favorites (75% chance)
-        low_fav_count = sum(1 for _ in range(count) if random.random() < 0.75)
-        high_fav_count = count - low_fav_count
-        
-        # Launch parallel requests with bias toward low favorites
-        api_sources = ["jikan", "anilist", "kitsu"]
-        tasks = []
-        
-        # Add tasks for low favorite characters (bias toward lower IDs/pages)
-        for i in range(low_fav_count * 2):  # Fetch extra for filtering
-            api = api_sources[i % 3]
-            tasks.append(fetch_one_char(api, force_low_favorites=True))
-        
-        # Add tasks for regular characters
-        for i in range(high_fav_count * 2):
-            api = api_sources[i % 3]
-            tasks.append(fetch_one_char(api, force_low_favorites=False))
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Filter valid results and separate by favorites
-        all_chars = [r for r in results if r and isinstance(r, dict)]
-        low_fav_chars = [c for c in all_chars if c.get("favorites", 0) < 9000]
-        high_fav_chars = [c for c in all_chars if c.get("favorites", 0) >= 9000]
-        
-        # Build final character list with 75% low favorites preference
-        characters = []
-        
-        # Add low favorite characters first (up to low_fav_count)
-        characters.extend(low_fav_chars[:low_fav_count])
-        
-        # Fill remaining slots with high favorite characters
-        remaining_slots = count - len(characters)
-        characters.extend(high_fav_chars[:remaining_slots])
-        
-        # If still need more characters, add any remaining
-        if len(characters) < count:
-            remaining_chars = [c for c in all_chars if c not in characters]
-            characters.extend(remaining_chars[:count - len(characters)])
-        
-        # Fill with fallback characters if needed - with realistic rarity distribution
-        fallback_pool = [
-            # Common characters (50%)
-            {"name": "Konohamaru", "anime": "Naruto", "gender": "Male", "favorites": 500},
-            {"name": "Tenten", "anime": "Naruto", "gender": "Female", "favorites": 800},
-            {"name": "Krillin", "anime": "Dragon Ball", "gender": "Male", "favorites": 600},
-            {"name": "Usopp", "anime": "One Piece", "gender": "Male", "favorites": 700},
-            {"name": "Mineta", "anime": "My Hero Academia", "gender": "Male", "favorites": 300},
-            {"name": "Sakura Haruno", "anime": "Naruto", "gender": "Female", "favorites": 900},
-            # Uncommon characters (25%)
-            {"name": "Rock Lee", "anime": "Naruto", "gender": "Male", "favorites": 2000},
-            {"name": "Shikamaru", "anime": "Naruto", "gender": "Male", "favorites": 3000},
-            {"name": "Yamcha", "anime": "Dragon Ball", "gender": "Male", "favorites": 1500},
-            {"name": "Nami", "anime": "One Piece", "gender": "Female", "favorites": 4000},
-            # Rare characters (15%)
-            {"name": "Kakashi", "anime": "Naruto", "gender": "Male", "favorites": 8000},
-            {"name": "Vegeta", "anime": "Dragon Ball", "gender": "Male", "favorites": 12000},
-            {"name": "Zoro", "anime": "One Piece", "gender": "Male", "favorites": 15000},
-            {"name": "Hinata Hyuga", "anime": "Naruto", "gender": "Female", "favorites": 10000},
-            # Epic characters (7%)
-            {"name": "Levi Ackerman", "anime": "Attack on Titan", "gender": "Male", "favorites": 25000},
-            {"name": "Yor Forger", "anime": "Spy x Family", "gender": "Female", "favorites": 30000},
-            {"name": "Loid Forger", "anime": "Spy x Family", "gender": "Male", "favorites": 28000},
-            # Legendary characters (3%) - rare to get!
-            {"name": "Goku", "anime": "Dragon Ball", "gender": "Male", "favorites": 80000},
-            {"name": "Naruto Uzumaki", "anime": "Naruto", "gender": "Male", "favorites": 90000},
-            {"name": "Luffy", "anime": "One Piece", "gender": "Male", "favorites": 85000},
-            {"name": "Anya Forger", "anime": "Spy x Family", "gender": "Female", "favorites": 100000},
-            {"name": "Mikasa Ackerman", "anime": "Attack on Titan", "gender": "Female", "favorites": 75000},
-        ]
-        
-        # Assign rarity using the realistic distribution
-        fallback_chars = []
-        for char in fallback_pool:
-            char_copy = char.copy()
-            char_copy["rarity"] = self.get_gacha_rarity(char.get("favorites", 0))
-            fallback_chars.append(char_copy)
-        
-        # Filter fallbacks by gender if needed
-        if gender_filter:
-            fallback_chars = [c for c in fallback_chars if c["gender"] == gender_filter]
-        
-        while len(characters) < count:
-            fallback = random.choice(fallback_chars).copy()
-            fallback["id"] = random.randint(100000, 999999)
-            characters.append(fallback)
-        
-        return characters[:count]
-    
+
     def generate_uid(self) -> str:
-        """Generate a unique ID for a character instance (like Pokétwo)."""
         import uuid
-        # Format: 8 char hex string for readability
         return uuid.uuid4().hex[:8].upper()
-    
-    def calculate_release_value(self, favorites: int, rarity: str) -> int:
-        """Calculate stella points for releasing a character based on rarity and favorites (likeness) with random seed."""
+   
+    def calculate_release_value(self, favorites: int, rarity: str, char_name: str = "unknown") -> int:
         import random
-        
-        # Enhanced base values for each rarity tier
+        import hashlib
+       
         base_values = {
-            "common": 50,      # Increased from 10
-            "uncommon": 150,   # Increased from 25  
-            "rare": 400,        # Increased from 75
-            "epic": 1200,       # Increased from 200
-            "legendary": 3000   # Increased from 500
+            "common": 50,
+            "uncommon": 150,
+            "rare": 400,
+            "epic": 1200,
+            "legendary": 3000
         }
         base = base_values.get(rarity, 50)
-        
-        # Enhanced favorites bonus with exponential scaling
-        # 1 point per 10 favorites (instead of 100), with higher multipliers for popular characters
+       
         if favorites == 0:
             favorites_bonus = 0
         elif favorites <= 50:
-            favorites_bonus = favorites * 1  # 1 point per favorite
+            favorites_bonus = favorites * 1
         elif favorites <= 200:
-            favorites_bonus = 50 + (favorites - 50) * 2  # 2 points per favorite after 50
+            favorites_bonus = 50 + (favorites - 50) * 2
         elif favorites <= 1000:
-            favorites_bonus = 350 + (favorites - 200) * 3  # 3 points per favorite after 200
+            favorites_bonus = 350 + (favorites - 200) * 3
         elif favorites <= 5000:
-            favorites_bonus = 2150 + (favorites - 1000) * 5  # 5 points per favorite after 1000
+            favorites_bonus = 2150 + (favorites - 1000) * 5
         else:
-            # Ultra popular characters get massive bonuses
-            favorites_bonus = 17150 + (favorites - 5000) * 10  # 10 points per favorite after 5000
-        
-        # Rarity multiplier on favorites bonus (rarer characters get more value from popularity)
+            favorites_bonus = 17150 + (favorites - 5000) * 10
+       
         rarity_multipliers = {
             "common": 1.0,
             "uncommon": 1.2,
@@ -686,38 +506,28 @@ class Games(commands.Cog):
             "epic": 2.0,
             "legendary": 3.0
         }
-        rarity_mult = rarity_multipliers.get(rarity, 1.0)
-        favorites_bonus = int(favorites_bonus * rarity_mult)
-        
-        # Add random seed factor for variability (±20% of base value)
-        # Create a deterministic seed based on character properties for consistency per character
-        seed_input = f"{rarity}_{favorites}_{base}"
-        random.seed(hash(seed_input) % (2**32))  # Use hash to create seed
-        
-        random_factor = random.uniform(0.8, 1.2)  # ±20% variation
-        random_bonus = int(base * (random_factor - 1.0))  # Convert to bonus/penalty
-        
-        # Reset random seed to avoid affecting other random operations
+        favorites_bonus = int(favorites_bonus * rarity_multipliers.get(rarity, 1.0))
+       
+        seed_input = f"{char_name}_{favorites}_{rarity}_{base}"
+        hash_object = hashlib.md5(seed_input.encode())
+        seed_value = int(hash_object.hexdigest()[:8], 16)
+        random.seed(seed_value)
+        random_factor = random.uniform(0.75, 1.25)
+        random_bonus = int(base * (random_factor - 1.0))
         random.seed()
-        
-        # Minimum and maximum caps
-        min_value = max(base, 100)  # Minimum 100 points
-        max_value = 50000  # Maximum 50,000 points
-        
+       
         total_value = base + favorites_bonus + random_bonus
-        total_value = max(min_value, min(total_value, max_value))
-        
+        total_value = max(100, min(total_value, 50000))
         return total_value
-    
+   
     async def add_character_to_inventory(self, user_id: str, guild_id: str, character: dict) -> str:
-        """Add a character to user's inventory in MongoDB. Returns the UID."""
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
-            
+           
             uid = self.generate_uid()
             favorites = character.get("favorites", 0)
-            
+           
             char_data = {
                 "uid": uid,
                 "id": character.get("id", random.randint(1, 999999)),
@@ -728,10 +538,10 @@ class Games(commands.Cog):
                 "gender": character.get("gender", "Unknown"),
                 "favorites": favorites,
                 "claimed_at": datetime.now(timezone.utc).isoformat(),
-                "cover_unlocked": False,  # Unlock with likes/interactions
-                "cover_progress": 0,  # Progress toward unlocking cover art
+                "cover_unlocked": False,
+                "cover_progress": 0,
             }
-            
+           
             await server_col.update_one(
                 {"guild_id": guild_id},
                 {"$push": {f"members.{user_id}.gacha_inventory": char_data}},
@@ -741,132 +551,116 @@ class Games(commands.Cog):
         except Exception as e:
             logger.error(f"Error adding character to inventory: {e}")
             return None
-    
+   
     async def is_character_owned_in_server(self, guild_id: str, char_name: str, char_id: int = None) -> tuple:
-        """Check if a character is already owned by someone in the server.
-        Returns (is_owned: bool, owner_id: str or None)
-        """
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
-            
+           
             server_data = await server_col.find_one({"guild_id": guild_id})
             if not server_data or "members" not in server_data:
                 return (False, None)
-            
+           
             char_name_lower = char_name.lower() if char_name else ""
-            
+           
             for user_id, member_data in server_data.get("members", {}).items():
                 inventory = member_data.get("gacha_inventory", [])
                 for owned_char in inventory:
-                    if (owned_char.get("id") == char_id or 
+                    if (owned_char.get("id") == char_id or
                         (owned_char.get("name", "").lower() == char_name_lower)):
                         return (True, user_id)
-            
+           
             return (False, None)
         except Exception as e:
             logger.error(f"Error checking character ownership: {e}")
             return (False, None)
-    
+   
     async def get_character_by_uid(self, guild_id: str, uid: str) -> tuple:
-        """Get a character by UID. Returns (owner_id, character_data) or (None, None)."""
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
-            
+           
             server_data = await server_col.find_one({"guild_id": guild_id})
             if not server_data or "members" not in server_data:
                 return (None, None)
-            
+           
             for user_id, member_data in server_data.get("members", {}).items():
                 inventory = member_data.get("gacha_inventory", [])
                 for char in inventory:
                     if char.get("uid", "").upper() == uid.upper():
                         return (user_id, char)
-            
+           
             return (None, None)
         except Exception as e:
             logger.error(f"Error getting character by UID: {e}")
             return (None, None)
-    
+   
     async def remove_character_from_inventory(self, user_id: str, guild_id: str, uid: str) -> dict:
-        """Remove a character from inventory by UID. Returns the removed character or None."""
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
-            
-            # First get the character data
+           
             server_data = await server_col.find_one({"guild_id": guild_id})
             if not server_data:
                 return None
-            
+           
             member_data = server_data.get("members", {}).get(user_id, {})
             inventory = member_data.get("gacha_inventory", [])
-            
+           
             char_to_remove = None
             for char in inventory:
                 if char.get("uid", "").upper() == uid.upper():
                     char_to_remove = char
                     break
-            
+           
             if not char_to_remove:
                 return None
-            
-            # Remove from inventory
+           
             await server_col.update_one(
                 {"guild_id": guild_id},
                 {"$pull": {f"members.{user_id}.gacha_inventory": {"uid": char_to_remove["uid"]}}}
             )
-            
+           
             return char_to_remove
         except Exception as e:
             logger.error(f"Error removing character: {e}")
             return None
-    
+   
     async def get_user_inventory(self, user_id: str, guild_id: str) -> list:
-        """Get user's character inventory from MongoDB."""
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
-            
+           
             server_data = await server_col.find_one({"guild_id": guild_id})
             if server_data and "members" in server_data:
                 member_data = server_data["members"].get(user_id, {})
                 return member_data.get("gacha_inventory", [])
         except Exception as e:
             logger.error(f"Error fetching inventory: {e}")
-        
         return []
-    
+   
     async def check_character_ownership(self, guild: discord.Guild, characters: list) -> dict:
-        """Check if any characters are already owned by members in this server.
-        
-        Returns dict mapping character index to owner info (user_id, username, avatar_url)
-        """
         ownership = {}
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
             guild_id = str(guild.id)
-            
+           
             server_data = await server_col.find_one({"guild_id": guild_id})
             if not server_data or "members" not in server_data:
                 return ownership
-            
-            # Check each character against all member inventories
+           
             for i, char in enumerate(characters):
                 char_name = char.get("name", "").lower()
                 char_id = char.get("id")
-                
+               
                 for user_id, member_data in server_data.get("members", {}).items():
                     inventory = member_data.get("gacha_inventory", [])
-                    
+                   
                     for owned_char in inventory:
-                        # Match by ID or name
-                        if (owned_char.get("id") == char_id or 
+                        if (owned_char.get("id") == char_id or
                             owned_char.get("name", "").lower() == char_name):
-                            
-                            # Try to get the member info
+                           
                             try:
                                 member = guild.get_member(int(user_id))
                                 if member:
@@ -878,13 +672,13 @@ class Games(commands.Cog):
                                     break
                             except:
                                 pass
-                    
+                   
                     if i in ownership:
                         break
-                        
+                       
         except Exception as e:
             logger.debug(f"Error checking ownership: {e}")
-        
+       
         return ownership
     
     @commands.group(name="game", aliases=["games"], invoke_without_command=True)
@@ -1914,7 +1708,7 @@ class Games(commands.Cog):
         if owner_avatar:
             embed.set_thumbnail(url=owner_avatar)
         
-        release_value = self.calculate_release_value(favorites, rarity)
+        release_value = self.calculate_release_value(favorites, rarity, char.get('name', 'unknown'))
         embed.set_footer(text=f"Release value: {release_value} pts")
         
         # Add cover art view button (commented out)
@@ -1944,7 +1738,7 @@ class Games(commands.Cog):
         # Calculate release value
         favorites = char.get("favorites", 0)
         rarity = char.get("rarity", "common")
-        release_value = self.calculate_release_value(favorites, rarity)
+        release_value = self.calculate_release_value(favorites, rarity, char.get('name', 'unknown'))
         
         # Remove from inventory
         removed = await self.remove_character_from_inventory(user_id, guild_id, uid)
@@ -2067,7 +1861,7 @@ class Games(commands.Cog):
             filter_text = " ♂️ Husbando"
         
         # Fetch characters instantly
-        characters = await self.fetch_gacha_characters(GACHA_CARDS_PER_DRAW, gender_filter=gender_filter)
+        characters = await self.pull_three_cards_real(gender_filter)
         
         # Check ownership for each character
         ownership_info = await self.check_character_ownership(ctx.guild, characters)
@@ -3429,6 +3223,376 @@ class Games(commands.Cog):
                 color=primary_color()
             )
             await msg.edit(embed=timeout_embed, view=None)
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🎨 COVER ART SYSTEM
+    # ═══════════════════════════════════════════════════════════════
+    
+    @commands.group(name="cover", aliases=["ca"], invoke_without_command=True)
+    async def cover(self, ctx):
+        """🎨 Cover art system for your gacha characters"""
+        embed = discord.Embed(
+            title="🎨 Cover Art System",
+            description="Browse and purchase beautiful cover art for your characters!\n\n"
+                       "**Commands:**\n"
+                       f"• `{ctx.prefix}cover gallery <UID>` - Browse cover art options\n"
+                       f"• `{ctx.prefix}cover buy <UID> <image_id>` - Buy cover art\n"
+                       f"• `{ctx.prefix}cover set <character> <cover_id>` - Set selected cover art\n"
+                       f"• `{ctx.prefix}cover collection` - View your purchased art\n"
+                       f"• `{ctx.prefix}cover search <character> [series]` - Search for art\n\n"
+                       "**Usage Examples:**\n"
+                       f"• `{ctx.prefix}cover buy F9D6E292 10534304`\n"
+                       f"• `{ctx.prefix}cover set emilia emilia_Art_10534304`\n"
+                       f"• `{ctx.prefix}cover search emilia re:zero`\n\n"
+                       "**Pricing:**\n"
+                       "• Common: 100 pts\n"
+                       "• Uncommon: 200 pts\n"
+                       "• Rare: 500 pts\n"
+                       "• Epic: 1,000 pts\n"
+                       "• Legendary: 2,000 pts\n\n"
+                       "**Features:**\n"
+                       "• 3 images per embed with pagination\n"
+                       "• Custom names for each purchased art\n"
+                       "• Set selected cover art per character\n"
+                       "• Full collection management\n"
+                       "• Unlimited pages with fast loading",
+            color=discord.Color.purple()
+        )
+        await ctx.reply(embed=embed, mention_author=False)
+    
+    @cover.command(name="gallery", aliases=["view", "browse"])
+    async def cover_gallery(self, ctx, uid: str = None):
+        """🖼️ Browse cover art options for your character"""
+        if not uid:
+            return await ctx.reply(f"Usage: `{ctx.prefix}cover gallery <UID>`\nFind UIDs in your collection!", mention_author=False)
+        
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        # Check if user is already running a command
+        if not await self.check_cover_command_cooldown(ctx):
+            return
+        
+        # Get character from inventory
+        char = await self._get_character_from_inventory(user_id, guild_id, uid)
+        if not char:
+            return await ctx.reply(f"❌ No character found with UID `{uid.upper()}`", mention_author=False)
+        
+        # Check if user owns the character
+        owner_id = await self._get_character_owner(guild_id, uid)
+        if owner_id != user_id:
+            return await ctx.reply("❌ You don't own this character!", mention_author=False)
+        
+        # Get user-specific lock for queuing
+        user_lock = self.get_user_lock(user_id)
+        
+        async with user_lock:
+            # Set active status
+            await self.set_cover_command_status(user_id, True)
+            
+            try:
+                # Send please wait message
+                wait_msg = await ctx.reply("🔍 Searching for cover art... This may take a moment!", mention_author=False)
+                logger.info(f"Cover art search started for user {user_id} - {char.get('name')} from {char.get('anime')}")
+                
+                # Search for cover art with unlimited pagination
+                char_name = char.get('name', '')
+                series_name = char.get('anime', '')
+                images, max_pages = await self.cover_art_system.search_cover_art(char_name, series_name, page=1, limit=30)
+                
+                # Delete wait message
+                try:
+                    await wait_msg.delete()
+                except:
+                    pass
+                
+                if not images:
+                    await ctx.reply("❌ No cover art found for this character!", mention_author=False)
+                    return
+                
+                logger.info(f"Cover art search completed for user {user_id} - Found {len(images)} images, max pages: {max_pages}")
+                
+                # Create 3 separate embeds
+                embeds = await self.cover_art_system.create_cover_art_embeds(char, images, page=1, total_pages=max_pages)
+                
+                # Create view with pagination and purchase options
+                from utils.cogs.game.draw.cover_art import CoverArtView
+                view = CoverArtView(self.cover_art_system, char, user_id, guild_id, images, current_page=1, total_pages=max_pages)
+                
+                msg = await ctx.reply(embeds=embeds, view=view, mention_author=False)
+                view.message = msg
+                
+            except asyncio.TimeoutError:
+                logger.error(f"Cover art search timeout for user {user_id}")
+                await ctx.reply("⏰ Search timed out! The servers might be busy. Please try again in a moment.", mention_author=False)
+            except Exception as e:
+                logger.error(f"Error in cover gallery: {e}")
+                await ctx.reply("❌ Error loading cover art gallery! Please try again.", mention_author=False)
+            finally:
+                # Clear active status
+                await self.set_cover_command_status(user_id, False)
+    
+    @cover.command(name="buy")
+    async def cover_buy(self, ctx, uid: str, image_id: int):
+        """🛍️ Buy cover art for your character
+        
+        **Usage:** `.cover buy <UID> <image_id>`
+        
+        **Example:** `.cover buy F9D6E292 10534304`
+        """
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        # Check if user is already running a command
+        if not await self.check_cover_command_cooldown(ctx):
+            return
+        
+        # Get user-specific lock for queuing
+        user_lock = self.get_user_lock(user_id)
+        
+        async with user_lock:
+            # Set active status
+            await self.set_cover_command_status(user_id, True)
+            
+            try:
+                # Check if user owns the character
+                char = await self.cover_art_system._get_character(user_id, guild_id, uid)
+                if not char:
+                    await ctx.reply("❌ You don't own this character!", mention_author=False)
+                    return
+                
+                # Generate custom name for the cover art
+                char_name = char.get('name', 'Unknown')
+                custom_name = f"{char_name}_Art_{image_id}"
+                
+                # Purchase the cover art
+                success, message = await self.cover_art_system.purchase_cover_art(
+                    user_id, guild_id, uid, image_id, custom_name
+                )
+                
+                if success:
+                    await ctx.reply(f"✅ {message}\n\nUse `.cover set {char_name.lower()} {custom_name}` to set this as your selected cover art!", mention_author=False)
+                else:
+                    await ctx.reply(f"❌ {message}", mention_author=False)
+                
+            except Exception as e:
+                logger.error(f"Error in cover buy: {e}")
+                await ctx.reply("❌ Error purchasing cover art! Please try again.", mention_author=False)
+            finally:
+                # Clear active status
+                await self.set_cover_command_status(user_id, False)
+    
+    @cover.command(name="set")
+    async def cover_set(self, ctx, character_name: str, cover_id: str):
+        """🖼️ Set a purchased cover art as the selected image for your character
+        
+        **Usage:** `.cover set <character_name> <cover_id>`
+        
+        **Example:** `.cover set emilia emilia_Art_10534304`
+        """
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        try:
+            # Get user's cover art collection
+            cover_arts = await self.cover_art_system._get_user_cover_arts(user_id, guild_id)
+            
+            # Find the specific cover art by name
+            target_art = None
+            target_char_uid = None
+            
+            for art in cover_arts:
+                if art.get('custom_name') == cover_id:
+                    target_art = art
+                    target_char_uid = art['character_uid']
+                    # Verify the character name matches
+                    char = await self.cover_art_system._get_character(user_id, guild_id, target_char_uid)
+                    if char and char.get('name', '').lower() == character_name.lower():
+                        break
+                    else:
+                        target_art = None
+            
+            if not target_art:
+                return await ctx.reply(f"❌ Cover art '{cover_id}' not found for character '{character_name}'!", mention_author=False)
+            
+            # Set the selected cover art
+            success, message = await self.cover_art_system.set_selected_cover_art(
+                user_id, guild_id, target_char_uid, cover_id
+            )
+            
+            if success:
+                await ctx.reply(f"✅ {message}", mention_author=False)
+            else:
+                await ctx.reply(f"❌ {message}", mention_author=False)
+                
+        except Exception as e:
+            logger.error(f"Error setting cover art: {e}")
+            await ctx.reply("❌ Error setting cover art!", mention_author=False)
+    
+    @cover.command(name="collection", aliases=["list", "mine"])
+    async def cover_collection(self, ctx):
+        """📚 View all your purchased cover art"""
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        try:
+            cover_arts = await self.cover_art_system._get_user_cover_arts(user_id, guild_id)
+            
+            if not cover_arts:
+                return await ctx.reply("You haven't purchased any cover art yet!\nUse `.cover gallery <UID>` to browse and purchase.", mention_author=False)
+            
+            embed = discord.Embed(
+                title="🎨 Your Cover Art Collection",
+                description=f"You own **{len(cover_arts)}** cover art pieces",
+                color=discord.Color.purple()
+            )
+            
+            # Group by character
+            characters = {}
+            for art in cover_arts:
+                char_name = art['character_name']
+                if char_name not in characters:
+                    characters[char_name] = []
+                characters[char_name].append(art)
+            
+            # Display each character and their cover arts
+            for char_name, arts in characters.items():
+                art_list = []
+                for art in arts:
+                    status = "✅" if art.get('selected', False) else "🔹"
+                    art_list.append(f"{status} `{art['custom_name']}` (ID: {art['image_id']})")
+                
+                embed.add_field(
+                    name=f"📖 {char_name}",
+                    value="\n".join(art_list),
+                    inline=False
+                )
+            
+            embed.set_footer(text="Use .cover set <name> to select a cover art")
+            await ctx.reply(embed=embed, mention_author=False)
+            
+        except Exception as e:
+            logger.error(f"Error showing cover art collection: {e}")
+            await ctx.reply("❌ Error loading your cover art collection!", mention_author=False)
+    
+    @cover.command(name="search")
+    async def cover_search(self, ctx, character_name: str, *, series_name: str = None):
+        """🔍 Search for cover art (preview only)
+        
+        **Format Examples:**
+        • emilia re:zero
+        • anya spy x family  
+        • kohaku dr. stone
+        • rem re:zero
+        """
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        # Check if user is already running a command
+        if not await self.check_cover_command_cooldown(ctx):
+            return
+        
+        # Get user-specific lock for queuing
+        user_lock = self.get_user_lock(user_id)
+        
+        async with user_lock:
+            # Set active status
+            await self.set_cover_command_status(user_id, True)
+            
+            try:
+                # Send please wait message
+                wait_msg = await ctx.reply("🔍 Searching for cover art... This may take a moment!", mention_author=False)
+                logger.info(f"Cover art search started for user {user_id} - {character_name} from {series_name or 'Any series'}")
+                
+                # Search for cover art using proper format
+                images, max_pages = await self.cover_art_system.search_cover_art(character_name, series_name, page=1, limit=9)
+                
+                # Delete wait message
+                try:
+                    await wait_msg.delete()
+                except:
+                    pass
+                
+                if not images:
+                    # Try fallback search without series if no results
+                    if series_name:
+                        await ctx.reply("🔄 No results found with series, trying character only...", mention_author=False)
+                        images, max_pages = await self.cover_art_system.search_cover_art(character_name, None, page=1, limit=9)
+                
+                if not images:
+                    await ctx.reply("❌ No cover art found for this search!", mention_author=False)
+                    return
+                
+                logger.info(f"Cover art search completed for user {user_id} - Found {len(images)} images, max pages: {max_pages}")
+                
+                # Create a mock character for the embeds
+                mock_character = {
+                    'name': character_name,
+                    'anime': series_name or 'Unknown',
+                    'rarity': 'common',
+                    'uid': 'SEARCH'
+                }
+                
+                # Create 3 separate embeds
+                embeds = await self.cover_art_system.create_cover_art_embeds(mock_character, images, page=1, total_pages=max_pages)
+                
+                # Create view with pagination (no purchase buttons for search)
+                from utils.cogs.game.draw.cover_art import CoverArtSearchView
+                view = CoverArtSearchView(self.cover_art_system, mock_character, user_id, guild_id, images, current_page=1, total_pages=max_pages)
+                
+                msg = await ctx.reply(embeds=embeds, view=view, mention_author=False)
+                view.message = msg
+                
+            except asyncio.TimeoutError:
+                logger.error(f"Cover art search timeout for user {user_id}")
+                await ctx.reply("⏰ Search timed out! The servers might be busy. Please try again in a moment.", mention_author=False)
+            except Exception as e:
+                logger.error(f"Error in cover search: {e}")
+                await ctx.reply("❌ Error searching for cover art! Please try again.", mention_author=False)
+            finally:
+                # Clear active status
+                await self.set_cover_command_status(user_id, False)
+    
+    async def _get_character_from_inventory(self, user_id: str, guild_id: str, uid: str) -> Optional[Dict]:
+        """Get character from user's inventory"""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.characters.{uid.lower()}": 1}
+            )
+            
+            if result:
+                characters = result.get("members", {}).get(user_id, {}).get("characters", {})
+                return characters.get(uid.lower())
+        except Exception as e:
+            logger.error(f"Error getting character from inventory: {e}")
+        
+        return None
+    
+    async def _get_character_owner(self, guild_id: str, uid: str) -> Optional[str]:
+        """Find who owns a character by UID"""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {"members": 1}
+            )
+            
+            if result:
+                members = result.get("members", {})
+                for user_id, member_data in members.items():
+                    characters = member_data.get("characters", {})
+                    if uid.lower() in characters:
+                        return user_id
+        except Exception as e:
+            logger.error(f"Error finding character owner: {e}")
+        
+        return None
 
 
 async def setup(bot):
