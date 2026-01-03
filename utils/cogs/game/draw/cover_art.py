@@ -21,6 +21,8 @@ class CoverArtSystem:
         self.quest_data = quest_data
         self.session = None
         self.multi_search = MultiSourceImageSearch()
+        self.image_cache = {}  # Cache: {character_uid: {sequential_id: image_data}}
+        self.character_image_map = {}  # Map: {character_uid: {sequential_id: source_image_data}}
         
     async def get_session(self):
         """Get or create aiohttp session"""
@@ -31,7 +33,7 @@ class CoverArtSystem:
             )
         return self.session
     
-    async def search_cover_art(self, character_name: str, series_name: str = None, page: int = 1, limit: int = 30) -> Tuple[List[Dict], int]:
+    async def search_cover_art(self, character_name: str, series_name: str = None, page: int = 1, limit: int = 30, character_uid: str = None) -> Tuple[List[Dict], int]:
         """Search for cover art using multiple sources with deduplication"""
         logger.info(f"[Cover Art] Searching: '{character_name}' from '{series_name}' (page {page})")
         
@@ -40,6 +42,33 @@ class CoverArtSystem:
             images, max_pages = await self.multi_search.search_all_sources(
                 character_name, series_name, page, limit
             )
+            
+            # Create character-specific sequential IDs
+            if character_uid and images:
+                if character_uid not in self.character_image_map:
+                    self.character_image_map[character_uid] = {}
+                
+                # Assign sequential IDs (1, 2, 3, ...) to each image for this character
+                for idx, img in enumerate(images, start=1):
+                    sequential_id = idx
+                    # Store the original image data with sequential ID
+                    self.character_image_map[character_uid][sequential_id] = {
+                        'source_id': img['id'],
+                        'source': img['source'],
+                        'url': img.get('url', ''),
+                        'preview_url': img.get('preview_url', ''),
+                        'file_url': img.get('file_url', ''),
+                        'score': img.get('score', 0),
+                        'width': img.get('width', 0),
+                        'height': img.get('height', 0),
+                        'tags': img.get('tags', [])
+                    }
+                
+                # Add sequential IDs to the returned images for display
+                for idx, img in enumerate(images, start=1):
+                    img['sequential_id'] = idx
+                
+                logger.info(f"[Cover Art] Assigned sequential IDs 1-{len(images)} for character {character_uid}")
             
             logger.info(f"[Cover Art] Found {len(images)} unique images from multiple sources")
             return images, max_pages
@@ -379,9 +408,11 @@ class CoverArtSystem:
 
                 # Footer with buy info and score
                 if is_search_mode:
-                    footer_text = f"Page {page}/{total_pages} • ID: {img['id']} • Score: {img['score']}"
+                    footer_text = f"Page {page}/{total_pages} • Image ID: {img['id']} • Score: {img['score']}"
                 else:
-                    footer_text = f"Page {page}/{total_pages} • Buy: .cover buy {uid.upper()} {img['id']}"
+                    # Use sequential ID assigned to this character
+                    seq_id = img.get('sequential_id', img['id'])
+                    footer_text = f"💰 To buy this image → .cover buy {uid.upper()} {seq_id}"
                 
                 embed.set_footer(text=footer_text)
                 embeds.append(embed)
@@ -439,10 +470,22 @@ class CoverArtSystem:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
             
+            # Search for the image URL from the multi-source search (check cache first)
+            image_url = await self._get_image_url_by_id(image_id, character_uid)
+            
+            # Get the cost for this rarity (for refund calculation later)
+            from ..const import GACHA_RARITY_TIERS
+            char = await self._get_character(user_id, guild_id, character_uid)
+            rarity = char.get('rarity', 'common') if char else 'common'
+            costs = {'common': 100, 'uncommon': 200, 'rare': 500, 'epic': 1000, 'legendary': 2000}
+            cost = costs.get(rarity, 100)
+            
             # Create cover art data structure
             cover_art_data = {
                 'image_id': image_id,
                 'custom_name': custom_name,
+                'image_url': image_url,
+                'cost': cost,
                 'unlocked_at': datetime.now(timezone.utc).isoformat(),
                 'selected': False  # Not selected by default
             }
@@ -456,8 +499,9 @@ class CoverArtSystem:
                     }
                 }
             )
+            logger.info(f"[Cover Art] Unlocked cover art '{custom_name}' for character {character_uid} (user: {user_id})")
         except Exception as e:
-            logger.error(f"Error unlocking cover art: {e}")
+            logger.error(f"Error unlocking cover art: {e}", exc_info=True)
     
     async def set_selected_cover_art(self, user_id: str, guild_id: str, character_uid: str, cover_art_name: str) -> Tuple[bool, str]:
         """Set a specific cover art as the selected image for a character"""
@@ -465,6 +509,7 @@ class CoverArtSystem:
         # Check if user owns the character
         char = await self._get_character(user_id, guild_id, character_uid)
         if not char:
+            logger.warning(f"[Cover Art Set] User {user_id} doesn't own character {character_uid}")
             return False, "You don't own this character!"
         
         # Get user's cover art collection
@@ -478,6 +523,7 @@ class CoverArtSystem:
                 break
         
         if not target_art:
+            logger.warning(f"[Cover Art Set] Cover art '{cover_art_name}' not found for character {character_uid} (user: {user_id})")
             return False, f"Cover art '{cover_art_name}' not found for this character!"
         
         # Update the selected cover art
@@ -485,18 +531,28 @@ class CoverArtSystem:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
             
+            image_url = target_art.get('image_url', '')
+            logger.info(f"[Cover Art Set] Setting cover art '{cover_art_name}' for character {character_uid} with URL: {image_url[:50]}...")
+            
+            # Update both the characters collection AND the gacha_inventory
             await server_col.update_one(
                 {"guild_id": guild_id},
-                {"$set": {
-                    f"members.{user_id}.characters.{character_uid.lower()}.cover_art.selected": True,
-                    f"members.{user_id}.characters.{character_uid.lower()}.cover_art.selected_at": datetime.now(timezone.utc).isoformat()
-                }}
+                {
+                    "$set": {
+                        f"members.{user_id}.characters.{character_uid.lower()}.cover_art.selected": True,
+                        f"members.{user_id}.characters.{character_uid.lower()}.cover_art.selected_at": datetime.now(timezone.utc).isoformat(),
+                        f"members.{user_id}.gacha_inventory.$[elem].active_cover_url": image_url,
+                        f"members.{user_id}.gacha_inventory.$[elem].active_cover_id": target_art.get('image_id')
+                    }
+                },
+                array_filters=[{"elem.uid": character_uid.upper()}]
             )
             
+            logger.info(f"[Cover Art Set] Successfully set cover art '{cover_art_name}' for character {character_uid}")
             return True, f"Successfully set '{cover_art_name}' as the selected cover art!"
             
         except Exception as e:
-            logger.error(f"Error setting selected cover art: {e}")
+            logger.error(f"Error setting selected cover art: {e}", exc_info=True)
             return False, "Error setting selected cover art!"
     
     async def _get_user_cover_arts(self, user_id: str, guild_id: str) -> List[Dict]:
@@ -569,11 +625,77 @@ class CoverArtSystem:
                 inventory = result.get("members", {}).get(user_id, {}).get("gacha_inventory", [])
                 for char in inventory:
                     if char.get("uid", "").upper() == character_uid.upper():
-                        return char.get('active_cover_url')
+                        active_url = char.get('active_cover_url')
+                        if active_url:
+                            logger.info(f"[Cover Art] Found active cover URL for character {character_uid}: {active_url[:50]}...")
+                        else:
+                            logger.debug(f"[Cover Art] No active cover URL set for character {character_uid}")
+                        return active_url
+            
+            logger.debug(f"[Cover Art] Character {character_uid} not found in inventory for user {user_id}")
         except Exception as e:
-            logger.error(f"Error getting active cover art URL: {e}")
+            logger.error(f"Error getting active cover art URL: {e}", exc_info=True)
         
         return None
+    
+    async def delete_cover_art(self, user_id: str, guild_id: str, cover_id: str) -> bool:
+        """Delete a cover art and return success status"""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            
+            # Find which character this cover art belongs to
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.characters": 1}
+            )
+            
+            if result:
+                characters = result.get("members", {}).get(user_id, {}).get("characters", {})
+                
+                for char_uid, char_data in characters.items():
+                    if char_data.get('cover_art', {}).get('custom_name') == cover_id:
+                        # Delete the cover art
+                        await server_col.update_one(
+                            {"guild_id": guild_id},
+                            {
+                                "$unset": {
+                                    f"members.{user_id}.characters.{char_uid}.cover_art": "",
+                                    f"members.{user_id}.characters.{char_uid}.cover_unlocked": ""
+                                }
+                            }
+                        )
+                        return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error deleting cover art: {e}")
+            return False
+    
+    async def _get_image_url_by_id(self, image_id: int, character_uid: str = None) -> str:
+        """Get image URL using character-specific sequential ID"""
+        try:
+            # Check character-specific image map first
+            if character_uid and character_uid in self.character_image_map:
+                if image_id in self.character_image_map[character_uid]:
+                    img_data = self.character_image_map[character_uid][image_id]
+                    # Get the actual URL from the mapped image
+                    image_url = img_data.get('url') or img_data.get('file_url') or img_data.get('preview_url', '')
+                    source = img_data.get('source', 'Unknown')
+                    source_id = img_data.get('source_id', 'N/A')
+                    logger.info(f"[Cover Art] Found sequential ID {image_id} for character {character_uid}")
+                    logger.info(f"[Cover Art] Source: {source} (ID: {source_id})")
+                    logger.info(f"[Cover Art] Using URL: {image_url[:80]}...")
+                    return image_url
+            
+            # Not found in character map
+            logger.error(f"[Cover Art] Sequential ID {image_id} not found for character {character_uid}")
+            logger.error(f"[Cover Art] User must view gallery first with .cover gallery {character_uid}")
+            return ''
+        except Exception as e:
+            logger.error(f"Error getting image URL by sequential ID: {e}", exc_info=True)
+            return ''
     
     async def get_selected_cover_art(self, user_id: str, guild_id: str, character_uid: str) -> Optional[Dict]:
         """Get the selected cover art for a character"""
@@ -669,7 +791,7 @@ class CoverArtView(discord.ui.View):
             # Fetch previous page with fast loading
             char_name = self.character.get('name', '')
             series_name = self.character.get('anime', '')
-            new_images, _ = await self.cover_system.search_cover_art(char_name, series_name, self.current_page - 1, 30)
+            new_images, _ = await self.cover_system.search_cover_art(char_name, series_name, self.current_page - 1, 3)
             
             if new_images:
                 self.current_page -= 1
@@ -711,7 +833,7 @@ class CoverArtView(discord.ui.View):
             # Fetch next page with fast loading
             char_name = self.character.get('name', '')
             series_name = self.character.get('anime', '')
-            new_images, _ = await self.cover_system.search_cover_art(char_name, series_name, self.current_page + 1, 30)
+            new_images, _ = await self.cover_system.search_cover_art(char_name, series_name, self.current_page + 1, 3)
             
             if new_images:
                 self.current_page += 1
@@ -763,7 +885,7 @@ class CoverArtView(discord.ui.View):
                 # Fetch target page with fast loading
                 char_name = self.character.get('name', '')
                 series_name = self.character.get('anime', '')
-                new_images, _ = await self.cover_system.search_cover_art(char_name, series_name, target_page, 30)
+                new_images, _ = await self.cover_system.search_cover_art(char_name, series_name, target_page, 3)
                 
                 if new_images:
                     self.current_page = target_page
