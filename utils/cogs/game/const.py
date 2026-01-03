@@ -137,19 +137,19 @@ RARITY_CONFIG = {
 # ═══════════════════════════════════════════════════════════════
 
 TIMER_CONFIG = {
-    "pokemon": {"max_uses": 3, "command_cooldown": 5, "cooldown": 1800},
-    "anime": {"max_uses": 5, "command_cooldown": 5, "cooldown": 1800},
-    "slots": {"max_uses": 3, "command_cooldown": 5, "cooldown": 1800},
-    "dice": {"max_uses": 5, "command_cooldown": 5, "cooldown": 300},
-    "coinflip": {"max_uses": 5, "command_cooldown": 5, "cooldown": 300},
+    "pokemon": {"max_uses": 6, "command_cooldown": 5, "cooldown": 1800},
+    "anime": {"max_uses": 6, "command_cooldown": 5, "cooldown": 1800},
+    "slots": {"max_uses": 6, "command_cooldown": 5, "cooldown": 1800},
+    "dice": {"max_uses": 6, "command_cooldown": 5, "cooldown": 300},
+    "coinflip": {"max_uses": 6, "command_cooldown": 5, "cooldown": 300},
     "guess": {"max_uses": 5, "command_cooldown": 5, "cooldown": 600},
     "hangman": {"max_uses": 20, "command_cooldown": 5, "cooldown": 300},
     "wordle": {"max_uses": 10, "command_cooldown": 5, "cooldown": 1800},
-    "work": {"max_uses": 999, "command_cooldown": 5, "cooldown": 3600},
+    "work": {"max_uses": 4, "command_cooldown": 5, "cooldown": 3600},
     "job": {"max_uses": 10, "command_cooldown": 5, "cooldown": 3600},
     "rob": {"max_uses": 5, "command_cooldown": 5, "cooldown": 7200},
     "crime": {"max_uses": 3, "command_cooldown": 5, "cooldown": 3600},
-    "gacha": {"max_uses": 3, "command_cooldown": 5, "cooldown": 1800},
+    "gacha": {"max_uses": 6, "command_cooldown": 5, "cooldown": 1800},
     "claim": {"max_uses": 1, "command_cooldown": 5, "cooldown": 86400},
 }
 

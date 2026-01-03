@@ -888,11 +888,16 @@ async def generate_gacha_draw_image(characters: list, claimed_indices: list = No
     
     card_width = 200
     card_height = 300
-    padding = 20
+    card_spacing = 40  # Space between cards
     num_cards = len(characters)
     
-    total_width = (card_width * num_cards) + (padding * (num_cards + 1))
-    total_height = card_height + 40  # compact (no title/footer)
+    # Calculate total content width (cards + spacing between them)
+    content_width = (card_width * num_cards) + (card_spacing * (num_cards - 1))
+    
+    # Add margins for the overall image
+    margin = 60
+    total_width = content_width + (margin * 2)
+    total_height = card_height + (margin * 2)
     
     # Transparent background
     img = Image.new('RGBA', (total_width, total_height), (0, 0, 0, 0))
@@ -944,9 +949,10 @@ async def generate_gacha_draw_image(characters: list, claimed_indices: list = No
                     pass
     
     # Draw each card - clean design with rarity shown through frame only
+    # Cards are centered horizontally and vertically with even spacing
     for i, char in enumerate(characters):
-        card_x = padding + i * (card_width + padding)
-        card_y = 50
+        card_x = margin + i * (card_width + card_spacing)
+        card_y = margin
         
         rarity = char.get("rarity", "common")
         frame = RARITY_FRAMES.get(rarity, RARITY_FRAMES["common"])

@@ -112,13 +112,19 @@ class DoubleOrNothingView(discord.ui.View):
 
 class CharacterInfoView(discord.ui.View):
     """View for showing character information after claiming"""
-    def __init__(self, cog, character: dict, uid: str, user: discord.Member):
+    def __init__(self, cog, character: dict, uid: str, user: discord.Member, draws_left: int = 0, guild_id: str = None):
         super().__init__(timeout=None)  # Persistent view
         self.cog = cog
         self.character = character
         self.uid = uid
         self.user = user
+        self.draws_left = draws_left
+        self.guild_id = guild_id
         self.message = None  # Will be set after creation
+        
+        # Only add redraw button if user has draws left
+        if draws_left > 0 and guild_id:
+            self.add_item(self.create_redraw_button())
     
     @discord.ui.button(label="Info", style=discord.ButtonStyle.primary)
     async def info_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -165,6 +171,95 @@ class CharacterInfoView(discord.ui.View):
             await interaction.response.send_message(embed=embed, ephemeral=True)
         except discord.InteractionResponded:
             await interaction.followup.send(embed=embed, ephemeral=True)
+    
+    def create_redraw_button(self):
+        """Create a redraw button dynamically"""
+        button = discord.ui.Button(label="Redraw", style=discord.ButtonStyle.success, emoji="🔄")
+        button.callback = self.redraw_callback
+        return button
+    
+    async def redraw_callback(self, interaction: discord.Interaction):
+        """Handle redraw button click"""
+        if interaction.user.id != self.user.id:
+            try:
+                return await interaction.response.send_message(f"{GameEmojis.ERROR} This isn't your draw!", ephemeral=True)
+            except discord.InteractionResponded:
+                return await interaction.followup.send(f"{GameEmojis.ERROR} This isn't your draw!", ephemeral=True)
+        
+        user_id = str(self.user.id)
+        guild_id = str(self.guild_id)
+        cost = GACHA_COST
+        
+        # Check balance
+        balance = await self.cog.quest_data.get_balance(user_id, guild_id)
+        if balance < cost:
+            try:
+                return await interaction.response.send_message(
+                    f"❌ Need **{cost}** but have **{balance:,}** pts!", 
+                    ephemeral=True
+                )
+            except discord.InteractionResponded:
+                return await interaction.followup.send(f"❌ Need **{cost}** but have **{balance:,}** pts!", ephemeral=True)
+        
+        # Check timer
+        class MockContext:
+            def __init__(self, user, guild):
+                self.author = user
+                self.guild = guild
+        
+        mock_ctx = MockContext(self.user, interaction.guild)
+        timer_error = await self.cog.check_timer(mock_ctx, "gacha")
+        if timer_error:
+            try:
+                return await interaction.response.send_message(timer_error, ephemeral=True)
+            except discord.InteractionResponded:
+                return await interaction.followup.send(timer_error, ephemeral=True)
+        
+        # Deduct cost and increment plays
+        await self.cog.set_cooldown(user_id, "gacha_command")
+        await self.cog.quest_data.add_balance(user_id, guild_id, -cost)
+        await self.cog.increment_plays(user_id, guild_id, "gacha")
+        
+        # Defer the response to prevent timeout
+        try:
+            await interaction.response.defer()
+        except:
+            pass
+        
+        # Fetch new characters
+        new_characters = await self.cog.pull_three_cards_real()
+        
+        # Check ownership for each character
+        ownership_info = await self.cog.check_character_ownership(interaction.guild, new_characters)
+        
+        # Generate new image
+        img_buffer = await generate_gacha_draw_image(new_characters, ownership_info=ownership_info)
+        file = discord.File(img_buffer, filename="gacha_redraw.png")
+        
+        # Update balance and draws left
+        new_balance = balance - cost
+        gacha_config = get_timer_config("gacha")
+        current_uses = await self.cog.get_current_uses(user_id, guild_id, "gacha")
+        new_draws_left = gacha_config['max_uses'] - current_uses
+        new_is_out_of_draws = new_draws_left <= 0
+        
+        # Create new claim view
+        new_view = GachaClaimView(
+            self.cog, self.user, guild_id, new_characters, 
+            new_balance, new_draws_left, new_is_out_of_draws, 
+            message=self.message
+        )
+        
+        # Edit the message with new draw
+        try:
+            await self.message.edit(attachments=[file], view=new_view)
+            new_view.message = self.message
+        except Exception as e:
+            logger.error(f"Error editing message in redraw: {e}")
+            try:
+                await interaction.followup.send("❌ Failed to update the message. Please try drawing again.", ephemeral=True)
+            except:
+                pass
 
 
 class GachaClaimView(discord.ui.View):
@@ -247,7 +342,7 @@ class GachaClaimView(discord.ui.View):
         favorites = char.get("favorites", 0)
         
         # Create info view for the claimed character
-        info_view = CharacterInfoView(self.cog, char, uid, self.user)
+        info_view = CharacterInfoView(self.cog, char, uid, self.user, self.draws_left, self.guild_id)
         
         try:
             await interaction.response.edit_message(attachments=[file], view=info_view)

@@ -401,6 +401,8 @@ class PoketwoSpawnDetector(commands.Cog):
 
                 base = self.base_cache(raw_name)
                 base_name = base.lower()
+                # Use raw_name for variant-aware lookups (collections, images)
+                lookup_name = raw_name.lower().replace('_', '-').replace(' ', '-')
                 conf_float = self._parse_confidence(conf)
                 low_conf = conf_float < 30.0
 
@@ -428,14 +430,14 @@ class PoketwoSpawnDetector(commands.Cog):
                     desc, dex = desc_data[:2]
                     dex = self._pokemon_ids.get(base_name, dex)
 
-                    # Pings
+                    # Pings - use lookup_name for variant-aware collection matching
                     ping_start = time.perf_counter()
                     fetch_shiny = server_config.get("sh_enabled", True) or server_config.get("cl_enabled", True)
                     fetch_type = server_config.get("type_enabled", True)
                     fetch_quest = server_config.get("quest_enabled", True)
 
                     shiny_pings, collect_pings, type_pings, quest_pings = await self._get_all_pings_batched(
-                        message.guild, base_name, fetch_shiny, fetch_type, fetch_quest
+                        message.guild, lookup_name, fetch_shiny, fetch_type, fetch_quest
                     )
                     ping_time = time.perf_counter() - ping_start
 
@@ -459,13 +461,13 @@ class PoketwoSpawnDetector(commands.Cog):
                         ) if server_config.get("buttons_enabled", True) else None
                     )
 
-                    # Image handling
+                    # Image handling - use lookup_name for variant-aware image lookup
                     image_start = time.perf_counter()
                     url = None
                     if server_config.get("images_enabled", True):
-                        url = self._get_image_url(base_name)
+                        url = self._get_image_url(lookup_name)
                         if not url:
-                            url = await self._handle_image_upload(base_name)
+                            url = await self._handle_image_upload(lookup_name)
                     image_time = time.perf_counter() - image_start
 
                     # Send response

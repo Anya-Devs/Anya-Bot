@@ -1324,6 +1324,24 @@ class Search(commands.Cog):
         
         Use in NSFW channels for adult content access (Rule34, e621, Realbooru)
         """
+        # ═══ OWNER-ONLY CHECK ═══
+        if not await self.bot.is_owner(ctx.author):
+            embed = discord.Embed(
+                title="⚠️ Safety Hazard - Command Restricted",
+                description=f"{ctx.author.mention}, this command is currently restricted to the bot developer only.\n\n"
+                           "**Reason:** This command is not fully filtered yet and may return inappropriate content that violates Discord's Terms of Service.\n\n"
+                           "The art search system is still under development to ensure maximum safety for all users. "
+                           "Once the filtering system is fully tested and verified, this command will be available to everyone.\n\n"
+                           "Thank you for your understanding! 🛡️",
+                color=discord.Color.orange()
+            )
+            embed.set_footer(text="Bot Developer Only • Safety First")
+            try:
+                embed.set_thumbnail(url=ctx.author.display_avatar.url)
+            except:
+                pass
+            return await ctx.reply(embed=embed, mention_author=False)
+        
         # Check for --random or -r flag
         randomize = False
         if query:
@@ -1514,6 +1532,24 @@ class Search(commands.Cog):
         Available sources: danbooru, gelbooru, safebooru, konachan, yandere, 
         zerochan, anime_pictures, waifu_im, nekos_best, rule34, e621, realbooru
         """
+        # ═══ OWNER-ONLY CHECK ═══
+        if not await self.bot.is_owner(ctx.author):
+            embed = discord.Embed(
+                title="⚠️ Safety Hazard - Command Restricted",
+                description=f"{ctx.author.mention}, this command is currently restricted to the bot developer only.\n\n"
+                           "**Reason:** This command is not fully filtered yet and may return inappropriate content that violates Discord's Terms of Service.\n\n"
+                           "The art search system is still under development to ensure maximum safety for all users. "
+                           "Once the filtering system is fully tested and verified, this command will be available to everyone.\n\n"
+                           "Thank you for your understanding! 🛡️",
+                color=discord.Color.orange()
+            )
+            embed.set_footer(text="Bot Developer Only • Safety First")
+            try:
+                embed.set_thumbnail(url=ctx.author.display_avatar.url)
+            except:
+                pass
+            return await ctx.reply(embed=embed, mention_author=False)
+        
         # ═══ CONTENT POLICY CHECK ═══
         if contains_prohibited_content(query):
             embed = discord.Embed(
