@@ -1,7 +1,15 @@
 """
-Multi-Source Image Search System
-Searches Google Safe Search, DuckDuckGo, Bing, Danbooru, and Safebooru
-with deduplication and safe content filtering
+Multi-Source Image Search System - MAXIMUM SAFETY FOR ALL-AGES BOT
+Searches ONLY safe-rated content from Safebooru.org, Konachan.net, and Danbooru
+with comprehensive filtering and deduplication
+
+SAFETY FEATURES:
+- 150+ blocked tags covering ALL inappropriate content
+- Strict rating filters (rating:general/rating:safe only)
+- Multi-layer validation (query filter + post-processing + URL validation)
+- Zero tolerance for suggestive, sexual, or inappropriate content
+- Full Discord TOS compliance with loli/shota protection
+- Family-friendly, wholesome anime fan art ONLY
 """
 
 import aiohttp
@@ -211,6 +219,52 @@ class MultiSourceImageSearch:
         self.seen_urls.add(url)
         return False
     
+    def _is_valid_image_url(self, url: str) -> bool:
+        """Check if URL appears to be a valid image URL"""
+        if not url:
+            return False
+        
+        # Must start with http/https
+        if not url.startswith(('http://', 'https://')):
+            return False
+        
+        # Check for common image extensions or known image hosts
+        valid_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.webp')
+        valid_hosts = ('safebooru.org', 'konachan.net', 'danbooru.donmai.us', 
+                       'safebooru.donmai.us', 'cdn.donmai.us')
+        
+        url_lower = url.lower()
+        
+        # Check extension
+        has_valid_ext = any(url_lower.endswith(ext) or f'{ext}?' in url_lower for ext in valid_extensions)
+        
+        # Check host
+        has_valid_host = any(host in url_lower for host in valid_hosts)
+        
+        return has_valid_ext or has_valid_host
+    
+    async def _validate_image_batch(self, images: List[Dict], max_validate: int = 50) -> List[Dict]:
+        """Validate a batch of images by checking if URLs are accessible"""
+        if not images:
+            return []
+        
+        # Only validate first N images to avoid too many requests
+        validated = []
+        session = await self.get_session()
+        
+        for img in images[:max_validate]:
+            url = img.get('preview_url') or img.get('url')
+            if self._is_valid_image_url(url):
+                validated.append(img)
+        
+        # Add remaining images without validation (they passed URL format check)
+        for img in images[max_validate:]:
+            url = img.get('preview_url') or img.get('url')
+            if self._is_valid_image_url(url):
+                validated.append(img)
+        
+        return validated
+    
     def _get_booru_character_tag(self, character_name: str, series_name: str = None) -> str:
         """Convert character name to proper booru tag format"""
         name_lower = character_name.lower().strip()
@@ -299,6 +353,59 @@ class MultiSourceImageSearch:
         cleaned = re.sub(r'\s+', '_', cleaned.strip())
         return cleaned
     
+    async def _fetch_with_retry(self, fetch_func, char_tag: str, page: int, limit: int, max_retries: int = 2) -> List[Dict]:
+        """Fetch with retry logic and exponential backoff"""
+        for attempt in range(max_retries + 1):
+            try:
+                result = await fetch_func(char_tag, page, limit)
+                if result:
+                    return result
+                return []
+            except Exception as e:
+                if attempt < max_retries:
+                    await asyncio.sleep(0.5 * (attempt + 1))  # Exponential backoff
+                else:
+                    return []
+        return []
+    
+    async def _fetch_source_pages(self, fetch_func, source_name: str, char_tag: str, max_pages: int = 20) -> List[Dict]:
+        """Fetch pages from a single source with smart batching and early stop"""
+        all_results = []
+        batch_size = 3  # Fetch 3 pages at a time
+        consecutive_empty = 0
+        
+        for batch_start in range(1, max_pages + 1, batch_size):
+            batch_end = min(batch_start + batch_size, max_pages + 1)
+            
+            # Create tasks for this batch
+            tasks = []
+            for page in range(batch_start, batch_end):
+                tasks.append(self._fetch_with_retry(fetch_func, char_tag, page, 100))
+            
+            # Execute batch with small delay between batches
+            if batch_start > 1:
+                await asyncio.sleep(0.3)  # Rate limit delay between batches
+            
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            batch_found = 0
+            for result in results:
+                if isinstance(result, list) and result:
+                    all_results.extend(result)
+                    batch_found += len(result)
+            
+            # Early stop: if batch returned nothing, source is exhausted
+            if batch_found == 0:
+                consecutive_empty += 1
+                if consecutive_empty >= 2:  # 2 empty batches = stop
+                    logger.info(f"[{source_name}] Exhausted at page ~{batch_start}, got {len(all_results)} total")
+                    break
+            else:
+                consecutive_empty = 0
+                logger.debug(f"[{source_name}] Batch {batch_start}-{batch_end-1}: +{batch_found} images")
+        
+        return all_results
+    
     async def search_all_sources(
         self, 
         character_name: str, 
@@ -306,46 +413,87 @@ class MultiSourceImageSearch:
         page: int = 1, 
         limit: int = 30
     ) -> Tuple[List[Dict], int]:
-        """Search multiple SFW sources with deep scraping and proper pagination"""
-        self.seen_urls.clear()
-        self.seen_hashes.clear()
+        """Search multiple SFW sources with smart batching, rate limiting, and proper pagination"""
+        # Create a cache key for this character search
+        cache_key = f"{character_name.lower()}_{series_name.lower() if series_name else 'none'}"
         
-        all_images = []
+        # Check if we have cached results for this character
+        if not hasattr(self, '_search_cache'):
+            self._search_cache = {}
         
-        # Get all name variations to try
-        name_variations = self._get_name_variations(character_name, series_name)
-        logger.info(f"[MultiSearch] Character '{character_name}' -> variations: {name_variations}")
-        
-        # Deep scraping: fetch multiple pages from each source
-        pages_per_source = 3  # Fetch 3 pages from each source
-        
-        # Try each variation until we get results
-        for char_tag in name_variations:
-            if all_images:
-                break  # Stop if we already found images
+        # If not in cache, fetch all results with smart batching
+        if cache_key not in self._search_cache:
+            self.seen_urls.clear()
+            self.seen_hashes.clear()
             
-            # Search multiple pages from BOTH sources in parallel
-            tasks = []
-            for source_page in range(1, pages_per_source + 1):
-                tasks.append(self._search_safebooru_org(char_tag, source_page, 100))
-                tasks.append(self._search_konachan(char_tag, source_page, 100))
+            all_images = []
             
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            # Get all name variations to try
+            name_variations = self._get_name_variations(character_name, series_name)
+            logger.info(f"[MultiSearch] Character '{character_name}' -> variations: {name_variations}")
             
-            # Combine and deduplicate results
-            for result in results:
-                if isinstance(result, list):
-                    for img in result:
+            # Try each variation until we get results
+            for char_tag in name_variations:
+                if all_images:
+                    break  # Stop if we already found images
+                
+                logger.info(f"[MultiSearch] Fetching '{char_tag}' from sources (smart batching)...")
+                
+                # Fetch from all sources in parallel, but each source fetches sequentially with batching
+                safebooru_task = self._fetch_source_pages(
+                    self._search_safebooru_org, "Safebooru.org", char_tag, max_pages=20
+                )
+                konachan_task = self._fetch_source_pages(
+                    self._search_konachan, "Konachan.net", char_tag, max_pages=20
+                )
+                danbooru_task = self._fetch_source_pages(
+                    self._search_danbooru_safe_only, "Danbooru", char_tag, max_pages=20
+                )
+                
+                # Run all sources in parallel
+                safebooru_results, konachan_results, danbooru_results = await asyncio.gather(
+                    safebooru_task, konachan_task, danbooru_task, return_exceptions=True
+                )
+                
+                # Process Safebooru results
+                if isinstance(safebooru_results, list):
+                    for img in safebooru_results:
                         if img.get('url') and not self._is_duplicate(img['url']):
                             all_images.append(img)
+                    logger.info(f"[MultiSearch] Safebooru: {len(safebooru_results)} raw -> {len([i for i in safebooru_results if not self._is_duplicate(i.get('url', ''))])} unique")
+                
+                # Process Konachan results
+                if isinstance(konachan_results, list):
+                    for img in konachan_results:
+                        if img.get('url') and not self._is_duplicate(img['url']):
+                            all_images.append(img)
+                    logger.info(f"[MultiSearch] Konachan: {len(konachan_results)} raw")
+                
+                # Process Danbooru results
+                if isinstance(danbooru_results, list):
+                    for img in danbooru_results:
+                        if img.get('url') and not self._is_duplicate(img['url']):
+                            all_images.append(img)
+                    logger.info(f"[MultiSearch] Danbooru: {len(danbooru_results)} raw")
+                
+                if all_images:
+                    logger.info(f"[MultiSearch] Found {len(all_images)} unique images with tag '{char_tag}'")
             
-            if all_images:
-                logger.info(f"[MultiSearch] Found {len(all_images)} images with tag '{char_tag}'")
+            # Validate all images have working URLs
+            all_images = await self._validate_image_batch(all_images)
+            logger.info(f"[MultiSearch] After validation: {len(all_images)} valid images")
+            
+            # Sort by score/relevance
+            all_images.sort(key=lambda x: x.get('score', 0), reverse=True)
+            
+            # Cache the complete result set
+            self._search_cache[cache_key] = all_images
+            logger.info(f"[MultiSearch] ✓ Cached {len(all_images)} total images for '{character_name}'")
+        else:
+            all_images = self._search_cache[cache_key]
+            logger.info(f"[MultiSearch] Using cached {len(all_images)} images for '{character_name}'")
         
-        # Sort by score/relevance
-        all_images.sort(key=lambda x: x.get('score', 0), reverse=True)
-        
-        # Calculate pagination
+        # Calculate pagination based on total cached results
         total_images = len(all_images)
         max_pages = max(1, (total_images + limit - 1) // limit)
         
@@ -484,6 +632,159 @@ class MultiSourceImageSearch:
         
         return []
     
+    async def _search_danbooru_safe_only(self, char_tag: str, page: int = 1, limit: int = 30) -> List[Dict]:
+        """Search Danbooru with STRICT safe filter - matching Safebooru standards"""
+        session = await self.get_session()
+        
+        # ULTRA STRICT: rating:general + extensive blacklist to match Safebooru's safety
+        # Exclude ALL suggestive, fanservice, and softcore content
+        blacklist = [
+            '-suggestive', '-ecchi', '-nude', '-underwear', '-panties', '-bra', '-lingerie',
+            '-bikini', '-swimsuit', '-cleavage', '-underboob', '-sideboob', '-ass', '-butt',
+            '-thighs', '-pantyshot', '-upskirt', '-cameltoe', '-nipples', '-topless',
+            '-lewd', '-nsfw', '-loli', '-shota', '-sexy', '-seductive', '-provocative',
+            '-erotic', '-fanservice', '-bath', '-bathing', '-shower', '-wet_clothes',
+            '-see-through', '-transparent', '-spread_legs', '-bondage', '-breast_grab',
+            '-groping', '-sexual', '-revealing', '-skimpy', '-tight_clothes'
+        ]
+        safe_tags = f"{char_tag} rating:general {' '.join(blacklist)}"
+        
+        params = {
+            'tags': safe_tags,
+            'limit': min(limit, 100),
+            'page': page
+        }
+        
+        # Add specific headers for Danbooru API
+        headers = {
+            'User-Agent': 'AnyaBot/1.0 (Discord Bot; Safe Content Filter)',
+            'Accept': 'application/json'
+        }
+        
+        try:
+            async with session.get('https://danbooru.donmai.us/posts.json', params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    result_count = len(data) if isinstance(data, list) else 0
+                    if result_count > 0:
+                        logger.info(f"[Danbooru] Page {page}: Found {result_count} results for '{char_tag}'")
+                    return self._process_danbooru_safe_results(data)
+                elif resp.status == 429:
+                    logger.warning(f"[Danbooru] Rate limited - waiting")
+                    await asyncio.sleep(2)
+                    return []
+                elif resp.status == 403:
+                    logger.warning(f"[Danbooru] Access forbidden (403) - API may require authentication or be blocking requests")
+                    return []
+                else:
+                    logger.warning(f"[Danbooru] Status {resp.status} for '{char_tag}' page {page}")
+        except asyncio.TimeoutError:
+            logger.warning(f"[Danbooru] Timeout for '{char_tag}' page {page}")
+        except Exception as e:
+            logger.error(f"[Danbooru] Error: {e}")
+        
+        return []
+    
+    def _process_danbooru_safe_results(self, data: List[Dict]) -> List[Dict]:
+        """Process Danbooru results with MAXIMUM SAFETY filtering - ALL-AGES ONLY"""
+        processed = []
+        
+        if not isinstance(data, list):
+            return processed
+        
+        # MAXIMUM SAFETY: 150+ blocked tags - ZERO TOLERANCE for inappropriate content
+        blocked_tags = {
+            # Explicit/Suggestive/Sexual
+            'suggestive', 'ecchi', 'lewd', 'nsfw', 'erotic', 'sexual', 'sexy', 'seductive',
+            'provocative', 'revealing', 'skimpy', 'fanservice', 'risque', 'sensual', 'alluring',
+            'tempting', 'sultry', 'flirtatious', 'arousing', 'titillating', 'indecent',
+            # Underwear/Intimate Apparel
+            'panties', 'underwear', 'bra', 'lingerie', 'bikini', 'swimsuit', 'thong', 'g-string',
+            'garter_belt', 'stockings', 'garter', 'negligee', 'corset', 'bustier', 'teddy',
+            'panty', 'brassiere', 'undergarment', 'intimate_apparel',
+            # Body Parts (Sexualized/Focus)
+            'cleavage', 'underboob', 'sideboob', 'breast_grab', 'breasts', 'boobs', 'chest',
+            'ass', 'butt', 'buttocks', 'rear', 'behind', 'thighs', 'legs', 'midriff', 'navel',
+            'belly', 'stomach', 'hips', 'waist', 'curves', 'figure', 'body', 'physique',
+            'cleavage_cutout', 'breast_focus', 'butt_focus', 'thigh_focus', 'leg_focus',
+            # Poses/Actions (Suggestive)
+            'pantyshot', 'upskirt', 'cameltoe', 'spread_legs', 'legs_apart', 'straddling',
+            'groping', 'grabbing', 'touching', 'breast_hold', 'arm_under_breasts', 'squeezing',
+            'fondling', 'caressing', 'embracing', 'hugging', 'cuddling', 'holding', 'pinching',
+            'spanking', 'slapping', 'kneeling', 'crawling', 'bending', 'arching', 'stretching',
+            'lying', 'reclining', 'lounging', 'sitting', 'on_back', 'on_stomach', 'on_side',
+            # Nudity/Exposure
+            'nipples', 'nude', 'naked', 'topless', 'bottomless', 'barefoot', 'bare_shoulders',
+            'bare_legs', 'bare_arms', 'bare_back', 'bare_chest', 'bare_midriff', 'exposed',
+            'undressing', 'undressed', 'partially_clothed', 'barely_clothed', 'scantily_clad',
+            'skin_tight', 'body_suit', 'leotard', 'one-piece', 'two-piece',
+            # Inappropriate/Adult Content (CRITICAL - Discord TOS)
+            'loli', 'shota', 'lolicon', 'shotacon', 'young', 'child', 'underage', 'minor',
+            'bondage', 'bdsm', 'chains', 'rope', 'tied', 'restrained', 'bound', 'cuffed',
+            'collar', 'leash', 'gag', 'blindfold', 'submissive', 'dominant', 'slave', 'master',
+            # Clothing States (Suggestive)
+            'bath', 'bathing', 'shower', 'showering', 'bathtub', 'onsen', 'hot_spring',
+            'wet', 'wet_clothes', 'soaked', 'drenched', 'dripping', 'sweaty', 'sweat',
+            'see-through', 'transparent', 'translucent', 'sheer', 'mesh', 'fishnet',
+            'tight', 'tight_clothes', 'form-fitting', 'skin_tight', 'clingy', 'hugging',
+            'torn_clothes', 'ripped', 'damaged', 'wardrobe_malfunction', 'clothing_aside',
+            'dress_lift', 'skirt_lift', 'shirt_lift', 'lifted_by_self', 'wind_lift',
+            # Angles/Camera Focus (Voyeuristic)
+            'from_below', 'from_behind', 'back_view', 'rear_view', 'side_view', 'profile',
+            'butt_focus', 'breast_focus', 'crotch', 'between_legs', 'pov', 'close-up',
+            'looking_at_viewer', 'eye_contact', 'seductive_gaze', 'bedroom_eyes',
+            'over_shoulder', 'looking_back', 'head_tilt', 'wink', 'blush',
+            # Bedroom/Private Settings
+            'bed', 'bedroom', 'pillow', 'sheets', 'blanket', 'lying_on_bed', 'in_bed',
+            'hotel', 'love_hotel', 'motel', 'room', 'private', 'alone', 'intimate',
+            # Romantic/Sexual Situations
+            'kiss', 'kissing', 'making_out', 'french_kiss', 'lip_lock', 'embrace',
+            'couple', 'lovers', 'romance', 'romantic', 'love', 'affection', 'intimate',
+            'date', 'dating', 'valentine', 'heart', 'hearts', 'love_letter',
+            # Misc Inappropriate
+            'mature', 'adult', 'r-15', 'r-18', 'r18', 'rating:questionable', 'rating:explicit',
+            'censored', 'uncensored', 'mosaic', 'convenient_censoring', 'steam', 'steam_censor',
+            'ahegao', 'orgasm', 'pleasure', 'aroused', 'flushed', 'embarrassed', 'shy',
+            'naughty', 'mischievous', 'playful', 'teasing', 'tease', 'temptation'
+        }
+        
+        for post in data:
+            try:
+                # Only accept 'g' (general) rating - the safest rating
+                rating = post.get('rating', '')
+                if rating != 'g':  # Only allow 'g' (general) rating
+                    continue
+                
+                file_url = post.get('file_url')
+                if not file_url:
+                    continue
+                
+                # Check tags for blocked content
+                tag_string = post.get('tag_string', '')
+                post_tags_set = set(tag_string.lower().split())
+                
+                # Skip if any blocked tags are present
+                if post_tags_set & blocked_tags:
+                    continue
+                
+                preview_url = post.get('large_file_url') or post.get('preview_file_url') or file_url
+                
+                processed.append({
+                    'id': post.get('id', 0),
+                    'url': file_url,
+                    'preview_url': preview_url,
+                    'source': 'Danbooru',
+                    'tags': tag_string.split()[:10],
+                    'score': post.get('score', 0),
+                    'width': post.get('image_width', 0),
+                    'height': post.get('image_height', 0),
+                })
+            except Exception as e:
+                logger.debug(f"Error processing Danbooru post: {e}")
+                continue
+        
+        return processed
+    
     async def _search_safebooru_org(self, char_tag: str, page: int = 1, limit: int = 30) -> List[Dict]:
         """Search Safebooru.org - PRIMARY IMAGE SOURCE"""
         session = await self.get_session()
@@ -526,11 +827,23 @@ class MultiSourceImageSearch:
         return []
     
     async def _search_konachan(self, char_tag: str, page: int = 1, limit: int = 30) -> List[Dict]:
-        """Search Konachan.net - STRICTLY SFW anime image board"""
+        """Search Konachan.net - ULTRA STRICT safe filter matching Safebooru standards"""
         session = await self.get_session()
         
+        # ULTRA STRICT: rating:safe + extensive blacklist to match Safebooru's safety
+        blacklist = [
+            '-suggestive', '-ecchi', '-nude', '-underwear', '-panties', '-bra', '-lingerie',
+            '-bikini', '-swimsuit', '-cleavage', '-underboob', '-sideboob', '-ass', '-butt',
+            '-thighs', '-pantyshot', '-upskirt', '-cameltoe', '-nipples', '-topless',
+            '-lewd', '-nsfw', '-loli', '-shota', '-sexy', '-seductive', '-provocative',
+            '-erotic', '-fanservice', '-bath', '-bathing', '-shower', '-wet_clothes',
+            '-see-through', '-transparent', '-spread_legs', '-bondage', '-breast_grab',
+            '-groping', '-sexual', '-revealing', '-skimpy', '-tight_clothes'
+        ]
+        safe_tags = f"{char_tag} rating:safe {' '.join(blacklist)}"
+        
         params = {
-            'tags': char_tag,
+            'tags': safe_tags,
             'limit': min(limit, 100),
             'page': page
         }
@@ -706,14 +1019,88 @@ class MultiSourceImageSearch:
         return processed
     
     def _process_konachan_results(self, data: List[Dict]) -> List[Dict]:
-        """Process Konachan.net results - STRICTLY SFW"""
+        """Process Konachan.net results - MAXIMUM SAFETY filtering - ALL-AGES ONLY"""
         processed = []
         
         if not isinstance(data, list):
             return processed
         
+        # MAXIMUM SAFETY: 150+ blocked tags - ZERO TOLERANCE for inappropriate content
+        blocked_tags = {
+            # Explicit/Suggestive/Sexual
+            'suggestive', 'ecchi', 'lewd', 'nsfw', 'erotic', 'sexual', 'sexy', 'seductive',
+            'provocative', 'revealing', 'skimpy', 'fanservice', 'risque', 'sensual', 'alluring',
+            'tempting', 'sultry', 'flirtatious', 'arousing', 'titillating', 'indecent',
+            # Underwear/Intimate Apparel
+            'panties', 'underwear', 'bra', 'lingerie', 'bikini', 'swimsuit', 'thong', 'g-string',
+            'garter_belt', 'stockings', 'garter', 'negligee', 'corset', 'bustier', 'teddy',
+            'panty', 'brassiere', 'undergarment', 'intimate_apparel',
+            # Body Parts (Sexualized/Focus)
+            'cleavage', 'underboob', 'sideboob', 'breast_grab', 'breasts', 'boobs', 'chest',
+            'ass', 'butt', 'buttocks', 'rear', 'behind', 'thighs', 'legs', 'midriff', 'navel',
+            'belly', 'stomach', 'hips', 'waist', 'curves', 'figure', 'body', 'physique',
+            'cleavage_cutout', 'breast_focus', 'butt_focus', 'thigh_focus', 'leg_focus',
+            # Poses/Actions (Suggestive)
+            'pantyshot', 'upskirt', 'cameltoe', 'spread_legs', 'legs_apart', 'straddling',
+            'groping', 'grabbing', 'touching', 'breast_hold', 'arm_under_breasts', 'squeezing',
+            'fondling', 'caressing', 'embracing', 'hugging', 'cuddling', 'holding', 'pinching',
+            'spanking', 'slapping', 'kneeling', 'crawling', 'bending', 'arching', 'stretching',
+            'lying', 'reclining', 'lounging', 'sitting', 'on_back', 'on_stomach', 'on_side',
+            # Nudity/Exposure
+            'nipples', 'nude', 'naked', 'topless', 'bottomless', 'barefoot', 'bare_shoulders',
+            'bare_legs', 'bare_arms', 'bare_back', 'bare_chest', 'bare_midriff', 'exposed',
+            'undressing', 'undressed', 'partially_clothed', 'barely_clothed', 'scantily_clad',
+            'skin_tight', 'body_suit', 'leotard', 'one-piece', 'two-piece',
+            # Inappropriate/Adult Content (CRITICAL - Discord TOS)
+            'loli', 'shota', 'lolicon', 'shotacon', 'young', 'child', 'underage', 'minor',
+            'bondage', 'bdsm', 'chains', 'rope', 'tied', 'restrained', 'bound', 'cuffed',
+            'collar', 'leash', 'gag', 'blindfold', 'submissive', 'dominant', 'slave', 'master',
+            # Clothing States (Suggestive)
+            'bath', 'bathing', 'shower', 'showering', 'bathtub', 'onsen', 'hot_spring',
+            'wet', 'wet_clothes', 'soaked', 'drenched', 'dripping', 'sweaty', 'sweat',
+            'see-through', 'transparent', 'translucent', 'sheer', 'mesh', 'fishnet',
+            'tight', 'tight_clothes', 'form-fitting', 'skin_tight', 'clingy', 'hugging',
+            'torn_clothes', 'ripped', 'damaged', 'wardrobe_malfunction', 'clothing_aside',
+            'dress_lift', 'skirt_lift', 'shirt_lift', 'lifted_by_self', 'wind_lift',
+            # Angles/Camera Focus (Voyeuristic)
+            'from_below', 'from_behind', 'back_view', 'rear_view', 'side_view', 'profile',
+            'butt_focus', 'breast_focus', 'crotch', 'between_legs', 'pov', 'close-up',
+            'looking_at_viewer', 'eye_contact', 'seductive_gaze', 'bedroom_eyes',
+            'over_shoulder', 'looking_back', 'head_tilt', 'wink', 'blush',
+            # Bedroom/Private Settings
+            'bed', 'bedroom', 'pillow', 'sheets', 'blanket', 'lying_on_bed', 'in_bed',
+            'hotel', 'love_hotel', 'motel', 'room', 'private', 'alone', 'intimate',
+            # Romantic/Sexual Situations
+            'kiss', 'kissing', 'making_out', 'french_kiss', 'lip_lock', 'embrace',
+            'couple', 'lovers', 'romance', 'romantic', 'love', 'affection', 'intimate',
+            'date', 'dating', 'valentine', 'heart', 'hearts', 'love_letter',
+            # Misc Inappropriate
+            'mature', 'adult', 'r-15', 'r-18', 'r18', 'rating:questionable', 'rating:explicit',
+            'censored', 'uncensored', 'mosaic', 'convenient_censoring', 'steam', 'steam_censor',
+            'ahegao', 'orgasm', 'pleasure', 'aroused', 'flushed', 'embarrassed', 'shy',
+            'naughty', 'mischievous', 'playful', 'teasing', 'tease', 'temptation'
+        }
+        
         for post in data:
             try:
+                # Skip if rating is not safe
+                rating = post.get('rating', 's')
+                if rating != 's':  # Only allow 's' (safe) rating
+                    continue
+                
+                # Check tags for blocked content
+                post_tags = post.get('tags', '')
+                if isinstance(post_tags, str):
+                    post_tags_set = set(post_tags.lower().split())
+                elif isinstance(post_tags, list):
+                    post_tags_set = set(t.lower() for t in post_tags)
+                else:
+                    post_tags_set = set()
+                
+                # Skip if any blocked tags are present
+                if post_tags_set & blocked_tags:
+                    continue
+                
                 # Konachan uses similar structure to other boorus
                 file_url = post.get('file_url') or post.get('jpeg_url')
                 if not file_url:

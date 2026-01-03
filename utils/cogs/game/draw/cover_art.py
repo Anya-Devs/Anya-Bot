@@ -43,34 +43,42 @@ class CoverArtSystem:
                 character_name, series_name, page, limit
             )
             
-            # Create character-specific sequential IDs
+            # Create character-specific sequential IDs on FIRST page only
             if character_uid and images:
-                if character_uid not in self.character_image_map:
-                    self.character_image_map[character_uid] = {}
+                # Check if we need to build the complete image map (first time or new character)
+                if character_uid not in self.character_image_map or page == 1:
+                    # Get ALL images for this character to assign persistent IDs
+                    cache_key = f"{character_name.lower()}_{series_name.lower() if series_name else 'none'}"
+                    if hasattr(self.multi_search, '_search_cache') and cache_key in self.multi_search._search_cache:
+                        all_character_images = self.multi_search._search_cache[cache_key]
+                        
+                        # Initialize map for this character
+                        self.character_image_map[character_uid] = {}
+                        
+                        # Assign sequential IDs to ALL images (1, 2, 3, ..., total)
+                        for idx, img in enumerate(all_character_images, start=1):
+                            self.character_image_map[character_uid][idx] = {
+                                'source_id': img['id'],
+                                'source': img['source'],
+                                'url': img.get('url', ''),
+                                'preview_url': img.get('preview_url', ''),
+                                'file_url': img.get('file_url', ''),
+                                'score': img.get('score', 0),
+                                'width': img.get('width', 0),
+                                'height': img.get('height', 0),
+                                'tags': img.get('tags', [])
+                            }
+                        
+                        logger.info(f"[Cover Art] Built complete image map with {len(all_character_images)} images for character {character_uid}")
                 
-                # Assign sequential IDs (1, 2, 3, ...) to each image for this character
-                for idx, img in enumerate(images, start=1):
-                    sequential_id = idx
-                    # Store the original image data with sequential ID
-                    self.character_image_map[character_uid][sequential_id] = {
-                        'source_id': img['id'],
-                        'source': img['source'],
-                        'url': img.get('url', ''),
-                        'preview_url': img.get('preview_url', ''),
-                        'file_url': img.get('file_url', ''),
-                        'score': img.get('score', 0),
-                        'width': img.get('width', 0),
-                        'height': img.get('height', 0),
-                        'tags': img.get('tags', [])
-                    }
-                
-                # Add sequential IDs to the returned images for display
-                for idx, img in enumerate(images, start=1):
+                # Add sequential IDs to the current page's images based on their position
+                start_idx = (page - 1) * limit
+                for idx, img in enumerate(images, start=start_idx + 1):
                     img['sequential_id'] = idx
                 
-                logger.info(f"[Cover Art] Assigned sequential IDs 1-{len(images)} for character {character_uid}")
+                logger.info(f"[Cover Art] Page {page}: Assigned sequential IDs {start_idx + 1}-{start_idx + len(images)} for character {character_uid}")
             
-            logger.info(f"[Cover Art] Found {len(images)} unique images from multiple sources")
+            logger.info(f"[Cover Art] Found {len(images)} images on page {page}/{max_pages}")
             return images, max_pages
             
         except Exception as e:

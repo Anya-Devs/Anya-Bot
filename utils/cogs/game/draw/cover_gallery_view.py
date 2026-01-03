@@ -43,8 +43,8 @@ class CoverGalleryView(discord.ui.View):
             await interaction.response.send_message("You're already on the first page!", ephemeral=True)
             return
         
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
+        # Defer immediately - no loading message
+        await interaction.response.defer()
         
         try:
             char_name = self.character.get('name', '')
@@ -66,14 +66,9 @@ class CoverGalleryView(discord.ui.View):
                         break
                 
                 await interaction.message.edit(embeds=embeds, view=self)
-            else:
-                await interaction.followup.send("No more images available!", ephemeral=True)
         except Exception as e:
             logger.error(f"Error loading previous page: {e}")
-            await interaction.followup.send("Error loading previous page!", ephemeral=True)
-        finally:
-            button.disabled = False
-            await interaction.message.edit(view=self)
+            await interaction.followup.send("❌ Error loading previous page!", ephemeral=True)
     
     @discord.ui.button(label="▶️", style=discord.ButtonStyle.grey, custom_id="next_page")
     async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -82,8 +77,8 @@ class CoverGalleryView(discord.ui.View):
             await interaction.response.send_message("You're already on the last page!", ephemeral=True)
             return
         
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
+        # Defer immediately - no loading message
+        await interaction.response.defer()
         
         try:
             char_name = self.character.get('name', '')
@@ -105,14 +100,9 @@ class CoverGalleryView(discord.ui.View):
                         break
                 
                 await interaction.message.edit(embeds=embeds, view=self)
-            else:
-                await interaction.followup.send("No more images available!", ephemeral=True)
         except Exception as e:
             logger.error(f"Error loading next page: {e}")
-            await interaction.followup.send("Error loading next page!", ephemeral=True)
-        finally:
-            button.disabled = False
-            await interaction.message.edit(view=self)
+            await interaction.followup.send("❌ Error loading next page!", ephemeral=True)
     
     @discord.ui.button(label="page/max", style=discord.ButtonStyle.secondary, custom_id="jump_page")
     async def jump_to_page(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -152,9 +142,12 @@ class CoverGalleryView(discord.ui.View):
                     button.label = f"{self.current_page}/{self.total_pages}"
                     
                     await interaction.message.edit(embeds=embeds, view=self)
-                    await interaction.followup.send(f"Jumped to page {target_page}!", ephemeral=True)
                 else:
-                    await interaction.followup.send("No images available on that page!", ephemeral=True)
+                    # Page is empty - adjust total_pages to prevent accessing non-existent pages
+                    self.total_pages = max(1, target_page - 1)
+                    button.label = f"{self.current_page}/{self.total_pages}"
+                    await interaction.message.edit(view=self)
+                    await interaction.followup.send(f"⚠️ Page {target_page} has no images. Max pages adjusted to {self.total_pages}.", ephemeral=True)
                     
             except Exception as e:
                 logger.error(f"Error jumping to page: {e}")

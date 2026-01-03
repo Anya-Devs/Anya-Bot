@@ -3473,18 +3473,73 @@ class Games(commands.Cog):
                 await ctx.reply(f"✅ {message}", mention_author=False)
             else:
                 await ctx.reply(f"❌ {message}", mention_author=False)
+        except Exception as e:
+            logger.error(f"Error setting cover art: {e}", exc_info=True)
+            await ctx.reply("❌ Error setting cover art!", mention_author=False)
+            
+    @cover.command(name="collection", aliases=["list", "mine", "c"])
+    async def cover_collection(self, ctx, uid: str = None):
+        """📚 View all your purchased cover art
+        
+        **Usage:** `.cover collection` or `.cover c <UID>`
+        
+        **Example:** `.cover c B9EB6DCF` - View covers for specific character
+        """
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        try:
+            cover_arts = await self.cover_art_system._get_user_cover_arts(user_id, guild_id)
+            
+            if not cover_arts:
+                return await ctx.reply("You haven't purchased any cover art yet!\nUse `.cover gallery <UID>` to browse and purchase.", mention_author=False)
+            
+            # Filter by UID if provided
+            if uid:
+                uid_lower = uid.lower()
+                cover_arts = [art for art in cover_arts if art.get('character_uid', '').lower() == uid_lower]
+                
+                if not cover_arts:
+                    return await ctx.reply(f"❌ You don't have any cover art for character `{uid.upper()}`!", mention_author=False)
+            
+            # Create 3 embeds showing cover art images
+            embeds = []
+            for i, art in enumerate(cover_arts[:3], 1):
+                char_name = art.get('character_name', 'Unknown')
+                char_uid = art.get('character_uid', 'N/A')
+                custom_name = art.get('custom_name', 'N/A')
+                image_url = art.get('image_url', '')
+                selected = art.get('selected', False)
+                
+                status = "✅ Active" if selected else "🔹 Owned"
+                
+                title_suffix = f" [{uid.upper()}]" if uid else ""
+                embed = discord.Embed(
+                    title=f"🎨 {char_name}{title_suffix} - Option {i}",
+                    description=f"**Status:** {status}\n**Cover ID:** `{custom_name}`\n**Character UID:** `{char_uid.upper()}`",
+                    color=discord.Color.green() if selected else discord.Color.purple()
+                )
+                
+                if image_url:
+                    embed.set_image(url=image_url)
+                
+                embed.set_footer(text=f"Set: .cover set {char_uid.upper()} {custom_name} | Release: .cover release {custom_name}")
+                embeds.append(embed)
+            
+            # Create view with help button
+            from utils.cogs.game.draw.cover_collection_view import CoverCollectionView
+            view = CoverCollectionView()
+            
+            msg = await ctx.reply(embeds=embeds, view=view, mention_author=False)
+            view.message = msg
             
         except Exception as e:
-            logger.error(f"Error in cover buy: {e}", exc_info=True)
-            await ctx.reply("❌ Error purchasing cover art!", mention_author=False)
-        finally:
-            await self.set_cover_command_status(user_id, False)
-
-@cover.command(name="view", aliases=["select", "switch"])
-async def cover_view(self, ctx, uid: str = None):
-    """👁️ View and select your purchased cover art for a character
+            logger.error(f"Error showing cover art collection: {e}", exc_info=True)
+            await ctx.reply("❌ Error loading your cover art collection!", mention_author=False)
     
-    **Usage:** `.cover view <UID>`
+    @cover.command(name="release", aliases=["delete", "refund"])
+    async def cover_release(self, ctx, cover_id: str = None):
+        """💸 Release cover art for 10% refund
         
         **Usage:** `.cover release <cover_id>`
         
