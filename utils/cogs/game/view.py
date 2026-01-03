@@ -8,6 +8,7 @@ from discord.ext import commands
 import random
 import aiohttp
 import os
+import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
@@ -17,6 +18,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from utils.cogs.cover_art import CoverArtVariantView, CoverArtDatabase
 from .const import *
 from .images import *
+from .const import GameEmojis
 logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════
@@ -33,13 +35,13 @@ class DoubleOrNothingView(discord.ui.View):
         self.winnings = winnings
         self.used = False
     
-    @discord.ui.button(label="Double or Nothing!", style=discord.ButtonStyle.green, emoji="🎲")
+    @discord.ui.button(label="Double or Nothing!", style=discord.ButtonStyle.green, emoji=GameEmojis.DICE)
     async def double_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if str(interaction.user.id) != self.user_id:
-            return await interaction.response.send_message("❌ This isn't your game!", ephemeral=True)
+            return await interaction.response.send_message(f"{GameEmojis.ERROR} This isn't your game!", ephemeral=True)
         
         if self.used:
-            return await interaction.response.send_message("❌ Already used!", ephemeral=True)
+            return await interaction.response.send_message(f"{GameEmojis.ERROR} Already used!", ephemeral=True)
         
         self.used = True
         self.stop()
@@ -53,12 +55,12 @@ class DoubleOrNothingView(discord.ui.View):
             balance = await self.cog.quest_data.get_balance(self.user_id, self.guild_id)
             
             embed = discord.Embed(
-                title="🎉 DOUBLED!",
+                title=f"{GameEmojis.CELEBRATION} DOUBLED!",
                 description=f"You turned **{self.winnings:,}** into **{new_winnings:,}** pts!",
                 color=discord.Color.gold()
             )
-            embed.add_field(name="💰 Total Won", value=f"+**{new_winnings:,}** pts", inline=True)
-            embed.add_field(name="💳 Balance", value=f"**{balance:,}** pts", inline=True)
+            embed.add_field(name=f"{GameEmojis.MONEY} Total Won", value=f"+**{new_winnings:,}** pts", inline=True)
+            embed.add_field(name=f"{GameEmojis.CREDIT_CARD} Balance", value=f"**{balance:,}** pts", inline=True)
             
             # Offer another double
             new_view = DoubleOrNothingView(self.cog, self.user_id, self.guild_id, new_winnings)
@@ -68,22 +70,22 @@ class DoubleOrNothingView(discord.ui.View):
             balance = await self.cog.quest_data.get_balance(self.user_id, self.guild_id)
             
             embed = discord.Embed(
-                title="💀 BUSTED!",
+                title=f"{GameEmojis.SKULL} BUSTED!",
                 description=f"You lost your **{self.winnings:,}** pts!",
                 color=discord.Color.red()
             )
-            embed.add_field(name="📉 Lost", value=f"-**{self.winnings:,}** pts", inline=True)
-            embed.add_field(name="💳 Balance", value=f"**{balance:,}** pts", inline=True)
+            embed.add_field(name=f"{GameEmojis.CHART_DOWN} Lost", value=f"-**{self.winnings:,}** pts", inline=True)
+            embed.add_field(name=f"{GameEmojis.CREDIT_CARD} Balance", value=f"**{balance:,}** pts", inline=True)
             
             await interaction.response.edit_message(embed=embed, view=None)
     
-    @discord.ui.button(label="Cash Out", style=discord.ButtonStyle.secondary, emoji="💰")
+    @discord.ui.button(label="Cash Out", style=discord.ButtonStyle.secondary, emoji=GameEmojis.MONEY)
     async def cashout_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if str(interaction.user.id) != self.user_id:
-            return await interaction.response.send_message("❌ This isn't your game!", ephemeral=True)
+            return await interaction.response.send_message(f"{GameEmojis.ERROR} This isn't your game!", ephemeral=True)
         
         if self.used:
-            return await interaction.response.send_message("❌ Already cashed out!", ephemeral=True)
+            return await interaction.response.send_message(f"{GameEmojis.ERROR} Already cashed out!", ephemeral=True)
         
         self.used = True
         self.stop()
@@ -91,11 +93,11 @@ class DoubleOrNothingView(discord.ui.View):
         balance = await self.cog.quest_data.get_balance(self.user_id, self.guild_id)
         
         embed = discord.Embed(
-            title="💰 Cashed Out!",
+            title=f"{GameEmojis.MONEY} Cashed Out!",
             description=f"Smart move! You kept your **{self.winnings:,}** pts.",
             color=discord.Color.green()
         )
-        embed.add_field(name="💳 Balance", value=f"**{balance:,}** pts", inline=True)
+        embed.add_field(name=f"{GameEmojis.CREDIT_CARD} Balance", value=f"**{balance:,}** pts", inline=True)
         
         await interaction.response.edit_message(embed=embed, view=None)
     
@@ -108,30 +110,102 @@ class DoubleOrNothingView(discord.ui.View):
 # GACHA SYSTEM VIEWS
 # ═══════════════════════════════════════════════════════════════
 
+class CharacterInfoView(discord.ui.View):
+    """View for showing character information after claiming"""
+    def __init__(self, cog, character: dict, uid: str, user: discord.Member):
+        super().__init__(timeout=None)  # Persistent view
+        self.cog = cog
+        self.character = character
+        self.uid = uid
+        self.user = user
+        self.message = None  # Will be set after creation
+    
+    @discord.ui.button(label="Info", style=discord.ButtonStyle.primary)
+    async def info_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user.id:
+            try:
+                return await interaction.response.send_message(f"{GameEmojis.ERROR} This isn't your character!", ephemeral=True)
+            except discord.InteractionResponded:
+                return await interaction.followup.send(f"{GameEmojis.ERROR} This isn't your character!", ephemeral=True)
+        
+        char = self.character
+        rarity_data = GACHA_RARITY_TIERS.get(char.get("rarity", "common"))
+        favorites = char.get("favorites", 0)
+        
+        # Calculate release value
+        release_value = self.cog.calculate_release_value(favorites, char.get("rarity", "common"), char.get('name', 'unknown'))
+        
+        # Create character info embed
+        embed = discord.Embed(
+            title=f"{rarity_data['stars']} {char['name']}",
+            description=f"*{char.get('anime', 'Unknown')}*",
+            color=rarity_data["color"]
+        )
+        
+        # Character details
+        details = f"**UID:** `{self.uid}`\n"
+        details += f"**Rarity:** {char.get('rarity', 'common').title()}\n"
+        details += f"**Gender:** {char.get('gender', 'Unknown')}\n"
+        details += f"**Favorites:** {favorites:,}\n"
+        details += f"**Release Value:** {release_value:,} pts"
+        
+        embed.add_field(name="Character Details", value=details, inline=False)
+        embed.add_field(
+            name="Commands", 
+            value="• `.draw view <UID>` - Show off character\n• `.draw release <UID>` - Sell for points", 
+            inline=False
+        )
+        
+        if char.get("image_url"):
+            embed.set_thumbnail(url=char["image_url"])
+        
+        embed.set_footer(text="Click Info again to refresh this message")
+        
+        try:
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except discord.InteractionResponded:
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+
 class GachaClaimView(discord.ui.View):
     """View for claiming a character from gacha draw - prevents double claiming"""
-    def __init__(self, cog, user: discord.Member, guild_id: str, characters: list, message=None):
+    def __init__(self, cog, user: discord.Member, guild_id: str, characters: list, balance: int, draws_left: int, is_out_of_draws: bool, message=None):
         super().__init__(timeout=GACHA_CLAIM_TIMEOUT)
         self.cog = cog
         self.user = user
         self.guild_id = guild_id
         self.characters = characters
+        self.balance = balance
+        self.draws_left = draws_left
+        self.is_out_of_draws = is_out_of_draws
         self.message = message
         self.claimed = False
         self.claimed_indices = []  # Track which cards have been claimed
     
     async def claim_character(self, interaction: discord.Interaction, index: int):
         if interaction.user.id != self.user.id:
-            return await interaction.response.send_message("❌ This isn't your draw!", ephemeral=True)
+            try:
+                return await interaction.response.send_message(f"{GameEmojis.ERROR} This isn't your draw!", ephemeral=True)
+            except discord.InteractionResponded:
+                return await interaction.followup.send(f"{GameEmojis.ERROR} This isn't your draw!", ephemeral=True)
         
         if self.claimed:
-            return await interaction.response.send_message("❌ You already claimed a character!", ephemeral=True)
+            try:
+                return await interaction.response.send_message(f"{GameEmojis.ERROR} You already claimed a character!", ephemeral=True)
+            except discord.InteractionResponded:
+                return await interaction.followup.send(f"{GameEmojis.ERROR} You already claimed a character!", ephemeral=True)
         
         if index in self.claimed_indices:
-            return await interaction.response.send_message("❌ This character was already claimed!", ephemeral=True)
+            try:
+                return await interaction.response.send_message(f"{GameEmojis.ERROR} This character was already claimed!", ephemeral=True)
+            except discord.InteractionResponded:
+                return await interaction.followup.send(f"{GameEmojis.ERROR} This character was already claimed!", ephemeral=True)
         
         if index < 0 or index >= len(self.characters):
-            return await interaction.response.send_message("❌ Invalid choice!", ephemeral=True)
+            try:
+                return await interaction.response.send_message(f"{GameEmojis.ERROR} Invalid choice!", ephemeral=True)
+            except discord.InteractionResponded:
+                return await interaction.followup.send(f"{GameEmojis.ERROR} Invalid choice!", ephemeral=True)
         
         char = self.characters[index]
         user_id = str(self.user.id)
@@ -147,10 +221,16 @@ class GachaClaimView(discord.ui.View):
                 owner_name = owner.display_name if owner else "Someone"
             except:
                 owner_name = "Someone"
-            return await interaction.response.send_message(
-                f"❌ **{char['name']}** is already owned by **{owner_name}** in this server!",
-                ephemeral=True
-            )
+            try:
+                return await interaction.response.send_message(
+                    f"❌ **{char['name']}** is already owned by **{owner_name}** in this server!",
+                    ephemeral=True
+                )
+            except discord.InteractionResponded:
+                return await interaction.followup.send(
+                    f"❌ **{char['name']}** is already owned by **{owner_name}** in this server!",
+                    ephemeral=True
+                )
         
         self.claimed = True
         self.claimed_indices.append(index)
@@ -166,19 +246,30 @@ class GachaClaimView(discord.ui.View):
         rarity_data = GACHA_RARITY_TIERS.get(char.get("rarity", "common"))
         favorites = char.get("favorites", 0)
         
-        # Update embed to show claim with UID
-        embed = discord.Embed(
-            title=f"{char['name']} • Claimed",
-            description=f"*{char.get('anime', 'Unknown')}*\n\n"
-                       f"**UID:** `{uid}`\n"
-                       f"**Rarity:** {rarity_data['stars']}\n"
-                       f"**Favorites:** {favorites:,}",
-            color=rarity_data["color"]
-        )
-        embed.set_image(url="attachment://gacha_claimed.png")
-        embed.set_footer(text="Use .draw view <UID> to show off • .draw release <UID> to sell")
+        # Create info view for the claimed character
+        info_view = CharacterInfoView(self.cog, char, uid, self.user)
         
-        await interaction.response.edit_message(embed=embed, attachments=[file], view=None)
+        try:
+            await interaction.response.edit_message(attachments=[file], view=info_view)
+            # Set the message reference to the interaction's message
+            info_view.message = interaction.message
+        except discord.InteractionResponded:
+            try:
+                await interaction.followup.send("Character claimed! Check the updated message above.", ephemeral=True)
+                # Try to edit the original message if possible
+                if self.message:
+                    await self.message.edit(attachments=[file], view=info_view)
+                    info_view.message = self.message
+            except:
+                pass
+        except discord.NotFound:
+            # Message was deleted, try to send a new one in the channel
+            try:
+                if hasattr(interaction, 'channel') and interaction.channel:
+                    new_msg = await interaction.channel.send(file=file, view=info_view)
+                    info_view.message = new_msg
+            except:
+                pass
     
     def _update_buttons(self):
         """Disable buttons for claimed characters"""
@@ -206,16 +297,118 @@ class GachaClaimView(discord.ui.View):
     async def claim_3(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.claim_character(interaction, 2)
     
-    @discord.ui.button(label="Skip", style=discord.ButtonStyle.danger)
-    async def skip_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Info", style=discord.ButtonStyle.secondary, row=1)
+    async def info_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user.id:
-            return await interaction.response.send_message("❌ This isn't your draw!", ephemeral=True)
+            try:
+                return await interaction.response.send_message(f"{GameEmojis.ERROR} This isn't your draw!", ephemeral=True)
+            except discord.InteractionResponded:
+                return await interaction.followup.send(f"{GameEmojis.ERROR} This isn't your draw!", ephemeral=True)
         
+        summary_content = self.cog._get_draw_summary_content(
+            self.user.display_name, self.balance, self.draws_left, self.is_out_of_draws
+        )
+        try:
+            await interaction.response.send_message(summary_content, ephemeral=True)
+        except discord.InteractionResponded:
+            await interaction.followup.send(summary_content, ephemeral=True)
+    
+    @discord.ui.button(label="Redraw", style=discord.ButtonStyle.primary, row=1)
+    async def redraw_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user.id:
+            try:
+                return await interaction.response.send_message(f"{GameEmojis.ERROR} This isn't your draw!", ephemeral=True)
+            except discord.InteractionResponded:
+                return await interaction.followup.send(f"{GameEmojis.ERROR} This isn't your draw!", ephemeral=True)
+        
+        if self.is_out_of_draws:
+            try:
+                return await interaction.response.send_message("❌ No draws left!", ephemeral=True)
+            except discord.InteractionResponded:
+                return await interaction.followup.send("❌ No draws left!", ephemeral=True)
+        
+        if self.claimed:
+            try:
+                return await interaction.response.send_message("❌ Already claimed!", ephemeral=True)
+            except discord.InteractionResponded:
+                return await interaction.followup.send("❌ Already claimed!", ephemeral=True)
+        
+        # Check if user can still redraw BEFORE marking as claimed
+        user_id = str(self.user.id)
+        guild_id = str(self.guild_id)
+        cost = GACHA_COST
+        
+        # Check balance first
+        balance = await self.cog.quest_data.get_balance(user_id, guild_id)
+        if balance < cost:
+            try:
+                return await interaction.response.send_message(
+                    f"❌ Need **{cost}** but have **{balance:,}** pts!", 
+                    ephemeral=True
+                )
+            except discord.InteractionResponded:
+                return await interaction.followup.send(f"❌ Need **{cost}** but have **{balance:,}** pts!", ephemeral=True)
+        
+        # Check timer - create mock context since check_timer expects ctx.author
+        class MockContext:
+            def __init__(self, user, guild):
+                self.author = user
+                self.guild = guild
+        
+        mock_ctx = MockContext(self.user, self.user.guild)
+        timer_error = await self.cog.check_timer(mock_ctx, "gacha")
+        if timer_error:
+            try:
+                return await interaction.response.send_message(timer_error, ephemeral=True)
+            except discord.InteractionResponded:
+                return await interaction.followup.send(timer_error, ephemeral=True)
+        
+        # Only mark as claimed AFTER all checks pass
         self.claimed = True
         self.stop()
         
-        # Keep showing cards, just remove buttons
-        await interaction.response.edit_message(content="⏭️ **Skipped** - No character claimed", embed=None, view=None)
+        # Deduct cost and increment plays
+        await self.cog.set_cooldown(user_id, "gacha_command")
+        await self.cog.quest_data.add_balance(user_id, guild_id, -cost)
+        await self.cog.increment_plays(user_id, guild_id, "gacha")
+        
+        # Defer the response first to prevent timeout
+        try:
+            await interaction.response.defer()
+        except:
+            pass
+        
+        # Fetch new characters
+        new_characters = await self.cog.pull_three_cards_real()
+        
+        # Check ownership for each character
+        ownership_info = await self.cog.check_character_ownership(self.user.guild, new_characters)
+        
+        # Generate new image
+        img_buffer = await generate_gacha_draw_image(new_characters, ownership_info=ownership_info)
+        file = discord.File(img_buffer, filename="gacha_redraw.png")
+        
+        # Update balance and draws left
+        new_balance = balance - cost
+        gacha_config = get_timer_config("gacha")
+        current_uses = await self.cog.get_current_uses(user_id, guild_id, "gacha")
+        new_draws_left = gacha_config['max_uses'] - current_uses
+        new_is_out_of_draws = new_draws_left <= 0
+        
+        # Create new view with updated data
+        new_view = GachaClaimView(self.cog, self.user, guild_id, new_characters, new_balance, new_draws_left, new_is_out_of_draws, message=interaction.message)
+        
+        # Edit the current message with new image and view
+        try:
+            await interaction.message.edit(attachments=[file], view=new_view)
+            new_view.message = interaction.message
+        except Exception as e:
+            logger.error(f"Error editing message in redraw: {e}")
+            # Fallback: send ephemeral message
+            try:
+                await interaction.followup.send("❌ Failed to update the message. Please try drawing again.", ephemeral=True)
+            except:
+                pass
     
     async def on_timeout(self):
         if not self.claimed and self.message:
@@ -350,107 +543,178 @@ class CharacterCoverArtView(discord.ui.View):
 # ═══════════════════════════════════════════════════════════════
 
 class InventoryView(discord.ui.View):
-    """Paginated inventory view with filters"""
-    def __init__(self, cog, user: discord.Member, guild_id: str, characters: list, filter_type: str = "all"):
-        super().__init__(timeout=120)
+    """Paginated inventory view with filters and search"""
+    
+    def __init__(self, cog, user: discord.Member, guild_id: str, characters: list, filter_type: str = "all", search_query: str = None):
+        super().__init__(timeout=180)
         self.cog = cog
         self.user = user
         self.guild_id = guild_id
         self.all_characters = characters
-        self.filter_type = filter_type
         self.page = 0
         self.per_page = 10
+        
+        # Filters
+        self.rarity_filter = "all"
+        self.gender_filter = "all"
+        self.search_query = search_query  # Search by name/anime
         
         self.filtered_chars = self._filter_characters()
         self.max_pages = max(1, (len(self.filtered_chars) + self.per_page - 1) // self.per_page)
         
-        # Add filter select menu
-        self.add_item(InventoryFilterSelect(self))
+        # Add components
+        self.add_item(InventoryRaritySelect(self))
+        self.add_item(InventoryGenderSelect(self))
     
     def _filter_characters(self):
-        if self.filter_type == "all":
-            return self.all_characters
-        elif self.filter_type == "waifu":
-            return [c for c in self.all_characters if c.get("gender") == "Female"]
-        elif self.filter_type == "husbando":
-            return [c for c in self.all_characters if c.get("gender") == "Male"]
-        elif self.filter_type == "legendary":
-            return [c for c in self.all_characters if c.get("rarity") == "legendary"]
-        elif self.filter_type == "epic":
-            return [c for c in self.all_characters if c.get("rarity") in ["epic", "legendary"]]
-        else:
-            return self.all_characters
+        """Apply both rarity and gender filters."""
+        from utils.cogs.game.const import get_rarity_from_favorites
+        
+        chars = self.all_characters
+        
+        # Recalculate rarity for all characters based on favorites
+        for char in chars:
+            favorites = char.get("favorites", 0)
+            char["rarity"] = get_rarity_from_favorites(favorites)
+        
+        # Apply rarity filter
+        if self.rarity_filter == "legendary":
+            chars = [c for c in chars if c.get("rarity") == "legendary"]
+        elif self.rarity_filter == "epic":
+            chars = [c for c in chars if c.get("rarity") == "epic"]
+        elif self.rarity_filter == "rare":
+            chars = [c for c in chars if c.get("rarity") == "rare"]
+        elif self.rarity_filter == "uncommon":
+            chars = [c for c in chars if c.get("rarity") == "uncommon"]
+        elif self.rarity_filter == "common":
+            chars = [c for c in chars if c.get("rarity") == "common"]
+        
+        # Apply gender filter
+        if self.gender_filter == "female":
+            chars = [c for c in chars if c.get("gender") == "Female"]
+        elif self.gender_filter == "male":
+            chars = [c for c in chars if c.get("gender") == "Male"]
+        elif self.gender_filter == "unknown":
+            chars = [c for c in chars if c.get("gender") not in ["Female", "Male"]]
+        
+        return chars
     
-    def get_embed(self):
+    async def get_embed(self):
+        from utils.cogs.game.const import get_rarity_from_favorites
+        
+        # Recalculate rarity for all characters based on favorites
+        for char in self.filtered_chars:
+            favorites = char.get("favorites", 0)
+            char["rarity"] = get_rarity_from_favorites(favorites)
+        
+        # Sort by rarity priority then favorites
+        rarity_order = {"legendary": 0, "epic": 1, "rare": 2, "uncommon": 3, "common": 4}
+        sorted_chars = sorted(
+            self.filtered_chars,
+            key=lambda c: (rarity_order.get(c.get("rarity", "common"), 4), -c.get("favorites", 0))
+        )
+        
+        # Get current page characters
         start = self.page * self.per_page
         end = start + self.per_page
-        page_chars = self.filtered_chars[start:end]
+        page_chars = sorted_chars[start:end]
         
-        filter_labels = {
-            "all": "All Characters",
-            "waifu": "Waifus ♀️",
-            "husbando": "Husbandos ♂️",
-            "legendary": "Legendary ⭐⭐⭐⭐⭐",
-            "epic": "Epic+ 🟣"
-        }
+        # Count by rarity for stats
+        rarity_counts = {"legendary": 0, "epic": 0, "rare": 0, "uncommon": 0, "common": 0}
+        for c in self.filtered_chars:
+            r = c.get("rarity", "common")
+            if r in rarity_counts:
+                rarity_counts[r] += 1
+        
+        # Build filter description
+        rarity_labels = {"all": "All", "legendary": "Legendary", "epic": "Epic", "rare": "Rare", "uncommon": "Uncommon", "common": "Common"}
+        gender_labels = {"all": "All", "female": f"{GameEmojis.FEMALE} Female", "male": f"{GameEmojis.MALE} Male", "unknown": f"{GameEmojis.NONBINARY} Unknown"}
+        
+        filter_text = f"**Rarity:** {rarity_labels.get(self.rarity_filter, 'All')} • **Gender:** {gender_labels.get(self.gender_filter, 'All')}"
+        
+        # Stats line
+        stats = f"{GameEmojis.LEGENDARY} {rarity_counts['legendary']} • {GameEmojis.EPIC} {rarity_counts['epic']} • {GameEmojis.RARE} {rarity_counts['rare']} • {GameEmojis.UNCOMMON} {rarity_counts['uncommon']} • {GameEmojis.COMMON} {rarity_counts['common']}"
         
         embed = discord.Embed(
-            title=f"📦 {self.user.display_name}'s Collection",
-            description=f"**Filter:** {filter_labels.get(self.filter_type, 'All')}\n"
-                       f"**Total:** {len(self.filtered_chars)} characters",
+            title=f"{GameEmojis.BOX} {self.user.display_name}'s Collection",
+            description=f"{filter_text}\n{stats}\n**Total:** {len(self.filtered_chars)} characters",
             color=discord.Color.blurple()
         )
         
+        # Build character list
         if page_chars:
             char_lines = []
-            for i, char in enumerate(page_chars, start=start + 1):
-                rarity_data = GACHA_RARITY_TIERS.get(char.get("rarity", "common"))
-                stars = "⭐" * rarity_data["stars"]
-                gender = "♀️" if char.get("gender") == "Female" else "♂️" if char.get("gender") == "Male" else "⚧"
-                uid = char.get("uid", "???")
-                char_lines.append(f"`{uid}` {stars} **{char['name']}** {gender}\n-# {char.get('anime', 'Unknown')}")
+            for char in page_chars:
+                rarity = char.get("rarity", "common")
+                rarity_data = GACHA_RARITY_TIERS.get(rarity, GACHA_RARITY_TIERS["common"])
+                gender_emoji = GameEmojis.FEMALE if char.get("gender") == "Female" else GameEmojis.MALE if char.get("gender") == "Male" else GameEmojis.NONBINARY
+                uid = char.get("uid", "")
+                if not uid:
+                    continue
+                name = char.get('name', 'Unknown')
+                anime = char.get('anime', 'Unknown')
+                likes = char.get("favorites", 0)
+                
+                # Check if character has active cover art
+                cover_indicator = ""
+                if char.get('active_cover_url'):
+                    cover_indicator = " 🎨"
+                
+                # Improved format: UID on same line, cleaner spacing
+                line = f"**{uid}**{cover_indicator} {rarity_data['emoji']} **{name}** {gender_emoji}\n> *{anime}* • ❤️ {likes:,}"
+                char_lines.append(line)
             
-            embed.add_field(name="Characters", value="\n".join(char_lines), inline=False)
+            embed.add_field(
+                name="Characters",
+                value="\n".join(char_lines) if char_lines else "No characters found.",
+                inline=False
+            )
         else:
-            embed.add_field(name="No Characters", value="No characters match this filter.", inline=False)
+            embed.add_field(
+                name="No Characters",
+                value="No characters match these filters.\nTry adjusting your filter settings!",
+                inline=False
+            )
         
-        embed.set_footer(text=f"Page {self.page + 1}/{self.max_pages}")
+        embed.set_footer(text=f"Page {self.page + 1}/{self.max_pages} • Use dropdowns to filter")
         return embed
     
-    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="◀ Prev", style=discord.ButtonStyle.primary, row=2)
     async def prev_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user.id:
-            return await interaction.response.send_message("❌ Not your inventory!", ephemeral=True)
+            return await interaction.response.send_message(f"{GameEmojis.ERROR} Not your inventory!", ephemeral=True)
         
         self.page = (self.page - 1) % self.max_pages
-        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+        await interaction.response.edit_message(embed=await self.get_embed(), view=self)
     
-    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.primary, row=2)
     async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user.id:
-            return await interaction.response.send_message("❌ Not your inventory!", ephemeral=True)
+            return await interaction.response.send_message(f"{GameEmojis.ERROR} Not your inventory!", ephemeral=True)
         
         self.page = (self.page + 1) % self.max_pages
-        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+        await interaction.response.edit_message(embed=await self.get_embed(), view=self)
 
 
-class InventoryFilterSelect(discord.ui.Select):
+class InventoryRaritySelect(discord.ui.Select):
+    """Filter by rarity tier."""
     def __init__(self, parent_view):
         self.parent_view = parent_view
         options = [
-            discord.SelectOption(label="All Characters", value="all", emoji="📦", default=parent_view.filter_type == "all"),
-            discord.SelectOption(label="Waifus", value="waifu", emoji="♀️", default=parent_view.filter_type == "waifu"),
-            discord.SelectOption(label="Husbandos", value="husbando", emoji="♂️", default=parent_view.filter_type == "husbando"),
-            discord.SelectOption(label="Legendary", value="legendary", emoji="🌟", default=parent_view.filter_type == "legendary"),
-            discord.SelectOption(label="Epic+", value="epic", emoji="🟣", default=parent_view.filter_type == "epic"),
+            discord.SelectOption(label="All Rarities", value="all", emoji=GameEmojis.BOX, default=True),
+            discord.SelectOption(label="Legendary", value="legendary", emoji=GameEmojis.LEGENDARY, description=f"5★ - 10,000+ {GameEmojis.HEARTS}"),
+            discord.SelectOption(label="Epic", value="epic", emoji=GameEmojis.EPIC, description=f"4★ - 5,000+ {GameEmojis.HEARTS}"),
+            discord.SelectOption(label="Rare", value="rare", emoji=GameEmojis.RARE, description=f"3★ - 1,000+ {GameEmojis.HEARTS}"),
+            discord.SelectOption(label="Uncommon", value="uncommon", emoji=GameEmojis.UNCOMMON, description=f"2★ - 100+ {GameEmojis.HEARTS}"),
+            discord.SelectOption(label="Common", value="common", emoji=GameEmojis.COMMON, description=f"1★ - <100 {GameEmojis.HEARTS}"),
         ]
-        super().__init__(placeholder="Filter characters...", options=options, row=0)
+        super().__init__(placeholder="🎖️ Filter by Rarity...", options=options, row=0)
     
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.parent_view.user.id:
-            return await interaction.response.send_message("❌ Not your inventory!", ephemeral=True)
+            return await interaction.response.send_message(f"{GameEmojis.ERROR} Not your inventory!", ephemeral=True)
         
-        self.parent_view.filter_type = self.values[0]
+        self.parent_view.rarity_filter = self.values[0]
         self.parent_view.filtered_chars = self.parent_view._filter_characters()
         self.parent_view.max_pages = max(1, (len(self.parent_view.filtered_chars) + self.parent_view.per_page - 1) // self.parent_view.per_page)
         self.parent_view.page = 0
@@ -459,7 +723,35 @@ class InventoryFilterSelect(discord.ui.Select):
         for opt in self.options:
             opt.default = opt.value == self.values[0]
         
-        await interaction.response.edit_message(embed=self.parent_view.get_embed(), view=self.parent_view)
+        await interaction.response.edit_message(embed=await self.parent_view.get_embed(), view=self.parent_view)
+
+
+class InventoryGenderSelect(discord.ui.Select):
+    """Filter by gender."""
+    def __init__(self, parent_view):
+        self.parent_view = parent_view
+        options = [
+            discord.SelectOption(label="All Genders", value="all", emoji="👥", default=True),
+            discord.SelectOption(label="Waifu", value="female", emoji="♀️", description="Female characters"),
+            discord.SelectOption(label="Husbando", value="male", emoji="♂️", description="Male characters"),
+            discord.SelectOption(label="Unknown", value="unknown", emoji="⚧", description="Unknown gender"),
+        ]
+        super().__init__(placeholder="👤 Filter by Gender...", options=options, row=1)
+    
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.parent_view.user.id:
+            return await interaction.response.send_message(f"{GameEmojis.ERROR} Not your inventory!", ephemeral=True)
+        
+        self.parent_view.gender_filter = self.values[0]
+        self.parent_view.filtered_chars = self.parent_view._filter_characters()
+        self.parent_view.max_pages = max(1, (len(self.parent_view.filtered_chars) + self.parent_view.per_page - 1) // self.parent_view.per_page)
+        self.parent_view.page = 0
+        
+        # Update default selection
+        for opt in self.options:
+            opt.default = opt.value == self.values[0]
+        
+        await interaction.response.edit_message(embed=await self.parent_view.get_embed(), view=self.parent_view)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1150,7 +1442,7 @@ class SlotMachineView(discord.ui.View):
     @discord.ui.button(label="Play Again", style=discord.ButtonStyle.green, emoji="🎰")
     async def play_again(self, interaction: discord.Interaction, button: discord.ui.Button):
         if str(interaction.user.id) != self.user_id:
-            return await interaction.response.send_message("❌ This isn't your game!", ephemeral=True)
+            return await interaction.response.send_message(f"{GameEmojis.ERROR} This isn't your game!", ephemeral=True)
         
         # Check cooldown
         import time
@@ -1188,7 +1480,7 @@ class SlotMachineView(discord.ui.View):
     @discord.ui.button(label="Change Bet", style=discord.ButtonStyle.secondary, emoji="💰")
     async def change_bet(self, interaction: discord.Interaction, button: discord.ui.Button):
         if str(interaction.user.id) != self.user_id:
-            return await interaction.response.send_message("❌ This isn't your game!", ephemeral=True)
+            return await interaction.response.send_message(f"{GameEmojis.ERROR} This isn't your game!", ephemeral=True)
         
         modal = SlotBetModal(self.cog, self.user_id, self.guild_id)
         await interaction.response.send_modal(modal)

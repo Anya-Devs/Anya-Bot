@@ -1,171 +1,162 @@
-
-"""
-═════════════════════════════════════════════════════════════════════════════════════════════════════
-🎮 GAME CONSTANTS & CONFIGURATION
-═════════════════════════════════════════════════════════════════════════════════════════════════════"""
+"""Game Constants & Configuration"""
 
 import logging
 import json
+import random
 from pathlib import Path
 from datetime import timedelta
 from PIL import ImageFont
 import discord
 
-
-# ═══════════════════════════════════════════════════════════════
-# 📝 LOGGER SETUP
-# ═══════════════════════════════════════════════════════════════
-
 logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════
-# 🎨 LEGACY FONT CONFIGURATION (DEPRECATED)
-# ═══════════════════════════════════════════════════════════════
-
-# ⚠️ DEPRECATED: Font loading moved to fonts.py
-# Keeping for backward compatibility only
-FONT_DIR = Path(__file__).parent.parent.parent / "data" / "assets" / "fonts"
-EMOJI_FONT_PATH = FONT_DIR / "seguiemj.ttf"
-PRIMARY_FONT_PATH = FONT_DIR / "arial.ttf"
-
-def _load_emoji_font(size: int) -> ImageFont.ImageFont:
-    """
-    ⚠️ DEPRECATED: Use fonts._load_emoji_font() instead
-    
-    Legacy font loading function for backward compatibility.
-    This will be removed in a future update.
-    """
-    for font_path in (EMOJI_FONT_PATH, PRIMARY_FONT_PATH):
-        if font_path.exists():
-            try:
-                return ImageFont.truetype(str(font_path), size)
-            except OSError:
-                continue
-    return ImageFont.load_default()
-
-# ═══════════════════════════════════════════════════════════════
-# 📁 CONFIGURATION LOADING
+# CONFIGURATION LOADING
 # ═══════════════════════════════════════════════════════════════
 
 def load_config(filename: str) -> dict:
-    """
-    Load a JSON configuration file from the minigames directory.
-    
-    📁 PATH: data/commands/minigames/{filename}
-    
-    📏 PARAMETERS:
-        filename (str): Name of the JSON config file
-    
-    🔄 RETURNS:
-        dict: Loaded configuration or empty dict if failed
-    
-    ⚠️ ERROR HANDLING:
-        - Returns empty dict if file not found
-        - Logs errors for debugging
-        - Graceful fallback to defaults
-    """
+    """Load JSON config from data/commands/minigames/{filename}"""
     try:
-        # Fix the path calculation - go up 4 levels from utils/cogs/game to root
         path = Path(__file__).parent.parent.parent.parent / "data" / "commands" / "minigames" / filename
         if path.exists():
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
-        else:
-            # File doesn't exist, return empty dict silently
-            return {}
+        return {}
     except Exception as e:
         logger.error(f"Failed to load {filename}: {e}")
         return {}
 
 # ═══════════════════════════════════════════════════════════════
-# 🎰 GAMBLING CONFIGURATION
+# EMOJI CONSTANTS
 # ═══════════════════════════════════════════════════════════════
 
-# Load gambling game settings
+class GameEmojis:
+    """Centralized emoji constants for easy editing"""
+    
+    LEGENDARY = "🌟"
+    EPIC = "🟣"
+    RARE = "🔵"
+    UNCOMMON = "🟢"
+    COMMON = "⚪"
+    
+    CHERRY = "🍒"
+    LEMON = "🍋"
+    ORANGE = "🍊"
+    GRAPE = "🍇"
+    BELL = "🔔"
+    STAR = "⭐"
+    DIAMOND = "💎"
+    
+    GAME = "🎮"
+    SLOTS = "🎰"
+    DICE = "🎲"
+    CARDS = "🎴"
+    COIN = "🪙"
+    
+    SUCCESS = "✅"
+    ERROR = "❌"
+    WARNING = "⚠️"
+    INFO = "ℹ️"
+    LOADING = "⏳"
+    TIMER = "⏰"
+    
+    MONEY = "💰"
+    CREDIT_CARD = "💳"
+    CHART_DOWN = "📉"
+    CHART_UP = "📈"
+    HEARTS = "❤️"
+    
+    BOX = "📦"
+    SPARKLES = "✨"
+    GIFT = "🎁"
+    TROPHY = "🏆"
+    
+    FEMALE = "♀️"
+    MALE = "♂️"
+    NONBINARY = "⚧"
+    
+    FIRE = "🔥"
+    BOOM = "💥"
+    CELEBRATION = "🎉"
+    SKULL = "💀"
+
+RARITY_EMOJIS = {
+    "legendary": GameEmojis.LEGENDARY,
+    "epic": GameEmojis.EPIC,
+    "rare": GameEmojis.RARE,
+    "uncommon": GameEmojis.UNCOMMON,
+    "common": GameEmojis.COMMON,
+}
+
+# ═══════════════════════════════════════════════════════════════
+# GAMBLING CONFIGURATION
+# ═══════════════════════════════════════════════════════════════
+
 GAMBLING_CONFIG = load_config("gambling.json")
 
-# Slot machine symbols with weights and multipliers
 SLOT_SYMBOLS = GAMBLING_CONFIG.get("slots", {}).get("symbols", {
-    "🍒": {"name": "Cherry", "multiplier": 2, "weight": 30},    # Common - 30% chance
-    "🍋": {"name": "Lemon", "multiplier": 3, "weight": 25},      # Common - 25% chance  
-    "🍊": {"name": "Orange", "multiplier": 4, "weight": 20},     # Uncommon - 20% chance
-    "🍇": {"name": "Grape", "multiplier": 5, "weight": 15},      # Uncommon - 15% chance
-    "🔔": {"name": "Bell", "multiplier": 10, "weight": 7},       # Rare - 7% chance
-    "⭐": {"name": "Star", "multiplier": 25, "weight": 2},        # Epic - 2% chance
-    "💎": {"name": "Diamond", "multiplier": 50, "weight": 1},    # Legendary - 1% chance
+    "🍒": {"name": "Cherry", "multiplier": 2, "weight": 30},
+    "🍋": {"name": "Lemon", "multiplier": 3, "weight": 25},
+    "🍊": {"name": "Orange", "multiplier": 4, "weight": 20},
+    "🍇": {"name": "Grape", "multiplier": 5, "weight": 15},
+    "🔔": {"name": "Bell", "multiplier": 10, "weight": 7},
+    "⭐": {"name": "Star", "multiplier": 25, "weight": 2},
+    "💎": {"name": "Diamond", "multiplier": 50, "weight": 1},
 })
 
+SLOT_BG_COLOR = (30, 30, 40)
+SLOT_FRAME_COLOR = (255, 215, 0)
+SLOT_REEL_BG = (20, 20, 30)
+SLOT_TEXT_COLOR = (255, 255, 255)
+
+SLOT_SYMBOL_COLORS = {
+    "🍒": (220, 20, 60),
+    "🍋": (255, 255, 0),
+    "🍊": (255, 165, 0),
+    "🍇": (128, 0, 128),
+    "🔔": (255, 215, 0),
+    "⭐": (255, 255, 100),
+    "💎": (0, 191, 255),
+    "🥜": (139, 69, 19),
+}
+
 # ═══════════════════════════════════════════════════════════════
-# 🃏 CARD GAME RARITY SYSTEM
+# CARD GAME RARITY SYSTEM
 # ═══════════════════════════════════════════════════════════════
 
-# Rarity configuration for gacha and card games
-# Extremely difficult to get rares - designed for long-term collection
 RARITY_CONFIG = {
-    "common": {
-        "chance": 0.85, 
-        "color": discord.Color.light_grey(), 
-        "multiplier": 1, 
-        "stars": "⭐"
-    },
-    "uncommon": {
-        "chance": 0.12, 
-        "color": discord.Color.green(), 
-        "multiplier": 2, 
-        "stars": "⭐⭐"
-    },
-    "rare": {
-        "chance": 0.025, 
-        "color": discord.Color.blue(), 
-        "multiplier": 5, 
-        "stars": "⭐⭐⭐"
-    },
-    "epic": {
-        "chance": 0.004, 
-        "color": discord.Color.purple(), 
-        "multiplier": 15, 
-        "stars": "⭐⭐⭐⭐"
-    },
-    "legendary": {
-        "chance": 0.001, 
-        "color": discord.Color.gold(), 
-        "multiplier": 50, 
-        "stars": "⭐⭐⭐⭐⭐"
-    },
+    "common": {"chance": 0.85, "color": discord.Color.light_grey(), "multiplier": 1, "stars": "⭐"},
+    "uncommon": {"chance": 0.12, "color": discord.Color.green(), "multiplier": 2, "stars": "⭐⭐"},
+    "rare": {"chance": 0.025, "color": discord.Color.blue(), "multiplier": 5, "stars": "⭐⭐⭐"},
+    "epic": {"chance": 0.004, "color": discord.Color.purple(), "multiplier": 15, "stars": "⭐⭐⭐⭐"},
+    "legendary": {"chance": 0.001, "color": discord.Color.gold(), "multiplier": 50, "stars": "⭐⭐⭐⭐⭐"},
 }
 
 # ═══════════════════════════════════════════════════════════════
-# ⏰ FLEXIBLE TIMER SYSTEM
+# TIMER SYSTEM
 # ═══════════════════════════════════════════════════════════════
 
-# Timer configuration for different game commands
-# Each command can have: max_uses (usage limit), command_cooldown (short delay between uses), and cooldown (main cooldown after limit reached)
-# Only claim is a true daily command - others use usage-based limits
 TIMER_CONFIG = {
-    "pokemon": {"max_uses": 5, "command_cooldown": 5, "cooldown": 1800},      # 5 draws, 5s between, 30min cooldown after limit
-    "anime": {"max_uses": 5, "command_cooldown": 5, "cooldown": 1800},        # 5 draws, 5s between, 30min cooldown after limit  
-    "slots": {"max_uses": 3, "command_cooldown": 5, "cooldown": 1800},        # 3 plays, 5s between, 30min cooldown after limit
-    "dice": {"max_uses": 5, "command_cooldown": 5, "cooldown": 300},          # 5 rolls, 5s between, 5min cooldown after limit
-    "coinflip": {"max_uses": 5, "command_cooldown": 5, "cooldown": 300},      # 5 flips, 5s between, 5min cooldown after limit
-    "guess": {"max_uses": 5, "command_cooldown": 5, "cooldown": 600},         # 5 guesses, 5s between, 10min cooldown after limit
-    "hangman": {"max_uses": 20, "command_cooldown": 5, "cooldown": 300},      # 20 games, 5s between, 5min cooldown after limit
-    "wordle": {"max_uses": 10, "command_cooldown": 5, "cooldown": 1800},      # 10 games, 5s between, 30min cooldown after limit
-    "work": {"max_uses": 999, "command_cooldown": 5, "cooldown": 3600},       # Effectively unlimited, 5s between, 1h cooldown after limit
-    "job": {"max_uses": 10, "command_cooldown": 5, "cooldown": 3600},         # 10 applications, 5s between, 1h cooldown after limit
-    "rob": {"max_uses": 5, "command_cooldown": 5, "cooldown": 7200},          # 5 attempts, 5s between, 2h cooldown after limit
-    "crime": {"max_uses": 999, "command_cooldown": 5, "cooldown": 3600},      # Effectively unlimited, 5s between, 1h cooldown after limit
-    "gacha": {"max_uses": 5, "command_cooldown": 5, "cooldown": 1},       # 5 draws, 5s between, 30min cooldown after limit
-    "claim": {"max_uses": 1, "command_cooldown": 5, "cooldown": 86400},        # TRUE DAILY: 1 claim per day
+    "pokemon": {"max_uses": 3, "command_cooldown": 5, "cooldown": 1800},
+    "anime": {"max_uses": 5, "command_cooldown": 5, "cooldown": 1800},
+    "slots": {"max_uses": 3, "command_cooldown": 5, "cooldown": 1800},
+    "dice": {"max_uses": 5, "command_cooldown": 5, "cooldown": 300},
+    "coinflip": {"max_uses": 5, "command_cooldown": 5, "cooldown": 300},
+    "guess": {"max_uses": 5, "command_cooldown": 5, "cooldown": 600},
+    "hangman": {"max_uses": 20, "command_cooldown": 5, "cooldown": 300},
+    "wordle": {"max_uses": 10, "command_cooldown": 5, "cooldown": 1800},
+    "work": {"max_uses": 999, "command_cooldown": 5, "cooldown": 3600},
+    "job": {"max_uses": 10, "command_cooldown": 5, "cooldown": 3600},
+    "rob": {"max_uses": 5, "command_cooldown": 5, "cooldown": 7200},
+    "crime": {"max_uses": 3, "command_cooldown": 5, "cooldown": 3600},
+    "gacha": {"max_uses": 3, "command_cooldown": 5, "cooldown": 1800},
+    "claim": {"max_uses": 1, "command_cooldown": 5, "cooldown": 86400},
 }
 
-# Helper function to get timer config for a command
 def get_timer_config(command: str) -> dict:
-    """Get timer configuration for a specific command."""
     return TIMER_CONFIG.get(command, {"max_uses": 5, "command_cooldown": 5, "cooldown": 300})
 
-# Helper function to format cooldown message
 def format_cooldown_message(remaining: timedelta, command: str = "") -> str:
-    """Format a cooldown message with the remaining time."""
     total_seconds = int(remaining.total_seconds())
     hours, remainder = divmod(total_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
@@ -180,16 +171,11 @@ def format_cooldown_message(remaining: timedelta, command: str = "") -> str:
     command_name = command.replace("_", " ").title()
     return f"⏰ {command_name} is cooling down! Wait {time_str} before playing again."
 
-# Helper function to determine if command uses daily reset or cooldown reset
 def uses_daily_reset(command: str) -> bool:
-    """Determine if a command should reset daily or based on cooldown."""
     config = get_timer_config(command)
-    # Commands with 24+ hour cooldowns use daily reset
     return config["cooldown"] >= 86400
 
-# Helper function to get time period description
 def get_time_period_description(cooldown_seconds: int) -> str:
-    """Get human-readable time period description based on cooldown."""
     cooldown_hours = cooldown_seconds / 3600
     if cooldown_hours >= 24:
         return "per day"
@@ -200,166 +186,390 @@ def get_time_period_description(cooldown_seconds: int) -> str:
         return f"per {minutes} minute{'s' if minutes > 1 else ''}"
 
 # ═══════════════════════════════════════════════════════════════
-# 🎰 GACHA SYSTEM CONFIGURATION
+# GACHA SYSTEM
 # ═══════════════════════════════════════════════════════════════
 
-# Gacha rarity tiers with weights and visual styling
-# EXTREMELY RARE SYSTEM - designed for long-term collection goals
-# Total weight: 10,000 (for precise control)
 GACHA_RARITY_TIERS = {
-    "common": {"weight": 7000, "color": 0x9E9E9E, "stars": 1, "emoji": "⚪"},      # 70% chance
-    "uncommon": {"weight": 2500, "color": 0x4CAF50, "stars": 2, "emoji": "🟢"},    # 25% chance
-    "rare": {"weight": 400, "color": 0x2196F3, "stars": 3, "emoji": "🔵"},         # 4% chance (1 in 25)
-    "epic": {"weight": 90, "color": 0x9C27B0, "stars": 4, "emoji": "🟣"},          # 0.9% chance (1 in 111)
-    "legendary": {"weight": 10, "color": 0xFFD700, "stars": 5, "emoji": "🌟"},       # 0.1% chance (1 in 1000)
+    "common": {"weight": 850000, "color": 0x9E9E9E, "stars": 1, "emoji": GameEmojis.COMMON},
+    "uncommon": {"weight": 140000, "color": 0x4CAF50, "stars": 2, "emoji": GameEmojis.UNCOMMON},
+    "rare": {"weight": 9000, "color": 0x2196F3, "stars": 3, "emoji": GameEmojis.RARE},
+    "epic": {"weight": 900, "color": 0x9C27B0, "stars": 4, "emoji": GameEmojis.EPIC},
+    "legendary": {"weight": 100, "color": 0xFFD700, "stars": 5, "emoji": GameEmojis.LEGENDARY},
 }
 
-# Gacha rarity calculation thresholds - EXTREMELY STRICT
-# Popular characters become nearly impossible to obtain
-GACHA_RARITY_THRESHOLDS = {
-    "legendary": 50000,      # 50k+ favorites = base legendary
-    "epic": 25000,           # 25k-49k = base epic  
-    "rare": 10000,           # 10k-24k = base rare
-    "uncommon": 5000,        # 5k-9,999 = base uncommon
-    "common": 0,             # <5k = base common
+# Anime popularity thresholds (based on MAL members/AniList popularity)
+GACHA_ANIME_POPULARITY_THRESHOLDS = {
+    "legendary": 2000000,  # 2M+ members (Attack on Titan, Demon Slayer, Frieren)
+    "epic": 1000000,       # 1M+ members (Jujutsu Kaisen, Spy x Family)
+    "rare": 500000,        # 500K+ members (Popular seasonal anime)
+    "uncommon": 100000,    # 100K+ members (Well-known anime)
+    "common": 0,           # Everything else
 }
 
-# REVERSED RARITY SYSTEM - More likes = RARER character
-# Popular characters are now EXTREMELY rare to obtain
-
-# EXTREMELY DIFFICULT RARITY SYSTEM - Takes 1000+ tries for rares/legendaries
-# Popular characters are nearly impossible to obtain
-RARITY_CHANCES = {
-    "common": 0.60,
-    "uncommon": 0.30,
-    "rare": 0.08,
-    "epic": 0.015,
-    "legendary": 0.005,
-}
-
-POPULARITY_MULTIPLIERS = {
-    (0, 999):       [1.2, 1.0, 0.5, 0.1, 0.01],
-    (1000, 2999):   [0.9, 1.3, 2.0, 3.0, 5.0],
-    (3000, 5999):   [0.5, 0.8, 5.0, 15.0, 30.0],
-    (6000, 9999):   [0.2, 0.4, 8.0, 40.0, 100.0],
-    (10000, float('inf')): [0.05, 0.1, 5.0, 80.0, 300.0],
+# Character favorites thresholds (secondary factor)
+GACHA_CHARACTER_FAVORITES_THRESHOLDS = {
+    "legendary": 10000,
+    "epic": 5000,
+    "rare": 1000,
+    "uncommon": 100,
+    "common": 0,
 }
 
 GACHA_API_CONFIG = {
     "jikan": {
         "base_url": "https://api.jikan.moe/v4",
         "character_endpoint": "/characters/{}/full",
-        "timeout": 5,
-        "bias_toward_low_favorites": 0.99,
-        "low_id_range": (5001, 20000),  # Swapped for low favorites
-        "high_id_range": (1, 5000),     # Swapped for high favorites
+        "anime_endpoint": "/anime/{}",
+        "timeout": 2,  # Reduced for speed
+        # ID ranges for character fetching (lower IDs = older/more established)
+        "character_id_ranges": {
+            "legendary": (1, 5000),      # Very popular characters
+            "epic": (1, 15000),          # Popular characters
+            "rare": (1, 40000),          # Moderately known
+            "uncommon": (1, 80000),      # Less known
+            "common": (1, 150000),       # Any character
+        }
     },
     "anilist": {
         "base_url": "https://graphql.anilist.co",
-        "pool_query": '''
-        query ($page: Int, $perPage: Int) {
-            Page(page: $page, perPage: $perPage) {
-                characters(sort: FAVOURITES_DESC) {
+        # Query to get characters from anime with specific popularity ranges
+        "anime_query": '''
+        query ($popularityMin: Int, $popularityMax: Int) {
+            Page(page: 1, perPage: 50) {
+                media(type: ANIME, popularity_greater: $popularityMin, popularity_lesser: $popularityMax, sort: POPULARITY_DESC) {
                     id
-                    name { full }
-                    image { large }
-                    favourites
-                    gender
-                    media(sort: POPULARITY_DESC, perPage: 1) {
-                        nodes { title { romaji } }
+                    title { romaji }
+                    popularity
+                    characters(sort: FAVOURITES_DESC, perPage: 10) {
+                        nodes {
+                            id
+                            name { full }
+                            image { large }
+                            favourites
+                            gender
+                        }
                     }
                 }
             }
         }
         ''',
-        "timeout": 4,
-        "bias_toward_low_favorites": 0.99,
-        "low_page_range": (300, 1000),
-        "high_page_range": (1, 100)
+        "character_query": '''
+        query ($id: Int) {
+            Character(id: $id) {
+                id
+                name { full }
+                image { large }
+                favourites
+                gender
+                media(sort: POPULARITY_DESC, perPage: 1, type: ANIME) {
+                    nodes {
+                        id
+                        title { romaji }
+                        popularity
+                        members
+                    }
+                }
+            }
+        }
+        ''',
+        "timeout": 2,  # Reduced for speed
+        # Popularity ranges for anime (higher = more popular)
+        "anime_popularity_ranges": {
+            "legendary": (200000, 999999),  # Extremely popular anime
+            "epic": (100000, 199999),       # Very popular anime
+            "rare": (50000, 99999),         # Popular anime
+            "uncommon": (20000, 49999),     # Moderately popular
+            "common": (1, 19999),           # Less popular
+        }
     },
-    "kitsu": {
-        "base_url": "https://kitsu.io/api/edge",
-        "character_endpoint": "/characters",
-        "timeout": 5,
-        "bias_toward_low_favorites": 0.99,
-        "low_offset_range": (5000, 15000),
-        "high_offset_range": (0, 5000),
-        "include_media": "mediaCharacters.media"
-    }
 }
 
 GACHA_COST = 50
 GACHA_CARDS_PER_DRAW = 3
 GACHA_CLAIM_TIMEOUT = 30
 
-COLLECTION_FILE = "data/cogs/games/gacha/collection.json"
-
 # ═══════════════════════════════════════════════════════════════
-# 🎰 SLOT MACHINE VISUAL CONFIGURATION
+# GACHA HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════
 
-# Slot machine color scheme
-SLOT_BG_COLOR = (30, 30, 40)          # Dark background
-SLOT_FRAME_COLOR = (255, 215, 0)     # Gold frame
-SLOT_REEL_BG = (20, 20, 30)          # Reel background
-SLOT_TEXT_COLOR = (255, 255, 255)    # White text
+def roll_gacha_rarity() -> str:
+    roll = random.randint(1, 1000000)
+    cumulative = 0
+    for rarity in ["legendary", "epic", "rare", "uncommon", "common"]:
+        cumulative += GACHA_RARITY_TIERS[rarity]["weight"]
+        if roll <= cumulative:
+            return rarity
+    return "common"
 
-# Slot symbol colors for visual rendering
-SLOT_SYMBOL_COLORS = {
-    "🍒": (220, 20, 60),    # Cherry - Red
-    "🍋": (255, 255, 0),    # Lemon - Yellow
-    "🍊": (255, 165, 0),    # Orange - Orange
-    "🍇": (128, 0, 128),    # Grape - Purple
-    "🔔": (255, 215, 0),    # Bell - Gold
-    "⭐": (255, 255, 100),  # Star - Light Yellow
-    "💎": (0, 191, 255),    # Diamond - Blue
-    "🥜": (139, 69, 19),    # Peanut - Brown
-}
+def get_rarity_from_anime_popularity(popularity: int) -> str:
+    """Determine rarity based on anime popularity (primary factor).
+    Higher popularity = rarer character.
+    """
+    if popularity >= GACHA_ANIME_POPULARITY_THRESHOLDS["legendary"]:
+        return "legendary"
+    elif popularity >= GACHA_ANIME_POPULARITY_THRESHOLDS["epic"]:
+        return "epic"
+    elif popularity >= GACHA_ANIME_POPULARITY_THRESHOLDS["rare"]:
+        return "rare"
+    elif popularity >= GACHA_ANIME_POPULARITY_THRESHOLDS["uncommon"]:
+        return "uncommon"
+    return "common"
+
+def get_rarity_from_favorites(favorites: int) -> str:
+    """Determine rarity based on character favorites (secondary factor)."""
+    if favorites >= GACHA_CHARACTER_FAVORITES_THRESHOLDS["legendary"]:
+        return "legendary"
+    elif favorites >= GACHA_CHARACTER_FAVORITES_THRESHOLDS["epic"]:
+        return "epic"
+    elif favorites >= GACHA_CHARACTER_FAVORITES_THRESHOLDS["rare"]:
+        return "rare"
+    elif favorites >= GACHA_CHARACTER_FAVORITES_THRESHOLDS["uncommon"]:
+        return "uncommon"
+    return "common"
+
+def get_combined_rarity(anime_popularity: int, char_favorites: int) -> str:
+    """Fast rarity calculation using anime popularity (70%) + character favorites (30%).
+    Optimized for speed with direct threshold checks.
+    """
+    # Direct threshold checks - faster than string comparisons
+    anime_score = (
+        5 if anime_popularity >= 2000000 else
+        4 if anime_popularity >= 1000000 else
+        3 if anime_popularity >= 500000 else
+        2 if anime_popularity >= 100000 else 1
+    )
+    
+    char_score = (
+        5 if char_favorites >= 10000 else
+        4 if char_favorites >= 5000 else
+        3 if char_favorites >= 1000 else
+        2 if char_favorites >= 100 else 1
+    )
+    
+    # Weighted average: 70% anime, 30% character
+    combined_score = (anime_score * 0.7) + (char_score * 0.3)
+    
+    # Direct return - fastest path
+    return (
+        "legendary" if combined_score >= 4.5 else
+        "epic" if combined_score >= 3.5 else
+        "rare" if combined_score >= 2.5 else
+        "uncommon" if combined_score >= 1.5 else
+        "common"
+    )
+
+def matches_target_rarity(actual_rarity: str, target_rarity: str) -> bool:
+    """Fast rarity matching check - single function for all validation."""
+    if target_rarity == "legendary":
+        return actual_rarity == "legendary"
+    elif target_rarity == "epic":
+        return actual_rarity in ("epic", "rare")
+    elif target_rarity == "rare":
+        return actual_rarity in ("rare", "uncommon")
+    elif target_rarity == "uncommon":
+        return actual_rarity in ("uncommon", "common", "rare")
+    else:  # common
+        return actual_rarity in ("common", "uncommon")
+
+def get_gacha_rates_display() -> str:
+    return (
+        f"{GameEmojis.LEGENDARY} **5★ Legendary** - 0.01% (1/10,000)\n"
+        f"{GameEmojis.EPIC} **4★ Epic** - 0.09% (1/1,111)\n"
+        f"{GameEmojis.RARE} **3★ Rare** - 0.9% (1/111)\n"
+        f"{GameEmojis.UNCOMMON} **2★ Uncommon** - 14%\n"
+        f"{GameEmojis.COMMON} **1★ Common** - 85%"
+    )
+
+def generate_uid() -> str:
+    import uuid
+    return uuid.uuid4().hex[:8].upper()
+
+def calculate_release_value(favorites: int, rarity: str, char_name: str = "unknown") -> int:
+    import hashlib
+    
+    base_values = {"common": 20, "uncommon": 50, "rare": 120, "epic": 300, "legendary": 750}
+    base = base_values.get(rarity, 20)
+    
+    if favorites == 0:
+        favorites_bonus = 0
+    elif favorites <= 50:
+        favorites_bonus = favorites * 0.5
+    elif favorites <= 200:
+        favorites_bonus = 25 + (favorites - 50) * 1
+    elif favorites <= 1000:
+        favorites_bonus = 125 + (favorites - 200) * 1.5
+    elif favorites <= 5000:
+        favorites_bonus = 775 + (favorites - 1000) * 2
+    else:
+        favorites_bonus = 5775 + (favorites - 5000) * 3
+    
+    rarity_multipliers = {"common": 1.0, "uncommon": 1.1, "rare": 1.2, "epic": 1.3, "legendary": 1.5}
+    favorites_bonus = int(favorites_bonus * rarity_multipliers.get(rarity, 1.0))
+    
+    seed_input = f"{char_name}_{favorites}_{rarity}_{base}"
+    hash_object = hashlib.md5(seed_input.encode())
+    seed_value = int(hash_object.hexdigest()[:8], 16)
+    random.seed(seed_value)
+    random_factor = random.uniform(0.8, 1.2)
+    random_bonus = int(base * (random_factor - 1.0))
+    random.seed()
+    
+    total_value = base + favorites_bonus + random_bonus
+    return max(100, min(total_value, 50000))
 
 # ═══════════════════════════════════════════════════════════════
-# 📋 CLASSIC GAMES CONFIGURATION
+# API FETCH FUNCTIONS
 # ═══════════════════════════════════════════════════════════════
 
-# Load classic game settings
+async def fetch_jikan_character(session, target_rarity: str):
+    """Fast Jikan API fetch - optimized for speed with parallel requests."""
+    config = GACHA_API_CONFIG["jikan"]
+    id_ranges = config.get("character_id_ranges", {})
+    id_range = id_ranges.get(target_rarity, (1, 150000))
+    timeout = config["timeout"]
+    
+    # Try fewer attempts but faster
+    max_attempts = 8
+    for attempt in range(max_attempts):
+        cid = random.randint(*id_range)
+        char_url = config["base_url"] + config["character_endpoint"].format(cid)
+        
+        try:
+            async with session.get(char_url, timeout=timeout) as resp:
+                if resp.status != 200:
+                    continue
+                data = await resp.json()
+                c = data.get("data")
+                if not c:
+                    continue
+
+                favorites = c.get("favorites", 0)
+                name = c.get("name", "Unknown")
+                gender = "Unknown"
+                anime_title = "Unknown Anime"
+                anime_members = 0
+                
+                # Get anime info
+                if c.get("anime") and len(c["anime"]) > 0:
+                    anime_data = c["anime"][0]
+                    anime_title = anime_data.get("title", anime_title)
+                    anime_mal_id = anime_data.get("mal_id")
+                    
+                    # Fetch anime details
+                    if anime_mal_id:
+                        anime_url = config["base_url"] + config["anime_endpoint"].format(anime_mal_id)
+                        try:
+                            async with session.get(anime_url, timeout=timeout) as anime_resp:
+                                if anime_resp.status == 200:
+                                    anime_full = await anime_resp.json()
+                                    anime_members = anime_full.get("data", {}).get("members", 0)
+                        except:
+                            pass
+
+                # Fast rarity check using consolidated function
+                char_rarity = get_combined_rarity(anime_members, favorites)
+                if not matches_target_rarity(char_rarity, target_rarity):
+                    continue
+
+                return {
+                    "id": cid,
+                    "name": name,
+                    "anime": anime_title,
+                    "anime_popularity": anime_members,
+                    "favorites": favorites,
+                    "gender": gender,
+                    "image_url": c.get("images", {}).get("jpg", {}).get("image_url"),
+                    "api_source": "Jikan"
+                }
+        except:
+            continue
+    
+    return None
+
+async def fetch_anilist_character(session, target_rarity: str):
+    """Fast AniList API fetch - optimized for speed."""
+    config = GACHA_API_CONFIG["anilist"]
+    popularity_ranges = config.get("anime_popularity_ranges", {})
+    pop_range = popularity_ranges.get(target_rarity, (1, 19999))
+    timeout = config["timeout"]
+    
+    # Try fewer attempts but faster
+    max_attempts = 8
+    for attempt in range(max_attempts):
+        try:
+            variables = {
+                "popularityMin": pop_range[0],
+                "popularityMax": pop_range[1]
+            }
+            
+            async with session.post(
+                config["base_url"],
+                json={"query": config["anime_query"], "variables": variables},
+                timeout=timeout
+            ) as resp:
+                if resp.status != 200:
+                    continue
+                result = await resp.json()
+                anime_list = result.get("data", {}).get("Page", {}).get("media", [])
+                if not anime_list:
+                    continue
+
+                anime = random.choice(anime_list)
+                anime_title = anime["title"]["romaji"]
+                anime_popularity = anime.get("popularity", 0)
+                
+                characters = anime.get("characters", {}).get("nodes", [])
+                if not characters:
+                    continue
+                
+                c = random.choice(characters)
+                gender = c.get("gender", "Unknown")
+                if gender:
+                    gender = gender.title()
+
+                favorites = c.get("favourites", 0)
+                
+                # Fast rarity check using consolidated function
+                char_rarity = get_combined_rarity(anime_popularity, favorites)
+                if not matches_target_rarity(char_rarity, target_rarity):
+                    continue
+
+                return {
+                    "id": c.get("id"),
+                    "name": c["name"]["full"],
+                    "anime": anime_title,
+                    "anime_popularity": anime_popularity,
+                    "favorites": favorites,
+                    "gender": gender or "Unknown",
+                    "image_url": c["image"]["large"],
+                    "api_source": "AniList"
+                }
+        except:
+            continue
+    
+    return None
+
+# ═══════════════════════════════════════════════════════════════
+# CLASSIC GAMES & ECONOMY
+# ═══════════════════════════════════════════════════════════════
+
 CLASSIC_CONFIG = load_config("classic.json")
-
-# Load economy system settings
 GROUNDED_CONFIG = load_config("grounded.json")
 
 # ═══════════════════════════════════════════════════════════════
-# 🔄 LEGACY COMPATIBILITY & MIGRATION NOTES
+# LEGACY COMPATIBILITY
 # ═══════════════════════════════════════════════════════════════
 
-"""
-📝 MIGRATION GUIDE:
+FONT_DIR = Path(__file__).parent.parent.parent / "data" / "assets" / "fonts"
+EMOJI_FONT_PATH = FONT_DIR / "seguiemj.ttf"
+PRIMARY_FONT_PATH = FONT_DIR / "arial.ttf"
 
-This file is being restructured for better maintainability:
-
-✅ COMPLETED:
-    • Font loading moved to fonts.py
-    • Added comprehensive documentation
-    • Organized constants by category
-
-🔄 IN PROGRESS:
-    • Moving game-specific configs to separate modules
-    • Standardizing configuration format
-
-📋 PLANNED:
-    • Split into multiple config files by game type
-    • Add configuration validation
-    • Implement hot-reloading for config changes
-
-⚠️ DEPRECATION NOTICES:
-    • Direct font imports from this file - use fonts.py instead
-    • Hardcoded game constants - move to config files
-    • Mixed configuration formats - standardize to JSON
-
-🎯 RECOMMENDATIONS:
-    • Use fonts._load_emoji_font() for new code
-    • Store game-specific settings in respective config files
-    • Follow the established naming conventions
-"""
-
-# ═══════════════════════════════════════════════════════════════
-# 🚀 END OF CONSTANTS FILE
-# ═══════════════════════════════════════════════════════════════
+def _load_emoji_font(size: int) -> ImageFont.ImageFont:
+    """DEPRECATED: Use fonts._load_emoji_font() instead"""
+    for font_path in (EMOJI_FONT_PATH, PRIMARY_FONT_PATH):
+        if font_path.exists():
+            try:
+                return ImageFont.truetype(str(font_path), size)
+            except OSError:
+                continue
+    return ImageFont.load_default()

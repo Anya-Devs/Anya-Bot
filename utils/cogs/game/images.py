@@ -1995,12 +1995,7 @@ async def generate_crime_scene_image(
     center_y = height // 2
     
     if success:
-        # Money flying from victim to robber
-        draw.text((center_x - 20, center_y - 20), "💰", font=big_font, fill=(255, 255, 255))
-        draw.text((center_x + 5, center_y - 5), "💵", font=font, fill=(255, 255, 255))
-        draw.text((center_x - 10, center_y + 5), "💸", font=font, fill=(255, 255, 255))
-        
-        # Arrow
+        # Arrow showing money transfer
         draw.line([(victim_x - 20, center_y), (robber_x + avatar_size + 20, center_y)], 
                  fill=accent, width=3)
         # Arrow head

@@ -10,6 +10,7 @@ from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timezone, timedelta
 import asyncio
 import logging
+from .multisearch import MultiSourceImageSearch
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ class CoverArtSystem:
     def __init__(self, quest_data):
         self.quest_data = quest_data
         self.session = None
+        self.multi_search = MultiSourceImageSearch()
         
     async def get_session(self):
         """Get or create aiohttp session"""
@@ -30,72 +32,21 @@ class CoverArtSystem:
         return self.session
     
     async def search_cover_art(self, character_name: str, series_name: str = None, page: int = 1, limit: int = 30) -> Tuple[List[Dict], int]:
-        """Search for cover art using Danbooru and Safebooru with unlimited pagination"""
-        session = await self.get_session()
-        all_images = []
+        """Search for cover art using multiple sources with deduplication"""
+        logger.info(f"[Cover Art] Searching: '{character_name}' from '{series_name}' (page {page})")
         
-        # Format character name for Danbooru/Safebooru (underscores for spaces)
-        formatted_character = character_name.replace(' ', '_').lower()
-        
-        # Build search terms in proper Danbooru format
-        search_terms = [formatted_character]
-        
-        # Add series in parentheses if provided
-        if series_name:
-            # Clean and format series name
-            cleaned_series = self._clean_series_name(series_name)
-            if cleaned_series:
-                search_terms[0] = f"{formatted_character}_({cleaned_series})"
-        
-        # Add safety filters
-        search_terms.extend(["rating:safe", "-ai_generated"])
-        
-        search_query = " ".join(search_terms)
-        
-        # Try to get total count first for max page detection
-        max_pages = 100  # Default high value
         try:
-            # Quick count query to determine actual max pages
-            count_params = {
-                'tags': search_query,
-                'limit': 1,
-                'page': 1,
-                'format': 'json'
-            }
+            # Use multi-source search with deduplication
+            images, max_pages = await self.multi_search.search_all_sources(
+                character_name, series_name, page, limit
+            )
             
-            async with session.get('https://danbooru.donmai.us/posts.json', params=count_params) as resp:
-                if resp.status == 200:
-                    # Check if there are more pages by trying page 1000
-                    test_params = count_params.copy()
-                    test_params['page'] = 1000
-                    
-                    async with session.get('https://danbooru.donmai.us/posts.json', params=test_params) as test_resp:
-                        if test_resp.status == 200:
-                            test_data = await test_resp.json()
-                            if not test_data:  # No results on page 1000, so max is less
-                                # Binary search for actual max page
-                                max_pages = await self._find_max_pages(session, search_query, 1000)
-                        else:
-                            max_pages = await self._find_max_pages(session, search_query, 1000)
+            logger.info(f"[Cover Art] Found {len(images)} unique images from multiple sources")
+            return images, max_pages
+            
         except Exception as e:
-            logger.debug(f"Error detecting max pages: {e}")
-        
-        # Fetch images with organized traffic management
-        try:
-            danbooru_images = await self._search_danbooru_fast(search_query, page, limit)
-            all_images.extend(danbooru_images)
-        except Exception as e:
-            logger.error(f"Danbooru search error: {e}")
-        
-        # Try Safebooru as backup
-        if len(all_images) < limit:
-            try:
-                safebooru_images = await self._search_safebooru_fast(search_query, page, limit - len(all_images))
-                all_images.extend(safebooru_images)
-            except Exception as e:
-                logger.error(f"Safebooru search error: {e}")
-        
-        return all_images[:limit], max_pages
+            logger.error(f"[Cover Art] Multi-source search error: {e}", exc_info=True)
+            return [], 1
     
     def _clean_series_name(self, series_name: str) -> str:
         """Clean and format series name for Danbooru search"""
@@ -380,54 +331,66 @@ class CoverArtSystem:
         return processed
     
     async def create_cover_art_embeds(
-     self,
-     character: Dict,
-     images: List[Dict],
-     page: int = 1,
-     total_pages: int = 1 ) -> List[discord.Embed]:
+        self,
+        character: Dict,
+        images: List[Dict],
+        page: int = 1,
+        total_pages: int = 1
+    ) -> List[discord.Embed]:
+        """Create embeds for cover art display with clear UID and character info"""
+        try:
+            char_name = character.get("name", "Unknown")
+            rarity = character.get("rarity", "common")
+            uid = character.get("uid", "UNKNOWN")
+            series = character.get("anime", "Unknown")
 
-      try:
-        char_name = character.get("name", "Unknown")
-        rarity = character.get("rarity", "common")
-        uid = character.get("uid", "UNKNOWN")
+            from ..const import GACHA_RARITY_TIERS
+            rarity_data = GACHA_RARITY_TIERS.get(rarity, GACHA_RARITY_TIERS["common"])
 
-        from ..const import GACHA_RARITY_TIERS
-        rarity_data = GACHA_RARITY_TIERS.get(rarity, GACHA_RARITY_TIERS["common"])
+            costs = {
+                "common": 100,
+                "uncommon": 200,
+                "rare": 500,
+                "epic": 1000,
+                "legendary": 2000,
+            }
+            cost = costs.get(rarity, 100)
 
-        costs = {
-            "common": 100,
-            "uncommon": 200,
-            "rare": 500,
-            "epic": 1000,
-            "legendary": 2000,
-        }
-        cost = costs.get(rarity, 100)
+            embeds: List[discord.Embed] = []
+            is_search_mode = uid == "SEARCH"
 
-        embeds: List[discord.Embed] = []
+            for i, img in enumerate(images[:3], start=1):
+                # Create embed with character info in title
+                if is_search_mode:
+                    title = f"🔍 {char_name} - Option {i}"
+                    description = f"*{series}*\n**Preview Only** - Own this character to purchase"
+                else:
+                    title = f"🎨 {char_name} [`{uid.upper()}`] - Option {i}"
+                    description = f"*{series}* • {rarity_data['emoji']} {rarity.title()} • Cost: **{cost}** pts"
+                
+                embed = discord.Embed(
+                    title=title,
+                    description=description,
+                    color=rarity_data["color"]
+                )
 
-        for i, img in enumerate(images[:3], start=1):
-            embed = discord.Embed(color=rarity_data["color"])
+                if img.get("preview_url"):
+                    embed.set_image(url=img["preview_url"])
 
-            if img.get("preview_url"):
-                embed.set_image(url=img["preview_url"])
+                # Footer with buy info and score
+                if is_search_mode:
+                    footer_text = f"Page {page}/{total_pages} • ID: {img['id']} • Score: {img['score']}"
+                else:
+                    footer_text = f"Page {page}/{total_pages} • Buy: .cover buy {uid.upper()} {img['id']}"
+                
+                embed.set_footer(text=footer_text)
+                embeds.append(embed)
 
-            # Footer with buy info and score (different for search vs gallery)
-            if uid == "SEARCH":
-                # Search mode - show ID and score, but can't buy directly
-                footer_text = f"ID: {img['id']} • Score: {img['score']} • Use .cover gallery <UID> to purchase"
-            else:
-                # Gallery mode - show actual buy command
-                footer_text = f"ID: {img['id']} • Score: {img['score']} • Buy: .cover buy {uid} {img['id']}"
-            
-            embed.set_footer(text=footer_text)
+            return embeds
 
-            embeds.append(embed)
-
-        return embeds
-
-      except Exception as e:
-        print(f"Error creating cover art embeds: {e}")
-        return []
+        except Exception as e:
+            logger.error(f"Error creating cover art embeds: {e}")
+            return []
 
     async def purchase_cover_art(self, user_id: str, guild_id: str, character_uid: str, image_id: int, custom_name: str = None) -> Tuple[bool, str]:
         """Purchase cover art for a character and store in database"""
@@ -565,6 +528,53 @@ class CoverArtSystem:
         
         return []
     
+    async def set_active_cover_art(self, user_id: str, guild_id: str, character_uid: str, image_id: int) -> bool:
+        """Set cover art as active for a character"""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            
+            # Get the character to find the cover art URL
+            char = await self._get_character(user_id, guild_id, character_uid)
+            if not char or not char.get('cover_art'):
+                return False
+            
+            # Mark as active
+            await server_col.update_one(
+                {"guild_id": guild_id},
+                {"$set": {
+                    f"members.{user_id}.gacha_inventory.$[elem].active_cover_id": image_id,
+                    f"members.{user_id}.gacha_inventory.$[elem].active_cover_url": char['cover_art'].get('image_url', '')
+                }},
+                array_filters=[{"elem.uid": character_uid.upper()}]
+            )
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error setting active cover art: {e}", exc_info=True)
+            return False
+    
+    async def get_active_cover_art_url(self, user_id: str, guild_id: str, character_uid: str) -> Optional[str]:
+        """Get the active cover art URL for a character from gacha_inventory"""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.gacha_inventory": 1}
+            )
+            
+            if result:
+                inventory = result.get("members", {}).get(user_id, {}).get("gacha_inventory", [])
+                for char in inventory:
+                    if char.get("uid", "").upper() == character_uid.upper():
+                        return char.get('active_cover_url')
+        except Exception as e:
+            logger.error(f"Error getting active cover art URL: {e}")
+        
+        return None
+    
     async def get_selected_cover_art(self, user_id: str, guild_id: str, character_uid: str) -> Optional[Dict]:
         """Get the selected cover art for a character"""
         try:
@@ -579,11 +589,24 @@ class CoverArtSystem:
         return None
     
     async def _get_character(self, user_id: str, guild_id: str, uid: str) -> Optional[Dict]:
-        """Get character from user's inventory"""
+        """Get character from user's inventory - checks both gacha_inventory and characters"""
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
             
+            # First check gacha_inventory (primary storage)
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.gacha_inventory": 1}
+            )
+            
+            if result:
+                inventory = result.get("members", {}).get(user_id, {}).get("gacha_inventory", [])
+                for char in inventory:
+                    if char.get("uid", "").upper() == uid.upper():
+                        return char
+            
+            # Fallback: check characters collection
             result = await server_col.find_one(
                 {"guild_id": guild_id},
                 {f"members.{user_id}.characters.{uid.lower()}": 1}
@@ -621,7 +644,7 @@ class CoverArtView(discord.ui.View):
         # Set the jump button label dynamically
         for child in self.children:
             if child.custom_id == "jump_page":
-                child.label = f"< {self.current_page}/{self.total_pages} >"
+                child.label = f"{self.current_page}/{self.total_pages}"
                 break
     
     async def on_timeout(self):
@@ -660,7 +683,7 @@ class CoverArtView(discord.ui.View):
                 # Update jump button label
                 for child in self.children:
                     if child.custom_id == "jump_page":
-                        child.label = f"< {self.current_page}/{self.total_pages} >"
+                        child.label = f"{self.current_page}/{self.total_pages}"
                         break
                 
                 await interaction.message.edit(embeds=embeds, view=self)
@@ -702,7 +725,7 @@ class CoverArtView(discord.ui.View):
                 # Update jump button label
                 for child in self.children:
                     if child.custom_id == "jump_page":
-                        child.label = f"< {self.current_page}/{self.total_pages} >"
+                        child.label = f"{self.current_page}/{self.total_pages}"
                         break
                 
                 await interaction.message.edit(embeds=embeds, view=self)
@@ -715,7 +738,7 @@ class CoverArtView(discord.ui.View):
             button.disabled = False
             await interaction.message.edit(view=self)
     
-    @discord.ui.button(label="< page/max >", style=discord.ButtonStyle.secondary, custom_id="jump_page")
+    @discord.ui.button(label="page/max", style=discord.ButtonStyle.secondary, custom_id="jump_page")
     async def jump_to_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Jump to a specific page"""
         # Create a modal for page input
@@ -752,7 +775,7 @@ class CoverArtView(discord.ui.View):
                     )
                     
                     # Update jump button label
-                    button.label = f"< {self.current_page}/{self.total_pages} >"
+                    button.label = f"{self.current_page}/{self.total_pages}"
                     
                     await interaction.message.edit(embeds=embeds, view=self)
                     await interaction.followup.send(f"Jumped to page {target_page}!", ephemeral=True)
@@ -763,37 +786,6 @@ class CoverArtView(discord.ui.View):
                 logger.error(f"Error jumping to page: {e}")
                 await interaction.followup.send("Error jumping to page!", ephemeral=True)
     
-    @discord.ui.button(label="🔀 Randomize", style=discord.ButtonStyle.blurple, custom_id="randomize")
-    async def randomize_order(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Randomize the order of current images"""
-        import random
-        
-        # Disable button temporarily
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
-        
-        try:
-            # Randomize current images order
-            random.shuffle(self.current_images)
-            self.randomized = not self.randomized  # Toggle state
-            
-            # Update embeds with randomized images
-            embeds = await self.cover_system.create_cover_art_embeds(
-                self.character, self.current_images, self.current_page, self.total_pages
-            )
-            
-            # Update button label to reflect state
-            button.label = "🔀 Unshuffle" if self.randomized else "🔀 Randomize"
-            
-            await interaction.message.edit(embeds=embeds, view=self)
-            await interaction.followup.send(f"{'🔀 Images randomized!' if self.randomized else '🔀 Images restored to original order!'}", ephemeral=True)
-            
-        except Exception as e:
-            logger.error(f"Error randomizing images: {e}")
-            await interaction.followup.send("Error randomizing images!", ephemeral=True)
-        finally:
-            button.disabled = False
-            await interaction.message.edit(view=self)
     
     @discord.ui.button(label="🔍 View Details", style=discord.ButtonStyle.green, custom_id="view_details")
     async def view_details(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -817,20 +809,6 @@ class CoverArtView(discord.ui.View):
         
         await interaction.response.send_message(embed=details_embed, ephemeral=True)
     
-    @discord.ui.button(label="🛍️ Buy Option 1", style=discord.ButtonStyle.green, custom_id="buy_1")
-    async def buy_option_1(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Purchase first cover art option"""
-        await self._purchase_option(interaction, 0)
-    
-    @discord.ui.button(label="🛍️ Buy Option 2", style=discord.ButtonStyle.green, custom_id="buy_2")
-    async def buy_option_2(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Purchase second cover art option"""
-        await self._purchase_option(interaction, 1)
-    
-    @discord.ui.button(label="🛍️ Buy Option 3", style=discord.ButtonStyle.green, custom_id="buy_3")
-    async def buy_option_3(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Purchase third cover art option"""
-        await self._purchase_option(interaction, 2)
 
 
 class CoverArtSearchView(discord.ui.View):
@@ -846,222 +824,152 @@ class CoverArtSearchView(discord.ui.View):
         self.current_page = current_page
         self.total_pages = total_pages
         self.message = None
-        self.randomized = False  # Track if current order is randomized
+        self.current_display_index = 0  # Which image is currently displayed
         
-        # Set the jump button label dynamically
+        # Update page button label
+        self._update_page_label()
+    
+    def _update_page_label(self):
+        """Update the page button label"""
         for child in self.children:
-            if child.custom_id == "jump_page":
-                child.label = f"< {self.current_page}/{self.total_pages} >"
+            if child.custom_id == "page_info":
+                child.label = f"Page {self.current_page}/{self.total_pages}"
                 break
+    
+    def _create_embed(self) -> discord.Embed:
+        """Create single clean embed for current images"""
+        char_name = self.character.get('name', 'Unknown')
+        series_name = self.character.get('anime', 'Unknown')
+        
+        embed = discord.Embed(
+            title=f"🔍 {char_name}",
+            description=f"*{series_name}* • Page {self.current_page}/{self.total_pages}\n"
+                        f"Found **{len(self.current_images)}** images",
+            color=discord.Color.purple()
+        )
+        
+        # Show first 3 images as options
+        for i, img in enumerate(self.current_images[:3], 1):
+            embed.add_field(
+                name=f"🖼️ Option {i}",
+                value=f"**ID:** `{img['id']}`\n"
+                      f"**Source:** {img['source']}\n"
+                      f"**Score:** {img['score']} • {img['width']}x{img['height']}",
+                inline=True
+            )
+        
+        # Set currently displayed image
+        if self.current_images and self.current_display_index < len(self.current_images):
+            img = self.current_images[self.current_display_index]
+            if img.get('preview_url'):
+                embed.set_image(url=img['preview_url'])
+        
+        embed.set_footer(text="Use .cover gallery <UID> to purchase for your character")
+        return embed
     
     async def on_timeout(self):
         """Disable buttons when view times out"""
         for child in self.children:
             child.disabled = True
         if self.message:
-            await self.message.edit(view=self)
+            try:
+                await self.message.edit(view=self)
+            except:
+                pass
     
-    @discord.ui.button(label="◀️", style=discord.ButtonStyle.grey, custom_id="prev_page")
+    @discord.ui.button(label="◀️", style=discord.ButtonStyle.grey, custom_id="prev_page", row=0)
     async def previous_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Go to previous page"""
         if self.current_page <= 1:
             await interaction.response.send_message("You're already on the first page!", ephemeral=True)
             return
         
-        # Disable button temporarily
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
+        await interaction.response.defer()
         
         try:
-            # Fetch previous page with fast loading
             char_name = self.character.get('name', '')
             series_name = self.character.get('anime', '')
-            new_images, _ = await self.cover_system.search_cover_art(char_name, series_name, self.current_page - 1, 30)
+            new_images, _ = await self.cover_system.search_cover_art(char_name, series_name, self.current_page - 1, 9)
             
             if new_images:
                 self.current_page -= 1
                 self.current_images = new_images
-                
-                # Update embeds
-                embeds = await self.cover_system.create_cover_art_embeds(
-                    self.character, new_images, self.current_page, self.total_pages
-                )
-                
-                # Add search-specific footer to each embed
-                for embed in embeds:
-                    embed.set_footer(text=f"Page {self.current_page}/{self.total_pages} • Browse only • Use .cover gallery <UID> to purchase!")
-                
-                # Update jump button label
-                for child in self.children:
-                    if child.custom_id == "jump_page":
-                        child.label = f"< {self.current_page}/{self.total_pages} >"
-                        break
-                
-                await interaction.message.edit(embeds=embeds, view=self)
+                self.current_display_index = 0
+                self._update_page_label()
+                await interaction.message.edit(embed=self._create_embed(), view=self)
             else:
                 await interaction.followup.send("No more images available!", ephemeral=True)
         except Exception as e:
             logger.error(f"Error loading previous page: {e}")
-            await interaction.followup.send("Error loading previous page!", ephemeral=True)
-        finally:
-            button.disabled = False
-            await interaction.message.edit(view=self)
+            await interaction.followup.send("Error loading page!", ephemeral=True)
     
-    @discord.ui.button(label="▶️", style=discord.ButtonStyle.grey, custom_id="next_page")
+    @discord.ui.button(label="Page 1/1", style=discord.ButtonStyle.secondary, custom_id="page_info", row=0, disabled=True)
+    async def page_info(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Display current page (non-interactive)"""
+        pass
+    
+    @discord.ui.button(label="▶️", style=discord.ButtonStyle.grey, custom_id="next_page", row=0)
     async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Go to next page"""
         if self.current_page >= self.total_pages:
             await interaction.response.send_message("You're already on the last page!", ephemeral=True)
             return
         
-        # Disable button temporarily
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
+        await interaction.response.defer()
         
         try:
-            # Fetch next page with fast loading
             char_name = self.character.get('name', '')
             series_name = self.character.get('anime', '')
-            new_images, _ = await self.cover_system.search_cover_art(char_name, series_name, self.current_page + 1, 30)
+            new_images, _ = await self.cover_system.search_cover_art(char_name, series_name, self.current_page + 1, 9)
             
             if new_images:
                 self.current_page += 1
                 self.current_images = new_images
-                
-                # Update embeds
-                embeds = await self.cover_system.create_cover_art_embeds(
-                    self.character, new_images, self.current_page, self.total_pages
-                )
-                
-                # Add search-specific footer to each embed
-                for embed in embeds:
-                    embed.set_footer(text=f"Page {self.current_page}/{self.total_pages} • Browse only • Use .cover gallery <UID> to purchase!")
-                
-                # Update jump button label
-                for child in self.children:
-                    if child.custom_id == "jump_page":
-                        child.label = f"< {self.current_page}/{self.total_pages} >"
-                        break
-                
-                await interaction.message.edit(embeds=embeds, view=self)
+                self.current_display_index = 0
+                self._update_page_label()
+                await interaction.message.edit(embed=self._create_embed(), view=self)
             else:
                 await interaction.followup.send("No more images available!", ephemeral=True)
         except Exception as e:
             logger.error(f"Error loading next page: {e}")
-            await interaction.followup.send("Error loading next page!", ephemeral=True)
-        finally:
-            button.disabled = False
-            await interaction.message.edit(view=self)
+            await interaction.followup.send("Error loading page!", ephemeral=True)
     
-    @discord.ui.button(label="< page/max >", style=discord.ButtonStyle.secondary, custom_id="jump_page")
-    async def jump_to_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Jump to a specific page"""
-        # Create a modal for page input
-        modal = JumpToPageModal(self.current_page, self.total_pages)
-        await interaction.response.send_modal(modal)
-        
-        # Wait for modal submission
-        await modal.wait()
-        
-        if modal.page_number is not None:
-            target_page = modal.page_number
-            
-            if target_page < 1 or target_page > self.total_pages:
-                await interaction.followup.send(f"Page must be between 1 and {self.total_pages}!", ephemeral=True)
-                return
-            
-            if target_page == self.current_page:
-                await interaction.followup.send("You're already on that page!", ephemeral=True)
-                return
-            
-            try:
-                # Fetch target page with fast loading
-                char_name = self.character.get('name', '')
-                series_name = self.character.get('anime', '')
-                new_images, _ = await self.cover_system.search_cover_art(char_name, series_name, target_page, 30)
-                
-                if new_images:
-                    self.current_page = target_page
-                    self.current_images = new_images
-                    
-                    # Update embeds
-                    embeds = await self.cover_system.create_cover_art_embeds(
-                        self.character, new_images, self.current_page, self.total_pages
-                    )
-                    
-                    # Add search-specific footer to each embed
-                    for embed in embeds:
-                        embed.set_footer(text=f"Page {self.current_page}/{self.total_pages} • Browse only • Use .cover gallery <UID> to purchase!")
-                    
-                    # Update jump button label
-                    button.label = f"< {self.current_page}/{self.total_pages} >"
-                    
-                    await interaction.message.edit(embeds=embeds, view=self)
-                    await interaction.followup.send(f"Jumped to page {target_page}!", ephemeral=True)
-                else:
-                    await interaction.followup.send("No images available on that page!", ephemeral=True)
-                    
-            except Exception as e:
-                logger.error(f"Error jumping to page: {e}")
-                await interaction.followup.send("Error jumping to page!", ephemeral=True)
+    @discord.ui.button(label="1️⃣", style=discord.ButtonStyle.blurple, custom_id="show_1", row=1)
+    async def show_image_1(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Show image 1"""
+        if len(self.current_images) >= 1:
+            self.current_display_index = 0
+            await interaction.response.edit_message(embed=self._create_embed(), view=self)
+        else:
+            await interaction.response.send_message("No image available!", ephemeral=True)
     
-    @discord.ui.button(label="🔀 Randomize", style=discord.ButtonStyle.blurple, custom_id="randomize")
-    async def randomize_order(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Randomize the order of current images"""
-        import random
-        
-        # Disable button temporarily
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
-        
-        try:
-            # Randomize current images order
+    @discord.ui.button(label="2️⃣", style=discord.ButtonStyle.blurple, custom_id="show_2", row=1)
+    async def show_image_2(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Show image 2"""
+        if len(self.current_images) >= 2:
+            self.current_display_index = 1
+            await interaction.response.edit_message(embed=self._create_embed(), view=self)
+        else:
+            await interaction.response.send_message("No image available!", ephemeral=True)
+    
+    @discord.ui.button(label="3️⃣", style=discord.ButtonStyle.blurple, custom_id="show_3", row=1)
+    async def show_image_3(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Show image 3"""
+        if len(self.current_images) >= 3:
+            self.current_display_index = 2
+            await interaction.response.edit_message(embed=self._create_embed(), view=self)
+        else:
+            await interaction.response.send_message("No image available!", ephemeral=True)
+    
+    @discord.ui.button(label="🔀 Shuffle", style=discord.ButtonStyle.grey, custom_id="shuffle", row=1)
+    async def shuffle_images(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Shuffle the current images"""
+        if len(self.current_images) > 1:
             random.shuffle(self.current_images)
-            self.randomized = not self.randomized  # Toggle state
-            
-            # Update embeds with randomized images
-            embeds = await self.cover_system.create_cover_art_embeds(
-                self.character, self.current_images, self.current_page, self.total_pages
-            )
-            
-            # Add search-specific footer to each embed
-            for embed in embeds:
-                embed.set_footer(text=f"Page {self.current_page}/{self.total_pages} • Browse only • Use .cover gallery <UID> to purchase!")
-            
-            # Update button label to reflect state
-            button.label = "🔀 Unshuffle" if self.randomized else "🔀 Randomize"
-            
-            await interaction.message.edit(embeds=embeds, view=self)
-            await interaction.followup.send(f"{'🔀 Images randomized!' if self.randomized else '🔀 Images restored to original order!'}", ephemeral=True)
-            
-        except Exception as e:
-            logger.error(f"Error randomizing images: {e}")
-            await interaction.followup.send("Error randomizing images!", ephemeral=True)
-        finally:
-            button.disabled = False
-            await interaction.message.edit(view=self)
-    
-    @discord.ui.button(label="🔍 View Details", style=discord.ButtonStyle.green, custom_id="view_details")
-    async def view_details(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """View detailed information about current images"""
-        details_embed = discord.Embed(
-            title="📊 Image Details",
-            description=f"Page {self.current_page}/{self.total_pages} • {'Randomized' if self.randomized else 'Original Order'}",
-            color=discord.Color.blue()
-        )
-        
-        for i, img in enumerate(self.current_images[:3], 1):
-            details_embed.add_field(
-                name=f"🖼️ Option {i}",
-                value=f"**ID:** {img['id']}\n"
-                      f"**Source:** {img['source']}\n"
-                      f"**Score:** {img['score']}\n"
-                      f"**Size:** {img['width']}×{img['height']}\n"
-                      f"**Tags:** {', '.join(img['tags'][:5])}",
-                inline=True
-            )
-        
-        await interaction.response.send_message(embed=details_embed, ephemeral=True)
+            self.current_display_index = 0
+            await interaction.response.edit_message(embed=self._create_embed(), view=self)
+        else:
+            await interaction.response.send_message("Not enough images to shuffle!", ephemeral=True)
 
 
 class JumpToPageModal(discord.ui.Modal):
