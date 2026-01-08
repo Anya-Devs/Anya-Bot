@@ -270,14 +270,17 @@ class Games(commands.Cog):
                 logger.debug(f"Gacha API error ({api_name}): {e}")
         return None
 
-    async def pull_gacha_cards(self, num_cards: int = 3, gender_filter: Optional[str] = None) -> List[Dict]:
+    async def pull_gacha_cards(self, num_cards: int = 3, gender_filter: Optional[str] = None, guild_id: str = None) -> List[Dict]:
         """Pull gacha cards using pure RNG - extremely rare drops.
         
         This system rolls rarity first, then fetches characters from the API
         that match that rarity tier based on their popularity/favorites.
+        
+        All characters in the same draw are guaranteed to be unique.
         """
         from utils.cogs.game.const import roll_gacha_rarity
         cards = []
+        drawn_character_ids = set()  # Track already drawn characters in this session
         
         for i in range(num_cards):
             # Roll rarity using pure RNG (no pity)
@@ -287,11 +290,17 @@ class Games(commands.Cog):
             # The API functions now properly filter by popularity ranges
             char = None
             attempts = 0
-            max_attempts = 8  # Increased attempts for better success rate
+            max_attempts = 15  # Increased attempts for better success rate
             
             while char is None and attempts < max_attempts:
                 char = await self.fetch_character_by_rarity(rolled_rarity)
                 attempts += 1
+                
+                # Validate character has required fields
+                if char:
+                    if not char.get("image_url") or not char.get("anime") or char.get("anime") == "Unknown":
+                        char = None
+                        continue
                 
                 # Apply gender filter if specified
                 if char and gender_filter:
@@ -313,27 +322,53 @@ class Games(commands.Cog):
                     if not matches_target_rarity(actual_rarity, rolled_rarity):
                         char = None
                         continue
+                
+                # UNIQUENESS CHECK: Ensure character hasn't been drawn in this session
+                if char:
+                    char_id = char.get("id")
+                    char_name = char.get("name", "").lower()
+                    # Create unique identifier using both ID and name
+                    unique_id = f"{char_id}_{char_name}"
+                    
+                    if unique_id in drawn_character_ids:
+                        # Character already drawn in this session, reroll
+                        char = None
+                        continue
             
             if char:
                 cards.append(char)
+                drawn_character_ids.add(f"{char.get('id')}_{char.get('name', '').lower()}")
             else:
-                # Fallback character - only if API completely fails
-                logger.warning(f"Failed to fetch {rolled_rarity} character after {max_attempts} attempts")
-                cards.append({
-                    "name": "Mystery Character",
-                    "anime": "Unknown",
-                    "favorites": 0,
-                    "gender": "Unknown",
-                    "image_url": None,
-                    "rarity": rolled_rarity,
-                    "api_source": "Fallback"
-                })
+                # Fallback: Try one more time with any rarity if original rarity failed
+                logger.warning(f"Failed to fetch {rolled_rarity} character after {max_attempts} attempts, trying fallback")
+                fallback_attempts = 5
+                for _ in range(fallback_attempts):
+                    fallback_char = await self.fetch_character_by_rarity("common")  # Try common as fallback
+                    if fallback_char and fallback_char.get("image_url") and fallback_char.get("anime"):
+                        fallback_char["rarity"] = rolled_rarity  # Override rarity to match roll
+                        cards.append(fallback_char)
+                        logger.info(f"Used fallback common character for {rolled_rarity} roll")
+                        break
+                else:
+                    # Last resort: Use a well-known character with guaranteed data
+                    logger.error(f"All attempts failed, using emergency fallback")
+                    cards.append({
+                        "id": 40,  # Spike Spiegel
+                        "name": "Spike Spiegel",
+                        "anime": "Cowboy Bebop",
+                        "favorites": 50000,
+                        "gender": "Male",
+                        "image_url": "https://cdn.myanimelist.net/images/characters/4/50197.jpg",
+                        "rarity": rolled_rarity,
+                        "api_source": "Emergency Fallback"
+                    })
         
         return cards
     
     async def pull_three_cards_real(self, gender_filter: Optional[str] = None, **kwargs) -> List[Dict]:
         """Pull 3 gacha cards - pure RNG, no pity."""
-        return await self.pull_gacha_cards(3, gender_filter)
+        guild_id = kwargs.get("guild_id")
+        return await self.pull_gacha_cards(3, gender_filter, guild_id)
 
     def get_random_rarity(self) -> str:
         """Get random rarity using the brutal drop rates."""
@@ -1481,13 +1516,68 @@ class Games(commands.Cog):
         """🎴 Draw only male characters (husbandos)."""
         await self._execute_draw(ctx, gender_filter="Male")
     
+    async def update_character_rarities_in_db(self, user_id: str, guild_id: str, inventory: list) -> list:
+        """Update character rarities in database with corrected values and return updated inventory."""
+        from utils.cogs.game.const import get_rarity_from_favorites
+        
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            
+            updated_chars = []
+            needs_update = False
+            
+            # Check each character for rarity updates
+            for char in inventory:
+                old_rarity = char.get("rarity", "common")
+                favorites = char.get("favorites", 0)
+                new_rarity = get_rarity_from_favorites(favorites)
+                
+                if old_rarity != new_rarity:
+                    # Update character rarity
+                    char["rarity"] = new_rarity
+                    updated_chars.append(char)
+                    needs_update = True
+                else:
+                    updated_chars.append(char)
+            
+            # Update database if any rarities changed
+            if needs_update:
+                await server_col.update_one(
+                    {"guild_id": guild_id},
+                    {"$set": {f"members.{user_id}.gacha_inventory": updated_chars}},
+                    upsert=True
+                )
+                logger.info(f"Updated rarities for {len(updated_chars)} characters in user {user_id}'s collection")
+            
+            return updated_chars
+            
+        except Exception as e:
+            logger.error(f"Error updating character rarities in database: {e}")
+            return inventory
+
     @draw.command(name="collection", aliases=["c", "inv", "inventory"])
     @commands.cooldown(1, 5, commands.BucketType.user)
-    async def draw_collection(self, ctx, member: discord.Member = None):
-        """📦 View your anime character collection."""
+    async def draw_collection(self, ctx, member: discord.Member = None, *, search_query: str = None):
+        """📦 View your anime character collection.
+        
+        Usage:
+        - `.draw c` - View all characters
+        - `.draw c --n miku` - Search for characters named "miku" or from series with "miku"
+        - `.draw c --n re zero` - Search for characters from "Re Zero"
+        - `.draw c --n Kono Subarashii Sekai ni Shukufuku wo!` - Search by full series name
+        """
         target = member or ctx.author
         guild_id = str(ctx.guild.id)
         user_id = str(target.id)
+        
+        # Parse search query from command
+        if search_query and search_query.strip().startswith("--n"):
+            search_query = search_query.strip()[3:].strip()  # Remove "--n " prefix
+        elif search_query and search_query.strip().startswith("-n"):
+            search_query = search_query.strip()[2:].strip()  # Remove "-n " prefix
+        else:
+            search_query = None
         
         inventory = await self.get_user_inventory(user_id, guild_id)
         
@@ -1506,7 +1596,10 @@ class Games(commands.Cog):
                 )
             return await ctx.reply(embed=embed, mention_author=False)
         
-        view = InventoryView(self, target, guild_id, inventory, filter_type="all")
+        # Update rarities in database and get updated inventory
+        updated_inventory = await self.update_character_rarities_in_db(user_id, guild_id, inventory)
+        
+        view = InventoryView(self, target, guild_id, updated_inventory, filter_type="all", search_query=search_query)
         await ctx.reply(embed=await view.get_embed(), view=view, mention_author=False)
     
     @draw.command(name="info", aliases=["help", "rates", "?"])

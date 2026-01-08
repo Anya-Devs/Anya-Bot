@@ -126,7 +126,7 @@ class CharacterInfoView(discord.ui.View):
         if draws_left > 0 and guild_id:
             self.add_item(self.create_redraw_button())
     
-    @discord.ui.button(label="Info", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Info", style=discord.ButtonStyle.gray)
     async def info_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user.id:
             try:
@@ -139,7 +139,8 @@ class CharacterInfoView(discord.ui.View):
         favorites = char.get("favorites", 0)
         
         # Calculate release value
-        release_value = self.cog.calculate_release_value(favorites, char.get("rarity", "common"), char.get('name', 'unknown'))
+        from .const import calculate_release_value
+        release_value = calculate_release_value(favorites, char.get("rarity", "common"), char.get('name', 'unknown'))
         
         # Create character info embed
         embed = discord.Embed(
@@ -174,7 +175,7 @@ class CharacterInfoView(discord.ui.View):
     
     def create_redraw_button(self):
         """Create a redraw button dynamically"""
-        button = discord.ui.Button(label="Redraw", style=discord.ButtonStyle.success, emoji="🔄")
+        button = discord.ui.Button(label="Redraw", style=discord.ButtonStyle.primary)
         button.callback = self.redraw_callback
         return button
     
@@ -226,6 +227,20 @@ class CharacterInfoView(discord.ui.View):
         except:
             pass
         
+        # Disable ALL buttons during processing to prevent any interaction
+        try:
+            for child in self.children:
+                child.disabled = True
+            await interaction.message.edit(view=self)
+        except:
+            pass
+        
+        # Edit message content to show loading status
+        try:
+            await interaction.message.edit(content="Rendering new characters... Please wait!", view=self)
+        except:
+            pass
+        
         # Fetch new characters
         new_characters = await self.cog.pull_three_cards_real()
         
@@ -250,9 +265,9 @@ class CharacterInfoView(discord.ui.View):
             message=self.message
         )
         
-        # Edit the message with new draw
+        # Edit the message with new draw and clear content
         try:
-            await self.message.edit(attachments=[file], view=new_view)
+            await self.message.edit(content="", attachments=[file], view=new_view)
             new_view.message = self.message
         except Exception as e:
             logger.error(f"Error editing message in redraw: {e}")
@@ -473,6 +488,20 @@ class GachaClaimView(discord.ui.View):
         except:
             pass
         
+        # Disable ALL buttons during processing to prevent any interaction
+        try:
+            for child in self.children:
+                child.disabled = True
+            await interaction.message.edit(view=self)
+        except:
+            pass
+        
+        # Edit message content to show loading status
+        try:
+            await interaction.message.edit(content="🎲 Rendering new characters... Please wait!", view=self)
+        except:
+            pass
+        
         # Fetch new characters
         new_characters = await self.cog.pull_three_cards_real()
         
@@ -493,9 +522,9 @@ class GachaClaimView(discord.ui.View):
         # Create new view with updated data
         new_view = GachaClaimView(self.cog, self.user, guild_id, new_characters, new_balance, new_draws_left, new_is_out_of_draws, message=interaction.message)
         
-        # Edit the current message with new image and view
+        # Edit the current message with new image and view, clearing content
         try:
-            await interaction.message.edit(attachments=[file], view=new_view)
+            await interaction.message.edit(content="", attachments=[file], view=new_view)
             new_view.message = interaction.message
         except Exception as e:
             logger.error(f"Error editing message in redraw: {e}")
@@ -662,7 +691,7 @@ class InventoryView(discord.ui.View):
         self.add_item(InventoryGenderSelect(self))
     
     def _filter_characters(self):
-        """Apply both rarity and gender filters."""
+        """Apply rarity, gender, and name search filters."""
         from utils.cogs.game.const import get_rarity_from_favorites
         
         chars = self.all_characters
@@ -671,6 +700,14 @@ class InventoryView(discord.ui.View):
         for char in chars:
             favorites = char.get("favorites", 0)
             char["rarity"] = get_rarity_from_favorites(favorites)
+        
+        # Apply name search filter (case-insensitive, searches both name and anime)
+        if self.search_query:
+            search_lower = self.search_query.lower().strip()
+            if search_lower:
+                chars = [c for c in chars if 
+                        (c.get("name", "").lower().find(search_lower) != -1) or 
+                        (c.get("anime", "").lower().find(search_lower) != -1)]
         
         # Apply rarity filter
         if self.rarity_filter == "legendary":
@@ -726,6 +763,10 @@ class InventoryView(discord.ui.View):
         gender_labels = {"all": "All", "female": f"{GameEmojis.FEMALE} Female", "male": f"{GameEmojis.MALE} Male", "unknown": f"{GameEmojis.NONBINARY} Unknown"}
         
         filter_text = f"**Rarity:** {rarity_labels.get(self.rarity_filter, 'All')} • **Gender:** {gender_labels.get(self.gender_filter, 'All')}"
+        
+        # Add search query to filter text if present
+        if self.search_query:
+            filter_text += f"\n🔍 **Search:** '{self.search_query}'"
         
         # Stats line
         stats = f"{GameEmojis.LEGENDARY} {rarity_counts['legendary']} • {GameEmojis.EPIC} {rarity_counts['epic']} • {GameEmojis.RARE} {rarity_counts['rare']} • {GameEmojis.UNCOMMON} {rarity_counts['uncommon']} • {GameEmojis.COMMON} {rarity_counts['common']}"

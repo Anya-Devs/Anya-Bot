@@ -871,273 +871,155 @@ RARITY_FRAMES = {
 }
 
 async def generate_gacha_draw_image(characters: list, claimed_indices: list = None, ownership_info: dict = None) -> io.BytesIO:
-    """Generate hyper-realistic anime gacha cards with ownership display.
-    
-    Args:
-        characters: List of dicts with name, anime, image_url, rarity, gender
-        claimed_indices: List of indices that have been claimed (greyed out)
-        ownership_info: Dict mapping index to owner info {user_id, username, avatar_url}
-    
-    Returns:
-        BytesIO buffer containing the PNG image
-    """
+    """Generate modern, clean anime gacha cards with enhanced visual appeal."""
     if claimed_indices is None:
         claimed_indices = []
     if ownership_info is None:
         ownership_info = {}
-    
-    card_width = 200
-    card_height = 300
-    card_spacing = 40  # Space between cards
+
+    card_width = 220
+    card_height = 340
+    card_spacing = 45
     num_cards = len(characters)
-    
-    # Calculate total content width (cards + spacing between them)
+
     content_width = (card_width * num_cards) + (card_spacing * (num_cards - 1))
-    
-    # Add margins for the overall image
     margin = 60
     total_width = content_width + (margin * 2)
     total_height = card_height + (margin * 2)
-    
-    # Transparent background
+
     img = Image.new('RGBA', (total_width, total_height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    
-    # Try to load emoji-compatible fonts
+
     try:
-        title_font = _load_emoji_font(22)
-        name_font = _load_emoji_font(14)
-        small_font = _load_emoji_font(11)
-        number_font = _load_emoji_font(28)
+        title_font = _load_emoji_font(24)
+        name_font = _load_emoji_font(16)
+        small_font = _load_emoji_font(12)
+        tiny_font = _load_emoji_font(10)
+        number_font = _load_emoji_font(32)
     except:
-        title_font = name_font = small_font = number_font = ImageFont.load_default()
-    
-    # Fetch all images first (character images + owner avatars)
+        title_font = name_font = small_font = tiny_font = number_font = ImageFont.load_default()
+
     char_images = []
     owner_avatars = {}
-    
+
     async with aiohttp.ClientSession() as session:
-        # Fetch character images
         for char in characters:
             char_img = None
             if char.get("image_url"):
                 try:
                     async with session.get(char["image_url"]) as resp:
                         if resp.status == 200:
-                            img_data = await resp.read()
-                            char_img = Image.open(io.BytesIO(img_data)).convert('RGBA')
+                            char_img = Image.open(io.BytesIO(await resp.read())).convert('RGBA')
                 except:
                     pass
             char_images.append(char_img)
-        
-        # Fetch owner avatars
+
         for idx, owner_data in ownership_info.items():
             if owner_data.get("avatar_url"):
                 try:
                     async with session.get(owner_data["avatar_url"]) as resp:
                         if resp.status == 200:
-                            img_data = await resp.read()
-                            avatar = Image.open(io.BytesIO(img_data)).convert('RGBA')
+                            avatar = Image.open(io.BytesIO(await resp.read())).convert('RGBA')
                             avatar = avatar.resize((36, 36), Image.Resampling.LANCZOS)
-                            # Make circular
                             mask = Image.new('L', (36, 36), 0)
-                            mask_draw = ImageDraw.Draw(mask)
-                            mask_draw.ellipse([0, 0, 35, 35], fill=255)
+                            ImageDraw.Draw(mask).ellipse([0, 0, 35, 35], fill=255)
                             avatar.putalpha(mask)
                             owner_avatars[idx] = avatar
                 except:
                     pass
-    
-    # Draw each card - clean design with rarity shown through frame only
-    # Cards are centered horizontally and vertically with even spacing
+
     for i, char in enumerate(characters):
         card_x = margin + i * (card_width + card_spacing)
         card_y = margin
-        
+
         rarity = char.get("rarity", "common")
         frame = RARITY_FRAMES.get(rarity, RARITY_FRAMES["common"])
-        
+
         is_claimed = i in claimed_indices
         is_owned = i in ownership_info
-        
-        # Create card canvas
+
         card_bg = Image.new('RGBA', (card_width, card_height), (0, 0, 0, 0))
         card_draw = ImageDraw.Draw(card_bg)
-        
-        # === HYPER-APPEALING FRAME DESIGN ===
+
         if is_claimed:
-            # Greyed out
-            card_draw.rounded_rectangle([0, 0, card_width - 1, card_height - 1], radius=8, fill=(45, 45, 50), outline=(65, 65, 70), width=3)
+            card_draw.rounded_rectangle([0, 0, card_width - 1, card_height - 1], 12, fill=(35, 35, 40, 250), outline=(55, 55, 60), width=4)
         else:
-            # Material-based frame (Wood/Bronze/Silver/Gold/Platinum)
-            base = frame["base"]
-            highlight = frame["highlight"]
-            shadow = frame["shadow"]
-            accent = frame["accent"]
-            
-            # Outer frame - thick material border
-            card_draw.rounded_rectangle([0, 0, card_width - 1, card_height - 1], radius=8, fill=base, outline=shadow, width=3)
-            
-            # Inner highlight (metallic shine effect)
-            card_draw.rounded_rectangle([3, 3, card_width - 4, card_height - 4], radius=6, outline=highlight, width=2)
-            
-            # Accent line (depth)
-            card_draw.rounded_rectangle([6, 6, card_width - 7, card_height - 7], radius=5, outline=accent, width=1)
-            
-            # Corner embellishments for epic/legendary
-            if rarity in ["legendary", "epic"]:
-                # Top corners - triangular accents
-                card_draw.polygon([(3, 3), (20, 3), (3, 20)], fill=highlight)
-                card_draw.polygon([(card_width - 4, 3), (card_width - 21, 3), (card_width - 4, 20)], fill=highlight)
-                # Bottom corners
-                card_draw.polygon([(3, card_height - 4), (20, card_height - 4), (3, card_height - 21)], fill=highlight)
-                card_draw.polygon([(card_width - 4, card_height - 4), (card_width - 21, card_height - 4), (card_width - 4, card_height - 21)], fill=highlight)
-            
-            # Sparkle effect for legendary
-            if frame.get("sparkle"):
-                sparkle_positions = [(15, 15), (card_width - 16, 15), (15, card_height - 16), (card_width - 16, card_height - 16)]
-                for sx, sy in sparkle_positions:
-                    card_draw.ellipse([sx - 3, sy - 3, sx + 3, sy + 3], fill=(255, 255, 255, 200))
-                    card_draw.ellipse([sx - 1, sy - 1, sx + 1, sy + 1], fill=(255, 255, 255, 255))
-        
-        # === NAME BANNER AT TOP ===
-        banner_h = 30
-        banner_margin = 10
-        if not is_claimed:
-            # Metallic banner with gradient effect
-            card_draw.rounded_rectangle([banner_margin, banner_margin, card_width - banner_margin, banner_margin + banner_h], radius=4, fill=frame["banner"])
-            # Shine line at top of banner
-            card_draw.line([(banner_margin + 4, banner_margin + 2), (card_width - banner_margin - 4, banner_margin + 2)], fill=(*frame["highlight"], 150), width=1)
-            # Shadow line at bottom
-            card_draw.line([(banner_margin + 4, banner_margin + banner_h - 2), (card_width - banner_margin - 4, banner_margin + banner_h - 2)], fill=(*frame["shadow"], 100), width=1)
-        else:
-            card_draw.rounded_rectangle([banner_margin, banner_margin, card_width - banner_margin, banner_margin + banner_h], radius=4, fill=(55, 55, 60))
-        
-        # Character name in banner
+            card_draw.rounded_rectangle([0, 0, card_width - 1, card_height - 1], 12, fill=frame["base"], outline=frame["shadow"], width=4)
+            card_draw.rounded_rectangle([4, 4, card_width - 5, card_height - 5], 10, outline=frame["highlight"], width=2)
+
+        banner_h = 36
+        banner_margin = 12
+        card_draw.rounded_rectangle(
+            [banner_margin, banner_margin, card_width - banner_margin, banner_margin + banner_h],
+            6,
+            fill=(20, 20, 25, 240) if not is_claimed else (40, 40, 45, 240)
+        )
+
         name = char.get("name", "Unknown")
-        if len(name) > 14:
-            name = name[:12] + "..."
+        if len(name) > 16:
+            name = name[:14] + "..."
         name_bbox = card_draw.textbbox((0, 0), name, font=name_font)
         name_x = (card_width - (name_bbox[2] - name_bbox[0])) // 2
-        text_color = frame.get("text", (255, 255, 255)) if not is_claimed else (130, 130, 130)
-        # Text shadow for depth
-        card_draw.text((name_x + 1, banner_margin + 8), name, fill=(0, 0, 0, 80), font=name_font)
-        card_draw.text((name_x, banner_margin + 7), name, fill=text_color, font=name_font)
-        
-        # === CHARACTER IMAGE - Main focus ===
-        img_area_x = 8
-        img_area_y = 8 + banner_h + 4
-        img_area_w = card_width - 16
-        img_area_h = card_height - banner_h - 56  # Space for bottom banner
-        
+        card_draw.text((name_x + 1, banner_margin + 10), name, fill=(0, 0, 0, 180), font=name_font)
+        card_draw.text((name_x, banner_margin + 9), name, fill=(255, 255, 255), font=name_font)
+
+        img_area_x = 10
+        img_area_y = banner_margin + banner_h + 8
+        img_area_w = card_width - 20
+        img_area_h = card_height - (banner_margin + banner_h) - 68
+
         char_img = char_images[i]
         if char_img:
-            # Resize to fill (cover art style)
-            img_ratio = char_img.width / char_img.height
-            target_ratio = img_area_w / img_area_h
-            
-            if img_ratio > target_ratio:
-                new_height = img_area_h
-                new_width = int(new_height * img_ratio)
-            else:
-                new_width = img_area_w
-                new_height = int(new_width / img_ratio)
-            
-            char_img = char_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            
-            # Center crop
-            left = (new_width - img_area_w) // 2
-            top = (new_height - img_area_h) // 2
-            char_img = char_img.crop((left, top, left + img_area_w, top + img_area_h))
-            
-            # Pinterest-quality enhancement
-            if is_claimed:
-                # Desaturate and darken claimed cards
-                char_img = char_img.convert('LA').convert('RGBA')
-                enhancer = ImageEnhance.Brightness(char_img)
-                char_img = enhancer.enhance(0.4)
-            elif is_owned:
-                # Slight desaturation for owned
-                enhancer = ImageEnhance.Color(char_img)
-                char_img = enhancer.enhance(0.75)
-            else:
-                # ENHANCE unclaimed cards - Pinterest quality
-                # Boost sharpness
-                from PIL import ImageFilter
-                char_img = char_img.filter(ImageFilter.SHARPEN)
-                
-                # Boost contrast for pop
-                enhancer = ImageEnhance.Contrast(char_img)
-                char_img = enhancer.enhance(1.25)
-                
-                # Boost color saturation
-                enhancer = ImageEnhance.Color(char_img)
-                char_img = enhancer.enhance(1.15)
-                
-                # Slight brightness boost
-                enhancer = ImageEnhance.Brightness(char_img)
-                char_img = enhancer.enhance(1.05)
-            
-            # Round corners
-            img_mask = Image.new('L', (img_area_w, img_area_h), 0)
-            mask_draw = ImageDraw.Draw(img_mask)
-            mask_draw.rounded_rectangle([0, 0, img_area_w - 1, img_area_h - 1], radius=4, fill=255)
-            char_img.putalpha(img_mask)
-            
+            char_img = char_img.resize((img_area_w, img_area_h), Image.Resampling.LANCZOS)
             card_bg.paste(char_img, (img_area_x, img_area_y), char_img)
-        else:
-            # Placeholder
-            card_draw.rounded_rectangle([img_area_x, img_area_y, img_area_x + img_area_w, img_area_y + img_area_h], radius=4, fill=(40, 40, 45))
-            card_draw.text((img_area_x + 75, img_area_y + 80), "?", fill=(70, 70, 80), font=title_font)
-        
-        # === OWNED BANNER (if owned) ===
+
+        # ===== OWNED BANNER (TEXT MOVED DOWN 5PX) =====
         if is_owned and not is_claimed:
             owner = ownership_info[i]
-            owner_banner_y = img_area_y + img_area_h - 38
-            
+            owner_banner_y = img_area_y + img_area_h - 44
+
             card_draw.rounded_rectangle(
-                [img_area_x + 4, owner_banner_y, img_area_x + img_area_w - 4, owner_banner_y + 34],
-                radius=4, fill=(0, 0, 0, 200)
+                [img_area_x + 6, owner_banner_y, img_area_x + img_area_w - 6, owner_banner_y + 40],
+                6,
+                fill=(15, 15, 20, 235),
+                outline=(255, 70, 70),
+                width=3
             )
-            card_draw.rounded_rectangle(
-                [img_area_x + 4, owner_banner_y, img_area_x + img_area_w - 4, owner_banner_y + 34],
-                radius=4, outline=(255, 80, 80), width=2
-            )
-            
-            # Owner avatar
+
             if i in owner_avatars:
-                card_bg.paste(owner_avatars[i], (img_area_x + 8, owner_banner_y + -1), owner_avatars[i])
-            
-            card_draw.text((img_area_x + 48, owner_banner_y + 2), "OWNED", fill=(255, 80, 80), font=small_font)
-            owner_name = owner.get("username", "Someone")[:10]
-            card_draw.text((img_area_x + 48, owner_banner_y + 16), f"by {owner_name}", fill=(180, 180, 180), font=small_font)
-        
-        # === ANIME NAME BANNER AT BOTTOM ===
-        bottom_banner_y = card_height - 42
-        banner_margin = 10
-        if not is_claimed:
-            card_draw.rounded_rectangle([banner_margin, bottom_banner_y, card_width - banner_margin, bottom_banner_y + 26], radius=4, fill=frame["banner"])
-            # Shine line
-            card_draw.line([(banner_margin + 4, bottom_banner_y + 2), (card_width - banner_margin - 4, bottom_banner_y + 2)], fill=(*frame["highlight"], 120), width=1)
-        else:
-            card_draw.rounded_rectangle([banner_margin, bottom_banner_y, card_width - banner_margin, bottom_banner_y + 26], radius=4, fill=(55, 55, 60))
-        
+                card_bg.paste(owner_avatars[i], (img_area_x + 10, owner_banner_y + 2), owner_avatars[i])
+
+            text_x = img_area_x + 52
+
+            # OWNED (moved down 5px)
+            card_draw.text((text_x + 1, owner_banner_y + 9), "OWNED", fill=(0, 0, 0, 200), font=small_font)
+            card_draw.text((text_x,     owner_banner_y + 8), "OWNED", fill=(255, 70, 70), font=small_font)
+
+            owner_name = owner.get("username", "Someone")[:12]
+
+            # by username (moved down 5px)
+            card_draw.text((text_x + 1, owner_banner_y + 26), f"by {owner_name}", fill=(0, 0, 0, 200), font=small_font)
+            card_draw.text((text_x,     owner_banner_y + 25), f"by {owner_name}", fill=(200, 200, 200), font=small_font)
+
+        bottom_banner_y = card_height - 48
+        card_draw.rounded_rectangle(
+            [banner_margin, bottom_banner_y, card_width - banner_margin, bottom_banner_y + 32],
+            6,
+            fill=(20, 20, 25, 240)
+        )
+
         anime = char.get("anime", "Unknown")
-        if len(anime) > 18:
-            anime = anime[:16] + "..."
+        if len(anime) > 20:
+            anime = anime[:18] + "..."
         anime_bbox = card_draw.textbbox((0, 0), anime, font=small_font)
         anime_x = (card_width - (anime_bbox[2] - anime_bbox[0])) // 2
-        anime_text_color = frame.get("text", (220, 220, 220)) if not is_claimed else (120, 120, 120)
-        # Text shadow
-        card_draw.text((anime_x + 1, bottom_banner_y + 7), anime, fill=(0, 0, 0, 60), font=small_font)
-        card_draw.text((anime_x, bottom_banner_y + 6), anime, fill=anime_text_color, font=small_font)
-        
-        # Paste card onto main image
+        card_draw.text((anime_x + 1, bottom_banner_y + 10), anime, fill=(0, 0, 0, 180), font=small_font)
+        card_draw.text((anime_x, bottom_banner_y + 9), anime, fill=(240, 240, 240), font=small_font)
+
         img.paste(card_bg, (card_x, card_y), card_bg)
-    
-    # Save with transparency
+
     buffer = io.BytesIO()
-    img.save(buffer, format='PNG', quality=95)
+    img.save(buffer, format="PNG", quality=95)
     buffer.seek(0)
     return buffer
 

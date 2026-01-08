@@ -149,7 +149,7 @@ TIMER_CONFIG = {
     "job": {"max_uses": 10, "command_cooldown": 5, "cooldown": 3600},
     "rob": {"max_uses": 5, "command_cooldown": 5, "cooldown": 7200},
     "crime": {"max_uses": 3, "command_cooldown": 5, "cooldown": 3600},
-    "gacha": {"max_uses": 10, "command_cooldown": 5, "cooldown": 1800},
+    "gacha": {"max_uses": 5, "command_cooldown": 5, "cooldown": 1800},
     "claim": {"max_uses": 1, "command_cooldown": 5, "cooldown": 86400},
 }
 
@@ -190,11 +190,11 @@ def get_time_period_description(cooldown_seconds: int) -> str:
 # ═══════════════════════════════════════════════════════════════
 
 GACHA_RARITY_TIERS = {
-    "common": {"weight": 850000, "color": 0x9E9E9E, "stars": 1, "emoji": GameEmojis.COMMON},
-    "uncommon": {"weight": 140000, "color": 0x4CAF50, "stars": 2, "emoji": GameEmojis.UNCOMMON},
-    "rare": {"weight": 9000, "color": 0x2196F3, "stars": 3, "emoji": GameEmojis.RARE},
-    "epic": {"weight": 900, "color": 0x9C27B0, "stars": 4, "emoji": GameEmojis.EPIC},
-    "legendary": {"weight": 100, "color": 0xFFD700, "stars": 5, "emoji": GameEmojis.LEGENDARY},
+    "common": {"weight": 980000, "color": 0x9E9E9E, "stars": 1, "emoji": GameEmojis.COMMON},
+    "uncommon": {"weight": 19000, "color": 0x4CAF50, "stars": 2, "emoji": GameEmojis.UNCOMMON},
+    "rare": {"weight": 950, "color": 0x2196F3, "stars": 3, "emoji": GameEmojis.RARE},
+    "epic": {"weight": 45, "color": 0x9C27B0, "stars": 4, "emoji": GameEmojis.EPIC},
+    "legendary": {"weight": 5, "color": 0xFFD700, "stars": 5, "emoji": GameEmojis.LEGENDARY},
 }
 
 # Anime popularity thresholds (based on MAL members/AniList popularity)
@@ -206,13 +206,13 @@ GACHA_ANIME_POPULARITY_THRESHOLDS = {
     "common": 0,           # Everything else
 }
 
-# Character favorites thresholds (secondary factor)
+# Character favorites thresholds (PRIMARY factor - this determines rarity!)
 GACHA_CHARACTER_FAVORITES_THRESHOLDS = {
-    "legendary": 10000,
-    "epic": 5000,
-    "rare": 1000,
-    "uncommon": 100,
-    "common": 0,
+    "legendary": 7000,     # 7K+ favorites (Itachi: 18,686, Levi: 31,576, Izuku: 11,413)
+    "epic": 3000,          # 3K+ favorites (Very popular characters)
+    "rare": 800,           # 800+ favorites (Popular characters)
+    "uncommon": 150,       # 150+ favorites (Known characters)
+    "common": 0,           # Everything else
 }
 
 GACHA_API_CONFIG = {
@@ -328,10 +328,20 @@ def get_rarity_from_favorites(favorites: int) -> str:
     return "common"
 
 def get_combined_rarity(anime_popularity: int, char_favorites: int) -> str:
-    """Fast rarity calculation using anime popularity (70%) + character favorites (30%).
+    """Fast rarity calculation using CHARACTER FAVORITES (80%) + anime popularity (20%).
+    Character favorites are the PRIMARY factor - popular characters should be legendary!
     Optimized for speed with direct threshold checks.
     """
     # Direct threshold checks - faster than string comparisons
+    # Character favorites are PRIMARY (80% weight)
+    char_score = (
+        5 if char_favorites >= 7000 else
+        4 if char_favorites >= 3000 else
+        3 if char_favorites >= 800 else
+        2 if char_favorites >= 150 else 1
+    )
+    
+    # Anime popularity is SECONDARY (20% weight)
     anime_score = (
         5 if anime_popularity >= 2000000 else
         4 if anime_popularity >= 1000000 else
@@ -339,15 +349,9 @@ def get_combined_rarity(anime_popularity: int, char_favorites: int) -> str:
         2 if anime_popularity >= 100000 else 1
     )
     
-    char_score = (
-        5 if char_favorites >= 10000 else
-        4 if char_favorites >= 5000 else
-        3 if char_favorites >= 1000 else
-        2 if char_favorites >= 100 else 1
-    )
-    
-    # Weighted average: 70% anime, 30% character
-    combined_score = (anime_score * 0.7) + (char_score * 0.3)
+    # Weighted average: 80% character favorites, 20% anime popularity
+    # This ensures popular characters like Itachi (18,686 favs) are legendary!
+    combined_score = (char_score * 0.8) + (anime_score * 0.2)
     
     # Direct return - fastest path
     return (
@@ -373,11 +377,11 @@ def matches_target_rarity(actual_rarity: str, target_rarity: str) -> bool:
 
 def get_gacha_rates_display() -> str:
     return (
-        f"{GameEmojis.LEGENDARY} **5★ Legendary** - 0.01% (1/10,000)\n"
-        f"{GameEmojis.EPIC} **4★ Epic** - 0.09% (1/1,111)\n"
-        f"{GameEmojis.RARE} **3★ Rare** - 0.9% (1/111)\n"
-        f"{GameEmojis.UNCOMMON} **2★ Uncommon** - 14%\n"
-        f"{GameEmojis.COMMON} **1★ Common** - 85%"
+        f"{GameEmojis.LEGENDARY} **5★ Legendary** - 0.0005% (1/200,000)\n"
+        f"{GameEmojis.EPIC} **4★ Epic** - 0.0045% (1/22,222)\n"
+        f"{GameEmojis.RARE} **3★ Rare** - 0.095% (1/1,053)\n"
+        f"{GameEmojis.UNCOMMON} **2★ Uncommon** - 1.9%\n"
+        f"{GameEmojis.COMMON} **1★ Common** - 98%"
     )
 
 def generate_uid() -> str:
@@ -385,37 +389,47 @@ def generate_uid() -> str:
     return uuid.uuid4().hex[:8].upper()
 
 def calculate_release_value(favorites: int, rarity: str, char_name: str = "unknown") -> int:
+    """Calculate dynamic release value with seed-based randomization.
+    Format: base + favorites_bonus + seed_variance
+    Example: Uncommon with 150 favs = 500 + (150*2) + seed(50-150) = 850-950 pts
+    """
     import hashlib
     
-    base_values = {"common": 20, "uncommon": 50, "rare": 120, "epic": 300, "legendary": 750}
-    base = base_values.get(rarity, 20)
+    # Base values per rarity tier
+    base_values = {"common": 200, "uncommon": 500, "rare": 1200, "epic": 3000, "legendary": 7500}
+    base = base_values.get(rarity, 200)
     
+    # Favorites bonus calculation (scaled)
     if favorites == 0:
         favorites_bonus = 0
-    elif favorites <= 50:
-        favorites_bonus = favorites * 0.5
-    elif favorites <= 200:
-        favorites_bonus = 25 + (favorites - 50) * 1
-    elif favorites <= 1000:
-        favorites_bonus = 125 + (favorites - 200) * 1.5
-    elif favorites <= 5000:
-        favorites_bonus = 775 + (favorites - 1000) * 2
+    elif favorites <= 100:
+        favorites_bonus = int(favorites * 1.5)
+    elif favorites <= 500:
+        favorites_bonus = 150 + int((favorites - 100) * 2)
+    elif favorites <= 2000:
+        favorites_bonus = 950 + int((favorites - 500) * 2.5)
+    elif favorites <= 8000:
+        favorites_bonus = 4700 + int((favorites - 2000) * 3)
     else:
-        favorites_bonus = 5775 + (favorites - 5000) * 3
+        favorites_bonus = 22700 + int((favorites - 8000) * 3.5)
     
-    rarity_multipliers = {"common": 1.0, "uncommon": 1.1, "rare": 1.2, "epic": 1.3, "legendary": 1.5}
+    # Rarity multipliers for favorites bonus
+    rarity_multipliers = {"common": 0.8, "uncommon": 1.0, "rare": 1.2, "epic": 1.4, "legendary": 1.6}
     favorites_bonus = int(favorites_bonus * rarity_multipliers.get(rarity, 1.0))
     
-    seed_input = f"{char_name}_{favorites}_{rarity}_{base}"
+    # Seed-based variance (deterministic per character)
+    seed_input = f"{char_name}_{favorites}_{rarity}"
     hash_object = hashlib.md5(seed_input.encode())
     seed_value = int(hash_object.hexdigest()[:8], 16)
     random.seed(seed_value)
-    random_factor = random.uniform(0.8, 1.2)
-    random_bonus = int(base * (random_factor - 1.0))
-    random.seed()
     
-    total_value = base + favorites_bonus + random_bonus
-    return max(100, min(total_value, 50000))
+    # Variance range based on base value (±10-30%)
+    variance_range = base * 0.2
+    seed_variance = int(random.uniform(-variance_range, variance_range))
+    random.seed()  # Reset seed
+    
+    total_value = base + favorites_bonus + seed_variance
+    return max(500, min(total_value, 100000))
 
 # ═══════════════════════════════════════════════════════════════
 # API FETCH FUNCTIONS
@@ -471,6 +485,13 @@ async def fetch_jikan_character(session, target_rarity: str):
                 if not matches_target_rarity(char_rarity, target_rarity):
                     continue
 
+                # Validate required fields
+                image_url = c.get("images", {}).get("jpg", {}).get("image_url")
+                if not image_url:
+                    continue  # Skip characters without images
+                if anime_title == "Unknown Anime":
+                    continue  # Skip characters without anime source
+
                 return {
                     "id": cid,
                     "name": name,
@@ -478,7 +499,7 @@ async def fetch_jikan_character(session, target_rarity: str):
                     "anime_popularity": anime_members,
                     "favorites": favorites,
                     "gender": gender,
-                    "image_url": c.get("images", {}).get("jpg", {}).get("image_url"),
+                    "image_url": image_url,
                     "api_source": "Jikan"
                 }
         except:
@@ -534,14 +555,21 @@ async def fetch_anilist_character(session, target_rarity: str):
                 if not matches_target_rarity(char_rarity, target_rarity):
                     continue
 
+                # Validate required fields
+                image_url = c.get("image", {}).get("large") if c.get("image") else None
+                char_name = c.get("name", {}).get("full") if c.get("name") else None
+                
+                if not image_url or not char_name or not anime_title:
+                    continue  # Skip characters with missing data
+
                 return {
                     "id": c.get("id"),
-                    "name": c["name"]["full"],
+                    "name": char_name,
                     "anime": anime_title,
                     "anime_popularity": anime_popularity,
                     "favorites": favorites,
                     "gender": gender or "Unknown",
-                    "image_url": c["image"]["large"],
+                    "image_url": image_url,
                     "api_source": "AniList"
                 }
         except:

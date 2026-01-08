@@ -345,8 +345,7 @@ class ArtGalleryView(discord.ui.View):
             nsfw=self.is_nsfw,
             selected_sources=self.selected_sources,
             page=self.api_page,
-            aggressive_load=aggressive,
-            max_pages_per_source=10 if aggressive else 1  # 10 pages for load all button
+            aggressive_load=aggressive
         )
         
         # Filter out prohibited content
@@ -620,8 +619,22 @@ class ArtGalleryView(discord.ui.View):
             tag_str = " ".join([f"`{tag}`" for tag in tags])
             embed.add_field(name="Tags", value=tag_str[:1024], inline=False)
         
-        # Image
-        embed.set_image(url=art.get("url"))
+        # Check if content is a video or non-image
+        content_url = art.get("url", "")
+        is_video = any(content_url.lower().endswith(ext) for ext in ['.mp4', '.webm', '.gifv', '.mov'])
+        is_non_image = not any(content_url.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp'])
+        
+        if is_video or is_non_image:
+            # For videos and non-image content, show link instead of embedding
+            if not embed.description:
+                embed.description = ""
+            embed.description += f"\n\n🔗 **[View Content]({art.get('page_url', content_url)})**\n*Click to view {('video' if is_video else 'content')}*"
+            # Use thumbnail if available, otherwise don't set image
+            if art.get("preview_url"):
+                embed.set_image(url=art.get("preview_url"))
+        else:
+            # For regular images, embed normally
+            embed.set_image(url=content_url)
         
         # Footer with loading indicator
         art_id = f"{art.get('source', 'unknown').lower()}_{art.get('id', 'unknown')}"
@@ -662,7 +675,20 @@ class ArtGalleryView(discord.ui.View):
             inline=True
         )
         
-        embed.set_image(url=art.get("url"))
+        # Check if content is a video or non-image
+        content_url = art.get("url", "")
+        is_video = any(content_url.lower().endswith(ext) for ext in ['.mp4', '.webm', '.gifv', '.mov'])
+        is_non_image = not any(content_url.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp'])
+        
+        if is_video or is_non_image:
+            # For videos and non-image content, show link instead of embedding
+            embed.description = f"🔗 **[View Content]({art.get('page_url', content_url)})**\n*Click to view {('video' if is_video else 'content')}*"
+            # Use thumbnail if available, otherwise don't set image
+            if art.get("preview_url"):
+                embed.set_image(url=art.get("preview_url"))
+        else:
+            # For regular images, embed normally
+            embed.set_image(url=content_url)
         
         return embed
     
@@ -1146,6 +1172,9 @@ class Search(commands.Cog):
         # Processing gateway - Track active command executions per user
         self.active_art_searches = {}  # {user_id: timestamp}
         self.processing_lock = set()  # Set of user_ids currently processing
+        
+        # Art command access control
+        self.art_commands_public = False  # Set to True when ready for public use
     
     async def cog_load(self):
         """Initialize session on load"""
@@ -1175,6 +1204,32 @@ class Search(commands.Cog):
         """Mark user as done processing"""
         self.processing_lock.discard(user_id)
         self.active_art_searches.pop(user_id, None)
+    
+    async def check_art_access(self, ctx) -> bool:
+        """Check if user has access to art commands based on public setting"""
+        if self.art_commands_public:
+            return True  # Commands are public, everyone can access
+        
+        # Commands are restricted to owner only
+        if not await self.bot.is_owner(ctx.author):
+            embed = discord.Embed(
+                title="⚠️ Safety Hazard - Command Restricted",
+                description=f"{ctx.author.mention}, this command is currently restricted to the bot developer only.\n\n"
+                           "**Reason:** This command is not fully filtered yet and may return inappropriate content that violates Discord's Terms of Service.\n\n"
+                           "The art search system is still under development to ensure maximum safety for all users. "
+                           "Once the filtering system is fully tested and verified, this command will be available to everyone.\n\n"
+                           "Thank you for your understanding! 🛡️",
+                color=discord.Color.orange()
+            )
+            embed.set_footer(text="Bot Developer Only • Safety First")
+            try:
+                embed.set_thumbnail(url=ctx.author.display_avatar.url)
+            except:
+                pass
+            await ctx.reply(embed=embed, mention_author=False)
+            return False
+        
+        return True  # Owner access granted
 
     # ═══════════════════════════════════════════════════════════════
     # GOOGLE SEARCH - Main unified command
@@ -1324,23 +1379,9 @@ class Search(commands.Cog):
         
         Use in NSFW channels for adult content access (Rule34, e621, Realbooru)
         """
-        # ═══ OWNER-ONLY CHECK ═══
-        if not await self.bot.is_owner(ctx.author):
-            embed = discord.Embed(
-                title="⚠️ Safety Hazard - Command Restricted",
-                description=f"{ctx.author.mention}, this command is currently restricted to the bot developer only.\n\n"
-                           "**Reason:** This command is not fully filtered yet and may return inappropriate content that violates Discord's Terms of Service.\n\n"
-                           "The art search system is still under development to ensure maximum safety for all users. "
-                           "Once the filtering system is fully tested and verified, this command will be available to everyone.\n\n"
-                           "Thank you for your understanding! 🛡️",
-                color=discord.Color.orange()
-            )
-            embed.set_footer(text="Bot Developer Only • Safety First")
-            try:
-                embed.set_thumbnail(url=ctx.author.display_avatar.url)
-            except:
-                pass
-            return await ctx.reply(embed=embed, mention_author=False)
+        # ═══ ACCESS CHECK ═══
+        if not await self.check_art_access(ctx):
+            return
         
         # Check for --random or -r flag
         randomize = False
@@ -1479,13 +1520,12 @@ class Search(commands.Cog):
                 if not hasattr(self, 'art_aggregator'):
                     self.art_aggregator = ArtAggregator(self.session)
                 
-                # Fetch initial results with aggressive loading (3 pages per source)
+                # Fetch initial results with aggressive loading (get all available results)
                 results = await self.art_aggregator.search_all(
                     query, 
                     limit=500, 
                     nsfw=is_nsfw,
-                    aggressive_load=True,
-                    max_pages_per_source=3
+                    aggressive_load=True
                 )
                 
                 # Filter out prohibited content from results
@@ -1532,23 +1572,9 @@ class Search(commands.Cog):
         Available sources: danbooru, gelbooru, safebooru, konachan, yandere, 
         zerochan, anime_pictures, waifu_im, nekos_best, rule34, e621, realbooru
         """
-        # ═══ OWNER-ONLY CHECK ═══
-        if not await self.bot.is_owner(ctx.author):
-            embed = discord.Embed(
-                title="⚠️ Safety Hazard - Command Restricted",
-                description=f"{ctx.author.mention}, this command is currently restricted to the bot developer only.\n\n"
-                           "**Reason:** This command is not fully filtered yet and may return inappropriate content that violates Discord's Terms of Service.\n\n"
-                           "The art search system is still under development to ensure maximum safety for all users. "
-                           "Once the filtering system is fully tested and verified, this command will be available to everyone.\n\n"
-                           "Thank you for your understanding! 🛡️",
-                color=discord.Color.orange()
-            )
-            embed.set_footer(text="Bot Developer Only • Safety First")
-            try:
-                embed.set_thumbnail(url=ctx.author.display_avatar.url)
-            except:
-                pass
-            return await ctx.reply(embed=embed, mention_author=False)
+        # ═══ ACCESS CHECK ═══
+        if not await self.check_art_access(ctx):
+            return
         
         # ═══ CONTENT POLICY CHECK ═══
         if contains_prohibited_content(query):
@@ -1652,6 +1678,10 @@ class Search(commands.Cog):
     @art_search.command(name="save", aliases=["favorite", "fav"])
     async def art_save(self, ctx, art_id: str = None, folder: str = "default"):
         """Save art to your favorites"""
+        # ═══ ACCESS CHECK ═══
+        if not await self.check_art_access(ctx):
+            return
+        
         if not art_id:
             return await ctx.reply("❌ Please provide an art ID to save.", mention_author=False)
         
@@ -1693,6 +1723,10 @@ class Search(commands.Cog):
         
         Actions: create, delete, list, rename
         """
+        # ═══ ACCESS CHECK ═══
+        if not await self.check_art_access(ctx):
+            return
+        
         if not action:
             embed = discord.Embed(
                 title="Art Folders",
@@ -1768,6 +1802,10 @@ class Search(commands.Cog):
     @art_search.command(name="favorites", aliases=["favs", "saved"])
     async def art_favorites(self, ctx, folder: str = None):
         """View your saved favorite art"""
+        # ═══ ACCESS CHECK ═══
+        if not await self.check_art_access(ctx):
+            return
+        
         from utils.cogs.quest import Quest_Data
         if not hasattr(self, 'quest_data'):
             self.quest_data = Quest_Data(self.bot)
@@ -2989,6 +3027,74 @@ class Search(commands.Cog):
             await ctx.reply(embed=embed, mention_author=False)
         except Exception:
             await ctx.reply("❌ Invalid math expression", mention_author=False)
+
+    # ═══════════════════════════════════════════════════════════════
+    # OWNER-ONLY SETTINGS
+    # ═══════════════════════════════════════════════════════════════
+    @commands.command(name="artaccess", hidden=True)
+    @commands.is_owner()
+    async def toggle_art_access(self, ctx, status: str = None):
+        """🔧 Toggle art commands public access (Owner only)
+        
+        Usage: .artaccess <on|off|status>
+        """
+        if not status:
+            # Show current status
+            status_text = "🔓 **PUBLIC** - Everyone can use art commands" if self.art_commands_public else "🔒 **PRIVATE** - Owner only"
+            embed = discord.Embed(
+                title="🎨 Art Commands Access Status",
+                description=status_text,
+                color=discord.Color.green() if self.art_commands_public else discord.Color.orange()
+            )
+            embed.add_field(
+                name="To change access:",
+                value=f"`{ctx.prefix}artaccess on` - Make commands public\n"
+                      f"`{ctx.prefix}artaccess off` - Restrict to owner only",
+                inline=False
+            )
+            return await ctx.reply(embed=embed, mention_author=False)
+        
+        status_lower = status.lower()
+        if status_lower in ["on", "public", "enable", "true"]:
+            self.art_commands_public = True
+            embed = discord.Embed(
+                title="✅ Art Commands Now Public",
+                description="🎨 All art commands are now available to everyone!",
+                color=discord.Color.green()
+            )
+            embed.set_footer(text="Use .artaccess status to check current setting")
+            await ctx.reply(embed=embed, mention_author=False)
+            
+        elif status_lower in ["off", "private", "disable", "false"]:
+            self.art_commands_public = False
+            embed = discord.Embed(
+                title="🔒 Art Commands Now Private",
+                description="🎨 Art commands are restricted to bot owner only.",
+                color=discord.Color.orange()
+            )
+            embed.set_footer(text="Use .artaccess status to check current setting")
+            await ctx.reply(embed=embed, mention_author=False)
+            
+        elif status_lower in ["status", "check", "current"]:
+            status_text = "🔓 **PUBLIC** - Everyone can use art commands" if self.art_commands_public else "🔒 **PRIVATE** - Owner only"
+            embed = discord.Embed(
+                title="🎨 Art Commands Access Status",
+                description=status_text,
+                color=discord.Color.green() if self.art_commands_public else discord.Color.orange()
+            )
+            await ctx.reply(embed=embed, mention_author=False)
+            
+        else:
+            embed = discord.Embed(
+                title="❌ Invalid Option",
+                description=f"**Usage:** `{ctx.prefix}artaccess <on|off|status>`\n\n"
+                           "**Options:**\n"
+                           "• `on` - Make commands public\n"
+                           "• `off` - Restrict to owner only\n"
+                           "• `status` - Show current setting",
+                color=discord.Color.red()
+            )
+            await ctx.reply(embed=embed, mention_author=False)
 
 
 async def setup(bot):
