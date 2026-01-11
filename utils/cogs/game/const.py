@@ -149,7 +149,7 @@ TIMER_CONFIG = {
     "job": {"max_uses": 10, "command_cooldown": 5, "cooldown": 3600},
     "rob": {"max_uses": 5, "command_cooldown": 5, "cooldown": 7200},
     "crime": {"max_uses": 3, "command_cooldown": 5, "cooldown": 3600},
-    "gacha": {"max_uses": 5, "command_cooldown": 5, "cooldown": 1800},
+    "gacha": {"max_uses": 50, "command_cooldown": 5, "cooldown": 1800},
     "claim": {"max_uses": 1, "command_cooldown": 5, "cooldown": 86400},
 }
 
@@ -453,16 +453,29 @@ def calculate_release_value(favorites: int, rarity: str, char_name: str = "unkno
 # ═══════════════════════════════════════════════════════════════
 
 async def fetch_jikan_character(session, target_rarity: str):
-    """Fast Jikan API fetch - optimized for speed with parallel requests."""
+    """Fast Jikan API fetch - optimized for speed and variety with parallel requests."""
     config = GACHA_API_CONFIG["jikan"]
     id_ranges = config.get("character_id_ranges", {})
     id_range = id_ranges.get(target_rarity, (1, 150000))
     timeout = config["timeout"]
     
-    # Try fewer attempts but faster
-    max_attempts = 8
+    # Try more attempts with better randomization for variety
+    max_attempts = 12
+    used_ids = set()  # Track used IDs in this session to avoid duplicates
+    
     for attempt in range(max_attempts):
-        cid = random.randint(*id_range)
+        # Use wider range for better variety, especially for common characters
+        if target_rarity == "common":
+            # Use much wider range for common characters to avoid repetition
+            cid = random.randint(1, 200000)
+        else:
+            cid = random.randint(*id_range)
+        
+        # Skip if we've already used this ID in this session
+        if cid in used_ids:
+            continue
+        used_ids.add(cid)
+        
         char_url = config["base_url"] + config["character_endpoint"].format(cid)
         
         try:
@@ -525,19 +538,31 @@ async def fetch_jikan_character(session, target_rarity: str):
     return None
 
 async def fetch_anilist_character(session, target_rarity: str):
-    """Fast AniList API fetch - optimized for speed."""
+    """Fast AniList API fetch - optimized for speed and variety."""
     config = GACHA_API_CONFIG["anilist"]
     popularity_ranges = config.get("anime_popularity_ranges", {})
     pop_range = popularity_ranges.get(target_rarity, (1, 19999))
     timeout = config["timeout"]
     
-    # Try fewer attempts but faster
-    max_attempts = 8
+    # Try more attempts with better randomization
+    max_attempts = 12
+    used_anime_ids = set()  # Track used anime to avoid duplicates
+    
     for attempt in range(max_attempts):
         try:
+            # Add some randomness to the popularity range for better variety
+            if target_rarity == "common":
+                # Use much wider range for common characters
+                pop_min = max(1, pop_range[0] - random.randint(0, 10000))
+                pop_max = pop_range[1] + random.randint(0, 50000)
+            else:
+                # Add some variance to other rarities too
+                pop_min = max(1, pop_range[0] - random.randint(0, 5000))
+                pop_max = pop_range[1] + random.randint(0, 10000)
+            
             variables = {
-                "popularityMin": pop_range[0],
-                "popularityMax": pop_range[1]
+                "popularityMin": pop_min,
+                "popularityMax": pop_max
             }
             
             async with session.post(
@@ -552,7 +577,19 @@ async def fetch_anilist_character(session, target_rarity: str):
                 if not anime_list:
                     continue
 
-                anime = random.choice(anime_list)
+                # Filter out already used anime for variety
+                available_anime = [anime for anime in anime_list if anime.get("id") not in used_anime_ids]
+                if not available_anime:
+                    # If all anime have been used, clear some and continue
+                    if len(used_anime_ids) > 10:
+                        used_anime_ids.clear()
+                        available_anime = anime_list
+                    else:
+                        continue
+                
+                anime = random.choice(available_anime)
+                used_anime_ids.add(anime.get("id"))
+                
                 anime_title = anime["title"]["romaji"]
                 anime_popularity = anime.get("popularity", 0)
                 

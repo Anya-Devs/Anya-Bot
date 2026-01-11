@@ -970,8 +970,52 @@ async def generate_gacha_draw_image(characters: list, claimed_indices: list = No
 
         char_img = char_images[i]
         if char_img:
+            if is_claimed:
+                # Convert to grayscale for claimed cards
+                char_img = char_img.convert('L').convert('RGBA')
+                # Apply gray tint
+                gray_overlay = Image.new('RGBA', char_img.size, (128, 128, 128, 100))
+                char_img = Image.alpha_composite(char_img, gray_overlay)
             char_img = char_img.resize((img_area_w, img_area_h), Image.Resampling.LANCZOS)
             card_bg.paste(char_img, (img_area_x, img_area_y), char_img)
+
+        # ===== CLAIMED STAMP =====
+        if is_claimed:
+            # Create red stamp text
+            try:
+                stamp_font = _load_emoji_font(48)
+            except:
+                stamp_font = ImageFont.load_default()
+            
+            stamp_text = "CLAIMED"
+            
+            # Calculate stamp position and rotation (diagonal)
+            stamp_x = card_width // 2
+            stamp_y = card_height // 2
+            
+            # Create stamp overlay with rotation
+            stamp_img = Image.new('RGBA', (card_width, card_height), (0, 0, 0, 0))
+            stamp_draw = ImageDraw.Draw(stamp_img)
+            
+            # Draw text with shadow effect
+            text_bbox = stamp_draw.textbbox((0, 0), stamp_text, font=stamp_font)
+            text_width = text_bbox[2] - text_bbox[0]
+            text_height = text_bbox[3] - text_bbox[1]
+            
+            # Center the stamp
+            text_x = (card_width - text_width) // 2
+            text_y = (card_height - text_height) // 2
+            
+            # Draw shadow
+            stamp_draw.text((text_x + 3, text_y + 3), stamp_text, fill=(0, 0, 0, 180), font=stamp_font)
+            # Draw red text
+            stamp_draw.text((text_x, text_y), stamp_text, fill=(220, 20, 60, 230), font=stamp_font)
+            
+            # Rotate the stamp
+            rotated_stamp = stamp_img.rotate(-30, expand=False, fillcolor=(0, 0, 0, 0))
+            
+            # Paste rotated stamp onto card
+            card_bg.paste(rotated_stamp, (0, 0), rotated_stamp)
 
         # ===== OWNED BANNER (TEXT MOVED DOWN 5PX) =====
         if is_owned and not is_claimed:

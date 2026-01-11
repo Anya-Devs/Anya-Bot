@@ -511,6 +511,7 @@ class Games(commands.Cog):
         from utils.cogs.game.const import roll_gacha_rarity
         cards = []
         drawn_character_ids = set()  # Track already drawn characters in this session
+        global_character_pool = set()  # Track characters seen recently across all draws
         
         for i in range(num_cards):
             # Roll rarity using pure RNG (no pity)
@@ -520,7 +521,7 @@ class Games(commands.Cog):
             # The API functions now properly filter by popularity ranges
             char = None
             attempts = 0
-            max_attempts = 15  # Increased attempts for better success rate
+            max_attempts = 20  # Increased attempts for better success rate
             
             while char is None and attempts < max_attempts:
                 char = await self.fetch_character_by_rarity(rolled_rarity)
@@ -571,30 +572,35 @@ class Games(commands.Cog):
             else:
                 # Fallback: Try one more time with any rarity if original rarity failed
                 logger.warning(f"Failed to fetch {rolled_rarity} character after {max_attempts} attempts, trying fallback")
-                fallback_attempts = 5
+                fallback_attempts = 8
                 for _ in range(fallback_attempts):
                     fallback_char = await self.fetch_character_by_rarity("common")  # Try common as fallback
                     if fallback_char and fallback_char.get("image_url") and fallback_char.get("anime"):
-                        fallback_char["rarity"] = rolled_rarity  # Override rarity to match roll
-                        cards.append(fallback_char)
-                        logger.info(f"Used fallback common character for {rolled_rarity} roll")
-                        break
+                        # Check uniqueness for fallback too
+                        fallback_id = f"{fallback_char.get('id')}_{fallback_char.get('name', '').lower()}"
+                        if fallback_id not in drawn_character_ids:
+                            fallback_char["rarity"] = rolled_rarity  # Override rarity to match roll
+                            cards.append(fallback_char)
+                            drawn_character_ids.add(fallback_id)
+                            logger.info(f"Used fallback common character for {rolled_rarity} roll")
+                            break
                 else:
                     # Last resort: Use a well-known character with guaranteed data
                     logger.error(f"All attempts failed, using emergency fallback")
-                    cards.append({
-                        "id": 40,  # Spike Spiegel
-                        "name": "Spike Spiegel",
-                        "anime": "Cowboy Bebop",
+                    emergency_char = {
+                        "id": 40 + i,  # Spike Spiegel + variation
+                        "name": f"Character {i+1}",
+                        "anime": "Fallback Anime",
                         "favorites": 50000,
-                        "gender": "Male",
+                        "gender": "Unknown",
                         "image_url": "https://cdn.myanimelist.net/images/characters/4/50197.jpg",
                         "rarity": rolled_rarity,
                         "api_source": "Emergency Fallback"
-                    })
+                    }
+                    cards.append(emergency_char)
         
         return cards
-    
+
     async def pull_three_cards_real(self, gender_filter: Optional[str] = None, **kwargs) -> List[Dict]:
         """Pull 3 gacha cards - pure RNG, no pity."""
         guild_id = kwargs.get("guild_id")
