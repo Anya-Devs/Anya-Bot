@@ -389,47 +389,64 @@ def generate_uid() -> str:
     return uuid.uuid4().hex[:8].upper()
 
 def calculate_release_value(favorites: int, rarity: str, char_name: str = "unknown") -> int:
-    """Calculate dynamic release value with seed-based randomization.
-    Format: base + favorites_bonus + seed_variance
-    Example: Uncommon with 150 favs = 500 + (150*2) + seed(50-150) = 850-950 pts
-    """
+    """Calculate dynamic release value based on popularity with uniqueness and overflow."""
     import hashlib
-    
+    import random
+
     # Base values per rarity tier
-    base_values = {"common": 200, "uncommon": 500, "rare": 1200, "epic": 3000, "legendary": 7500}
-    base = base_values.get(rarity, 200)
-    
-    # Favorites bonus calculation (scaled)
+    base_values = {"common": 20, "uncommon": 40, "rare": 100, "epic": 250, "legendary": 600}
+    base = base_values.get(rarity, 20)
+
+    # Favorites bonus calculation
     if favorites == 0:
         favorites_bonus = 0
     elif favorites <= 100:
-        favorites_bonus = int(favorites * 1.5)
+        favorites_bonus = int(favorites * 0.5)
     elif favorites <= 500:
-        favorites_bonus = 150 + int((favorites - 100) * 2)
+        favorites_bonus = 50 + int((favorites - 100) * 0.8)
     elif favorites <= 2000:
-        favorites_bonus = 950 + int((favorites - 500) * 2.5)
+        favorites_bonus = 370 + int((favorites - 500) * 1.0)
     elif favorites <= 8000:
-        favorites_bonus = 4700 + int((favorites - 2000) * 3)
+        favorites_bonus = 1870 + int((favorites - 2000) * 1.2)
     else:
-        favorites_bonus = 22700 + int((favorites - 8000) * 3.5)
-    
-    # Rarity multipliers for favorites bonus
+        favorites_bonus = 9030 + int((favorites - 8000) * 1.3)
+
+    # Rarity multipliers
     rarity_multipliers = {"common": 0.8, "uncommon": 1.0, "rare": 1.2, "epic": 1.4, "legendary": 1.6}
     favorites_bonus = int(favorites_bonus * rarity_multipliers.get(rarity, 1.0))
-    
-    # Seed-based variance (deterministic per character)
+
+    # Seed-based variance
     seed_input = f"{char_name}_{favorites}_{rarity}"
     hash_object = hashlib.md5(seed_input.encode())
     seed_value = int(hash_object.hexdigest()[:8], 16)
     random.seed(seed_value)
-    
-    # Variance range based on base value (±10-30%)
-    variance_range = base * 0.2
+    variance_range = base * 0.15
     seed_variance = int(random.uniform(-variance_range, variance_range))
+
+    # Overflow bonus for extreme popularity
+    overflow_bonus = 0
+    if favorites >= 10000:
+        overflow_multiplier = 1.0 + (favorites - 10000) / 20000
+        overflow_seed = f"overflow_{char_name}_{favorites}"
+        overflow_hash = hashlib.md5(overflow_seed.encode())
+        overflow_seed_val = int(overflow_hash.hexdigest()[:8], 16)
+        random.seed(overflow_seed_val)
+        overflow_base = int(base * overflow_multiplier)
+        overflow_bonus = int(random.uniform(0.5, 2.0) * overflow_base)
+
+    # Dynamic min and max
+    min_seed_input = f"min_{char_name}_{rarity}"
+    min_hash_object = hashlib.md5(min_seed_input.encode())
+    min_seed_value = int(min_hash_object.hexdigest()[:8], 16)
+    random.seed(min_seed_value)
+    dynamic_min = int(base * (0.25 + random.random() * 0.25))  # 25-50% of base
+
+    # Dynamic max proportional to favorites + base + rarity + overflow
+    dynamic_max = int(base * 5 + favorites * 0.2 + favorites_bonus * 0.5 + overflow_bonus * 0.5)
+
     random.seed()  # Reset seed
-    
-    total_value = base + favorites_bonus + seed_variance
-    return max(500, min(total_value, 100000))
+    total_value = base + favorites_bonus + seed_variance + overflow_bonus
+    return max(dynamic_min, min(total_value, dynamic_max))
 
 # ═══════════════════════════════════════════════════════════════
 # API FETCH FUNCTIONS

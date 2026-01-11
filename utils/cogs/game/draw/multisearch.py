@@ -22,167 +22,56 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Character name to booru tag mappings
-# Format: "common name": "booru_tag" or "booru_tag_(series)"
-CHARACTER_TAG_MAPPINGS = {
-    # Spy x Family
-    "yor forger": "yor_briar",
-    "yor briar": "yor_briar",
-    "anya forger": "anya_(spy_x_family)",
-    "loid forger": "loid_forger",
-    "twilight": "loid_forger",
-    
-    # Re:Zero
-    "emilia": "emilia_(re:zero)",
-    "rem": "rem_(re:zero)",
-    "ram": "ram_(re:zero)",
-    "beatrice": "beatrice_(re:zero)",
-    "echidna": "echidna_(re:zero)",
-    
-    # Konosuba
-    "megumin": "megumin",
-    "aqua": "aqua_(konosuba)",
-    "darkness": "darkness_(konosuba)",
-    "kazuma": "satou_kazuma",
-    
-    # Demon Slayer
-    "nezuko": "kamado_nezuko",
-    "nezuko kamado": "kamado_nezuko",
-    "tanjiro": "kamado_tanjirou",
-    "zenitsu": "agatsuma_zenitsu",
-    "inosuke": "hashibira_inosuke",
-    "shinobu": "kochou_shinobu",
-    "mitsuri": "kanroji_mitsuri",
-    
-    # Jujutsu Kaisen
-    "gojo": "gojou_satoru",
-    "gojo satoru": "gojou_satoru",
-    "itadori": "itadori_yuuji",
-    "megumi": "fushiguro_megumi",
-    "nobara": "kugisaki_nobara",
-    
-    # Tokyo Ghoul
-    "ken kaneki": "kaneki_ken",
-    "kaneki": "kaneki_ken",
-    "touka": "kirishima_touka",
-    "touka kirishima": "kirishima_touka",
-    
-    # Classroom of the Elite
-    "kiyotaka ayanokouji": "ayanokouji_kiyotaka",
-    "ayanokouji": "ayanokouji_kiyotaka",
-    "kiyotaka": "ayanokouji_kiyotaka",
-    "horikita": "horikita_suzune",
-    
-    # My Hero Academia
-    "deku": "midoriya_izuku",
-    "izuku": "midoriya_izuku",
-    "bakugo": "bakugou_katsuki",
-    "todoroki": "todoroki_shouto",
-    "uraraka": "uraraka_ochako",
-    
-    # Attack on Titan
-    "eren": "eren_yeager",
-    "mikasa": "mikasa_ackerman",
-    "levi": "levi_(shingeki_no_kyojin)",
-    "armin": "armin_arlert",
-    
-    # Chainsaw Man
-    "power": "power_(chainsaw_man)",
-    "makima": "makima_(chainsaw_man)",
-    "denji": "denji_(chainsaw_man)",
-    "aki": "aki_hayakawa",
-    
-    # Darling in the FranXX
-    "zero two": "zero_two_(darling_in_the_franxx)",
-    "02": "zero_two_(darling_in_the_franxx)",
-    "ichigo": "ichigo_(darling_in_the_franxx)",
-    
-    # Genshin Impact
-    "hu tao": "hu_tao_(genshin_impact)",
-    "raiden": "raiden_shogun",
-    "ayaka": "kamisato_ayaka",
-    "ganyu": "ganyu_(genshin_impact)",
-    "keqing": "keqing_(genshin_impact)",
-    "mona": "mona_(genshin_impact)",
-    "fischl": "fischl_(genshin_impact)",
-    
-    # Fate Series
-    "saber": "saber_(fate)",
-    "artoria": "artoria_pendragon_(fate)",
-    "rin": "tohsaka_rin",
-    "sakura": "matou_sakura",
-    "jeanne": "jeanne_d'arc_(fate)",
-    
-    # Hololive
-    "gawr gura": "gawr_gura",
-    "gura": "gawr_gura",
-    "mori calliope": "mori_calliope",
-    "amelia watson": "watson_amelia",
-    "pekora": "usada_pekora",
-    "marine": "houshou_marine",
-    
-    # Bocchi the Rock
-    "bocchi": "gotou_hitori",
-    "hitori": "gotou_hitori",
-    "nijika": "ijichi_nijika",
-    "ryo": "yamada_ryo_(bocchi_the_rock!)",
-    "kita": "kita_ikuyo",
-    
-    # Oshi no Ko
-    "ai": "ai_(oshi_no_ko)",
-    "ruby": "ruby_(oshi_no_ko)",
-    "kana": "arima_kana",
-    "akane": "kurokawa_akane",
-    
-    # Frieren
-    "frieren": "frieren",
-    "fern": "fern_(sousou_no_frieren)",
-    
-    # Blue Lock
-    "isagi": "isagi_yoichi",
-    "bachira": "bachira_meguru",
-    
-    # Violet Evergarden
-    "violet": "violet_evergarden",
-    "violet evergarden": "violet_evergarden",
+# Smart character name patterns for booru tag generation
+COMMON_NAME_PATTERNS = {
+    # Common name variations and patterns
+    "suffixes_to_remove": ['san', 'chan', 'kun', 'sama', 'sensei', 'senpai'],
+    "prefixes_to_remove": ['mr', 'mrs', 'miss', 'dr', 'prof'],
+    "common_titles": ['lord', 'lady', 'captain', 'commander', 'major', 'colonel'],
 }
 
-# Series name to booru tag mappings
-SERIES_TAG_MAPPINGS = {
-    "spy x family": "spy_x_family",
-    "spyxfamily": "spy_x_family",
-    "re:zero": "re:zero_kara_hajimeru_isekai_seikatsu",
-    "re zero": "re:zero_kara_hajimeru_isekai_seikatsu",
-    "konosuba": "kono_subarashii_sekai_ni_shukufuku_wo!",
-    "kono subarashii sekai ni shukufuku wo": "kono_subarashii_sekai_ni_shukufuku_wo!",
-    "demon slayer": "kimetsu_no_yaiba",
-    "kimetsu no yaiba": "kimetsu_no_yaiba",
-    "jujutsu kaisen": "jujutsu_kaisen",
-    "my hero academia": "boku_no_hero_academia",
-    "mha": "boku_no_hero_academia",
-    "bnha": "boku_no_hero_academia",
-    "attack on titan": "shingeki_no_kyojin",
-    "aot": "shingeki_no_kyojin",
-    "chainsaw man": "chainsaw_man",
-    "darling in the franxx": "darling_in_the_franxx",
-    "ditf": "darling_in_the_franxx",
-    "genshin impact": "genshin_impact",
-    "genshin": "genshin_impact",
-    "fate": "fate_(series)",
-    "fate stay night": "fate/stay_night",
-    "fate grand order": "fate/grand_order",
-    "fgo": "fate/grand_order",
-    "hololive": "hololive",
-    "bocchi the rock": "bocchi_the_rock!",
-    "bocchi": "bocchi_the_rock!",
-    "oshi no ko": "oshi_no_ko",
-    "frieren": "sousou_no_frieren",
-    "blue lock": "blue_lock",
-    "violet evergarden": "violet_evergarden",
-    "one piece": "one_piece",
-    "naruto": "naruto",
-    "dragon ball": "dragon_ball",
-    "pokemon": "pokemon",
+# Series name patterns for better formatting
+SERIES_PATTERNS = {
+    "articles_to_remove": ['the', 'a', 'an'],
+    "special_chars": [':', ';', '!', '?', '.', ',', '&', "'", '"'],
+}
+
+# Smart series name patterns for algorithmic generation
+SERIES_FORMATTING_RULES = {
+    "common_substitutions": {
+        "spy x family": "spy_x_family",
+        "re:zero": "re:zero_kara_hajimeru_isekai_seikatsu",
+        "re zero": "re:zero_kara_hajimeru_isekai_seikatsu",
+        "demon slayer": "kimetsu_no_yaiba",
+        "kimetsu no yaiba": "kimetsu_no_yaiba",
+        "jujutsu kaisen": "jujutsu_kaisen",
+        "my hero academia": "boku_no_hero_academia",
+        "mha": "boku_no_hero_academia",
+        "bnha": "boku_no_hero_academia",
+        "attack on titan": "shingeki_no_kyojin",
+        "aot": "shingeki_no_kyojin",
+        "chainsaw man": "chainsaw_man",
+        "darling in the franxx": "darling_in_the_franxx",
+        "ditf": "darling_in_the_franxx",
+        "genshin impact": "genshin_impact",
+        "genshin": "genshin_impact",
+        "fate": "fate_(series)",
+        "fate stay night": "fate/stay_night",
+        "fate grand order": "fate/grand_order",
+        "fgo": "fate/grand_order",
+        "hololive": "hololive",
+        "bocchi the rock": "bocchi_the_rock!",
+        "bocchi": "bocchi_the_rock!",
+        "oshi no ko": "oshi_no_ko",
+        "frieren": "sousou_no_frieren",
+        "blue lock": "blue_lock",
+        "arknights": "arknights",
+        "violet evergarden": "violet_evergarden",
+        "one piece": "one_piece",
+        "naruto": "naruto",
+        "dragon ball": "dragon_ball",
+        "pokemon": "pokemon",
+    }
 }
 
 
@@ -265,67 +154,91 @@ class MultiSourceImageSearch:
         
         return validated
     
-    def _get_booru_character_tag(self, character_name: str, series_name: str = None) -> str:
-        """Convert character name to proper booru tag format"""
+    def _clean_character_name(self, character_name: str) -> str:
+        """Clean and normalize character name using smart patterns"""
         name_lower = character_name.lower().strip()
         
-        # Check direct mapping first
-        if name_lower in CHARACTER_TAG_MAPPINGS:
-            return CHARACTER_TAG_MAPPINGS[name_lower]
+        # Remove common suffixes
+        for suffix in COMMON_NAME_PATTERNS["suffixes_to_remove"]:
+            if name_lower.endswith(f' {suffix}'):
+                name_lower = name_lower[:-len(f' {suffix}')]
         
-        # Try without common suffixes
-        for suffix in [' san', ' chan', ' kun', ' sama']:
-            if name_lower.endswith(suffix):
-                base_name = name_lower[:-len(suffix)]
-                if base_name in CHARACTER_TAG_MAPPINGS:
-                    return CHARACTER_TAG_MAPPINGS[base_name]
+        # Remove common prefixes
+        for prefix in COMMON_NAME_PATTERNS["prefixes_to_remove"]:
+            if name_lower.startswith(f'{prefix} '):
+                name_lower = name_lower[len(f'{prefix} '):]
         
-        # Format as booru tag: spaces to underscores, lowercase
-        formatted = re.sub(r'[^a-zA-Z0-9\s]', '', name_lower)
-        formatted = re.sub(r'\s+', '_', formatted.strip())
+        # Remove common titles
+        for title in COMMON_NAME_PATTERNS["common_titles"]:
+            name_lower = name_lower.replace(f'{title} ', '').replace(f' {title}', '')
         
-        # If series provided, try to add series suffix
+        # Remove special characters and extra spaces
+        cleaned = re.sub(r'[^a-zA-Z0-9\s]', '', name_lower)
+        cleaned = re.sub(r'\s+', '_', cleaned.strip())
+        
+        return cleaned
+    
+    def _get_booru_character_tag(self, character_name: str, series_name: str = None) -> str:
+        """Generate booru tag using smart algorithmic approach"""
+        cleaned_name = self._clean_character_name(character_name)
+        
+        # If series provided, try with series disambiguation first
         if series_name:
             series_tag = self._get_booru_series_tag(series_name)
             if series_tag:
-                return f"{formatted}_({series_tag})"
+                return f"{cleaned_name}_({series_tag})"
         
-        return formatted
+        # Return cleaned name without series
+        return cleaned_name
     
     def _get_name_variations(self, character_name: str, series_name: str = None) -> List[str]:
-        """Generate multiple name variations to try (first_last, last_first, etc.)"""
+        """Generate multiple name variations using smart algorithm"""
         variations = []
+        cleaned_name = self._clean_character_name(character_name)
         
-        # Get base tag
-        base_tag = self._get_booru_character_tag(character_name, series_name)
-        variations.append(base_tag)
+        # Primary: with series disambiguation
+        if series_name:
+            series_tag = self._get_booru_series_tag(series_name)
+            if series_tag:
+                variations.append(f"{cleaned_name}_({series_tag})")
         
-        # If not in mappings, try name variations
-        name_lower = character_name.lower().strip()
-        if name_lower not in CHARACTER_TAG_MAPPINGS:
-            # Clean the name
-            cleaned = re.sub(r'[^a-zA-Z0-9\s]', '', name_lower)
-            parts = cleaned.split()
-            
+        # Secondary: without series
+        variations.append(cleaned_name)
+        
+        # Generate name order variations for multi-part names
+        parts = cleaned_name.split('_')
+        if len(parts) >= 2:
+            # Try different combinations
             if len(parts) == 2:
-                # Try both first_last and last_first
                 first, last = parts
                 variations.append(f"{first}_{last}")
                 variations.append(f"{last}_{first}")
                 
-                # Try with series suffix if provided
+                # With series if provided
                 if series_name:
                     series_tag = self._get_booru_series_tag(series_name)
                     if series_tag:
                         variations.append(f"{first}_{last}_({series_tag})")
                         variations.append(f"{last}_{first}_({series_tag})")
+            
             elif len(parts) == 3:
-                # Try different combinations for 3-part names
                 first, middle, last = parts
-                variations.append(f"{first}_{middle}_{last}")
-                variations.append(f"{last}_{first}_{middle}")
-                variations.append(f"{first}_{last}")
-                variations.append(f"{last}_{first}")
+                # Different combinations for 3-part names
+                variations.extend([
+                    f"{first}_{middle}_{last}",
+                    f"{last}_{first}_{middle}",
+                    f"{first}_{last}",
+                    f"{last}_{first}"
+                ])
+                
+                # With series for main combinations
+                if series_name:
+                    series_tag = self._get_booru_series_tag(series_name)
+                    if series_tag:
+                        variations.extend([
+                            f"{first}_{middle}_{last}_({series_tag})",
+                            f"{first}_{last}_({series_tag})"
+                        ])
         
         # Remove duplicates while preserving order
         seen = set()
@@ -338,19 +251,28 @@ class MultiSourceImageSearch:
         return unique_variations
     
     def _get_booru_series_tag(self, series_name: str) -> str:
-        """Convert series name to proper booru tag format"""
+        """Generate series tag using smart formatting rules"""
         if not series_name:
             return ""
         
         name_lower = series_name.lower().strip()
         
-        # Check direct mapping
-        if name_lower in SERIES_TAG_MAPPINGS:
-            return SERIES_TAG_MAPPINGS[name_lower]
+        # Check common substitutions first
+        if name_lower in SERIES_FORMATTING_RULES["common_substitutions"]:
+            return SERIES_FORMATTING_RULES["common_substitutions"][name_lower]
+        
+        # Remove articles
+        for article in SERIES_PATTERNS["articles_to_remove"]:
+            name_lower = name_lower.replace(f'{article} ', '').replace(f' {article}', '')
+        
+        # Remove special characters
+        for char in SERIES_PATTERNS["special_chars"]:
+            name_lower = name_lower.replace(char, '')
         
         # Clean and format
         cleaned = re.sub(r'[^a-zA-Z0-9\s]', '', name_lower)
         cleaned = re.sub(r'\s+', '_', cleaned.strip())
+        
         return cleaned
     
     async def _fetch_with_retry(self, fetch_func, char_tag: str, page: int, limit: int, max_retries: int = 2) -> List[Dict]:

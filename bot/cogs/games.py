@@ -40,6 +40,236 @@ class Games(commands.Cog):
         if self.session and not self.session.closed:
             asyncio.create_task(self.session.close())
    
+    async def fetch_enhanced_character_description(self, character_name: str, anime_name: str = None) -> str:
+        """Enhanced character description fetching with multiple search strategies"""
+        session = await self.get_session()
+        
+        try:
+            # Strategy 1: Direct character search by name
+            description = await self._search_character_by_name(session, character_name, anime_name)
+            if description and description != f"A character from {anime_name or 'Unknown'}.":
+                return description
+            
+            # Strategy 2: Try alternative name variations (common nicknames, romanized names)
+            alt_names = self._get_name_variations(character_name)
+            for alt_name in alt_names:
+                description = await self._search_character_by_name(session, alt_name, anime_name)
+                if description and description != f"A character from {anime_name or 'Unknown'}.":
+                    return description
+            
+            # Strategy 3: Search by anime series and find main characters
+            if anime_name:
+                description = await self._search_by_anime_series(session, character_name, anime_name)
+                if description and description != f"A character from {anime_name or 'Unknown'}.":
+                    return description
+            
+            # Strategy 4: Fallback to generic but informative description
+            return f"A character from {anime_name or 'Unknown'}."
+                    
+        except Exception as e:
+            logger.debug(f"Error in enhanced character description fetch for {character_name}: {e}")
+        
+        return f"A character from {anime_name or 'Unknown'}."
+    
+    async def _search_character_by_name(self, session, character_name: str, anime_name: str = None) -> str:
+     """Search for character by name with Jikan API"""
+     try:
+        search_url = "https://api.jikan.moe/v4/characters"
+        params = {
+            "q": character_name,
+            "limit": 15
+        }
+
+        print(f"Searching for character: '{character_name}' from anime: '{anime_name}'")
+
+        async with session.get(
+            search_url,
+            params=params,
+            timeout=aiohttp.ClientTimeout(total=10)
+        ) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                characters = data.get("data", [])
+
+                print(f"Found {len(characters)} characters for '{character_name}'")
+                
+                # Debug: Print the first character structure
+                if characters:
+                    print(f"First character structure: {json.dumps(characters[0], indent=2)}")
+
+                if not characters:
+                    return f"A character from {anime_name or 'Unknown'}."
+
+                best_match = None
+                best_score = 0
+                char_name_lower = character_name.lower()
+
+                for i, char in enumerate(characters):
+                    # Handle different API response structures
+                    char_data = char.get("character", char)  # Use char itself if no nested character object
+                    char_name_api = char_data.get("name", "").lower()
+                    score = 0
+
+                    if char_name_api == char_name_lower:
+                        score += 100
+                        print(f"Exact match found: '{char_name_api}' (score: {score})")
+                    elif char_name_lower in char_name_api or char_name_api in char_name_lower:
+                        score += 50
+                        print(f"Partial match: '{char_name_api}' (score: {score})")
+
+                    if anime_name and char.get("anime"):
+                        for anime in char.get("anime", []):
+                            anime_title = anime.get("title", "").lower()
+                            if anime_name.lower() in anime_title or anime_title in anime_name.lower():
+                                score += 30
+                                print(f"Anime match: '{anime_title}' (score: {score})")
+                                break
+
+                    for nickname in char_data.get("nicknames", []):
+                        if char_name_lower in nickname.lower() or nickname.lower() in char_name_lower:
+                            score += 25
+                            print(f"Nickname match: '{nickname}' (score: {score})")
+                            break
+
+                    print(f"Character {i}: '{char_name_api}' - Final score: {score}")
+
+                    if score > best_score:
+                        best_score = score
+                        best_match = char_data
+                        print(f"New best match: '{char_name_api}' with score {score}")
+
+                if best_match:
+                    print(f"Best match: '{best_match.get('name', 'Unknown')}' with score {best_score}")
+
+                if best_match and best_score >= 25:
+                    about = best_match.get("about", "")
+                    if about:
+                        about = about.replace("\n\n", " ").replace("\n", " ")
+                        about = about[:300]
+                        if len(about) == 300:
+                            about = about.rsplit(" ", 1)[0] + "..."
+                        print(f"Returning description for '{best_match.get('name')}'")
+                        return about
+
+                    nicknames = best_match.get("nicknames", [])
+                    if nicknames:
+                        anime_title = anime_name or "Unknown"
+                        return f"Also known as: {', '.join(nicknames[:3])}. A character from {anime_title}"
+
+                print(f"No good match found (best score: {best_score})")
+
+     except Exception as e:
+        print(f"Error in character name search: {e}")
+
+     return f"A character from {anime_name or 'Unknown'}."
+
+    async def _search_by_anime_series(self, session, character_name: str, anime_name: str) -> str:
+        """Search for character within a specific anime series"""
+        try:
+            # First search for the anime
+            anime_search_url = f"https://api.jikan.moe/v4/anime"
+            params = {
+                "q": anime_name,
+                "limit": 5
+            }
+            
+            async with session.get(anime_search_url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    animes = data.get("data", [])
+                    
+                    if animes:
+                        # Get the first matching anime
+                        anime = animes[0]
+                        anime_id = anime.get("mal_id")
+                        
+                        if anime_id:
+                            # Get characters for this anime
+                            characters_url = f"https://api.jikan.moe/v4/anime/{anime_id}/characters"
+                            
+                            async with session.get(characters_url, timeout=aiohttp.ClientTimeout(total=10)) as char_resp:
+                                if char_resp.status == 200:
+                                    char_data = await char_resp.json()
+                                    characters = char_data.get("data", [])
+                                    
+                                    # Find matching character
+                                    char_name_lower = character_name.lower()
+                                    for char_info in characters:
+                                        char = char_info.get("character", {})
+                                        char_name_api = char.get("name", "").lower()
+                                        
+                                        # Check for name match
+                                        if (char_name_api == char_name_lower or 
+                                            char_name_lower in char_name_api or 
+                                            char_name_api in char_name_lower):
+                                            
+                                            about = char.get("about", "")
+                                            if about:
+                                                about = about.replace("\n\n", " ").replace("\n", " ")
+                                                about = about[:300]
+                                                if len(about) == 300:
+                                                    about = about.rsplit(" ", 1)[0] + "..."
+                                                return about
+                                            
+                                            # Fallback to role information
+                                            role = char_info.get("role", "Character")
+                                            return f"A {role.lower()} from {anime.get('title', anime_name)}."
+        
+        except Exception as e:
+            logger.debug(f"Error in anime series search: {e}")
+        
+        return f"A character from {anime_name or 'Unknown'}."
+    
+    def _get_name_variations(self, character_name: str) -> list:
+        """Generate common name variations for better search results"""
+        variations = []
+        name_lower = character_name.lower()
+        
+        # Common patterns
+        if " " in character_name:
+            # Split names - try first and last name separately
+            parts = character_name.split()
+            if len(parts) >= 2:
+                variations.append(parts[0])  # First name
+                variations.append(parts[-1])  # Last name
+                variations.append(parts[0] + " " + parts[-1])  # First + Last
+        
+        # Common Japanese name patterns
+        if "-" in character_name:
+            parts = character_name.split("-")
+            variations.extend(parts)
+        
+        # Remove common honorifics
+        honorifics = ["-san", "-chan", "-kun", "-sama", "-sensei", "-senpai"]
+        for honorific in honorifics:
+            if name_lower.endswith(honorific):
+                variations.append(character_name[:-len(honorific)])
+        
+        # Special case variations for common character names
+        special_variations = {
+            "megumin": ["Megumin"],  # Already capitalized correctly
+            "anya": ["Anya", "Anya Forger"],
+            "eren": ["Eren", "Eren Yeager"],
+            "mikasa": ["Mikasa", "Mikasa Ackerman"],
+            "emilia": ["Emilia"],
+            "rem": ["Rem"],
+            "ram": ["Ram"],
+            "zero two": ["Zero Two", "02", "002"],
+            "darling": ["Zero Two", "02", "002"],
+        }
+        
+        # Add special variations if character name matches
+        for key, vars_list in special_variations.items():
+            if key in name_lower or name_lower in key:
+                variations.extend(vars_list)
+        
+        # Add original name
+        variations.append(character_name)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        return [x for x in variations if not (x in seen or seen.add(x))]
+   
     async def get_user_character(self, user_id: str, guild_id: str) -> Optional[str]:
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
@@ -1692,35 +1922,24 @@ class Games(commands.Cog):
         cover_progress = char.get("cover_progress", 0)
         unlock_threshold = max(100, favorites // 10)  # Need 10% of favorites as interactions
         
-        # Create a beautiful character description
-        description = char.get("about", "")
-        if not description:
-            description = f"A character from {char.get('anime', 'Unknown')}."
-        
         embed = discord.Embed(
-            title=f"{rarity_data['stars']} {char['name']}",
-            description=f"*{description}*",
+            #title=f"", # {rarity_data['stars']}
+            description=f"```           {char['name']}```",
             color=rarity_data["color"]
         )
         
         # Character details in a clean format
-        details = f"**Series:** {char.get('anime', 'Unknown')}\n"
-        details += f"**Gender:** {char.get('gender', 'Unknown')}\n"
-        details += f"**Rarity:** {rarity.title()}\n"
-        details += f"**Favorites:** {favorites:,}\n"
+        details = f"Series: {char.get('anime', 'Unknown')}\n"
+        details += f"Gender: {char.get('gender', 'Unknown')}\n"
+        details += f"Rarity: {rarity.title()}\n"
+        details += f"Favorites: {favorites:,}\n"
         details += f"**UID:** `{char.get('uid', uid).upper()}`"
         
         embed.add_field(name="Character Details", value=details, inline=False)
         
-        # Owner information
-        embed.add_field(name="Owner", value=owner_name, inline=True)
-        
         # Cover art status
         if cover_unlocked:
             embed.add_field(name="Cover Art", value="Unlocked", inline=True)
-        else:
-            progress_pct = min(100, int((cover_progress / unlock_threshold) * 100))
-            embed.add_field(name="Cover Art Progress", value=f"{progress_pct}% ({cover_progress}/{unlock_threshold})", inline=True)
         
         # Set character image - use active cover art if set, otherwise default image
         active_cover_url = await self.cover_art_system.get_active_cover_art_url(owner_id, guild_id, char.get('uid', uid))
@@ -1729,12 +1948,9 @@ class Games(commands.Cog):
         elif char.get("image_url"):
             embed.set_image(url=char["image_url"])
         
-        if owner_avatar:
-            embed.set_thumbnail(url=owner_avatar)
-        
         from utils.cogs.game.const import calculate_release_value
         release_value = calculate_release_value(favorites, rarity, char.get('name', 'unknown'))
-        embed.set_footer(text=f"Release value: {release_value} pts")
+        embed.set_footer(icon_url=ctx.author.avatar,text=f"Owned by {owner_name} • Release value: {release_value} pts")
         
         # Add cover art view button (commented out)
         # view = CharacterCoverArtView(char['uid'], ctx.author.id)
@@ -3227,18 +3443,12 @@ class Games(commands.Cog):
             await ctx.reply(embed=embed, mention_author=False)
         elif isinstance(error, commands.MemberNotFound):
             await ctx.reply("❌ Member not found!", mention_author=False)
-        else:
-            logger.error(f"Game error: {error}")
-            raise error
 
-
-    @commands.command(name="memo")
+    @commands.group(name="memo", invoke_without_command=True)
     @commands.cooldown(1, 15, commands.BucketType.user)
-    async def memo_game(self, ctx):
-        """🧠 Memory game - Remember the emoji!"""
-        from utils.cogs.fun import Memo
-        from data.local.const import primary_color
+    async def memo_group(self, ctx):
         
+        """🧠 Memory game - Remember the emoji!"""
         emojis = ["😀","😊","😂","😍","😎","😢","😠","😱","😡","😐","🥳","😏","🙃","😇","😅","😜","😌","😋"]
         shuffled = emojis * 2
         random.shuffle(shuffled)
@@ -3255,7 +3465,7 @@ class Games(commands.Cog):
         msg = await ctx.reply(embed=embed, mention_author=False)
         await asyncio.sleep(2)
 
-        view = Memo(ctx, shuffled, chosen, msg)
+        view = Memo(ctx, shuffled, chosen, msg, self.bot)
         future = int((datetime.now(timezone.utc) + timedelta(seconds=13)).timestamp())
         
         def timestamp_gen(ts: int) -> str:
@@ -3275,10 +3485,74 @@ class Games(commands.Cog):
                 color=primary_color()
             )
             await msg.edit(embed=timeout_embed, view=None)
-
-    # ═══════════════════════════════════════════════════════════════
-    # 🎨 COVER ART SYSTEM
-    # ═══════════════════════════════════════════════════════════════
+    
+    @memo_group.command(name="leaderboard")
+    async def memo_leaderboard(self, ctx):
+        """🏆 View memo streak leaderboard"""
+        from utils.cogs.fun import Memo_Data
+        
+        memo_data = Memo_Data()
+        
+        try:
+            # Get all users with streak data for this guild
+            pipeline = [
+                {"$match": {"guild_id": ctx.guild.id}},
+                {"$project": {"user_id": "$user_id", "streak": "$streak"}},
+                {"$sort": {"streak": -1}},
+                {"$limit": 10}
+            ]
+            
+            cursor = memo_data.mongo.streaks.aggregate(pipeline)
+            top_players = await cursor.to_list(length=10)
+            
+            if not top_players:
+                embed = discord.Embed(
+                    title="🏆 Memo Streak Lea`derboard",
+                    description="No streak data found! Play `.memo` to set a streak!",
+                    color=discord.Color.orange()
+                )
+                return await ctx.reply(embed=embed, mention_author=False)
+            
+            embed = discord.Embed(
+                title="🏆 Memo Streak Leaderboard",
+                description="Top memory game streaks in this server!",
+                color=discord.Color.orange()
+            )
+            
+            for i, player in enumerate(top_players, 1):
+                user_id = player["user_id"]
+                streak = player["streak"]
+                
+                try:
+                    user = ctx.guild.get_member(int(user_id))
+                    if user:
+                        username = user.display_name
+                        avatar = user.avatar.url if user.avatar else None
+                    else:
+                        username = f"User {user_id}"
+                        avatar = None
+                except:
+                    username = f"User {user_id}"
+                    avatar = None
+                
+                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"#{i}"
+                embed.add_field(
+                    name=f"> {medal}. {username}",
+                    value=f"Streak: {streak} 🔥",
+                    inline=False
+                )
+            
+            embed.set_footer(text=f"Requested by {ctx.author}", icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
+            await ctx.reply(embed=embed, mention_author=False)
+            
+        except Exception as e:
+            logger.error(f"Error fetching memo leaderboard: {e}")
+            embed = discord.Embed(
+                title="❌ Error",
+                description="Failed to fetch leaderboard. Try again later.",
+                color=discord.Color.red()
+            )
+            await ctx.reply(embed=embed, mention_author=False)
     
     @commands.group(name="cover", aliases=["ca"], invoke_without_command=True)
     async def cover(self, ctx):

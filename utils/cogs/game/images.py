@@ -1097,11 +1097,6 @@ def generate_guess_thermometer(guesses: list, secret: int, attempts_left: int, t
         tw = bbox[2] - bbox[0]
         draw.text((x_pos - tw // 2, bar_y + bar_height + 7), label, fill=(150, 150, 150), font=small_font)
     
-    # Draw secret position (hidden marker)
-    secret_x = bar_x + int((secret - 1) / 99 * bar_width)
-    draw.polygon([(secret_x, bar_y - 8), (secret_x - 6, bar_y - 16), (secret_x + 6, bar_y - 16)], 
-                fill=(255, 255, 255, 100))
-    
     # Draw guess markers
     for i, guess in enumerate(guesses):
         x_pos = bar_x + int((guess - 1) / 99 * bar_width)
@@ -1150,7 +1145,6 @@ def generate_guess_thermometer(guesses: list, secret: int, attempts_left: int, t
     img.save(buffer, format='PNG')
     buffer.seek(0)
     return buffer
-
 
 def generate_guess_result_image(guesses: list, secret: int, won: bool, winnings: int) -> io.BytesIO:
     """Generate a result image showing the path of guesses.

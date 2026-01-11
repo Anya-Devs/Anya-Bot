@@ -148,10 +148,12 @@ class Mini_Games:
 
 # ---------------- Memo Game ---------------- #
 class Memo(discord.ui.View):
-    def __init__(self, ctx, emojis, chosen_emoji, message):
+    def __init__(self, ctx, emojis, chosen_emoji, message, bot=None):
         super().__init__(timeout=10)
         self.ctx, self.emojis, self.chosen_emoji, self.message = ctx, list(emojis), chosen_emoji, message
-        self.quest_data, self.memo_data = Quest_Data(), Memo_Data()
+        self.bot = bot
+        self.quest_data = Quest_Data(bot) if bot else Quest_Data(ctx.bot)
+        self.memo_data = Memo_Data()
         self.user_points, self.streak_increment, self.base_points, self.points_multiplier = {}, 1, 5, 2
 
         # Buttons

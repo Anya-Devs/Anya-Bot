@@ -254,7 +254,7 @@ class ArtGalleryView(discord.ui.View):
         initial_results: list = None,
         selected_sources: Set[str] = None
     ):
-        super().__init__(timeout=300)  # 5 minute timeout
+        super().__init__(timeout=None)  # No timeout - buttons don't expire
         self.cog = cog
         self.author = author
         self.query = query
