@@ -44,6 +44,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
 import aiohttp
 from .fonts import _load_emoji_font
 from typing import Literal, Optional, List, Dict, Union
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -1001,6 +1002,312 @@ def _draw_textured_card_frame(draw, card_width: int, card_height: int, frame: di
     draw.rounded_rectangle([4, 4, card_width - 5, card_height - 5], 10, 
                          outline=frame["highlight"], width=2)
 
+
+def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: bool = False, is_owned: bool = False, owner_data: dict = None) -> Image.Image:
+    """Draw an individual card using the exact same logic as the draw system."""
+    card_width = 220
+    card_height = 340
+    
+    rarity = char.get("rarity", "common")
+    frame = RARITY_FRAMES.get(rarity, RARITY_FRAMES["common"])
+    
+    card_bg = Image.new('RGBA', (card_width, card_height), (0, 0, 0, 0))
+    card_draw = ImageDraw.Draw(card_bg)
+    
+    # Load fonts
+    try:
+        name_font = _load_emoji_font(16)
+        small_font = _load_emoji_font(12)
+        tiny_font = _load_emoji_font(10)
+    except:
+        name_font = small_font = tiny_font = ImageFont.load_default()
+    
+    # Draw textured frame
+    if is_claimed:
+        _draw_textured_card_frame(card_draw, card_width, card_height, frame, is_claimed=True)
+    else:
+        _draw_textured_card_frame(card_draw, card_width, card_height, frame, is_claimed=False)
+    
+    # Draw banner
+    banner_h = 36
+    banner_margin = 12
+    card_draw.rounded_rectangle(
+        [banner_margin, banner_margin, card_width - banner_margin, banner_margin + banner_h],
+        6,
+        fill=(20, 20, 25, 240) if not is_claimed else (40, 40, 45, 240)
+    )
+    
+    # Draw character name
+    name = char.get("name", "Unknown")
+    if len(name) > 16:
+        name = name[:14] + "..."
+    name_bbox = card_draw.textbbox((0, 0), name, font=name_font)
+    name_x = (card_width - (name_bbox[2] - name_bbox[0])) // 2
+    card_draw.text((name_x + 1, banner_margin + 10), name, fill=(0, 0, 0, 180), font=name_font)
+    card_draw.text((name_x, banner_margin + 9), name, fill=(255, 255, 255), font=name_font)
+    
+    # Draw character image area - EXACT same as draw system
+    img_area_x = 10
+    img_area_y = banner_margin + banner_h + 8
+    img_area_w = card_width - 20
+    img_area_h = card_height - (banner_margin + banner_h) - 68
+    
+    if char_img:
+        if is_claimed:
+            # Convert to grayscale for claimed cards
+            char_img = char_img.convert('L').convert('RGBA')
+            # Apply gray tint
+            gray_overlay = Image.new('RGBA', char_img.size, (128, 128, 128, 100))
+            char_img = Image.alpha_composite(char_img, gray_overlay)
+        char_img = char_img.resize((img_area_w, img_area_h), Image.Resampling.LANCZOS)
+        card_bg.paste(char_img, (img_area_x, img_area_y), char_img)
+    else:
+        # Draw placeholder - RECTANGULAR like in draw system
+        card_draw.ellipse([img_area_x + 20, img_area_y + 20, 
+                          img_area_x + img_area_w - 20, img_area_y + img_area_h - 20],
+                        fill=(50, 50, 55))
+    
+    # Draw claimed stamp if needed
+    if is_claimed:
+        try:
+            stamp_font = _load_emoji_font(48)
+        except:
+            stamp_font = ImageFont.load_default()
+        
+        stamp_text = "CLAIMED"
+        stamp_x = card_width // 2
+        stamp_y = card_height // 2
+        
+        stamp_img = Image.new('RGBA', (card_width, card_height), (0, 0, 0, 0))
+        stamp_draw = ImageDraw.Draw(stamp_img)
+        
+        text_bbox = stamp_draw.textbbox((0, 0), stamp_text, font=stamp_font)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+        
+        text_x = (card_width - text_width) // 2
+        text_y = (card_height - text_height) // 2
+        
+        stamp_draw.text((text_x + 3, text_y + 3), stamp_text, fill=(0, 0, 0, 180), font=stamp_font)
+        stamp_draw.text((text_x, text_y), stamp_text, fill=(220, 20, 60, 230), font=stamp_font)
+        
+        rotated_stamp = stamp_img.rotate(-30, expand=False, fillcolor=(0, 0, 0, 0))
+        card_bg.paste(rotated_stamp, (0, 0), rotated_stamp)
+    
+    # Draw owned banner if needed
+    if is_owned and not is_claimed and owner_data:
+        owner_banner_y = img_area_y + img_area_h - 44
+        
+        card_draw.rounded_rectangle(
+            [img_area_x + 6, owner_banner_y, img_area_x + img_area_w - 6, owner_banner_y + 40],
+            6,
+            fill=(15, 15, 20, 235),
+            outline=(255, 70, 70),
+            width=3
+        )
+        
+        # Draw owner avatar if available
+        if owner_data.get("avatar_img"):
+            avatar_img = owner_data["avatar_img"]
+            card_bg.paste(avatar_img, (img_area_x + 10, owner_banner_y + 2), avatar_img)
+        
+        # Draw owned text
+        text_x = img_area_x + 52
+        card_draw.text((text_x + 1, owner_banner_y + 9), "OWNED", fill=(0, 0, 0, 200), font=small_font)
+        card_draw.text((text_x, owner_banner_y + 8), "OWNED", fill=(255, 70, 70), font=small_font)
+        
+        owner_name = owner_data.get("username", "Someone")[:12]
+        card_draw.text((text_x + 1, owner_banner_y + 26), f"by {owner_name}", fill=(0, 0, 0, 200), font=small_font)
+        card_draw.text((text_x, owner_banner_y + 25), f"by {owner_name}", fill=(200, 200, 200), font=small_font)
+    
+    # Draw bottom banner with anime name - EXACT same as draw system
+    bottom_banner_y = card_height - 48
+    card_draw.rounded_rectangle(
+        [banner_margin, bottom_banner_y, card_width - banner_margin, bottom_banner_y + 32],
+        6,
+        fill=(20, 20, 25, 240)
+    )
+    
+    anime = char.get("anime", "Unknown")
+    if len(anime) > 20:
+        anime = anime[:18] + "..."
+    anime_bbox = card_draw.textbbox((0, 0), anime, font=small_font)
+    anime_x = (card_width - (anime_bbox[2] - anime_bbox[0])) // 2
+    card_draw.text((anime_x + 1, bottom_banner_y + 10), anime, fill=(0, 0, 0, 180), font=small_font)
+    card_draw.text((anime_x, bottom_banner_y + 9), anime, fill=(240, 240, 240), font=small_font)
+    
+    return card_bg
+
+
+
+
+async def generate_gallery_image(
+    characters: list,
+    page: int = 1,
+    cards_per_page: int = 15,  # 5x3 grid
+    user_name: str = "User",
+    user_avatar_bytes: bytes = None,
+    filter_type: str = "all",
+    search_query: str = None
+) -> io.BytesIO:
+    """Generate a modern, polished gallery image with user card collection."""
+    
+    # === Layout & sizing ===
+    cards_per_row, rows_per_page = 5, 3
+    card_width, card_height = 220, 340
+    spacing_x, spacing_y = 25, 25
+    margin = 50
+
+    gallery_width = (card_width * cards_per_row) + (spacing_x * (cards_per_row - 1)) + 2*margin
+    gallery_height = (card_height * rows_per_page) + (spacing_y * (rows_per_page - 1)) + 250
+
+    total_cards = len(characters)
+    total_pages = max(1, (total_cards + cards_per_page - 1) // cards_per_page)
+    start_idx = (page - 1) * cards_per_page
+    end_idx = min(start_idx + cards_per_page, total_cards)
+
+    # === Base image with subtle gradient background ===
+    img = Image.new('RGBA', (gallery_width, gallery_height), (12, 12, 18, 255))
+    draw = ImageDraw.Draw(img)
+    for y in range(gallery_height):
+        r = 12 + y / gallery_height * 10
+        g = 12 + y / gallery_height * 10
+        b = 18 + y / gallery_height * 15
+        draw.line([(0, y), (gallery_width, y)], fill=(int(r), int(g), int(b), 255))
+
+    # === Fonts ===
+    try:
+        title_font = _load_emoji_font(36)
+        header_font = _load_emoji_font(20)
+        sub_font = _load_emoji_font(18)
+    except:
+        title_font = header_font = sub_font = ImageFont.load_default()
+
+    # === Header gradient & shadow ===
+    header_height = 140
+    header = Image.new('RGBA', (gallery_width, header_height), (0, 0, 0, 0))
+    h_draw = ImageDraw.Draw(header)
+    for y in range(header_height):
+        alpha = int(255 - (y / header_height) * 100)
+        h_draw.line([(0, y), (gallery_width, y)], fill=(25, 25, 30, alpha))
+    img.paste(header, (0, 0), header)
+    draw.rectangle([0, header_height-1, gallery_width, header_height], fill=(40,40,45,255))
+
+    # === User avatar with circular mask & shadow ===
+    avatar_size = 70
+    avatar_x, avatar_y = margin, 35
+    if user_avatar_bytes:
+        try:
+            avatar_img = Image.open(io.BytesIO(user_avatar_bytes)).convert('RGBA')
+            avatar_img = avatar_img.resize((avatar_size, avatar_size), Image.Resampling.LANCZOS)
+            mask = Image.new('L', (avatar_size, avatar_size), 0)
+            ImageDraw.Draw(mask).ellipse([0,0,avatar_size,avatar_size], fill=255)
+            avatar_img.putalpha(mask)
+            # Drop shadow
+            shadow = Image.new('RGBA', (avatar_size+10, avatar_size+10), (0,0,0,0))
+            ImageDraw.Draw(shadow).ellipse([5,5,avatar_size+5,avatar_size+5], fill=(0,0,0,100))
+            shadow = shadow.filter(ImageFilter.GaussianBlur(5))
+            img.paste(shadow, (avatar_x-5, avatar_y-5), shadow)
+            img.paste(avatar_img, (avatar_x, avatar_y), avatar_img)
+        except Exception as e:
+            print(f"Avatar error: {e}")
+            draw.ellipse([avatar_x, avatar_y, avatar_x+avatar_size, avatar_y+avatar_size],
+                         fill=(50,50,60,255), outline=(60,60,70,255), width=2)
+    else:
+        draw.ellipse([avatar_x, avatar_y, avatar_x+avatar_size, avatar_y+avatar_size],
+                     fill=(50,50,60,255), outline=(60,60,70,255), width=2)
+
+    # === User name & stats ===
+    name_x, name_y = avatar_x + avatar_size + 25, avatar_y + 5
+    draw.text((name_x, name_y), f"{user_name}'s Gallery", fill=(240,240,240), font=title_font)
+    draw.text((name_x, name_y+45), f"Collection: {total_cards} cards", fill=(170,170,170), font=header_font)
+    
+    filter_text = f"Filter: {filter_type.title()}"
+    if search_query:
+        filter_text += f" | Search: '{search_query}'"
+    draw.text((name_x, name_y+70), filter_text, fill=(140,140,140), font=sub_font)
+
+    page_text = f"Page {page}/{total_pages}"
+    page_bbox = draw.textbbox((0,0), page_text, font=sub_font)
+    draw.text((gallery_width - margin - (page_bbox[2]-page_bbox[0]), name_y+10),
+              page_text, fill=(190,190,190), font=sub_font)
+
+    # === Rarity stats row ===
+    rarity_colors = {
+        "legendary": (255,193,7), "epic": (156,39,176), "rare": (25,118,210),
+        "uncommon": (67,160,71), "common": (120,144,156)
+    }
+    rarity_counts = {}
+    for char in characters:
+        r = char.get("rarity", "common").lower()
+        rarity_counts[r] = rarity_counts.get(r, 0) + 1
+
+    current_x = name_x
+    stats_y = name_y + 95
+    for rarity in ["legendary","epic","rare","uncommon","common"]:
+        if rarity in rarity_counts:
+            text = f"{rarity.title()}: {rarity_counts[rarity]}"
+            draw.text((current_x, stats_y), text, fill=rarity_colors.get(rarity), font=sub_font)
+            current_x += draw.textbbox((0,0), text, font=sub_font)[2] + 30
+
+    # === Card grid ===
+    grid_start_y = header_height + 30
+    page_chars = characters[start_idx:end_idx]
+
+    # Async image fetch
+    char_images = [None]*len(page_chars)
+    async with aiohttp.ClientSession() as session:
+        tasks = [fetch_image(session, char["image_url"], i) for i,char in enumerate(page_chars) if char.get("image_url")]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for res in results:
+            if not isinstance(res, Exception) and res:
+                idx, img_data = res
+                char_images[idx] = Image.open(io.BytesIO(img_data)).convert('RGBA')
+
+    # Draw cards with shadows
+    for idx, char in enumerate(page_chars):
+        row, col = idx//cards_per_row, idx%cards_per_row
+        card_x = margin + col*(card_width+spacing_x)
+        card_y = grid_start_y + row*(card_height+spacing_y)
+        card_img = _draw_individual_card(char, char_images[idx])
+
+        # Shadow
+        shadow = Image.new('RGBA', (card_width+20, card_height+20), (0,0,0,0))
+        ImageDraw.Draw(shadow).rectangle([10,10,card_width+10,card_height+10], fill=(0,0,0,80))
+        shadow = shadow.filter(ImageFilter.GaussianBlur(8))
+        img.paste(shadow, (card_x-10, card_y-10), shadow)
+        img.paste(card_img, (card_x, card_y), card_img)
+
+    # === Footer gradient & nav hints ===
+    footer_y = gallery_height - 50
+    footer = Image.new('RGBA', (gallery_width, 50), (0,0,0,0))
+    f_draw = ImageDraw.Draw(footer)
+    for y in range(50):
+        alpha = int(200 - (y/50)*100)
+        f_draw.line([(0,y),(gallery_width,y)], fill=(20,20,25,alpha))
+    img.paste(footer, (0, footer_y), footer)
+
+    if total_pages > 1:
+        nav_text = "Use ← → arrows or page numbers to navigate"
+        nav_bbox = draw.textbbox((0,0), nav_text, font=header_font)
+        draw.text(((gallery_width - (nav_bbox[2]-nav_bbox[0]))//2, footer_y+15),
+                  nav_text, fill=(150,150,150), font=header_font)
+
+    # === Save to buffer ===
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG", quality=100)
+    buffer.seek(0)
+    return buffer
+
+# Helper async function for image fetching
+async def fetch_image(session, url, idx):
+    try:
+        async with session.get(url) as resp:
+            if resp.status == 200:
+                return idx, await resp.read()
+    except Exception as e:
+        print(f"Error fetching image {url}: {e}")
+    return None
 
 async def generate_gacha_draw_image(characters: list, claimed_indices: list = None, ownership_info: dict = None) -> io.BytesIO:
     """Generate modern, clean anime gacha cards with enhanced visual appeal."""
@@ -2186,6 +2493,354 @@ def generate_dice_gif(result: int) -> io.BytesIO:
         duration=70,
         loop=0
     )
+    buffer.seek(0)
+    return buffer
+
+
+# ═══════════════════════════════════════════════════════════════
+# 🖼️ GALLERY IMAGE GENERATION
+# ═══════════════════════════════════════════════════════════════
+
+async def generate_gallery_image(
+    characters: list,
+    page: int = 1,
+    cards_per_page: int = 15,
+    user_name: str = "User",
+    user_avatar_bytes: bytes = None,
+    filter_type: str = "all",
+    search_query: str = None
+) -> io.BytesIO:
+    """Generate a professional gallery grid image for character collection.
+    
+    Args:
+        characters: List of character dictionaries
+        page: Current page number (1-indexed)
+        cards_per_page: Number of cards to show per page
+        user_name: Display name of the user
+        user_avatar_bytes: User's avatar as bytes
+        filter_type: Filter type (all, waifu, husbando, rarity name, search)
+        search_query: Search query string if filter_type is "search"
+    
+    Returns:
+        BytesIO buffer containing the PNG image
+    """
+    # Layout configuration
+    cards_per_row = 5
+    rows_per_page = 3
+    card_width = 160
+    card_height = 240
+    card_spacing_x = 20
+    card_spacing_y = 25
+    
+    # Header and footer
+    header_height = 100
+    footer_height = 60
+    margin_x = 40
+    margin_y = 30
+    
+    # Calculate dimensions
+    grid_width = (card_width * cards_per_row) + (card_spacing_x * (cards_per_row - 1))
+    grid_height = (card_height * rows_per_page) + (card_spacing_y * (rows_per_page - 1))
+    total_width = grid_width + (margin_x * 2)
+    total_height = header_height + grid_height + footer_height + (margin_y * 2)
+    
+    # Background colors - modern dark theme
+    bg_color = (18, 18, 22)
+    header_bg = (28, 28, 34)
+    footer_bg = (24, 24, 30)
+    card_bg = (32, 32, 38)
+    text_color = (255, 255, 255)
+    subtitle_color = (160, 160, 170)
+    accent_color = (100, 150, 255)
+    
+    # Create image
+    img = Image.new('RGB', (total_width, total_height), bg_color)
+    draw = ImageDraw.Draw(img)
+    
+    # Load fonts
+    try:
+        title_font = _load_emoji_font(28)
+        subtitle_font = _load_emoji_font(14)
+        name_font = _load_emoji_font(13)
+        small_font = _load_emoji_font(11)
+        tiny_font = _load_emoji_font(9)
+        page_font = _load_emoji_font(18)
+    except:
+        title_font = subtitle_font = name_font = small_font = tiny_font = page_font = ImageFont.load_default()
+    
+    # ===== HEADER SECTION =====
+    draw.rectangle([0, 0, total_width, header_height], fill=header_bg)
+    
+    # User avatar (if provided)
+    avatar_size = 60
+    avatar_x = margin_x
+    avatar_y = 20
+    
+    if user_avatar_bytes:
+        try:
+            avatar_img = Image.open(io.BytesIO(user_avatar_bytes)).convert('RGBA')
+            avatar_img = avatar_img.resize((avatar_size, avatar_size), Image.Resampling.LANCZOS)
+            
+            # Create circular mask
+            mask = Image.new('L', (avatar_size, avatar_size), 0)
+            mask_draw = ImageDraw.Draw(mask)
+            mask_draw.ellipse((0, 0, avatar_size, avatar_size), fill=255)
+            
+            # Apply mask
+            output = Image.new('RGBA', (avatar_size, avatar_size), (0, 0, 0, 0))
+            output.paste(avatar_img, (0, 0), mask)
+            
+            # Paste onto main image
+            img.paste(output, (avatar_x, avatar_y), output)
+        except:
+            # Draw placeholder circle
+            draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size],
+                        fill=(60, 60, 70), outline=accent_color, width=2)
+    else:
+        # Draw placeholder circle
+        draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size],
+                    fill=(60, 60, 70), outline=accent_color, width=2)
+    
+    # Title and user name
+    title_x = avatar_x + avatar_size + 20
+    title_y = avatar_y + 5
+    
+    title_text = f"{user_name}'s Gallery"
+    draw.text((title_x, title_y), title_text, fill=text_color, font=title_font)
+    
+    # Filter info
+    filter_text = ""
+    if filter_type == "waifu":
+        filter_text = "♀️ Female Characters Only"
+    elif filter_type == "husbando":
+        filter_text = "♂️ Male Characters Only"
+    elif filter_type in ["legendary", "epic", "rare", "uncommon", "common"]:
+        filter_text = f"⭐ {filter_type.title()} Rarity"
+    elif filter_type == "search" and search_query:
+        filter_text = f"🔍 Search: '{search_query}'"
+    else:
+        filter_text = "📚 All Characters"
+    
+    draw.text((title_x, title_y + 35), filter_text, fill=subtitle_color, font=subtitle_font)
+    
+    # Total count
+    total_cards = len(characters)
+    total_pages = max(1, (total_cards + cards_per_page - 1) // cards_per_page)
+    count_text = f"{total_cards} cards • Page {page}/{total_pages}"
+    draw.text((title_x, title_y + 52), count_text, fill=subtitle_color, font=small_font)
+    
+    # Divider line
+    divider_y = header_height - 1
+    draw.line([(margin_x, divider_y), (total_width - margin_x, divider_y)], 
+              fill=(60, 60, 70), width=2)
+    
+    # ===== CARD GRID SECTION =====
+    grid_start_y = header_height + margin_y
+    
+    # Get cards for current page
+    start_idx = (page - 1) * cards_per_page
+    end_idx = min(start_idx + cards_per_page, total_cards)
+    page_characters = characters[start_idx:end_idx]
+    
+    # Fetch character images and cover art
+    char_images = []
+    async with aiohttp.ClientSession() as session:
+        for char in page_characters:
+            char_img = None
+            
+            # Try to get cover art first if available
+            cover_url = char.get("active_cover_url") or char.get("image_url")
+            
+            if cover_url:
+                try:
+                    async with session.get(cover_url) as resp:
+                        if resp.status == 200:
+                            char_img = Image.open(io.BytesIO(await resp.read())).convert('RGBA')
+                except:
+                    pass
+            
+            char_images.append(char_img)
+    
+    # Draw cards in grid
+    for idx, char in enumerate(page_characters):
+        row = idx // cards_per_row
+        col = idx % cards_per_row
+        
+        card_x = margin_x + col * (card_width + card_spacing_x)
+        card_y = grid_start_y + row * (card_height + card_spacing_y)
+        
+        # Get rarity info
+        rarity = char.get("rarity", "common")
+        frame = RARITY_FRAMES.get(rarity, RARITY_FRAMES["common"])
+        
+        # Create card background
+        card_bg = Image.new('RGBA', (card_width, card_height), (0, 0, 0, 0))
+        card_draw = ImageDraw.Draw(card_bg)
+        
+        # Draw textured frame
+        _draw_textured_card_frame(card_draw, card_width, card_height, frame, is_claimed=False)
+        
+        # === THIN TOP BAR for character name ===
+        top_bar_height = 24
+        top_bar_margin = 6
+        
+        # Draw thin semi-transparent bar at top
+        card_draw.rounded_rectangle(
+            [top_bar_margin, top_bar_margin, card_width - top_bar_margin, top_bar_margin + top_bar_height],
+            4,
+            fill=(10, 10, 15, 200)
+        )
+        
+        # Character name in top bar
+        name = char.get("name", "Unknown")
+        if len(name) > 16:
+            name = name[:14] + ".."
+        name_bbox = card_draw.textbbox((0, 0), name, font=name_font)
+        name_x = (card_width - (name_bbox[2] - name_bbox[0])) // 2
+        name_y = top_bar_margin + (top_bar_height - (name_bbox[3] - name_bbox[1])) // 2 - 2
+        
+        # Shadow for readability
+        card_draw.text((name_x + 1, name_y + 1), name, fill=(0, 0, 0, 200), font=name_font)
+        # Main text
+        card_draw.text((name_x, name_y), name, fill=(255, 255, 255), font=name_font)
+        
+        # === CHARACTER IMAGE - MAXIMUM SPACE ===
+        img_area_x = 4
+        img_area_y = top_bar_margin + top_bar_height + 2
+        img_area_w = card_width - 8
+        img_area_h = card_height - img_area_y - 32  # Leave space for bottom bar
+        
+        # Draw character image with smart cropping
+        char_img = char_images[idx]
+        if char_img:
+            # Calculate aspect ratio to fill the space while maintaining proportions
+            img_w, img_h = char_img.size
+            target_ratio = img_area_w / img_area_h
+            img_ratio = img_w / img_h
+            
+            if img_ratio > target_ratio:
+                # Image is wider - fit to height and crop width
+                new_h = img_area_h
+                new_w = int(img_area_h * img_ratio)
+                resized = char_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                # Center crop
+                crop_x = (new_w - img_area_w) // 2
+                cropped = resized.crop((crop_x, 0, crop_x + img_area_w, img_area_h))
+            else:
+                # Image is taller - fit to width and crop height
+                new_w = img_area_w
+                new_h = int(img_area_w / img_ratio)
+                resized = char_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                # Top-weighted crop (show character's face/upper body)
+                crop_y = 0
+                if new_h > img_area_h:
+                    cropped = resized.crop((0, crop_y, img_area_w, crop_y + img_area_h))
+                else:
+                    cropped = resized
+            
+            # Add subtle gradient overlay at bottom for text readability
+            gradient_overlay = Image.new('RGBA', (img_area_w, img_area_h), (0, 0, 0, 0))
+            gradient_draw = ImageDraw.Draw(gradient_overlay)
+            
+            # Draw gradient at bottom (smaller gradient)
+            gradient_height = 30
+            for i in range(gradient_height):
+                alpha = int((i / gradient_height) * 100)  # 0 to 100 alpha
+                y_pos = img_area_h - gradient_height + i
+                gradient_draw.rectangle(
+                    [0, y_pos, img_area_w, y_pos + 1],
+                    fill=(0, 0, 0, alpha)
+                )
+            
+            # Composite the gradient
+            cropped = Image.alpha_composite(cropped.convert('RGBA'), gradient_overlay)
+            
+            # Paste onto card
+            card_bg.paste(cropped, (img_area_x, img_area_y), cropped)
+        else:
+            # Placeholder
+            card_draw.rounded_rectangle(
+                [img_area_x, img_area_y, img_area_x + img_area_w, img_area_y + img_area_h],
+                4,
+                fill=(40, 40, 50)
+            )
+            placeholder_text = "?"
+            p_bbox = card_draw.textbbox((0, 0), placeholder_text, font=title_font)
+            p_x = img_area_x + (img_area_w - (p_bbox[2] - p_bbox[0])) // 2
+            p_y = img_area_y + (img_area_h - (p_bbox[3] - p_bbox[1])) // 2
+            card_draw.text((p_x, p_y), placeholder_text, fill=(80, 80, 90), font=title_font)
+        
+        # === THIN BOTTOM BAR for info ===
+        bottom_bar_height = 26
+        bottom_bar_y = card_height - bottom_bar_height - top_bar_margin
+        
+        # Draw thin semi-transparent bar at bottom
+        card_draw.rounded_rectangle(
+            [top_bar_margin, bottom_bar_y, card_width - top_bar_margin, bottom_bar_y + bottom_bar_height],
+            4,
+            fill=(10, 10, 15, 200)
+        )
+        
+        # Get info
+        anime = char.get("anime", "Unknown")
+        uid = char.get("uid", "???").upper()
+        favorites = char.get("favorites", 0)
+        
+        # Left side: Anime name (truncated)
+        if len(anime) > 12:
+            anime = anime[:10] + ".."
+        anime_x = top_bar_margin + 6
+        anime_y = bottom_bar_y + (bottom_bar_height - (small_font.size if hasattr(small_font, 'size') else 11)) // 2 - 1
+        card_draw.text((anime_x + 1, anime_y + 1), anime, fill=(0, 0, 0, 200), font=small_font)
+        card_draw.text((anime_x, anime_y), anime, fill=(200, 200, 210), font=small_font)
+        
+        # Right side: UID and favorites
+        info_text = f"{uid} • ❤️{favorites:,}"
+        info_bbox = card_draw.textbbox((0, 0), info_text, font=tiny_font)
+        info_x = card_width - top_bar_margin - (info_bbox[2] - info_bbox[0]) - 6
+        info_y = bottom_bar_y + (bottom_bar_height - (info_bbox[3] - info_bbox[1])) // 2
+        card_draw.text((info_x + 1, info_y + 1), info_text, fill=(0, 0, 0, 200), font=tiny_font)
+        card_draw.text((info_x, info_y), info_text, fill=(160, 160, 170), font=tiny_font)
+        
+        # Paste card onto main image
+        img.paste(card_bg, (card_x, card_y), card_bg)
+    
+    # ===== FOOTER SECTION =====
+    footer_y = total_height - footer_height
+    draw.rectangle([0, footer_y, total_width, total_height], fill=footer_bg)
+    
+    # Divider line
+    draw.line([(margin_x, footer_y), (total_width - margin_x, footer_y)], 
+              fill=(60, 60, 70), width=2)
+    
+    # Page navigation info
+    page_text = f"Page {page} of {total_pages}"
+    page_bbox = draw.textbbox((0, 0), page_text, font=page_font)
+    page_x = (total_width - (page_bbox[2] - page_bbox[0])) // 2
+    draw.text((page_x, footer_y + 20), page_text, fill=accent_color, font=page_font)
+    
+    # Navigation hints
+    if page < total_pages:
+        next_text = f"Use .draw gallery {page + 1} for next page →"
+        next_bbox = draw.textbbox((0, 0), next_text, font=small_font)
+        next_x = total_width - margin_x - (next_bbox[2] - next_bbox[0])
+        draw.text((next_x, footer_y + 12), next_text, fill=subtitle_color, font=small_font)
+    
+    if page > 1:
+        prev_text = f"← Use .draw gallery {page - 1} for previous page"
+        draw.text((margin_x, footer_y + 12), prev_text, fill=subtitle_color, font=small_font)
+    
+    # Showing X-Y of Z cards
+    showing_start = start_idx + 1
+    showing_end = end_idx
+    showing_text = f"Showing {showing_start}-{showing_end} of {total_cards}"
+    showing_bbox = draw.textbbox((0, 0), showing_text, font=tiny_font)
+    showing_x = (total_width - (showing_bbox[2] - showing_bbox[0])) // 2
+    draw.text((showing_x, footer_y + 42), showing_text, fill=subtitle_color, font=tiny_font)
+    
+    # Save to buffer
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG', quality=95)
     buffer.seek(0)
     return buffer
 

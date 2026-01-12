@@ -1792,6 +1792,154 @@ class Games(commands.Cog):
             logger.error(f"Error updating character rarities in database: {e}")
             return inventory
 
+    @draw.command(name="gallery", aliases=["g", "grid"])
+    @commands.cooldown(1, 3, commands.BucketType.user)
+    async def draw_gallery(self, ctx, page: int = 1, *, filter_args: str = None):
+        """🖼️ View your card collection as a beautiful gallery image.
+        
+        Usage:
+        - `.draw gallery` - Show all cards (page 1)
+        - `.draw gallery 2` - Show page 2
+        - `.draw gallery waifu` - Show only female characters
+        - `.draw gallery husbando` - Show only male characters
+        - `.draw gallery legendary` - Show only legendary cards
+        - `.draw gallery epic` - Show only epic cards
+        - `.draw gallery rare` - Show only rare cards
+        - `.draw gallery uncommon` - Show only uncommon cards
+        - `.draw gallery common` - Show only common cards
+        - `.draw gallery "search term"` - Search for characters by name/anime
+        """
+        user_id = str(ctx.author.id)
+        guild_id = str(ctx.guild.id)
+        
+        # Parse filter arguments
+        filter_type = "all"
+        search_query = None
+        
+        if filter_args:
+            filter_args_lower = filter_args.lower().strip()
+            
+            # Check for gender filters
+            if filter_args_lower in ["waifu", "female", "girl"]:
+                filter_type = "waifu"
+            elif filter_args_lower in ["husbando", "male", "boy"]:
+                filter_type = "husbando"
+            # Check for rarity filters
+            elif filter_args_lower in ["legendary", "epic", "rare", "uncommon", "common"]:
+                filter_type = filter_args_lower
+            else:
+                # Treat as search query
+                search_query = filter_args
+                filter_type = "search"
+        
+        # Get user's inventory
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.gacha_inventory": 1}
+            )
+            
+            if not result or not result.get("members", {}).get(user_id, {}).get("gacha_inventory"):
+                await ctx.reply("❌ You don't have any cards in your collection! Use `.draw` to get some.", mention_author=False)
+                return
+            
+            inventory = result["members"][user_id]["gacha_inventory"]
+            
+            # Apply filters
+            filtered_inventory = []
+            
+            for char in inventory:
+                # Gender filter
+                if filter_type == "waifu" and char.get("gender", "").lower() not in ["female", "girl"]:
+                    continue
+                elif filter_type == "husbando" and char.get("gender", "").lower() not in ["male", "boy"]:
+                    continue
+                # Rarity filter
+                elif filter_type in ["legendary", "epic", "rare", "uncommon", "common"]:
+                    if char.get("rarity", "").lower() != filter_type:
+                        continue
+                # Search filter
+                elif filter_type == "search" and search_query:
+                    name_match = search_query.lower() in char.get("name", "").lower()
+                    anime_match = search_query.lower() in char.get("anime", "").lower()
+                    if not (name_match or anime_match):
+                        continue
+                
+                filtered_inventory.append(char)
+            
+            if not filtered_inventory:
+                filter_desc = f"matching '{search_query}'" if search_query else filter_type
+                await ctx.reply(f"❌ No cards found with filter: {filter_desc}", mention_author=False)
+                return
+            
+            # Sort by rarity (legendary first) then by name
+            from utils.cogs.game.const import GACHA_RARITY_TIERS
+            rarity_order = {"legendary": 0, "epic": 1, "rare": 2, "uncommon": 3, "common": 4}
+            
+            def sort_key(char):
+                rarity_score = rarity_order.get(char.get("rarity", "common"), 5)
+                name = char.get("name", "").lower()
+                return (rarity_score, name)
+            
+            sorted_inventory = sorted(filtered_inventory, key=sort_key)
+            
+            # Pagination settings
+            cards_per_page = 15  # 5 cards per row * 3 rows
+            total_cards = len(sorted_inventory)
+            total_pages = (total_cards + cards_per_page - 1) // cards_per_page
+            
+            # Validate page number
+            if page < 1:
+                page = 1
+            elif page > total_pages:
+                page = total_pages
+            
+            # Get user avatar
+            avatar_bytes = None
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(ctx.author.display_avatar.url) as resp:
+                        if resp.status == 200:
+                            avatar_bytes = await resp.read()
+            except:
+                pass
+            
+            # Generate initial gallery image
+            from utils.cogs.game.images import generate_gallery_image
+            buffer = await generate_gallery_image(
+                characters=sorted_inventory,
+                page=page,
+                cards_per_page=cards_per_page,
+                user_name=ctx.author.display_name,
+                user_avatar_bytes=avatar_bytes,
+                filter_type=filter_type,
+                search_query=search_query
+            )
+            
+            # Create file
+            file = discord.File(buffer, filename=f"gallery_{user_id}_page_{page}.png")
+            
+            # Create interactive view with pagination and filters
+            from utils.cogs.game.view import GalleryView
+            view = GalleryView(
+                cog=self,
+                user=ctx.author,
+                guild_id=guild_id,
+                characters=sorted_inventory,
+                page=page,
+                filter_type=filter_type,
+                search_query=search_query
+            )
+            
+            # Send with view
+            await ctx.reply(file=file, view=view, mention_author=False)
+            
+        except Exception as e:
+            logger.error(f"Error in draw gallery: {e}", exc_info=True)
+            await ctx.reply("❌ Error generating gallery image. Please try again.", mention_author=False)
+
     @draw.command(name="collection", aliases=["c", "inv", "inventory"])
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def draw_collection(self, ctx, member: discord.Member = None, *, search_query: str = None):
@@ -1856,6 +2004,9 @@ class Games(commands.Cog):
                 f"`{ctx.prefix}draw` - Draw 3 random characters\n"
                 f"`{ctx.prefix}draw waifu` - Draw female only\n"
                 f"`{ctx.prefix}draw husbando` - Draw male only\n"
+                f"`{ctx.prefix}draw gallery` - 🖼️ View collection as image\n"
+                f"`{ctx.prefix}draw gallery waifu` - Gallery of female only\n"
+                f"`{ctx.prefix}draw gallery legendary` - Gallery by rarity\n"
                 f"`{ctx.prefix}draw collection` - View your collection\n"
                 f"`{ctx.prefix}draw view <UID>` - Show off a character\n"
                 f"`{ctx.prefix}draw release <UID>` - Sell for pts\n"

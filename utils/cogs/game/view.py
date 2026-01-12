@@ -891,6 +891,281 @@ class InventoryGenderSelect(discord.ui.Select):
 
 
 # ═══════════════════════════════════════════════════════════════
+# GALLERY VIEW WITH PAGINATION
+# ═══════════════════════════════════════════════════════════════
+
+class GalleryView(discord.ui.View):
+    """Gallery view with pagination and filter controls"""
+    
+    def __init__(self, cog, user: discord.Member, guild_id: str, characters: list, 
+                 page: int = 1, filter_type: str = "all", search_query: str = None):
+        super().__init__(timeout=180)
+        self.cog = cog
+        self.user = user
+        self.guild_id = guild_id
+        self.all_characters = characters
+        self.page = page
+        self.cards_per_page = 15
+        self.filter_type = filter_type
+        self.search_query = search_query
+        
+        # Calculate total pages
+        self.total_pages = max(1, (len(characters) + self.cards_per_page - 1) // self.cards_per_page)
+        
+        # Add filter selects
+        self.add_item(GalleryRaritySelect(self))
+        self.add_item(GalleryGenderSelect(self))
+        
+        # Update button states
+        self._update_buttons()
+    
+    def _update_buttons(self):
+        """Update button states based on current page"""
+        # Remove existing navigation buttons
+        for item in self.children[:]:
+            if isinstance(item, discord.ui.Button) and item.custom_id in ["prev", "next", "first", "last"]:
+                self.remove_item(item)
+        
+        # Add navigation buttons
+        # First page button
+        first_btn = discord.ui.Button(
+            label="⏮️",
+            style=discord.ButtonStyle.secondary,
+            custom_id="first",
+            disabled=(self.page <= 1),
+            row=2
+        )
+        first_btn.callback = self.first_page
+        self.add_item(first_btn)
+        
+        # Previous page button
+        prev_btn = discord.ui.Button(
+            label="◀️ Previous",
+            style=discord.ButtonStyle.primary,
+            custom_id="prev",
+            disabled=(self.page <= 1),
+            row=2
+        )
+        prev_btn.callback = self.prev_page
+        self.add_item(prev_btn)
+        
+        # Page indicator (disabled button)
+        page_btn = discord.ui.Button(
+            label=f"Page {self.page}/{self.total_pages}",
+            style=discord.ButtonStyle.secondary,
+            disabled=True,
+            row=2
+        )
+        self.add_item(page_btn)
+        
+        # Next page button
+        next_btn = discord.ui.Button(
+            label="Next ▶️",
+            style=discord.ButtonStyle.primary,
+            custom_id="next",
+            disabled=(self.page >= self.total_pages),
+            row=2
+        )
+        next_btn.callback = self.next_page
+        self.add_item(next_btn)
+        
+        # Last page button
+        last_btn = discord.ui.Button(
+            label="⏭️",
+            style=discord.ButtonStyle.secondary,
+            custom_id="last",
+            disabled=(self.page >= self.total_pages),
+            row=2
+        )
+        last_btn.callback = self.last_page
+        self.add_item(last_btn)
+    
+    async def get_gallery_image(self):
+        """Generate the gallery image for current page"""
+        # Get user avatar
+        avatar_bytes = None
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(self.user.display_avatar.url) as resp:
+                    if resp.status == 200:
+                        avatar_bytes = await resp.read()
+        except:
+            pass
+        
+        # Generate image
+        buffer = await generate_gallery_image(
+            characters=self.all_characters,
+            page=self.page,
+            cards_per_page=self.cards_per_page,
+            user_name=self.user.display_name,
+            user_avatar_bytes=avatar_bytes,
+            filter_type=self.filter_type,
+            search_query=self.search_query
+        )
+        return buffer
+    
+    async def first_page(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("❌ This isn't your gallery!", ephemeral=True)
+        
+        self.page = 1
+        self._update_buttons()
+        
+        await interaction.response.defer()
+        buffer = await self.get_gallery_image()
+        file = discord.File(buffer, filename=f"gallery_page_{self.page}.png")
+        await interaction.message.edit(attachments=[file], view=self)
+    
+    async def prev_page(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("❌ This isn't your gallery!", ephemeral=True)
+        
+        if self.page > 1:
+            self.page -= 1
+            self._update_buttons()
+            
+            await interaction.response.defer()
+            buffer = await self.get_gallery_image()
+            file = discord.File(buffer, filename=f"gallery_page_{self.page}.png")
+            await interaction.message.edit(attachments=[file], view=self)
+    
+    async def next_page(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("❌ This isn't your gallery!", ephemeral=True)
+        
+        if self.page < self.total_pages:
+            self.page += 1
+            self._update_buttons()
+            
+            await interaction.response.defer()
+            buffer = await self.get_gallery_image()
+            file = discord.File(buffer, filename=f"gallery_page_{self.page}.png")
+            await interaction.message.edit(attachments=[file], view=self)
+    
+    async def last_page(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("❌ This isn't your gallery!", ephemeral=True)
+        
+        self.page = self.total_pages
+        self._update_buttons()
+        
+        await interaction.response.defer()
+        buffer = await self.get_gallery_image()
+        file = discord.File(buffer, filename=f"gallery_page_{self.page}.png")
+        await interaction.message.edit(attachments=[file], view=self)
+
+
+class GalleryRaritySelect(discord.ui.Select):
+    """Filter gallery by rarity"""
+    def __init__(self, parent_view):
+        self.parent_view = parent_view
+        
+        # Determine current filter
+        current = parent_view.filter_type if parent_view.filter_type in ["legendary", "epic", "rare", "uncommon", "common"] else "all"
+        
+        options = [
+            discord.SelectOption(label="All Rarities", value="all", emoji="⭐", default=(current == "all")),
+            discord.SelectOption(label="Legendary", value="legendary", emoji=GameEmojis.LEGENDARY, default=(current == "legendary")),
+            discord.SelectOption(label="Epic", value="epic", emoji=GameEmojis.EPIC, default=(current == "epic")),
+            discord.SelectOption(label="Rare", value="rare", emoji=GameEmojis.RARE, default=(current == "rare")),
+            discord.SelectOption(label="Uncommon", value="uncommon", emoji=GameEmojis.UNCOMMON, default=(current == "uncommon")),
+            discord.SelectOption(label="Common", value="common", emoji=GameEmojis.COMMON, default=(current == "common")),
+        ]
+        super().__init__(placeholder="⭐ Filter by Rarity...", options=options, row=0)
+    
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.parent_view.user.id:
+            return await interaction.response.send_message("❌ This isn't your gallery!", ephemeral=True)
+        
+        # Update filter
+        selected_rarity = self.values[0]
+        
+        # Get original unfiltered characters from cog
+        user_id = str(self.parent_view.user.id)
+        guild_id = self.parent_view.guild_id
+        inventory = await self.parent_view.cog.get_user_inventory(user_id, guild_id)
+        
+        # Filter characters
+        if selected_rarity == "all":
+            filtered_chars = inventory
+            self.parent_view.filter_type = "all"
+        else:
+            filtered_chars = [c for c in inventory if c.get("rarity", "common") == selected_rarity]
+            self.parent_view.filter_type = selected_rarity
+        
+        # Update view state
+        self.parent_view.all_characters = filtered_chars
+        self.parent_view.total_pages = max(1, (len(filtered_chars) + self.parent_view.cards_per_page - 1) // self.parent_view.cards_per_page)
+        self.parent_view.page = 1
+        self.parent_view._update_buttons()
+        
+        # Update selection
+        for opt in self.options:
+            opt.default = opt.value == selected_rarity
+        
+        # Regenerate image
+        await interaction.response.defer()
+        buffer = await self.parent_view.get_gallery_image()
+        file = discord.File(buffer, filename=f"gallery_page_{self.parent_view.page}.png")
+        await interaction.message.edit(attachments=[file], view=self.parent_view)
+
+
+class GalleryGenderSelect(discord.ui.Select):
+    """Filter gallery by gender"""
+    def __init__(self, parent_view):
+        self.parent_view = parent_view
+        
+        # Determine current filter
+        current = parent_view.filter_type if parent_view.filter_type in ["waifu", "husbando"] else "all"
+        
+        options = [
+            discord.SelectOption(label="All Genders", value="all", emoji="👥", default=(current == "all")),
+            discord.SelectOption(label="Waifu", value="waifu", emoji="♀️", description="Female characters", default=(current == "waifu")),
+            discord.SelectOption(label="Husbando", value="husbando", emoji="♂️", description="Male characters", default=(current == "husbando")),
+        ]
+        super().__init__(placeholder="👤 Filter by Gender...", options=options, row=1)
+    
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.parent_view.user.id:
+            return await interaction.response.send_message("❌ This isn't your gallery!", ephemeral=True)
+        
+        # Update filter
+        selected_gender = self.values[0]
+        
+        # Get original unfiltered characters from cog
+        user_id = str(self.parent_view.user.id)
+        guild_id = self.parent_view.guild_id
+        inventory = await self.parent_view.cog.get_user_inventory(user_id, guild_id)
+        
+        # Filter characters
+        if selected_gender == "all":
+            filtered_chars = inventory
+            self.parent_view.filter_type = "all"
+        elif selected_gender == "waifu":
+            filtered_chars = [c for c in inventory if c.get("gender", "").lower() in ["female", "girl"]]
+            self.parent_view.filter_type = "waifu"
+        elif selected_gender == "husbando":
+            filtered_chars = [c for c in inventory if c.get("gender", "").lower() in ["male", "boy"]]
+            self.parent_view.filter_type = "husbando"
+        
+        # Update view state
+        self.parent_view.all_characters = filtered_chars
+        self.parent_view.total_pages = max(1, (len(filtered_chars) + self.parent_view.cards_per_page - 1) // self.parent_view.cards_per_page)
+        self.parent_view.page = 1
+        self.parent_view._update_buttons()
+        
+        # Update selection
+        for opt in self.options:
+            opt.default = opt.value == selected_gender
+        
+        # Regenerate image
+        await interaction.response.defer()
+        buffer = await self.parent_view.get_gallery_image()
+        file = discord.File(buffer, filename=f"gallery_page_{self.parent_view.page}.png")
+        await interaction.message.edit(attachments=[file], view=self.parent_view)
+
+
+# ═══════════════════════════════════════════════════════════════
 # MULTIPLAYER GAME VIEWS
 # ═══════════════════════════════════════════════════════════════
 
