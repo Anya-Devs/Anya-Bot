@@ -149,7 +149,7 @@ TIMER_CONFIG = {
     "job": {"max_uses": 10, "command_cooldown": 5, "cooldown": 3600},
     "rob": {"max_uses": 5, "command_cooldown": 5, "cooldown": 7200},
     "crime": {"max_uses": 3, "command_cooldown": 5, "cooldown": 3600},
-    "gacha": {"max_uses": 50, "command_cooldown": 5, "cooldown": 1800},
+    "gacha": {"max_uses": 5, "command_cooldown": 5, "cooldown": 1800},
     "claim": {"max_uses": 1, "command_cooldown": 5, "cooldown": 86400},
 }
 
