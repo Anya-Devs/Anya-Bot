@@ -1047,6 +1047,37 @@ def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: 
     card_draw.text((name_x + 1, banner_margin + name_y_offset + 1), name, fill=(0, 0, 0, 180), font=name_font)
     card_draw.text((name_x, banner_margin + name_y_offset), name, fill=(255, 255, 255), font=name_font)
     
+    # Draw UID and favorite indicator in top right
+    uid = char.get("uid", "UNKNOWN")
+    uid_text = uid[:6]  # Shorten UID for display
+    uid_bbox = card_draw.textbbox((0, 0), uid_text, font=tiny_font)
+    uid_x = card_width - banner_margin - (uid_bbox[2] - uid_bbox[0]) - 5
+    uid_y = banner_margin + 5
+    
+    # Draw UID background
+    uid_bg_margin = 2
+    card_draw.rounded_rectangle(
+        [uid_x - uid_bg_margin, uid_y - uid_bg_margin, 
+         uid_x + (uid_bbox[2] - uid_bbox[0]) + uid_bg_margin, uid_y + (uid_bbox[3] - uid_bbox[1]) + uid_bg_margin],
+        4,
+        fill=(10, 10, 15, 200)
+    )
+    
+    # Draw UID text
+    card_draw.text((uid_x + 1, uid_y + 1), uid_text, fill=(0, 0, 0, 180), font=tiny_font)
+    card_draw.text((uid_x, uid_y), uid_text, fill=(200, 200, 200), font=tiny_font)
+    
+    # Draw favorite star if favorited
+    if char.get("favorite", False):
+        star_text = "⭐"
+        star_bbox = card_draw.textbbox((0, 0), star_text, font=tiny_font)
+        star_x = uid_x - star_bbox[2] - 8
+        star_y = uid_y
+        
+        # Draw star with slight shadow
+        card_draw.text((star_x + 1, star_y + 1), star_text, fill=(0, 0, 0, 180), font=tiny_font)
+        card_draw.text((star_x, star_y), star_text, fill=(255, 215, 0), font=tiny_font)  # Gold color
+    
     # Draw character image area - scale with card size
     img_area_x = int(10 * (card_width / 220))
     img_area_y = banner_margin + banner_h + int(8 * (card_width / 220))

@@ -710,7 +710,9 @@ class InventoryView(discord.ui.View):
                         (c.get("anime", "").lower().find(search_lower) != -1)]
         
         # Apply rarity filter
-        if self.rarity_filter == "legendary":
+        if self.rarity_filter == "favorites":
+            chars = [c for c in chars if c.get("favorite", False)]
+        elif self.rarity_filter == "legendary":
             chars = [c for c in chars if c.get("rarity") == "legendary"]
         elif self.rarity_filter == "epic":
             chars = [c for c in chars if c.get("rarity") == "epic"]
@@ -754,15 +756,18 @@ class InventoryView(discord.ui.View):
         end = start + self.per_page
         page_chars = sorted_chars[start:end]
         
-        # Count by rarity for stats
+        # Count by rarity and favorites for stats
         rarity_counts = {"legendary": 0, "epic": 0, "rare": 0, "uncommon": 0, "common": 0}
+        favorites_count = 0
         for c in self.filtered_chars:
             r = c.get("rarity", "common")
             if r in rarity_counts:
                 rarity_counts[r] += 1
+            if c.get("favorite", False):
+                favorites_count += 1
         
         # Build filter description
-        rarity_labels = {"all": "All", "legendary": "Legendary", "epic": "Epic", "rare": "Rare", "uncommon": "Uncommon", "common": "Common"}
+        rarity_labels = {"all": "All", "favorites": "⭐ Favorites", "legendary": "Legendary", "epic": "Epic", "rare": "Rare", "uncommon": "Uncommon", "common": "Common"}
         gender_labels = {"all": "All", "female": f"{GameEmojis.FEMALE} Female", "male": f"{GameEmojis.MALE} Male", "unknown": f"{GameEmojis.NONBINARY} Unknown"}
         
         filter_text = f"**Rarity:** {rarity_labels.get(self.rarity_filter, 'All')} • **Gender:** {gender_labels.get(self.gender_filter, 'All')}"
@@ -772,7 +777,7 @@ class InventoryView(discord.ui.View):
             filter_text += f"\n🔍 **Search:** '{self.search_query}'"
         
         # Stats line
-        stats = f"{GameEmojis.LEGENDARY} {rarity_counts['legendary']} • {GameEmojis.EPIC} {rarity_counts['epic']} • {GameEmojis.RARE} {rarity_counts['rare']} • {GameEmojis.UNCOMMON} {rarity_counts['uncommon']} • {GameEmojis.COMMON} {rarity_counts['common']}"
+        stats = f"⭐ {favorites_count} • {GameEmojis.LEGENDARY} {rarity_counts['legendary']} • {GameEmojis.EPIC} {rarity_counts['epic']} • {GameEmojis.RARE} {rarity_counts['rare']} • {GameEmojis.UNCOMMON} {rarity_counts['uncommon']} • {GameEmojis.COMMON} {rarity_counts['common']}"
         
         embed = discord.Embed(
             title=f"{GameEmojis.BOX} {self.user.display_name}'s Collection",
@@ -799,8 +804,11 @@ class InventoryView(discord.ui.View):
                 if char.get('active_cover_url'):
                     cover_indicator = " 🎨"
                 
+                # Check if character is favorited
+                favorite_indicator = " ⭐" if char.get("favorite", False) else ""
+                
                 # Improved format: UID on same line, cleaner spacing
-                line = f"**{uid}**{cover_indicator} {rarity_data['emoji']} **{name}** {gender_emoji}\n> *{anime}* • ❤️ {likes:,}"
+                line = f"**{uid}**{cover_indicator}{favorite_indicator} {rarity_data['emoji']} **{name}** {gender_emoji}\n> *{anime}* • ❤️ {likes:,}"
                 char_lines.append(line)
             
             embed.add_field(
@@ -841,6 +849,7 @@ class InventoryRaritySelect(discord.ui.Select):
         self.parent_view = parent_view
         options = [
             discord.SelectOption(label="All Rarities", value="all", emoji=GameEmojis.BOX, default=True),
+            discord.SelectOption(label="⭐ Favorites", value="favorites", emoji="⭐", description="Show only favorited characters"),
             discord.SelectOption(label="Legendary", value="legendary", emoji=GameEmojis.LEGENDARY, description=f"5★ - 10,000+ {GameEmojis.HEARTS}"),
             discord.SelectOption(label="Epic", value="epic", emoji=GameEmojis.EPIC, description=f"4★ - 5,000+ {GameEmojis.HEARTS}"),
             discord.SelectOption(label="Rare", value="rare", emoji=GameEmojis.RARE, description=f"3★ - 1,000+ {GameEmojis.HEARTS}"),
@@ -1098,10 +1107,11 @@ class GalleryRaritySelect(discord.ui.Select):
         self.parent_view = parent_view
         
         # Determine current filter
-        current = parent_view.filter_type if parent_view.filter_type in ["legendary", "epic", "rare", "uncommon", "common"] else "all"
+        current = parent_view.filter_type if parent_view.filter_type in ["favorites", "legendary", "epic", "rare", "uncommon", "common"] else "all"
         
         options = [
             discord.SelectOption(label="All Rarities", value="all", emoji="⭐", default=(current == "all")),
+            discord.SelectOption(label="⭐ Favorites", value="favorites", emoji="⭐", description="Show only favorited characters", default=(current == "favorites")),
             discord.SelectOption(label="Legendary", value="legendary", emoji=GameEmojis.LEGENDARY, default=(current == "legendary")),
             discord.SelectOption(label="Epic", value="epic", emoji=GameEmojis.EPIC, default=(current == "epic")),
             discord.SelectOption(label="Rare", value="rare", emoji=GameEmojis.RARE, default=(current == "rare")),
@@ -1126,6 +1136,9 @@ class GalleryRaritySelect(discord.ui.Select):
         if selected_rarity == "all":
             filtered_chars = inventory
             self.parent_view.filter_type = "all"
+        elif selected_rarity == "favorites":
+            filtered_chars = [c for c in inventory if c.get("favorite", False)]
+            self.parent_view.filter_type = "favorites"
         else:
             filtered_chars = [c for c in inventory if c.get("rarity", "common") == selected_rarity]
             self.parent_view.filter_type = selected_rarity

@@ -1942,7 +1942,7 @@ class Games(commands.Cog):
 
     @draw.command(name="collection", aliases=["c", "inv", "inventory"])
     @commands.cooldown(1, 5, commands.BucketType.user)
-    async def draw_collection(self, ctx, member: discord.Member = None, *, search_query: str = None):
+    async def draw_collection(self, ctx, *, args: str = None):
         """📦 View your anime character collection.
         
         Usage:
@@ -1950,18 +1950,37 @@ class Games(commands.Cog):
         - `.draw c --n miku` - Search for characters named "miku" or from series with "miku"
         - `.draw c --n re zero` - Search for characters from "Re Zero"
         - `.draw c --n Kono Subarashii Sekai ni Shukufuku wo!` - Search by full series name
+        - `.draw c @user` - View another user's collection
+        - `.draw c @user --n miku` - Search in another user's collection
         """
+        member = None
+        search_query = None
+        
+        if args:
+            # Parse member and search query
+            parts = args.split()
+            member_mention = None
+            
+            # Check if first argument is a member mention
+            if parts and parts[0].startswith('<@') and parts[0].endswith('>'):
+                try:
+                    member_id = int(parts[0].strip('<@!>'))
+                    member = ctx.guild.get_member(member_id)
+                    if member:
+                        member_mention = parts[0]
+                        args = ' '.join(parts[1:]).strip() if len(parts) > 1 else None
+                except (ValueError, AttributeError):
+                    pass
+            
+            # Parse search query
+            if args and args.strip().startswith("--n"):
+                search_query = args.strip()[3:].strip()  # Remove "--n " prefix
+            elif args and args.strip().startswith("-n"):
+                search_query = args.strip()[2:].strip()  # Remove "-n " prefix
+        
         target = member or ctx.author
         guild_id = str(ctx.guild.id)
         user_id = str(target.id)
-        
-        # Parse search query from command
-        if search_query and search_query.strip().startswith("--n"):
-            search_query = search_query.strip()[3:].strip()  # Remove "--n " prefix
-        elif search_query and search_query.strip().startswith("-n"):
-            search_query = search_query.strip()[2:].strip()  # Remove "-n " prefix
-        else:
-            search_query = None
         
         inventory = await self.get_user_inventory(user_id, guild_id)
         
@@ -2008,6 +2027,8 @@ class Games(commands.Cog):
                 f"`{ctx.prefix}draw gallery waifu` - Gallery of female only\n"
                 f"`{ctx.prefix}draw gallery legendary` - Gallery by rarity\n"
                 f"`{ctx.prefix}draw collection` - View your collection\n"
+                f"`{ctx.prefix}draw favorite <UID>` - ⭐ Favorite/unfavorite a character\n"
+                f"`{ctx.prefix}draw unfavorite <UID>` - ☆ Unfavorite a character\n"
                 f"`{ctx.prefix}draw view <UID>` - Show off a character\n"
                 f"`{ctx.prefix}draw release <UID>` - Sell for pts\n"
                 f"`{ctx.prefix}draw trade @user <UID>` - Trade"
@@ -2214,6 +2235,228 @@ class Games(commands.Cog):
         
         await ctx.reply(embed=embed, mention_author=False)
     
+    @draw.command(name="favorite", aliases=["fav", "f"])
+    @commands.cooldown(1, 3, commands.BucketType.user)
+    async def draw_favorite(self, ctx, *uids: str):
+     """⭐ Favorite characters by UIDs.
+  
+     Usage: `.draw f <UID1> <UID2> ...`
+     """
+     if not uids:
+        return await ctx.reply(f"Usage: `{ctx.prefix}draw favorite <UID> [UID2 ...]`\nFind UIDs in your collection!", mention_author=False)
+  
+     guild_id = str(ctx.guild.id)
+     user_id = str(ctx.author.id)
+  
+     success_embeds = []
+     failed = []
+     updated = False
+  
+     try:
+        db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+        server_col = db["Servers"]
+      
+        # Get current inventory
+        result = await server_col.find_one(
+            {"guild_id": guild_id},
+            {f"members.{user_id}.gacha_inventory": 1}
+        )
+      
+        if not result:
+            return await ctx.reply("❌ Error accessing your collection.", mention_author=False)
+      
+        inventory = result.get("members", {}).get(user_id, {}).get("gacha_inventory", [])
+        updated_inventory = inventory[:]  # Copy to modify
+      
+        for uid in uids:
+            upper_uid = uid.upper()
+          
+            # Check ownership and get char
+            owner_id, char = await self.get_character_by_uid(guild_id, uid)
+          
+            if not char:
+                failed.append((upper_uid, "No character found"))
+                continue
+          
+            if owner_id != user_id:
+                failed.append((upper_uid, "You don't own this"))
+                continue
+          
+            # Find and update in inventory
+            char_found = False
+          
+            for i, character in enumerate(updated_inventory):
+                if character.get("uid", "").upper() == upper_uid:
+                    char_found = True
+                    was_favorited = character.get("favorite", False)
+                  
+                    if not was_favorited:
+                        updated_inventory[i]["favorite"] = True
+                        updated = True
+                  
+                    action = "favorited" if not was_favorited else "already favorited"
+                    star = "⭐"
+                  
+                    # Create embed for this character
+                    rarity = char.get("rarity", "common")
+                    rarity_data = GACHA_RARITY_TIERS.get(rarity, GACHA_RARITY_TIERS["common"])
+                  
+                    embed = discord.Embed(
+                        title=f"{star} {char['name']} {action}!",
+                        description=f"*{char.get('anime', 'Unknown')}*\n\n"
+                                   f"**UID:** `{upper_uid}`",
+                        color=rarity_data["color"]
+                    )
+                  
+                    if char.get("image_url"):
+                        embed.set_thumbnail(url=char["image_url"])
+                  
+                    success_embeds.append(embed)
+                    break
+          
+            if not char_found:
+                failed.append((upper_uid, "Not found in collection"))
+      
+        # Update database if changes were made
+        if updated:
+            await server_col.update_one(
+                {"guild_id": guild_id},
+                {"$set": {f"members.{user_id}.gacha_inventory": updated_inventory}},
+                upsert=True
+            )
+      
+        # Create failed embed if any
+        embeds_to_send = success_embeds[:]
+      
+        if failed:
+            fail_desc = "\n".join(f"❌ `{uid}`: {reason}" for uid, reason in failed)
+            failed_embed = discord.Embed(
+                title="Favorite Failed",
+                description=fail_desc,
+                color=0xFF0000
+            )
+            embeds_to_send.append(failed_embed)
+      
+        if embeds_to_send:
+            await ctx.reply(embeds=embeds_to_send, mention_author=False)
+        else:
+            await ctx.reply("❌ No valid operations performed.", mention_author=False)
+      
+     except Exception as e:
+        logger.error(f"Error in draw favorite: {e}")
+        await ctx.reply("❌ Error updating favorite status. Please try again.", mention_author=False)
+
+    @draw.command(name="unfavorite", aliases=["unfav"])
+    @commands.cooldown(1, 3, commands.BucketType.user)
+    async def draw_unfavorite(self, ctx, *uids: str):
+     """☆ Unfavorite characters by UIDs.
+  
+     Usage: `.draw unfav <UID1> <UID2> ...`
+     """
+     if not uids:
+        return await ctx.reply(f"Usage: `{ctx.prefix}draw unfavorite <UID> [UID2 ...]`\nFind UIDs in your collection!", mention_author=False)
+  
+     guild_id = str(ctx.guild.id)
+     user_id = str(ctx.author.id)
+  
+     success_embeds = []
+     failed = []
+     updated = False
+  
+     try:
+        db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+        server_col = db["Servers"]
+      
+        # Get current inventory
+        result = await server_col.find_one(
+            {"guild_id": guild_id},
+            {f"members.{user_id}.gacha_inventory": 1}
+        )
+      
+        if not result:
+            return await ctx.reply("❌ Error accessing your collection.", mention_author=False)
+      
+        inventory = result.get("members", {}).get(user_id, {}).get("gacha_inventory", [])
+        updated_inventory = inventory[:]  # Copy to modify
+      
+        for uid in uids:
+            upper_uid = uid.upper()
+          
+            # Check ownership and get char
+            owner_id, char = await self.get_character_by_uid(guild_id, uid)
+          
+            if not char:
+                failed.append((upper_uid, "No character found"))
+                continue
+          
+            if owner_id != user_id:
+                failed.append((upper_uid, "You don't own this"))
+                continue
+          
+            # Find and update in inventory
+            char_found = False
+          
+            for i, character in enumerate(updated_inventory):
+                if character.get("uid", "").upper() == upper_uid:
+                    char_found = True
+                    was_favorited = character.get("favorite", False)
+                  
+                    if was_favorited:
+                        updated_inventory[i]["favorite"] = False
+                        updated = True
+                  
+                    action = "unfavorited" if was_favorited else "already unfavorited"
+                    star = "☆"
+                  
+                    # Create embed for this character
+                    rarity = char.get("rarity", "common")
+                    rarity_data = GACHA_RARITY_TIERS.get(rarity, GACHA_RARITY_TIERS["common"])
+                  
+                    embed = discord.Embed(
+                        title=f"{star} {char['name']} {action}!",
+                        description=f"*{char.get('anime', 'Unknown')}*\n\n"
+                                   f"**UID:** `{upper_uid}`",
+                        color=rarity_data["color"]
+                    )
+                  
+                    if char.get("image_url"):
+                        embed.set_thumbnail(url=char["image_url"])
+                  
+                    success_embeds.append(embed)
+                    break
+          
+            if not char_found:
+                failed.append((upper_uid, "Not found in collection"))
+      
+        # Update database if changes were made
+        if updated:
+            await server_col.update_one(
+                {"guild_id": guild_id},
+                {"$set": {f"members.{user_id}.gacha_inventory": updated_inventory}},
+                upsert=True
+            )
+      
+        # Create failed embed if any
+        embeds_to_send = success_embeds[:]
+      
+        if failed:
+            fail_desc = "\n".join(f"❌ `{uid}`: {reason}" for uid, reason in failed)
+            failed_embed = discord.Embed(
+                title="Unfavorite Failed",
+                description=fail_desc,
+                color=0xFF0000
+            )
+            embeds_to_send.append(failed_embed)
+      
+        if embeds_to_send:
+            await ctx.reply(embeds=embeds_to_send, mention_author=False)
+        else:
+            await ctx.reply("❌ No valid operations performed.", mention_author=False)
+      
+     except Exception as e:
+        logger.error(f"Error in draw unfavorite: {e}")
+        await ctx.reply("❌ Error updating favorite status. Please try again.", mention_author=False)
+        
     @draw.command(name="market", aliases=["shop", "marketplace"])
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def draw_market(self, ctx):
@@ -2225,7 +2468,6 @@ class Games(commands.Cog):
                        "The global marketplace will allow you to:\n"
                        "• List characters for sale by UID\n"
                        "• Browse and buy characters from others\n"
-                       "• Trade items like food and materials\n\n"
                        f"For now, use `{ctx.prefix}draw trade @user <UID>` for direct trades!",
             color=discord.Color.gold()
         )
