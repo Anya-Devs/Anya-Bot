@@ -2527,10 +2527,10 @@ async def generate_gallery_image(
     # Layout configuration
     cards_per_row = 5
     rows_per_page = 3
-    card_width = 160
-    card_height = 240
-    card_spacing_x = 20
-    card_spacing_y = 25
+    card_width = 200  # Increased from 160
+    card_height = 300  # Increased from 240
+    card_spacing_x = 25  # Increased spacing
+    card_spacing_y = 30  # Increased spacing
     
     # Header and footer
     header_height = 100
@@ -2681,34 +2681,35 @@ async def generate_gallery_image(
         _draw_textured_card_frame(card_draw, card_width, card_height, frame, is_claimed=False)
         
         # === THIN TOP BAR for character name ===
-        top_bar_height = 24
+        top_bar_height = 28  # Increased from 24
         top_bar_margin = 6
         
-        # Draw thin semi-transparent bar at top
+        # Draw thin semi-transparent bar at top with stronger background
         card_draw.rounded_rectangle(
             [top_bar_margin, top_bar_margin, card_width - top_bar_margin, top_bar_margin + top_bar_height],
             4,
-            fill=(10, 10, 15, 200)
+            fill=(5, 5, 10, 235)  # Darker and more opaque
         )
         
         # Character name in top bar
         name = char.get("name", "Unknown")
-        if len(name) > 16:
-            name = name[:14] + ".."
+        if len(name) > 18:
+            name = name[:16] + ".."
         name_bbox = card_draw.textbbox((0, 0), name, font=name_font)
         name_x = (card_width - (name_bbox[2] - name_bbox[0])) // 2
         name_y = top_bar_margin + (top_bar_height - (name_bbox[3] - name_bbox[1])) // 2 - 2
         
-        # Shadow for readability
+        # Stronger shadow for readability
+        card_draw.text((name_x + 2, name_y + 2), name, fill=(0, 0, 0, 255), font=name_font)
         card_draw.text((name_x + 1, name_y + 1), name, fill=(0, 0, 0, 200), font=name_font)
-        # Main text
+        # Main text - brighter
         card_draw.text((name_x, name_y), name, fill=(255, 255, 255), font=name_font)
         
         # === CHARACTER IMAGE - MAXIMUM SPACE ===
         img_area_x = 4
         img_area_y = top_bar_margin + top_bar_height + 2
         img_area_w = card_width - 8
-        img_area_h = card_height - img_area_y - 32  # Leave space for bottom bar
+        img_area_h = card_height - img_area_y - 34  # Leave space for bottom bar (increased from 32)
         
         # Draw character image with smart cropping
         char_img = char_images[idx]
@@ -2738,14 +2739,14 @@ async def generate_gallery_image(
                 else:
                     cropped = resized
             
-            # Add subtle gradient overlay at bottom for text readability
+            # Add stronger gradient overlay at bottom for text readability
             gradient_overlay = Image.new('RGBA', (img_area_w, img_area_h), (0, 0, 0, 0))
             gradient_draw = ImageDraw.Draw(gradient_overlay)
             
-            # Draw gradient at bottom (smaller gradient)
-            gradient_height = 30
+            # Draw gradient at bottom (stronger for readability)
+            gradient_height = 35
             for i in range(gradient_height):
-                alpha = int((i / gradient_height) * 100)  # 0 to 100 alpha
+                alpha = int((i / gradient_height) * 140)  # 0 to 140 alpha (stronger)
                 y_pos = img_area_h - gradient_height + i
                 gradient_draw.rectangle(
                     [0, y_pos, img_area_w, y_pos + 1],
@@ -2771,14 +2772,14 @@ async def generate_gallery_image(
             card_draw.text((p_x, p_y), placeholder_text, fill=(80, 80, 90), font=title_font)
         
         # === THIN BOTTOM BAR for info ===
-        bottom_bar_height = 26
+        bottom_bar_height = 28  # Increased from 26
         bottom_bar_y = card_height - bottom_bar_height - top_bar_margin
         
-        # Draw thin semi-transparent bar at bottom
+        # Draw thin semi-transparent bar at bottom with stronger background
         card_draw.rounded_rectangle(
             [top_bar_margin, bottom_bar_y, card_width - top_bar_margin, bottom_bar_y + bottom_bar_height],
             4,
-            fill=(10, 10, 15, 200)
+            fill=(5, 5, 10, 235)  # Darker and more opaque
         )
         
         # Get info
@@ -2787,20 +2788,26 @@ async def generate_gallery_image(
         favorites = char.get("favorites", 0)
         
         # Left side: Anime name (truncated)
-        if len(anime) > 12:
-            anime = anime[:10] + ".."
-        anime_x = top_bar_margin + 6
+        if len(anime) > 14:
+            anime = anime[:12] + ".."
+        anime_x = top_bar_margin + 8
         anime_y = bottom_bar_y + (bottom_bar_height - (small_font.size if hasattr(small_font, 'size') else 11)) // 2 - 1
+        # Stronger shadow
+        card_draw.text((anime_x + 2, anime_y + 2), anime, fill=(0, 0, 0, 255), font=small_font)
         card_draw.text((anime_x + 1, anime_y + 1), anime, fill=(0, 0, 0, 200), font=small_font)
-        card_draw.text((anime_x, anime_y), anime, fill=(200, 200, 210), font=small_font)
+        # Brighter text
+        card_draw.text((anime_x, anime_y), anime, fill=(230, 230, 240), font=small_font)
         
         # Right side: UID and favorites
         info_text = f"{uid} • ❤️{favorites:,}"
         info_bbox = card_draw.textbbox((0, 0), info_text, font=tiny_font)
-        info_x = card_width - top_bar_margin - (info_bbox[2] - info_bbox[0]) - 6
+        info_x = card_width - top_bar_margin - (info_bbox[2] - info_bbox[0]) - 8
         info_y = bottom_bar_y + (bottom_bar_height - (info_bbox[3] - info_bbox[1])) // 2
+        # Stronger shadow
+        card_draw.text((info_x + 2, info_y + 2), info_text, fill=(0, 0, 0, 255), font=tiny_font)
         card_draw.text((info_x + 1, info_y + 1), info_text, fill=(0, 0, 0, 200), font=tiny_font)
-        card_draw.text((info_x, info_y), info_text, fill=(160, 160, 170), font=tiny_font)
+        # Brighter text
+        card_draw.text((info_x, info_y), info_text, fill=(180, 180, 190), font=tiny_font)
         
         # Paste card onto main image
         img.paste(card_bg, (card_x, card_y), card_bg)
