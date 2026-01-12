@@ -1493,7 +1493,7 @@ class Games(commands.Cog):
     @commands.command(name="guess", aliases=["number", "guessnumber"])
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def guess_command(self, ctx, bet: int = 50):
-        """🔢 Guess a number 1-100! Closer guesses win more."""
+        """🔢 Guess a number 1-100! Fewer attempts = bigger rewards!"""
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
         
@@ -1558,7 +1558,10 @@ class Games(commands.Cog):
                 if diff == 0:
                     # Perfect guess!
                     perfect_win = True
-                    winnings = bet * 5
+                    # Calculate winnings based on attempts taken (1-5 attempts)
+                    attempts_taken = len(guesses_list)
+                    attempt_multiplier = max(1.0, 6.0 - (attempts_taken - 1) * 0.8)  # 5x, 4.2x, 3.4x, 2.6x, 1.8x
+                    winnings = int(bet * attempt_multiplier)
                     await self.quest_data.add_balance(user_id, guild_id, winnings)
                     new_balance = balance - bet + winnings
                     
@@ -1568,7 +1571,8 @@ class Games(commands.Cog):
                     
                     embed = discord.Embed(
                         title="🎯 PERFECT!",
-                        description=f"You got it in **{len(guesses_list)}** {'guess' if len(guesses_list) == 1 else 'guesses'}!\n"
+                        description=f"You got it in **{attempts_taken}** {'guess' if attempts_taken == 1 else 'guesses'}!\n"
+                                   f"🎚️ Multiplier: **{attempt_multiplier:.1f}x**\n"
                                    f"💰 Won: **+{winnings - bet:,}** pts\n💳 Balance: **{new_balance:,}** pts",
                         color=discord.Color.gold()
                     )
@@ -1603,22 +1607,30 @@ class Games(commands.Cog):
             except asyncio.TimeoutError:
                 break
         
-        # Game over - much stricter partial winnings
+        # Game over - much stricter partial winnings with attempt-based scaling
         if guesses_list:
             closest = min(guesses_list, key=lambda x: abs(x - secret))
             diff = abs(closest - secret)
+            attempts_taken = len(guesses_list)
             
-            # More reasonable near-miss rewards
+            # Base winnings from closeness
             if diff == 0:
-                winnings = bet * 5  # should be caught by perfect path, safe fallback
+                base_winnings = bet * 5  # should be caught by perfect path, safe fallback
             elif diff <= 2:
-                winnings = bet * 2
+                base_winnings = bet * 2
             elif diff <= 5:
-                winnings = int(bet * 1.5)
+                base_winnings = int(bet * 1.5)
             elif diff <= 10:
-                winnings = int(bet * 1.25)
+                base_winnings = int(bet * 1.25)
             elif diff <= 15:
-                winnings = int(bet * 1.1)
+                base_winnings = int(bet * 1.1)
+            else:
+                base_winnings = 0
+            
+            # Apply attempt-based scaling (fewer attempts = higher multiplier)
+            if base_winnings > 0:
+                attempt_multiplier = max(0.2, 1.0 - (attempts_taken - 1) * 0.15)  # 1.0x, 0.85x, 0.7x, 0.55x, 0.4x
+                winnings = int(base_winnings * attempt_multiplier)
             else:
                 winnings = 0
         else:

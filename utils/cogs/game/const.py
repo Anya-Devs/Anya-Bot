@@ -33,7 +33,7 @@ def load_config(filename: str) -> dict:
 class GameEmojis:
     """Centralized emoji constants for easy editing"""
     
-    LEGENDARY = "🌟"
+    LEGENDARY = "🟡"
     EPIC = "🟣"
     RARE = "🔵"
     UNCOMMON = "🟢"

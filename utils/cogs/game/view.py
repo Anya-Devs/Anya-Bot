@@ -767,7 +767,7 @@ class InventoryView(discord.ui.View):
                 favorites_count += 1
         
         # Build filter description
-        rarity_labels = {"all": "All", "favorites": "⭐ Favorites", "legendary": "Legendary", "epic": "Epic", "rare": "Rare", "uncommon": "Uncommon", "common": "Common"}
+        rarity_labels = {"all": "All", "favorites": "Favorites", "legendary": "Legendary", "epic": "Epic", "rare": "Rare", "uncommon": "Uncommon", "common": "Common"}
         gender_labels = {"all": "All", "female": f"{GameEmojis.FEMALE} Female", "male": f"{GameEmojis.MALE} Male", "unknown": f"{GameEmojis.NONBINARY} Unknown"}
         
         filter_text = f"**Rarity:** {rarity_labels.get(self.rarity_filter, 'All')} • **Gender:** {gender_labels.get(self.gender_filter, 'All')}"
@@ -802,13 +802,13 @@ class InventoryView(discord.ui.View):
                 # Check if character has active cover art
                 cover_indicator = ""
                 if char.get('active_cover_url'):
-                    cover_indicator = " 🎨"
+                    cover_indicator = "🎨"
                 
                 # Check if character is favorited
-                favorite_indicator = " ⭐" if char.get("favorite", False) else ""
+                favorite_indicator = "⭐" if char.get("favorite", False) else ""
                 
                 # Improved format: UID on same line, cleaner spacing
-                line = f"**{uid}**{cover_indicator}{favorite_indicator} {rarity_data['emoji']} **{name}** {gender_emoji}\n> *{anime}* • ❤️ {likes:,}"
+                line = f"**{uid}** • `{cover_indicator}{favorite_indicator}{rarity_data['emoji']}` • **{name}** {gender_emoji}\n> *{anime}* • ❤️ {likes:,}"
                 char_lines.append(line)
             
             embed.add_field(
@@ -849,7 +849,7 @@ class InventoryRaritySelect(discord.ui.Select):
         self.parent_view = parent_view
         options = [
             discord.SelectOption(label="All Rarities", value="all", emoji=GameEmojis.BOX, default=True),
-            discord.SelectOption(label="⭐ Favorites", value="favorites", emoji="⭐", description="Show only favorited characters"),
+            discord.SelectOption(label="Favorites", value="favorites", emoji="⭐", description="Show only favorited characters"),
             discord.SelectOption(label="Legendary", value="legendary", emoji=GameEmojis.LEGENDARY, description=f"5★ - 10,000+ {GameEmojis.HEARTS}"),
             discord.SelectOption(label="Epic", value="epic", emoji=GameEmojis.EPIC, description=f"4★ - 5,000+ {GameEmojis.HEARTS}"),
             discord.SelectOption(label="Rare", value="rare", emoji=GameEmojis.RARE, description=f"3★ - 1,000+ {GameEmojis.HEARTS}"),
