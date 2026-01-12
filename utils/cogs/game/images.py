@@ -878,31 +878,31 @@ RARITY_FRAMES = {
     },
 }
 
-def _draw_textured_card_frame(draw, card_width: int, card_height: int, frame: dict, is_claimed: bool = False):
+def _draw_textured_card_frame(draw, card_width: int, card_height: int, frame: dict, is_claimed: bool = False, scale: int = 1):
     """Draw a textured card frame with metallic/wood effects."""
     if is_claimed:
         # Simple gray frame for claimed cards
-        draw.rounded_rectangle([0, 0, card_width - 1, card_height - 1], 12, 
-                            fill=(35, 35, 40, 250), outline=(55, 55, 60), width=4)
+        draw.rounded_rectangle([0, 0, card_width - 1, card_height - 1], 12 * scale, 
+                            fill=(35, 35, 40, 250), outline=(55, 55, 60), width=4 * scale)
         return
     
     # Base frame
-    draw.rounded_rectangle([0, 0, card_width - 1, card_height - 1], 12, 
-                         fill=frame["base"], outline=frame["shadow"], width=4)
+    draw.rounded_rectangle([0, 0, card_width - 1, card_height - 1], 12 * scale, 
+                         fill=frame["base"], outline=frame["shadow"], width=4 * scale)
     
     # Add texture effects based on rarity
     if frame.get("grain"):
         # Wood grain effect for common cards
-        for i in range(0, card_height, 3):
+        for i in range(0, card_height, 3 * scale):
             grain_y = i
-            if i % 6 == 0:
+            if i % (6 * scale) == 0:
                 # Horizontal grain lines
-                draw.line([(8, grain_y), (card_width - 8, grain_y)], 
-                         fill=frame["highlight"], width=1)
+                draw.line([(8 * scale, grain_y), (card_width - 8 * scale, grain_y)], 
+                         fill=frame["highlight"], width=1 * scale)
             else:
                 # Slight offset for variation
-                draw.line([(10, grain_y), (card_width - 10, grain_y)], 
-                         fill=frame["accent"], width=1)
+                draw.line([(10 * scale, grain_y), (card_width - 10 * scale, grain_y)], 
+                         fill=frame["accent"], width=1 * scale)
     
     if frame.get("metallic"):
         # Metallic shimmer effects
@@ -911,42 +911,43 @@ def _draw_textured_card_frame(draw, card_width: int, card_height: int, frame: di
         
         # Create shimmer lines
         for i in range(5):
-            shimmer_x = random.randint(15, card_width - 15)
-            shimmer_y = random.randint(15, card_height - 15)
-            shimmer_length = random.randint(20, 40)
+            shimmer_x = random.randint(15 * scale, card_width - 15 * scale)
+            shimmer_y = random.randint(15 * scale, card_height - 15 * scale)
+            shimmer_length = random.randint(20 * scale, 40 * scale)
             shimmer_angle = random.choice([0, 45, 90])
             
             if shimmer_angle == 0:
                 # Horizontal shimmer
                 draw.line([(shimmer_x, shimmer_y), 
-                          (min(shimmer_x + shimmer_length, card_width - 15), shimmer_y)], 
-                         fill=frame["highlight"], width=1)
+                          (min(shimmer_x + shimmer_length, card_width - 15 * scale), shimmer_y)], 
+                         fill=frame["highlight"], width=1 * scale)
             elif shimmer_angle == 45:
                 # Diagonal shimmer
-                end_x = min(shimmer_x + shimmer_length, card_width - 15)
-                end_y = min(shimmer_y + shimmer_length, card_height - 15)
+                end_x = min(shimmer_x + shimmer_length, card_width - 15 * scale)
+                end_y = min(shimmer_y + shimmer_length, card_height - 15 * scale)
                 draw.line([(shimmer_x, shimmer_y), (end_x, end_y)], 
-                         fill=frame["highlight"], width=1)
+                         fill=frame["highlight"], width=1 * scale)
             else:
                 # Vertical shimmer
                 draw.line([(shimmer_x, shimmer_y), 
-                          (shimmer_x, min(shimmer_y + shimmer_length, card_height - 15))], 
-                         fill=frame["highlight"], width=1)
+                          (shimmer_x, min(shimmer_y + shimmer_length, card_height - 15 * scale))], 
+                         fill=frame["highlight"], width=1 * scale)
         
         random.seed()  # Reset seed
     
     if frame.get("brushed"):
         # Brushed metal effect (horizontal lines)
-        for i in range(10, card_height - 10, 4):
-            draw.line([(10, i), (card_width - 10, i)], 
-                     fill=frame["accent"], width=1)
+        for i in range(10 * scale, card_height - 10 * scale, 4 * scale):
+            draw.line([(10 * scale, i), (card_width - 10 * scale, i)], 
+                     fill=frame["accent"], width=1 * scale)
     
     if frame.get("polished"):
         # Polished effect - smooth gradient lines
-        for i in range(5, card_height - 5, 8):
-            alpha = 100 - (i // 10)  # Fade out towards edges
-            draw.line([(8, i), (card_width - 8, i)], 
-                     fill=frame["highlight"] + (alpha,), width=2)
+        for i in range(5 * scale, card_height - 5 * scale, 8 * scale):
+            alpha = 100 - (i // (10 * scale))  # Fade out towards edges
+            if alpha < 0: alpha = 0
+            draw.line([(8 * scale, i), (card_width - 8 * scale, i)], 
+                     fill=frame["highlight"] + (alpha,), width=2 * scale)
     
     if frame.get("brilliant"):
         # Brilliant gold - extra shine points
@@ -1003,10 +1004,8 @@ def _draw_textured_card_frame(draw, card_width: int, card_height: int, frame: di
                          outline=frame["highlight"], width=2)
 
 
-def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: bool = False, is_owned: bool = False, owner_data: dict = None) -> Image.Image:
+def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: bool = False, is_owned: bool = False, owner_data: dict = None, card_width: int = 280, card_height: int = 400) -> Image.Image:
     """Draw an individual card using the exact same logic as the draw system."""
-    card_width = 220
-    card_height = 340
     
     rarity = char.get("rarity", "common")
     frame = RARITY_FRAMES.get(rarity, RARITY_FRAMES["common"])
@@ -1014,11 +1013,11 @@ def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: 
     card_bg = Image.new('RGBA', (card_width, card_height), (0, 0, 0, 0))
     card_draw = ImageDraw.Draw(card_bg)
     
-    # Load fonts
+    # Load fonts - scale with card size
     try:
-        name_font = _load_emoji_font(16)
-        small_font = _load_emoji_font(12)
-        tiny_font = _load_emoji_font(10)
+        name_font = _load_emoji_font(int(16 * (card_width / 220)))  # Scale from original 220px width
+        small_font = _load_emoji_font(int(12 * (card_width / 220)))
+        tiny_font = _load_emoji_font(int(10 * (card_width / 220)))
     except:
         name_font = small_font = tiny_font = ImageFont.load_default()
     
@@ -1028,9 +1027,9 @@ def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: 
     else:
         _draw_textured_card_frame(card_draw, card_width, card_height, frame, is_claimed=False)
     
-    # Draw banner
-    banner_h = 36
-    banner_margin = 12
+    # Draw banner - scale with card size
+    banner_h = int(36 * (card_width / 220))
+    banner_margin = int(12 * (card_width / 220))
     card_draw.rounded_rectangle(
         [banner_margin, banner_margin, card_width - banner_margin, banner_margin + banner_h],
         6,
@@ -1039,18 +1038,20 @@ def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: 
     
     # Draw character name
     name = char.get("name", "Unknown")
-    if len(name) > 16:
-        name = name[:14] + "..."
+    max_name_length = int(16 * (card_width / 220))
+    if len(name) > max_name_length:
+        name = name[:max_name_length-2] + "..."
     name_bbox = card_draw.textbbox((0, 0), name, font=name_font)
     name_x = (card_width - (name_bbox[2] - name_bbox[0])) // 2
-    card_draw.text((name_x + 1, banner_margin + 10), name, fill=(0, 0, 0, 180), font=name_font)
-    card_draw.text((name_x, banner_margin + 9), name, fill=(255, 255, 255), font=name_font)
+    name_y_offset = int(10 * (card_width / 220))
+    card_draw.text((name_x + 1, banner_margin + name_y_offset + 1), name, fill=(0, 0, 0, 180), font=name_font)
+    card_draw.text((name_x, banner_margin + name_y_offset), name, fill=(255, 255, 255), font=name_font)
     
-    # Draw character image area - EXACT same as draw system
-    img_area_x = 10
-    img_area_y = banner_margin + banner_h + 8
-    img_area_w = card_width - 20
-    img_area_h = card_height - (banner_margin + banner_h) - 68
+    # Draw character image area - scale with card size
+    img_area_x = int(10 * (card_width / 220))
+    img_area_y = banner_margin + banner_h + int(8 * (card_width / 220))
+    img_area_w = card_width - int(20 * (card_width / 220))
+    img_area_h = card_height - (banner_margin + banner_h) - int(68 * (card_width / 220))
     
     if char_img:
         if is_claimed:
@@ -1062,15 +1063,16 @@ def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: 
         char_img = char_img.resize((img_area_w, img_area_h), Image.Resampling.LANCZOS)
         card_bg.paste(char_img, (img_area_x, img_area_y), char_img)
     else:
-        # Draw placeholder - RECTANGULAR like in draw system
-        card_draw.ellipse([img_area_x + 20, img_area_y + 20, 
-                          img_area_x + img_area_w - 20, img_area_y + img_area_h - 20],
+        # Draw placeholder - scale with card size
+        placeholder_margin = int(20 * (card_width / 220))
+        card_draw.ellipse([img_area_x + placeholder_margin, img_area_y + placeholder_margin, 
+                          img_area_x + img_area_w - placeholder_margin, img_area_y + img_area_h - placeholder_margin],
                         fill=(50, 50, 55))
     
     # Draw claimed stamp if needed
     if is_claimed:
         try:
-            stamp_font = _load_emoji_font(48)
+            stamp_font = _load_emoji_font(int(48 * (card_width / 220)))
         except:
             stamp_font = ImageFont.load_default()
         
@@ -1088,7 +1090,8 @@ def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: 
         text_x = (card_width - text_width) // 2
         text_y = (card_height - text_height) // 2
         
-        stamp_draw.text((text_x + 3, text_y + 3), stamp_text, fill=(0, 0, 0, 180), font=stamp_font)
+        shadow_offset = int(3 * (card_width / 220))
+        stamp_draw.text((text_x + shadow_offset, text_y + shadow_offset), stamp_text, fill=(0, 0, 0, 180), font=stamp_font)
         stamp_draw.text((text_x, text_y), stamp_text, fill=(220, 20, 60, 230), font=stamp_font)
         
         rotated_stamp = stamp_img.rotate(-30, expand=False, fillcolor=(0, 0, 0, 0))
@@ -1096,45 +1099,50 @@ def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: 
     
     # Draw owned banner if needed
     if is_owned and not is_claimed and owner_data:
-        owner_banner_y = img_area_y + img_area_h - 44
+        owner_banner_h = int(40 * (card_width / 220))
+        owner_banner_y = img_area_y + img_area_h - owner_banner_h - int(4 * (card_width / 220))
         
         card_draw.rounded_rectangle(
-            [img_area_x + 6, owner_banner_y, img_area_x + img_area_w - 6, owner_banner_y + 40],
+            [img_area_x + int(6 * (card_width / 220)), owner_banner_y, 
+             img_area_x + img_area_w - int(6 * (card_width / 220)), owner_banner_y + owner_banner_h],
             6,
             fill=(15, 15, 20, 235),
             outline=(255, 70, 70),
-            width=3
+            width=int(3 * (card_width / 220))
         )
         
         # Draw owner avatar if available
         if owner_data.get("avatar_img"):
             avatar_img = owner_data["avatar_img"]
-            card_bg.paste(avatar_img, (img_area_x + 10, owner_banner_y + 2), avatar_img)
+            card_bg.paste(avatar_img, (img_area_x + int(10 * (card_width / 220)), owner_banner_y + 2), avatar_img)
         
-        # Draw owned text
-        text_x = img_area_x + 52
-        card_draw.text((text_x + 1, owner_banner_y + 9), "OWNED", fill=(0, 0, 0, 200), font=small_font)
-        card_draw.text((text_x, owner_banner_y + 8), "OWNED", fill=(255, 70, 70), font=small_font)
+        # Draw owned text - scale positions
+        owned_text_x = img_area_x + int(52 * (card_width / 220))
+        card_draw.text((owned_text_x + 1, owner_banner_y + int(9 * (card_width / 220))), "OWNED", fill=(0, 0, 0, 200), font=small_font)
+        card_draw.text((owned_text_x, owner_banner_y + int(8 * (card_width / 220))), "OWNED", fill=(255, 70, 70), font=small_font)
         
-        owner_name = owner_data.get("username", "Someone")[:12]
-        card_draw.text((text_x + 1, owner_banner_y + 26), f"by {owner_name}", fill=(0, 0, 0, 200), font=small_font)
-        card_draw.text((text_x, owner_banner_y + 25), f"by {owner_name}", fill=(200, 200, 200), font=small_font)
+        owner_name = owner_data.get("username", "Someone")[:int(12 * (card_width / 220))]
+        card_draw.text((owned_text_x + 1, owner_banner_y + int(26 * (card_width / 220))), f"by {owner_name}", fill=(0, 0, 0, 200), font=small_font)
+        card_draw.text((owned_text_x, owner_banner_y + int(25 * (card_width / 220))), f"by {owner_name}", fill=(200, 200, 200), font=small_font)
     
-    # Draw bottom banner with anime name - EXACT same as draw system
-    bottom_banner_y = card_height - 48
+    # Draw bottom banner with anime name - scale with card size
+    bottom_banner_h = int(32 * (card_width / 220))
+    bottom_banner_y = card_height - int(48 * (card_width / 220))
     card_draw.rounded_rectangle(
-        [banner_margin, bottom_banner_y, card_width - banner_margin, bottom_banner_y + 32],
+        [banner_margin, bottom_banner_y, card_width - banner_margin, bottom_banner_y + bottom_banner_h],
         6,
         fill=(20, 20, 25, 240)
     )
     
     anime = char.get("anime", "Unknown")
-    if len(anime) > 20:
-        anime = anime[:18] + "..."
+    max_anime_length = int(20 * (card_width / 220))
+    if len(anime) > max_anime_length:
+        anime = anime[:max_anime_length-2] + "..."
     anime_bbox = card_draw.textbbox((0, 0), anime, font=small_font)
     anime_x = (card_width - (anime_bbox[2] - anime_bbox[0])) // 2
-    card_draw.text((anime_x + 1, bottom_banner_y + 10), anime, fill=(0, 0, 0, 180), font=small_font)
-    card_draw.text((anime_x, bottom_banner_y + 9), anime, fill=(240, 240, 240), font=small_font)
+    anime_y_offset = int(10 * (card_width / 220))
+    card_draw.text((anime_x + 1, bottom_banner_y + anime_y_offset + 1), anime, fill=(0, 0, 0, 180), font=small_font)
+    card_draw.text((anime_x, bottom_banner_y + anime_y_offset), anime, fill=(240, 240, 240), font=small_font)
     
     return card_bg
 
@@ -1144,7 +1152,7 @@ def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: 
 async def generate_gallery_image(
     characters: list,
     page: int = 1,
-    cards_per_page: int = 15,  # 5x3 grid
+    cards_per_page: int = 10,  # 2x5 grid
     user_name: str = "User",
     user_avatar_bytes: bytes = None,
     filter_type: str = "all",
@@ -1153,10 +1161,11 @@ async def generate_gallery_image(
     """Generate a modern, polished gallery image with user card collection."""
     
     # === Layout & sizing ===
-    cards_per_row, rows_per_page = 5, 3
-    card_width, card_height = 220, 340
-    spacing_x, spacing_y = 25, 25
-    margin = 50
+    cards_per_row, rows_per_page = 5, 2  # 2x5 grid = 10 cards per page
+    card_width, card_height = 280, 400  # Larger cards for better visibility
+    spacing_x, spacing_y = 30, 30  # More spacing
+    margin = 60
+    cards_per_page = cards_per_row * rows_per_page  # 10 cards per page
 
     gallery_width = (card_width * cards_per_row) + (spacing_x * (cards_per_row - 1)) + 2*margin
     gallery_height = (card_height * rows_per_page) + (spacing_y * (rows_per_page - 1)) + 250
@@ -1193,9 +1202,9 @@ async def generate_gallery_image(
     img.paste(header, (0, 0), header)
     draw.rectangle([0, header_height-1, gallery_width, header_height], fill=(40,40,45,255))
 
-    # === User avatar with circular mask & shadow ===
-    avatar_size = 70
-    avatar_x, avatar_y = margin, 35
+    # === User avatar with circular mask & enhanced visibility ===
+    avatar_size = 100  # Increased from 70
+    avatar_x, avatar_y = margin, 30
     if user_avatar_bytes:
         try:
             avatar_img = Image.open(io.BytesIO(user_avatar_bytes)).convert('RGBA')
@@ -1203,29 +1212,64 @@ async def generate_gallery_image(
             mask = Image.new('L', (avatar_size, avatar_size), 0)
             ImageDraw.Draw(mask).ellipse([0,0,avatar_size,avatar_size], fill=255)
             avatar_img.putalpha(mask)
+            
+            # Enhanced glowing border
+            border_size = avatar_size + 8
+            border_img = Image.new('RGBA', (border_size, border_size), (0, 0, 0, 0))
+            border_draw = ImageDraw.Draw(border_img)
+            # Outer glow
+            for i in range(4, 0, -1):
+                alpha = 80 - i * 15
+                border_draw.ellipse([i, i, border_size - i, border_size - i], 
+                                  outline=(120, 170, 255, alpha), width=2)
+            # Main border
+            border_draw.ellipse([4, 4, border_size - 4, border_size - 4], 
+                              outline=(120, 170, 255), width=3)
+            
             # Drop shadow
             shadow = Image.new('RGBA', (avatar_size+10, avatar_size+10), (0,0,0,0))
-            ImageDraw.Draw(shadow).ellipse([5,5,avatar_size+5,avatar_size+5], fill=(0,0,0,100))
+            ImageDraw.Draw(shadow).ellipse([5,5,avatar_size+5,avatar_size+5], fill=(0,0,0,120))
             shadow = shadow.filter(ImageFilter.GaussianBlur(5))
+            
+            # Paste all layers
             img.paste(shadow, (avatar_x-5, avatar_y-5), shadow)
+            img.paste(border_img, (avatar_x-4, avatar_y-4), border_img)
             img.paste(avatar_img, (avatar_x, avatar_y), avatar_img)
         except Exception as e:
             print(f"Avatar error: {e}")
+            # Enhanced placeholder
+            for i in range(4, 0, -1):
+                alpha = 80 - i * 15
+                draw.ellipse([avatar_x - i, avatar_y - i, 
+                            avatar_x + avatar_size + i, avatar_y + avatar_size + i],
+                           outline=(120, 170, 255, alpha), width=2)
+            draw.ellipse([avatar_x - 4, avatar_y - 4, 
+                        avatar_x + avatar_size + 4, avatar_y + avatar_size + 4],
+                       outline=(120, 170, 255), width=3)
             draw.ellipse([avatar_x, avatar_y, avatar_x+avatar_size, avatar_y+avatar_size],
-                         fill=(50,50,60,255), outline=(60,60,70,255), width=2)
+                         fill=(50,50,60,255))
     else:
+        # Enhanced placeholder when no avatar
+        for i in range(4, 0, -1):
+            alpha = 80 - i * 15
+            draw.ellipse([avatar_x - i, avatar_y - i, 
+                        avatar_x + avatar_size + i, avatar_y + avatar_size + i],
+                       outline=(120, 170, 255, alpha), width=2)
+        draw.ellipse([avatar_x - 4, avatar_y - 4, 
+                    avatar_x + avatar_size + 4, avatar_y + avatar_size + 4],
+                   outline=(120, 170, 255), width=3)
         draw.ellipse([avatar_x, avatar_y, avatar_x+avatar_size, avatar_y+avatar_size],
-                     fill=(50,50,60,255), outline=(60,60,70,255), width=2)
+                     fill=(50,50,60,255))
 
     # === User name & stats ===
     name_x, name_y = avatar_x + avatar_size + 25, avatar_y + 5
-    draw.text((name_x, name_y), f"{user_name}'s Gallery", fill=(240,240,240), font=title_font)
-    draw.text((name_x, name_y+45), f"Collection: {total_cards} cards", fill=(170,170,170), font=header_font)
+    draw.text((name_x, name_y), f"{user_name}'s Gallery", fill=(255,255,255), font=title_font)  # Pure white
+    draw.text((name_x, name_y+45), f"Collection: {total_cards} cards", fill=(200,200,200), font=header_font)  # Brighter
     
     filter_text = f"Filter: {filter_type.title()}"
     if search_query:
         filter_text += f" | Search: '{search_query}'"
-    draw.text((name_x, name_y+70), filter_text, fill=(140,140,140), font=sub_font)
+    draw.text((name_x, name_y+70), filter_text, fill=(180,180,190), font=sub_font)  # Much brighter
 
     page_text = f"Page {page}/{total_pages}"
     page_bbox = draw.textbbox((0,0), page_text, font=sub_font)
@@ -1257,19 +1301,31 @@ async def generate_gallery_image(
     # Async image fetch
     char_images = [None]*len(page_chars)
     async with aiohttp.ClientSession() as session:
-        tasks = [fetch_image(session, char["image_url"], i) for i,char in enumerate(page_chars) if char.get("image_url")]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for res in results:
-            if not isinstance(res, Exception) and res:
-                idx, img_data = res
-                char_images[idx] = Image.open(io.BytesIO(img_data)).convert('RGBA')
+        # Create a mapping of character index to task
+        tasks = []
+        char_indices = []
+        for i, char in enumerate(page_chars):
+            if char.get("image_url"):
+                tasks.append(fetch_image(session, char["image_url"], i))
+                char_indices.append(i)
+        
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for res in results:
+                if not isinstance(res, Exception) and res:
+                    idx, img_data = res
+                    try:
+                        char_images[idx] = Image.open(io.BytesIO(img_data)).convert('RGBA')
+                    except Exception as e:
+                        print(f"Error opening image for character {idx}: {e}")
+                        char_images[idx] = None
 
     # Draw cards with shadows
     for idx, char in enumerate(page_chars):
         row, col = idx//cards_per_row, idx%cards_per_row
         card_x = margin + col*(card_width+spacing_x)
         card_y = grid_start_y + row*(card_height+spacing_y)
-        card_img = _draw_individual_card(char, char_images[idx])
+        card_img = _draw_individual_card(char, char_images[idx], card_width=card_width, card_height=card_height)
 
         # Shadow
         shadow = Image.new('RGBA', (card_width+20, card_height+20), (0,0,0,0))
@@ -2524,19 +2580,26 @@ async def generate_gallery_image(
     Returns:
         BytesIO buffer containing the PNG image
     """
-    # Layout configuration
-    cards_per_row = 5
-    rows_per_page = 3
-    card_width = 200  # Increased from 160
-    card_height = 300  # Increased from 240
-    card_spacing_x = 25  # Increased spacing
-    card_spacing_y = 30  # Increased spacing
+    # Dynamic layout configuration based on card count
+    total_cards = len(characters)
+    
+    # Optimize for Discord ultra-wide viewing (8 cols x 2 rows)
+    cards_per_row = 5  # Increased from 4
+    rows_per_page = 2  # Decreased from 3
+    cards_per_page = cards_per_row * rows_per_page  # 16 cards per page
+    
+    # Larger cards for better visibility (2x size)
+    card_width = 528
+    card_height = 792
+
+    card_spacing_x = 60
+    card_spacing_y = 70
     
     # Header and footer
-    header_height = 100
-    footer_height = 60
-    margin_x = 40
-    margin_y = 30
+    header_height = 240  # Doubled from 120
+    footer_height = 140  # Doubled from 70
+    margin_x = 100  # Doubled from 50
+    margin_y = 70  # Doubled from 35
     
     # Calculate dimensions
     grid_width = (card_width * cards_per_row) + (card_spacing_x * (cards_per_row - 1))
@@ -2544,37 +2607,37 @@ async def generate_gallery_image(
     total_width = grid_width + (margin_x * 2)
     total_height = header_height + grid_height + footer_height + (margin_y * 2)
     
-    # Background colors - modern dark theme
-    bg_color = (18, 18, 22)
-    header_bg = (28, 28, 34)
-    footer_bg = (24, 24, 30)
-    card_bg = (32, 32, 38)
+    # Background colors - improved contrast for readability
+    bg_color = (12, 12, 16)
+    header_bg = (20, 20, 28)
+    footer_bg = (16, 16, 24)
+    card_bg = (28, 28, 36)
     text_color = (255, 255, 255)
-    subtitle_color = (160, 160, 170)
-    accent_color = (100, 150, 255)
+    subtitle_color = (200, 200, 210)  # Brighter for better readability
+    accent_color = (120, 170, 255)  # Brighter accent
     
     # Create image
     img = Image.new('RGB', (total_width, total_height), bg_color)
     draw = ImageDraw.Draw(img)
     
-    # Load fonts
+    # Load fonts - scaled up 2x
     try:
-        title_font = _load_emoji_font(28)
-        subtitle_font = _load_emoji_font(14)
-        name_font = _load_emoji_font(13)
-        small_font = _load_emoji_font(11)
-        tiny_font = _load_emoji_font(9)
-        page_font = _load_emoji_font(18)
+        title_font = _load_emoji_font(64)  # Doubled from 32
+        subtitle_font = _load_emoji_font(32)  # Doubled from 16
+        name_font = _load_emoji_font(30)  # Doubled from 15
+        small_font = _load_emoji_font(26)  # Doubled from 13
+        tiny_font = _load_emoji_font(22)  # Doubled from 11
+        page_font = _load_emoji_font(40)  # Doubled from 20
     except:
         title_font = subtitle_font = name_font = small_font = tiny_font = page_font = ImageFont.load_default()
     
     # ===== HEADER SECTION =====
     draw.rectangle([0, 0, total_width, header_height], fill=header_bg)
     
-    # User avatar (if provided)
-    avatar_size = 60
+    # User avatar (if provided) - made larger and more prominent
+    avatar_size = 160  # Increased from 120
     avatar_x = margin_x
-    avatar_y = 20
+    avatar_y = 30  # Adjusted positioning
     
     if user_avatar_bytes:
         try:
@@ -2590,20 +2653,56 @@ async def generate_gallery_image(
             output = Image.new('RGBA', (avatar_size, avatar_size), (0, 0, 0, 0))
             output.paste(avatar_img, (0, 0), mask)
             
-            # Paste onto main image
+            # Add a glowing border around avatar
+            border_size = avatar_size + 8
+            border_img = Image.new('RGBA', (border_size, border_size), (0, 0, 0, 0))
+            border_draw = ImageDraw.Draw(border_img)
+            # Outer glow
+            for i in range(4, 0, -1):
+                alpha = 60 - i * 12
+                border_draw.ellipse([i, i, border_size - i, border_size - i], 
+                                  outline=(*accent_color, alpha), width=2)
+            # Main border
+            border_draw.ellipse([4, 4, border_size - 4, border_size - 4], 
+                              outline=accent_color, width=3)
+            
+            # Paste border then avatar
+            img.paste(border_img, (avatar_x - 4, avatar_y - 4), border_img)
             img.paste(output, (avatar_x, avatar_y), output)
         except:
-            # Draw placeholder circle
+            # Draw placeholder circle with enhanced border
+            # Outer glow
+            for i in range(4, 0, -1):
+                alpha = 60 - i * 12
+                draw.ellipse([avatar_x - i, avatar_y - i, 
+                            avatar_x + avatar_size + i, avatar_y + avatar_size + i],
+                           outline=(*accent_color, alpha), width=2)
+            # Main border
+            draw.ellipse([avatar_x - 4, avatar_y - 4, 
+                        avatar_x + avatar_size + 4, avatar_y + avatar_size + 4],
+                       outline=accent_color, width=3)
+            # Fill
             draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size],
-                        fill=(60, 60, 70), outline=accent_color, width=2)
+                        fill=(60, 60, 70))
     else:
-        # Draw placeholder circle
+        # Draw placeholder circle with enhanced border
+        # Outer glow
+        for i in range(4, 0, -1):
+            alpha = 60 - i * 12
+            draw.ellipse([avatar_x - i, avatar_y - i, 
+                        avatar_x + avatar_size + i, avatar_y + avatar_size + i],
+                       outline=(*accent_color, alpha), width=2)
+        # Main border
+        draw.ellipse([avatar_x - 4, avatar_y - 4, 
+                    avatar_x + avatar_size + 4, avatar_y + avatar_size + 4],
+                   outline=accent_color, width=3)
+        # Fill
         draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size],
-                    fill=(60, 60, 70), outline=accent_color, width=2)
+                    fill=(60, 60, 70))
     
     # Title and user name
-    title_x = avatar_x + avatar_size + 20
-    title_y = avatar_y + 5
+    title_x = avatar_x + avatar_size + 40  # Doubled spacing
+    title_y = avatar_y + 10  # Doubled spacing
     
     title_text = f"{user_name}'s Gallery"
     draw.text((title_x, title_y), title_text, fill=text_color, font=title_font)
@@ -2621,18 +2720,18 @@ async def generate_gallery_image(
     else:
         filter_text = "📚 All Characters"
     
-    draw.text((title_x, title_y + 35), filter_text, fill=subtitle_color, font=subtitle_font)
+    draw.text((title_x, title_y + 70), filter_text, fill=subtitle_color, font=subtitle_font) # Y offset doubled
     
     # Total count
     total_cards = len(characters)
     total_pages = max(1, (total_cards + cards_per_page - 1) // cards_per_page)
     count_text = f"{total_cards} cards • Page {page}/{total_pages}"
-    draw.text((title_x, title_y + 52), count_text, fill=subtitle_color, font=small_font)
+    draw.text((title_x, title_y + 104), count_text, fill=subtitle_color, font=small_font) # Y offset doubled
     
     # Divider line
-    divider_y = header_height - 1
+    divider_y = header_height - 2
     draw.line([(margin_x, divider_y), (total_width - margin_x, divider_y)], 
-              fill=(60, 60, 70), width=2)
+              fill=(60, 60, 70), width=4)
     
     # ===== CARD GRID SECTION =====
     grid_start_y = header_height + margin_y
@@ -2642,24 +2741,31 @@ async def generate_gallery_image(
     end_idx = min(start_idx + cards_per_page, total_cards)
     page_characters = characters[start_idx:end_idx]
     
-    # Fetch character images and cover art
+    # Helper function to fetch single image
+    async def fetch_char_image(session, char):
+        cover_url = char.get("active_cover_url") or char.get("image_url")
+        if not cover_url:
+            return None
+            
+        try:
+            async with session.get(cover_url, timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.read()
+                    return Image.open(io.BytesIO(data)).convert('RGBA')
+        except:
+            return None
+        return None
+
+    # Fetch all images concurrently
     char_images = []
-    async with aiohttp.ClientSession() as session:
-        for char in page_characters:
-            char_img = None
-            
-            # Try to get cover art first if available
-            cover_url = char.get("active_cover_url") or char.get("image_url")
-            
-            if cover_url:
-                try:
-                    async with session.get(cover_url) as resp:
-                        if resp.status == 200:
-                            char_img = Image.open(io.BytesIO(await resp.read())).convert('RGBA')
-                except:
-                    pass
-            
-            char_images.append(char_img)
+    try:
+        async with aiohttp.ClientSession() as session:
+            tasks = [fetch_char_image(session, char) for char in page_characters]
+            char_images = await asyncio.gather(*tasks)
+    except Exception as e:
+        # Fallback if connection fails
+        char_images = [None] * len(page_characters)
+        print(f"Error fetching gallery images: {e}")
     
     # Draw cards in grid
     for idx, char in enumerate(page_characters):
@@ -2677,18 +2783,18 @@ async def generate_gallery_image(
         card_bg = Image.new('RGBA', (card_width, card_height), (0, 0, 0, 0))
         card_draw = ImageDraw.Draw(card_bg)
         
-        # Draw textured frame
-        _draw_textured_card_frame(card_draw, card_width, card_height, frame, is_claimed=False)
+        # Draw textured frame with scale=2
+        _draw_textured_card_frame(card_draw, card_width, card_height, frame, is_claimed=False, scale=2)
         
         # === THIN TOP BAR for character name ===
-        top_bar_height = 28  # Increased from 24
-        top_bar_margin = 6
+        top_bar_height = 56  # Doubled from 28
+        top_bar_margin = 12  # Doubled from 6
         
         # Draw thin semi-transparent bar at top with stronger background
         card_draw.rounded_rectangle(
             [top_bar_margin, top_bar_margin, card_width - top_bar_margin, top_bar_margin + top_bar_height],
-            4,
-            fill=(5, 5, 10, 235)  # Darker and more opaque
+            8,  # Doubled radius
+            fill=(5, 5, 10, 235)
         )
         
         # Character name in top bar
@@ -2697,19 +2803,19 @@ async def generate_gallery_image(
             name = name[:16] + ".."
         name_bbox = card_draw.textbbox((0, 0), name, font=name_font)
         name_x = (card_width - (name_bbox[2] - name_bbox[0])) // 2
-        name_y = top_bar_margin + (top_bar_height - (name_bbox[3] - name_bbox[1])) // 2 - 2
+        name_y = top_bar_margin + (top_bar_height - (name_bbox[3] - name_bbox[1])) // 2 - 4
         
-        # Stronger shadow for readability
-        card_draw.text((name_x + 2, name_y + 2), name, fill=(0, 0, 0, 255), font=name_font)
-        card_draw.text((name_x + 1, name_y + 1), name, fill=(0, 0, 0, 200), font=name_font)
-        # Main text - brighter
+        # Stronger shadow for readability (offsets doubled)
+        card_draw.text((name_x + 4, name_y + 4), name, fill=(0, 0, 0, 255), font=name_font)
+        card_draw.text((name_x + 2, name_y + 2), name, fill=(0, 0, 0, 200), font=name_font)
+        # Main text
         card_draw.text((name_x, name_y), name, fill=(255, 255, 255), font=name_font)
         
         # === CHARACTER IMAGE - MAXIMUM SPACE ===
-        img_area_x = 4
-        img_area_y = top_bar_margin + top_bar_height + 2
-        img_area_w = card_width - 8
-        img_area_h = card_height - img_area_y - 34  # Leave space for bottom bar (increased from 32)
+        img_area_x = 8  # Doubled from 4
+        img_area_y = top_bar_margin + top_bar_height + 4  # Doubled from 2
+        img_area_w = card_width - 16  # Doubled from 8
+        img_area_h = card_height - img_area_y - 68  # Doubled from 34
         
         # Draw character image with smart cropping
         char_img = char_images[idx]
@@ -2744,9 +2850,9 @@ async def generate_gallery_image(
             gradient_draw = ImageDraw.Draw(gradient_overlay)
             
             # Draw gradient at bottom (stronger for readability)
-            gradient_height = 35
+            gradient_height = 70  # Doubled from 35
             for i in range(gradient_height):
-                alpha = int((i / gradient_height) * 140)  # 0 to 140 alpha (stronger)
+                alpha = int((i / gradient_height) * 140)
                 y_pos = img_area_h - gradient_height + i
                 gradient_draw.rectangle(
                     [0, y_pos, img_area_w, y_pos + 1],
@@ -2762,7 +2868,7 @@ async def generate_gallery_image(
             # Placeholder
             card_draw.rounded_rectangle(
                 [img_area_x, img_area_y, img_area_x + img_area_w, img_area_y + img_area_h],
-                4,
+                8,  # Doubled radius
                 fill=(40, 40, 50)
             )
             placeholder_text = "?"
@@ -2772,14 +2878,14 @@ async def generate_gallery_image(
             card_draw.text((p_x, p_y), placeholder_text, fill=(80, 80, 90), font=title_font)
         
         # === THIN BOTTOM BAR for info ===
-        bottom_bar_height = 28  # Increased from 26
+        bottom_bar_height = 56  # Doubled from 28
         bottom_bar_y = card_height - bottom_bar_height - top_bar_margin
         
         # Draw thin semi-transparent bar at bottom with stronger background
         card_draw.rounded_rectangle(
             [top_bar_margin, bottom_bar_y, card_width - top_bar_margin, bottom_bar_y + bottom_bar_height],
-            4,
-            fill=(5, 5, 10, 235)  # Darker and more opaque
+            8,  # Doubled radius
+            fill=(5, 5, 10, 235)
         )
         
         # Get info
@@ -2790,22 +2896,22 @@ async def generate_gallery_image(
         # Left side: Anime name (truncated)
         if len(anime) > 14:
             anime = anime[:12] + ".."
-        anime_x = top_bar_margin + 8
-        anime_y = bottom_bar_y + (bottom_bar_height - (small_font.size if hasattr(small_font, 'size') else 11)) // 2 - 1
+        anime_x = top_bar_margin + 16  # Doubled offset
+        anime_y = bottom_bar_y + (bottom_bar_height - (small_font.size if hasattr(small_font, 'size') else 22)) // 2 - 2
         # Stronger shadow
-        card_draw.text((anime_x + 2, anime_y + 2), anime, fill=(0, 0, 0, 255), font=small_font)
-        card_draw.text((anime_x + 1, anime_y + 1), anime, fill=(0, 0, 0, 200), font=small_font)
+        card_draw.text((anime_x + 4, anime_y + 4), anime, fill=(0, 0, 0, 255), font=small_font)
+        card_draw.text((anime_x + 2, anime_y + 2), anime, fill=(0, 0, 0, 200), font=small_font)
         # Brighter text
         card_draw.text((anime_x, anime_y), anime, fill=(230, 230, 240), font=small_font)
         
         # Right side: UID and favorites
         info_text = f"{uid} • ❤️{favorites:,}"
         info_bbox = card_draw.textbbox((0, 0), info_text, font=tiny_font)
-        info_x = card_width - top_bar_margin - (info_bbox[2] - info_bbox[0]) - 8
+        info_x = card_width - top_bar_margin - (info_bbox[2] - info_bbox[0]) - 16  # Doubled offset
         info_y = bottom_bar_y + (bottom_bar_height - (info_bbox[3] - info_bbox[1])) // 2
         # Stronger shadow
-        card_draw.text((info_x + 2, info_y + 2), info_text, fill=(0, 0, 0, 255), font=tiny_font)
-        card_draw.text((info_x + 1, info_y + 1), info_text, fill=(0, 0, 0, 200), font=tiny_font)
+        card_draw.text((info_x + 4, info_y + 4), info_text, fill=(0, 0, 0, 255), font=tiny_font)
+        card_draw.text((info_x + 2, info_y + 2), info_text, fill=(0, 0, 0, 200), font=tiny_font)
         # Brighter text
         card_draw.text((info_x, info_y), info_text, fill=(180, 180, 190), font=tiny_font)
         

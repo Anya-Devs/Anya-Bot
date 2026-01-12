@@ -46,6 +46,7 @@ SERIES_FORMATTING_RULES = {
         "kimetsu no yaiba": "kimetsu_no_yaiba",
         "jujutsu kaisen": "jujutsu_kaisen",
         "my hero academia": "boku_no_hero_academia",
+        "boku no hero academia": "boku_no_hero_academia",
         "mha": "boku_no_hero_academia",
         "bnha": "boku_no_hero_academia",
         "attack on titan": "shingeki_no_kyojin",
@@ -261,6 +262,14 @@ class MultiSourceImageSearch:
         if name_lower in SERIES_FORMATTING_RULES["common_substitutions"]:
             return SERIES_FORMATTING_RULES["common_substitutions"][name_lower]
         
+        # Remove trailing numbers/seasons (e.g., " 4", " season 2", " part 3")
+        name_lower = re.sub(r'\s+\d+$', '', name_lower)  # Remove trailing numbers
+        name_lower = re.sub(r'\s+(season|part|s)\s+\d+$', '', name_lower)  # Remove season/part info
+        
+        # Check substitutions again after cleaning
+        if name_lower in SERIES_FORMATTING_RULES["common_substitutions"]:
+            return SERIES_FORMATTING_RULES["common_substitutions"][name_lower]
+        
         # Remove articles
         for article in SERIES_PATTERNS["articles_to_remove"]:
             name_lower = name_lower.replace(f'{article} ', '').replace(f' {article}', '')
@@ -350,9 +359,23 @@ class MultiSourceImageSearch:
             
             all_images = []
             
-            # Get all name variations to try
-            name_variations = self._get_name_variations(character_name, series_name)
-            logger.info(f"[MultiSearch] Character '{character_name}' -> variations: {name_variations}")
+            # First try fuzzy matching to find the best tag
+            logger.info(f"[MultiSearch] Starting fuzzy tag matching for '{character_name}' from '{series_name}'")
+            best_tag = await self._fuzzy_match_tags(character_name, series_name)
+            
+            # Create variations with the best tag first
+            name_variations = []
+            if best_tag and best_tag != self._get_booru_character_tag(character_name, series_name):
+                name_variations.append(best_tag)
+                logger.info(f"[MultiSearch] Fuzzy match found: {best_tag}")
+            
+            # Add algorithmic variations as fallback
+            algorithmic_variations = self._get_name_variations(character_name, series_name)
+            for var in algorithmic_variations:
+                if var not in name_variations:
+                    name_variations.append(var)
+            
+            logger.info(f"[MultiSearch] Character '{character_name}' -> final variations: {name_variations}")
             
             # Try each variation until we get results
             for char_tag in name_variations:
@@ -707,6 +730,186 @@ class MultiSourceImageSearch:
         
         return processed
     
+    async def _fuzzy_match_tags(self, character_name: str, series_name: str = None) -> str:
+        """Use Safebooru tag API to find the correct character tag with fuzzy matching"""
+        session = await self.get_session()
+        
+        # Generate base character name variations
+        base_variations = []
+        cleaned_name = self._clean_character_name(character_name)
+        base_variations.append(cleaned_name)
+        
+        # Add simple variations
+        if '_' in cleaned_name:
+            parts = cleaned_name.split('_')
+            if len(parts) == 2:
+                base_variations.extend([
+                    f"{parts[0]}_{parts[1]}",
+                    f"{parts[1]}_{parts[0]}"
+                ])
+        
+        # Get series tag for better matching
+        series_tag = None
+        if series_name:
+            series_tag = self._get_booru_series_tag(series_name)
+        
+        # Try to find matching character tags
+        for variation in base_variations:
+            try:
+                # First try: exact character name with series disambiguation
+                if series_tag:
+                    exact_search = f"{variation}_({series_tag}) rating:safe"
+                    logger.info(f"[Fuzzy Match] Trying exact search: {exact_search}")
+                    
+                    search_params = {
+                        'page': 'dapi',
+                        's': 'post',
+                        'q': 'index',
+                        'json': '1',
+                        'limit': 10,
+                        'tags': exact_search,
+                        'pid': 0
+                    }
+                    
+                    async with session.get('https://safebooru.org/index.php', params=search_params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        if resp.status == 200:
+                            text = await resp.text()
+                            if text.strip():
+                                try:
+                                    import json
+                                    posts = json.loads(text)
+                                    if isinstance(posts, list) and len(posts) > 0:
+                                        # If we found posts with exact match, this is our tag
+                                        logger.info(f"[Fuzzy Match] Exact match found: {variation}_({series_tag})")
+                                        return f"{variation}_({series_tag})"
+                                except json.JSONDecodeError:
+                                    pass
+                
+                # Second try: character name pattern search with stricter filtering
+                search_params = {
+                    'page': 'dapi',
+                    's': 'post',
+                    'q': 'index',
+                    'json': '1',
+                    'limit': 50,
+                    'tags': f"{variation}* rating:safe",
+                    'pid': 0
+                }
+                
+                async with session.get('https://safebooru.org/index.php', params=search_params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status == 200:
+                        text = await resp.text()
+                        if text.strip():
+                            try:
+                                import json
+                                posts = json.loads(text)
+                                if isinstance(posts, list) and posts:
+                                    # Extract all tags from these posts and find character tags
+                                    all_tags = {}
+                                    for post in posts:
+                                        post_tags = post.get('tags', '').split()
+                                        for tag in post_tags:
+                                            # Only consider tags that start with our character name
+                                            if tag.lower().startswith(variation.lower()):
+                                                # Skip very long tags (likely wrong series)
+                                                if len(tag) <= 60:  # Reasonable limit
+                                                    all_tags[tag] = all_tags.get(tag, 0) + 1
+                                    
+                                    if all_tags:
+                                        # Convert to tag data format for scoring
+                                        tag_data_list = [{'name': tag, 'count': count} for tag, count in all_tags.items()]
+                                        best_tag = self._find_best_character_tag(tag_data_list, variation, series_name)
+                                        if best_tag:
+                                            logger.info(f"[Fuzzy Match] Found best tag: {best_tag}")
+                                            return best_tag
+                            except json.JSONDecodeError:
+                                pass
+            except Exception as e:
+                logger.debug(f"[Fuzzy Match] Error searching for {variation}: {e}")
+                continue
+        
+        # If no fuzzy match found, fall back to original method
+        logger.info(f"[Fuzzy Match] No match found, using algorithmic generation")
+        return self._get_booru_character_tag(character_name, series_name)
+    
+    def _find_best_character_tag(self, tags: List[Dict], search_term: str, series_name: str = None) -> str:
+        """Find the best matching character tag from Safebooru tag results"""
+        if not tags:
+            return None
+        
+        # Calculate series tag if provided
+        series_tag = None
+        if series_name:
+            series_tag = self._get_booru_series_tag(series_name)
+        
+        best_match = None
+        best_score = 0
+        
+        for tag_data in tags:
+            tag_name = tag_data.get('name', '').lower()
+            tag_count = tag_data.get('count', 0)
+            
+            # Skip if it's obviously not a character tag
+            if any(skip in tag_name for skip in ['artist:', 'studio:', 'creator:', 'copyright:', 'general:']):
+                continue
+            
+            # Calculate match score
+            score = 0
+            
+            # EXACT SERIES MATCH gets massive bonus
+            if series_tag and f"({series_tag})" in tag_name:
+                score += 200  # Huge bonus for exact series disambiguation
+                logger.debug(f"[Scoring] Exact series match: {tag_name} +200")
+            
+            # Check if tag starts with exact character name
+            if tag_name.startswith(search_term):
+                score += 100
+                logger.debug(f"[Scoring] Starts with search term: {tag_name} +100")
+            # Contains search term
+            elif search_term in tag_name:
+                score += 60
+                logger.debug(f"[Scoring] Contains search term: {tag_name} +60")
+            
+            # Bonus for partial series match (words from series name)
+            if series_tag and not f"({series_tag})" in tag_name:
+                series_words = series_tag.split('_')
+                matching_words = sum(1 for word in series_words if word in tag_name)
+                if matching_words > 0:
+                    score += matching_words * 20
+                    logger.debug(f"[Scoring] Partial series match: {tag_name} +{matching_words * 20}")
+            
+            # Penalty for very long tags (likely wrong series)
+            if len(tag_name) > 50:
+                score -= 50
+                logger.debug(f"[Scoring] Tag too long penalty: {tag_name} -50")
+            elif len(tag_name) > 30:
+                score -= 20
+                logger.debug(f"[Scoring] Tag long penalty: {tag_name} -20")
+            
+            # Bonus for tag popularity (more posts = more likely to be correct)
+            if tag_count > 1000:
+                score += 30
+            elif tag_count > 100:
+                score += 20
+            elif tag_count > 50:
+                score += 10
+            elif tag_count > 10:
+                score += 5
+            
+            # Avoid tags that are too generic
+            if len(tag_name) < 3:
+                score -= 20
+            
+            logger.debug(f"[Scoring] Final score for {tag_name}: {score}")
+            
+            if score > best_score:
+                best_score = score
+                best_match = tag_name
+                logger.debug(f"[Scoring] New best: {tag_name} with score {best_score}")
+        
+        logger.info(f"[Scoring] Best match: {best_match} with score {best_score}")
+        return best_match if best_score >= 80 else None  # Higher threshold for better quality
+
     async def _search_safebooru_org(self, char_tag: str, page: int = 1, limit: int = 30) -> List[Dict]:
         """Search Safebooru.org - PRIMARY IMAGE SOURCE"""
         session = await self.get_session()

@@ -1886,7 +1886,7 @@ class Games(commands.Cog):
             sorted_inventory = sorted(filtered_inventory, key=sort_key)
             
             # Pagination settings
-            cards_per_page = 15  # 5 cards per row * 3 rows
+            cards_per_page = 10  # 8 cards per row * 2 rows
             total_cards = len(sorted_inventory)
             total_pages = (total_cards + cards_per_page - 1) // cards_per_page
             

@@ -729,6 +729,9 @@ class InventoryView(discord.ui.View):
         elif self.gender_filter == "unknown":
             chars = [c for c in chars if c.get("gender") not in ["Female", "Male"]]
         
+        # Always sort by favorites (most favorites first)
+        chars.sort(key=lambda x: x.get("favorites", 0), reverse=True)
+        
         return chars
     
     async def get_embed(self):
@@ -905,9 +908,12 @@ class GalleryView(discord.ui.View):
         self.guild_id = guild_id
         self.all_characters = characters
         self.page = page
-        self.cards_per_page = 15
+        self.cards_per_page = 10  # Updated to 10 (2x5 grid)
         self.filter_type = filter_type
         self.search_query = search_query
+        
+        # Always sort by favorites (most favorites first)
+        self.all_characters.sort(key=lambda x: x.get("favorites", 0), reverse=True)
         
         # Calculate total pages
         self.total_pages = max(1, (len(characters) + self.cards_per_page - 1) // self.cards_per_page)
@@ -923,7 +929,7 @@ class GalleryView(discord.ui.View):
         """Update button states based on current page"""
         # Remove existing navigation buttons
         for item in self.children[:]:
-            if isinstance(item, discord.ui.Button) and item.custom_id in ["prev", "next", "first", "last"]:
+            if isinstance(item, discord.ui.Button) and item.custom_id in ["prev", "next", "first", "last", "page_indicator"]:
                 self.remove_item(item)
         
         # Add navigation buttons
@@ -954,6 +960,7 @@ class GalleryView(discord.ui.View):
             label=f"Page {self.page}/{self.total_pages}",
             style=discord.ButtonStyle.secondary,
             disabled=True,
+            custom_id="page_indicator",
             row=2
         )
         self.add_item(page_btn)
@@ -1003,18 +1010,52 @@ class GalleryView(discord.ui.View):
             search_query=self.search_query
         )
         return buffer
-    
+    def _set_items_disabled(self, disabled: bool):
+        """Enable or disable all interactive items"""
+        for item in self.children:
+            item.disabled = disabled
+
+    async def _update_gallery(self, interaction: discord.Interaction):
+        """Helper to update gallery message safely with loading state"""
+        try:
+            # 1. Disable all controls to prevent spam
+            self._set_items_disabled(True)
+            
+            # 2. Update message to show disabled state immediately
+            # Use edit_message to acknowledge interaction and update UI
+            await interaction.response.edit_message(view=self)
+            
+            # 3. Generate image (long running task)
+            buffer = await self.get_gallery_image()
+            file = discord.File(buffer, filename=f"gallery_page_{self.page}.png")
+            
+            # 4. Re-enable selects (buttons are handled by _update_buttons)
+            self._set_items_disabled(False)
+            
+            # 5. Refresh buttons for current page state
+            self._update_buttons()
+            
+            # 6. Update message with new image and active controls
+            await interaction.edit_original_response(attachments=[file], view=self)
+            
+        except Exception as e:
+            # Try to inform user via followup if defer succeeded, or original response
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("❌ Failed to load gallery page. Please try again.", ephemeral=True)
+                else:
+                    await interaction.followup.send("❌ Failed to load gallery page due to an timeout or error. Please try again.", ephemeral=True)
+            except:
+                pass
+            print(f"Error in gallery view: {e}")
+
     async def first_page(self, interaction: discord.Interaction):
         if interaction.user.id != self.user.id:
             return await interaction.response.send_message("❌ This isn't your gallery!", ephemeral=True)
         
         self.page = 1
-        self._update_buttons()
-        
-        await interaction.response.defer()
-        buffer = await self.get_gallery_image()
-        file = discord.File(buffer, filename=f"gallery_page_{self.page}.png")
-        await interaction.message.edit(attachments=[file], view=self)
+        # Button state will be handled inside _update_gallery logic
+        await self._update_gallery(interaction)
     
     async def prev_page(self, interaction: discord.Interaction):
         if interaction.user.id != self.user.id:
@@ -1022,12 +1063,7 @@ class GalleryView(discord.ui.View):
         
         if self.page > 1:
             self.page -= 1
-            self._update_buttons()
-            
-            await interaction.response.defer()
-            buffer = await self.get_gallery_image()
-            file = discord.File(buffer, filename=f"gallery_page_{self.page}.png")
-            await interaction.message.edit(attachments=[file], view=self)
+            await self._update_gallery(interaction)
     
     async def next_page(self, interaction: discord.Interaction):
         if interaction.user.id != self.user.id:
@@ -1035,24 +1071,25 @@ class GalleryView(discord.ui.View):
         
         if self.page < self.total_pages:
             self.page += 1
-            self._update_buttons()
-            
-            await interaction.response.defer()
-            buffer = await self.get_gallery_image()
-            file = discord.File(buffer, filename=f"gallery_page_{self.page}.png")
-            await interaction.message.edit(attachments=[file], view=self)
+            await self._update_gallery(interaction)
     
     async def last_page(self, interaction: discord.Interaction):
         if interaction.user.id != self.user.id:
             return await interaction.response.send_message("❌ This isn't your gallery!", ephemeral=True)
         
         self.page = self.total_pages
-        self._update_buttons()
-        
-        await interaction.response.defer()
-        buffer = await self.get_gallery_image()
-        file = discord.File(buffer, filename=f"gallery_page_{self.page}.png")
-        await interaction.message.edit(attachments=[file], view=self)
+        await self._update_gallery(interaction)
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item) -> None:
+        """Handle errors in the view"""
+        print(f"Error in gallery view item {item}: {error}")
+        try:
+             if not interaction.response.is_done():
+                await interaction.response.send_message("❌ An error occurred interacting with the gallery.", ephemeral=True)
+             else:
+                await interaction.followup.send("❌ An error occurred.", ephemeral=True)
+        except:
+            pass
 
 
 class GalleryRaritySelect(discord.ui.Select):
@@ -1093,21 +1130,20 @@ class GalleryRaritySelect(discord.ui.Select):
             filtered_chars = [c for c in inventory if c.get("rarity", "common") == selected_rarity]
             self.parent_view.filter_type = selected_rarity
         
+        # Always sort by favorites (most favorites first)
+        filtered_chars.sort(key=lambda x: x.get("favorites", 0), reverse=True)
+        
         # Update view state
         self.parent_view.all_characters = filtered_chars
         self.parent_view.total_pages = max(1, (len(filtered_chars) + self.parent_view.cards_per_page - 1) // self.parent_view.cards_per_page)
         self.parent_view.page = 1
-        self.parent_view._update_buttons()
         
         # Update selection
         for opt in self.options:
             opt.default = opt.value == selected_rarity
-        
-        # Regenerate image
-        await interaction.response.defer()
-        buffer = await self.parent_view.get_gallery_image()
-        file = discord.File(buffer, filename=f"gallery_page_{self.parent_view.page}.png")
-        await interaction.message.edit(attachments=[file], view=self.parent_view)
+            
+        # Use simple update
+        await self.parent_view._update_gallery(interaction)
 
 
 class GalleryGenderSelect(discord.ui.Select):
@@ -1148,21 +1184,20 @@ class GalleryGenderSelect(discord.ui.Select):
             filtered_chars = [c for c in inventory if c.get("gender", "").lower() in ["male", "boy"]]
             self.parent_view.filter_type = "husbando"
         
+        # Always sort by favorites (most favorites first)
+        filtered_chars.sort(key=lambda x: x.get("favorites", 0), reverse=True)
+        
         # Update view state
         self.parent_view.all_characters = filtered_chars
         self.parent_view.total_pages = max(1, (len(filtered_chars) + self.parent_view.cards_per_page - 1) // self.parent_view.cards_per_page)
         self.parent_view.page = 1
-        self.parent_view._update_buttons()
         
         # Update selection
         for opt in self.options:
             opt.default = opt.value == selected_gender
-        
-        # Regenerate image
-        await interaction.response.defer()
-        buffer = await self.parent_view.get_gallery_image()
-        file = discord.File(buffer, filename=f"gallery_page_{self.parent_view.page}.png")
-        await interaction.message.edit(attachments=[file], view=self.parent_view)
+            
+        # Use simple update
+        await self.parent_view._update_gallery(interaction)
 
 
 # ═══════════════════════════════════════════════════════════════
