@@ -2729,36 +2729,13 @@ class Games(commands.Cog):
         for name in requested_names:
             char = await self.fetch_character_by_name(name)
             if char and char.get("image_url") and char.get("anime"):
-                # Use multisearch to find better character images
-                try:
-                    from utils.cogs.game.draw.multisearch import MultiSourceImageSearch
-                    searcher = MultiSourceImageSearch()
-                    
-                    # Search for character images using both name and anime
-                    search_results = await searcher.search_all_sources(
-                        character_name=char.get("name", ""),
-                        series_name=char.get("anime", ""),
-                        limit=5
-                    )
-                    
-                    if search_results:
-                        # Use the first (best) image result
-                        best_image = search_results[0]
-                        char["image_url"] = best_image.get("image_url", char.get("image_url"))
-                        logger.info(f"[Dev Drop] Found better image for {char.get('name')} via multisearch")
-                    else:
-                        logger.info(f"[Dev Drop] Using MAL API image for {char.get('name')} (no multisearch results)")
-                        
-                except Exception as e:
-                    logger.warning(f"[Dev Drop] Multisearch failed for {char.get('name')}: {e}, using MAL image")
-                
                 # Ensure proper rarity assignment
                 if not char.get("rarity"):
                     anime_pop = char.get("anime_popularity", 0)
                     char_favs = char.get("favorites", 0)
                     char["rarity"] = get_combined_rarity(anime_pop, char_favs)
                 specific_characters.append(char)
-                logger.info(f"[Dev Drop] Found specific character: {name} -> {char.get('name', 'Unknown')} from {char.get('anime', 'Unknown')}")
+                logger.info(f"[Dev Drop] Found specific character: {name} -> {char.get('name', 'Unknown')}")
             else:
                 logger.warning(f"[Dev Drop] Could not find character: {name}")
         
@@ -2818,17 +2795,7 @@ class Games(commands.Cog):
     async def _execute_draw(self, ctx, gender_filter: str = None):
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
-        # Get balance and inventory for dynamic pricing
-        balance = await self.quest_data.get_balance(user_id, guild_id)
-        inventory = await self.get_user_inventory(user_id, guild_id)
-        inv_count = len(inventory)
-        
-        # Dynamic Cost: Scales with collection size (Usage) and wealth (Balance)
-        # "Cookie Clicker" style scaling to keep rich players engaged
-        usage_mult = 1 + (inv_count / 50)      # +2% cost per card owned
-        wealth_mult = 1 + (balance / 50000)    # +100% cost per 50k balance
-        
-        cost = int(GACHA_COST * usage_mult * wealth_mult)
+        cost = GACHA_COST
         
         # Check timer (cooldown + daily limit)
         timer_error = await self.check_timer(ctx, "gacha")
@@ -2836,8 +2803,9 @@ class Games(commands.Cog):
             return await ctx.reply(timer_error, mention_author=False)
         
         # Check balance
+        balance = await self.quest_data.get_balance(user_id, guild_id)
         if balance < cost:
-            return await ctx.reply(f"❌ Need **{cost:,}** but have **{balance:,}** pts!\n*Cost scales with your wealth & collection size!*", mention_author=False)
+            return await ctx.reply(f"❌ Need **{cost}** but have **{balance:,}** pts!", mention_author=False)
         
         # Set command cooldown, deduct cost and increment plays
         await self.set_cooldown(user_id, "gacha_command")
@@ -2847,8 +2815,8 @@ class Games(commands.Cog):
         # Send loading message
         loading_msg = await ctx.reply(
             embed=discord.Embed(
-                title=f"Pulling characters... (-{cost:,} pts)",
-                description=f"Using **{cost:,}** pts based on your wealth/inventory.\n```py\nFetching your gacha results...```",
+                title="Pulling characters...",
+                description="```py\nFetching your gacha results...```",
                 color=discord.Color.blue()
             ),
             mention_author=False

@@ -2593,39 +2593,51 @@ async def generate_gallery_image(
         card_draw.rounded_rectangle([12, fav_y, card_width - 12, fav_y + fav_h],
                                     radius=6, fill=(5, 5, 10, 200))
         
-        likes = char.get("likes", 0)
-        likes_text = f"❤️{likes:,}"
-        likes_font = _load_font_from_assets(SEGUIEMJ_PATH, 28)
-        likes_bbox = card_draw.textbbox((0, 0), likes_text, font=likes_font)
-        likes_x = (card_width - (likes_bbox[2] - likes_bbox[0])) // 2
-        likes_y = fav_y + (fav_h - (likes_bbox[3] - likes_bbox[1])) // 2
-        card_draw.text((likes_x, likes_y), likes_text, fill=(255, 100, 150), font=likes_font)
+        favorites = char.get("favorites", 0)
+        fav_text = f"❤️{favorites:,}"
+        fav_font = _load_font_from_assets(SEGUIEMJ_PATH, 28)
+        fav_bbox = card_draw.textbbox((0, 0), fav_text, font=fav_font)
+        fav_x = (card_width - (fav_bbox[2] - fav_bbox[0])) // 2
+        fav_y_centered = fav_y + (fav_h - (fav_bbox[3] - fav_bbox[1])) // 2
+        card_draw.text((fav_x, fav_y_centered), fav_text, fill=(255, 100, 150), font=fav_font)
 
-        # Image area
-        img_y = 12 + bar_h + 4 + fav_h + 4
+        # Image area with reduced borders for more width
+        img_y = 12 + bar_h + 4 + fav_h + 8
         img_h = card_height - img_y - 80
-        img_w = card_width - 16
+        img_w = card_width - 16  # Reduced from 24 to 16 (8px border each side) for more width
 
         char_img = char_images[i]
         if char_img:
-            # Cover fit - resize to fill the area while maintaining aspect ratio
+            # Scale image to use more width while maintaining aspect ratio
             img_ratio = img_w / img_h
             char_ratio = char_img.width / char_img.height
             
-            if char_ratio > img_ratio:
-                # Image is wider than target - fit to width
+            # Always prioritize fitting to width for better character visibility
+            # Only fit to height if image is extremely tall (ratio > 2.5)
+            if char_ratio <= 2.5:
+                # Standard character images - fit to width, calculate height
                 new_width = img_w
                 new_height = int(img_w / char_ratio)
+                
+                # If height exceeds available space, scale down to fit
+                if new_height > img_h:
+                    scale_factor = img_h / new_height
+                    new_height = img_h
+                    new_width = int(new_width * scale_factor)
             else:
-                # Image is taller than target - fit to height
+                # Very tall images - fit to height to prevent excessive width
                 new_height = img_h
                 new_width = int(img_h * char_ratio)
             
+            # Resize with high quality
             char_img = char_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            px = (card_width - new_width) // 2
+            
+            # Center the image within the designated area
+            px = 8 + (img_w - new_width) // 2  # 8px left border + centering
             py = img_y + (img_h - new_height) // 2
             card.paste(char_img, (px, py), char_img)
         else:
+            # Placeholder with adjusted borders
             card_draw.rounded_rectangle(
                 [8, img_y, card_width - 8, img_y + img_h],
                 radius=8,
