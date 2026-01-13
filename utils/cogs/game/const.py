@@ -7,6 +7,7 @@ from pathlib import Path
 from datetime import timedelta
 from PIL import ImageFont
 import discord
+from bot.token import use_test_bot as ut
 
 logger = logging.getLogger(__name__)
 
@@ -145,11 +146,11 @@ TIMER_CONFIG = {
     "guess": {"max_uses": 5, "command_cooldown": 5, "cooldown": 600},
     "hangman": {"max_uses": 20, "command_cooldown": 5, "cooldown": 300},
     "wordle": {"max_uses": 10, "command_cooldown": 5, "cooldown": 1800},
-    "work": {"max_uses": 4, "command_cooldown": 5, "cooldown": 3600},
-    "job": {"max_uses": 10, "command_cooldown": 5, "cooldown": 3600},
-    "rob": {"max_uses": 5, "command_cooldown": 5, "cooldown": 7200},
+    "work": {"max_uses": 2, "command_cooldown": 5, "cooldown": 3600},
+    "job": {"max_uses": 5, "command_cooldown": 5, "cooldown": 3600},
+    "rob": {"max_uses": 3, "command_cooldown": 5, "cooldown": 7200},
     "crime": {"max_uses": 3, "command_cooldown": 5, "cooldown": 3600},
-    "gacha": {"max_uses": 5, "command_cooldown": 5, "cooldown": 1800},
+    "gacha": {"max_uses": 10 if ut else 10, "command_cooldown": 5, "cooldown": 1800},
     "claim": {"max_uses": 1, "command_cooldown": 5, "cooldown": 86400},
 }
 
@@ -190,11 +191,11 @@ def get_time_period_description(cooldown_seconds: int) -> str:
 # ═══════════════════════════════════════════════════════════════
 
 GACHA_RARITY_TIERS = {
-    "common": {"weight": 980000, "color": 0x9E9E9E, "stars": 1, "emoji": GameEmojis.COMMON},
-    "uncommon": {"weight": 19000, "color": 0x4CAF50, "stars": 2, "emoji": GameEmojis.UNCOMMON},
-    "rare": {"weight": 950, "color": 0x2196F3, "stars": 3, "emoji": GameEmojis.RARE},
-    "epic": {"weight": 45, "color": 0x9C27B0, "stars": 4, "emoji": GameEmojis.EPIC},
-    "legendary": {"weight": 5, "color": 0xFFD700, "stars": 5, "emoji": GameEmojis.LEGENDARY},
+    "common": {"weight": 50000, "color": 0x9E9E9E, "stars": 1, "emoji": GameEmojis.COMMON},
+    "uncommon": {"weight": 30000, "color": 0x4CAF50, "stars": 2, "emoji": GameEmojis.UNCOMMON},
+    "rare": {"weight": 15000, "color": 0x2196F3, "stars": 3, "emoji": GameEmojis.RARE},
+    "epic": {"weight": 4000, "color": 0x9C27B0, "stars": 4, "emoji": GameEmojis.EPIC},
+    "legendary": {"weight": 1000, "color": 0xFFD700, "stars": 5, "emoji": GameEmojis.LEGENDARY},
 }
 
 # Anime popularity thresholds (based on MAL members/AniList popularity)
@@ -284,7 +285,7 @@ GACHA_API_CONFIG = {
     },
 }
 
-GACHA_COST = 50
+GACHA_COST = 250
 GACHA_CARDS_PER_DRAW = 3
 GACHA_CLAIM_TIMEOUT = 30
 

@@ -279,7 +279,7 @@ class CharacterInfoView(discord.ui.View):
 
 class GachaClaimView(discord.ui.View):
     """View for claiming a character from gacha draw - prevents double claiming"""
-    def __init__(self, cog, user: discord.Member, guild_id: str, characters: list, balance: int, draws_left: int, is_out_of_draws: bool, message=None):
+    def __init__(self, cog, user: discord.Member, guild_id: str, characters: list, balance: int, draws_left: int, is_out_of_draws: bool, message=None, is_dev_drop: bool = False):
         super().__init__(timeout=GACHA_CLAIM_TIMEOUT)
         self.cog = cog
         self.user = user
@@ -291,6 +291,7 @@ class GachaClaimView(discord.ui.View):
         self.message = message
         self.claimed = False
         self.claimed_indices = []  # Track which cards have been claimed
+        self.is_dev_drop = is_dev_drop  # Flag for dev drops (no cost)
     
     async def claim_character(self, interaction: discord.Interaction, index: int):
         if interaction.user.id != self.user.id:
@@ -1111,7 +1112,7 @@ class GalleryRaritySelect(discord.ui.Select):
         
         options = [
             discord.SelectOption(label="All Rarities", value="all", emoji="⭐", default=(current == "all")),
-            discord.SelectOption(label="⭐ Favorites", value="favorites", emoji="⭐", description="Show only favorited characters", default=(current == "favorites")),
+            discord.SelectOption(label="Favorites", value="favorites", emoji="⭐", description="Show only favorited characters", default=(current == "favorites")),
             discord.SelectOption(label="Legendary", value="legendary", emoji=GameEmojis.LEGENDARY, default=(current == "legendary")),
             discord.SelectOption(label="Epic", value="epic", emoji=GameEmojis.EPIC, default=(current == "epic")),
             discord.SelectOption(label="Rare", value="rare", emoji=GameEmojis.RARE, default=(current == "rare")),
@@ -2267,9 +2268,19 @@ class TaskSelectMenu(discord.ui.Select):
             task_message = "You completed your work shift!"
         
         # Calculate reward
-        pay_min, pay_max = self.job_data.get("pay_range", [50, 100])
+        pay_min, pay_max = self.job_data.get("pay_range", [20, 40])
         reward = random.randint(pay_min, pay_max)
         
+        # Small failure chance (5%) even for manual work
+        if random.random() < 0.05:
+            await self.cog.set_cooldown(user_id, "work")
+            embed = discord.Embed(
+                title=f"⚠️ {task_name} Failed",
+                description=f"You made a mistake and your boss got angry!\n**Earned:** 0 pts",
+                color=discord.Color.red()
+            )
+            return await interaction.response.edit_message(embed=embed, view=None)
+
         # Apply character bonus if any
         character = await self.cog.get_user_character(user_id, self.guild_id)
         if character:

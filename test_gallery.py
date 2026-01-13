@@ -19,23 +19,23 @@ async def test_gallery():
     print("🖼️ Testing Enhanced Gallery Command")
     print("=" * 50)
     
-    # Create test characters with different rarities and genders
+    # Create test characters with different rarities, genders, and likes
     test_characters = [
-        {"name": "Legendary Heroine", "anime": "Epic Tales", "rarity": "legendary", "uid": "LEG001", "image_url": None, "gender": "female"},
-        {"name": "Epic Warrior", "anime": "Battle Saga", "rarity": "epic", "uid": "EPI001", "image_url": None, "gender": "male"},
-        {"name": "Rare Mage", "anime": "Magic Academy", "rarity": "rare", "uid": "RAR001", "image_url": None, "gender": "female"},
-        {"name": "Uncommon Rogue", "anime": "Shadow Guild", "rarity": "uncommon", "uid": "UNC001", "image_url": None, "gender": "male"},
-        {"name": "Common Peasant", "anime": "Village Life", "rarity": "common", "uid": "COM001", "image_url": None, "gender": "female"},
-        {"name": "Silver Knight", "anime": "Crystal Saga", "rarity": "rare", "uid": "RAR002", "image_url": None, "gender": "male"},
-        {"name": "Bronze Fighter", "anime": "Arena Battles", "rarity": "uncommon", "uid": "UNC002", "image_url": None, "gender": "female"},
-        {"name": "Gold Phoenix", "anime": "Mythic Birds", "rarity": "epic", "uid": "EPI002", "image_url": None, "gender": "male"},
-        {"name": "Platinum Dragon", "anime": "Dragon Lore", "rarity": "legendary", "uid": "LEG002", "image_url": None, "gender": "female"},
-        {"name": "Wood Elf", "anime": "Forest Tales", "rarity": "common", "uid": "COM002", "image_url": None, "gender": "male"},
-        {"name": "Steel Samurai", "anime": "Bushido Code", "rarity": "rare", "uid": "RAR003", "image_url": None, "gender": "male"},
-        {"name": "Crystal Mage", "anime": "Elemental Wars", "rarity": "epic", "uid": "EPI003", "image_url": None, "gender": "female"},
-        {"name": "Diamond Knight", "anime": "Royal Guard", "rarity": "legendary", "uid": "LEG003", "image_url": None, "gender": "male"},
-        {"name": "Iron Warrior", "anime": "Metal Clan", "rarity": "uncommon", "uid": "UNC003", "image_url": None, "gender": "female"},
-        {"name": "Stone Golem", "anime": "Earth Magic", "rarity": "common", "uid": "COM003", "image_url": None, "gender": "male"},
+        {"name": "Legendary Heroine", "anime": "Epic Tales", "rarity": "legendary", "uid": "LEG001", "image_url": "https://i.pinimg.com/736x/a5/bd/5e/a5bd5e7957223a287aebe8bca3c4666f.jpg", "gender": "female", "likes": 1247},
+        {"name": "Epic Warrior", "anime": "Battle Saga", "rarity": "epic", "uid": "EPI001", "image_url": None, "gender": "male", "likes": 892},
+        {"name": "Rare Mage", "anime": "Magic Academy", "rarity": "rare", "uid": "RAR001", "image_url": None, "gender": "female", "likes": 656},
+        {"name": "Uncommon Rogue", "anime": "Shadow Guild", "rarity": "uncommon", "uid": "UNC001", "image_url": None, "gender": "male", "likes": 423},
+        {"name": "Common Peasant", "anime": "Village Life", "rarity": "common", "uid": "COM001", "image_url": None, "gender": "female", "likes": 187},
+        {"name": "Silver Knight", "anime": "Crystal Saga", "rarity": "rare", "uid": "RAR002", "image_url": None, "gender": "male", "likes": 734},
+        {"name": "Bronze Fighter", "anime": "Arena Battles", "rarity": "uncommon", "uid": "UNC002", "image_url": None, "gender": "female", "likes": 312},
+        {"name": "Gold Phoenix", "anime": "Mythic Birds", "rarity": "epic", "uid": "EPI002", "image_url": None, "gender": "male", "likes": 1567},
+        {"name": "Platinum Dragon", "anime": "Dragon Lore", "rarity": "legendary", "uid": "LEG002", "image_url": None, "gender": "female", "likes": 2103},
+        {"name": "Wood Elf", "anime": "Forest Tales", "rarity": "common", "uid": "COM002", "image_url": None, "gender": "male", "likes": 145},
+        {"name": "Steel Samurai", "anime": "Bushido Code", "rarity": "rare", "uid": "RAR003", "image_url": None, "gender": "male", "likes": 891},
+        {"name": "Crystal Mage", "anime": "Elemental Wars", "rarity": "epic", "uid": "EPI003", "image_url": None, "gender": "female", "likes": 1234},
+        {"name": "Diamond Knight", "anime": "Royal Guard", "rarity": "legendary", "uid": "LEG003", "image_url": None, "gender": "male", "likes": 1876},
+        {"name": "Iron Warrior", "anime": "Metal Clan", "rarity": "uncommon", "uid": "UNC003", "image_url": None, "gender": "female", "likes": 567},
+        {"name": "Stone Golem", "anime": "Earth Magic", "rarity": "common", "uid": "COM003", "image_url": None, "gender": "male", "likes": 234},
     ]
     
     try:

@@ -500,6 +500,176 @@ class Games(commands.Cog):
                 logger.debug(f"Gacha API error ({api_name}): {e}")
         return None
 
+    async def fetch_character_by_name(self, name: str) -> Optional[Dict]:
+        """Fetch a specific character by name from the API."""
+        session = await self.get_session()
+        
+        try:
+            # Clean the character name for search
+            clean_name = name.strip().lower()
+            
+            # Try multiple API endpoints
+            api_endpoints = [
+                "https://api.jikan.moe/v4/characters",
+                "https://api.jikan.moe/v4/people"  # Try people endpoint too
+            ]
+            
+            for endpoint in api_endpoints:
+                try:
+                    # Search for character
+                    search_params = {
+                        'q': clean_name,
+                        'limit': 10
+                    }
+                    
+                    async with session.get(f"{endpoint}?q={clean_name}&limit=10", timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            
+                            if endpoint.endswith("/characters"):
+                                results = data.get("data", [])
+                            else:  # people endpoint
+                                results = []
+                                people_data = data.get("data", [])
+                                for person in people_data:
+                                    # Get character voices from this person
+                                    if person.get("voices"):
+                                        for voice in person["voices"]:
+                                            if voice.get("character"):
+                                                results.append(voice["character"])
+                            
+                            # Look for exact name match
+                            for char_data in results:
+                                char_name = char_data.get("name", "").lower()
+                                if clean_name in char_name or char_name in clean_name:
+                                    # Found a match, get full character details
+                                    char_id = char_data.get("mal_id")
+                                    if char_id:
+                                        full_char = await self._get_full_character_details(char_id)
+                                        if full_char:
+                                            return full_char
+                                    
+                                    # Fallback to basic data
+                                    return self._format_character_data(char_data)
+                        
+                except Exception as e:
+                    logger.debug(f"API endpoint {endpoint} failed: {e}")
+                    continue
+            
+            # If no exact match, try fuzzy search
+            logger.info(f"No exact match for '{name}', trying fuzzy search")
+            return await self._fuzzy_character_search(clean_name)
+            
+        except Exception as e:
+            logger.error(f"Error fetching character by name '{name}': {e}")
+            return None
+    
+    async def _get_full_character_details(self, char_id: int) -> Optional[Dict]:
+        """Get full character details from MAL API."""
+        session = await self.get_session()
+        
+        try:
+            async with session.get(f"https://api.jikan.moe/v4/characters/{char_id}/full", timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    char_data = data.get("data", {})
+                    return self._format_character_data(char_data)
+        except Exception as e:
+            logger.debug(f"Failed to get full character details for ID {char_id}: {e}")
+        
+        return None
+    
+    async def _fuzzy_character_search(self, name: str) -> Optional[Dict]:
+        """Try fuzzy search for character name."""
+        session = await self.get_session()
+        
+        try:
+            # Try with partial name matching
+            name_parts = name.split()
+            
+            for part in name_parts:
+                if len(part) < 3:  # Skip very short parts
+                    continue
+                    
+                async with session.get(f"https://api.jikan.moe/v4/characters?q={part}&limit=5", timeout=aiohttp.ClientTimeout(total=8)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        results = data.get("data", [])
+                        
+                        for char_data in results:
+                            char_name = char_data.get("name", "").lower()
+                            # Check if this result contains our search terms
+                            if all(p in char_name for p in name_parts if len(p) > 2):
+                                return self._format_character_data(char_data)
+        except Exception as e:
+            logger.debug(f"Fuzzy search failed for '{name}': {e}")
+        
+        return None
+    
+    def _format_character_data(self, char_data: Dict) -> Dict:
+        """Format character data from API into standard format."""
+        # Get anime information - handle different API response formats
+        anime_name = "Unknown"
+        anime_popularity = 0
+        
+        # Try different anime data structures
+        anime_info = char_data.get("anime", [])
+        if anime_info and isinstance(anime_info, list) and len(anime_info) > 0:
+            # Format: [{"anime": {"name": "...", "popularity": ...}}] or [{"anime": {...}}]
+            first_anime = anime_info[0]
+            if isinstance(first_anime, dict):
+                # Check if it's nested: {"anime": {...}} or direct: {"name": "..."}
+                if "anime" in first_anime:
+                    anime_data = first_anime.get("anime", {})
+                    anime_name = anime_data.get("title", anime_data.get("name", "Unknown"))
+                    anime_popularity = anime_data.get("popularity", 0)
+                else:
+                    # Direct format
+                    anime_name = first_anime.get("title", first_anime.get("name", "Unknown"))
+                    anime_popularity = first_anime.get("popularity", 0)
+        elif isinstance(anime_info, dict):
+            # Format: {"name": "...", "popularity": ...} or {"title": "..."}
+            anime_name = anime_info.get("title", anime_info.get("name", "Unknown"))
+            anime_popularity = anime_info.get("popularity", 0)
+        
+        # Alternative: check for direct anime field
+        if anime_name == "Unknown" and "anime" in char_data:
+            direct_anime = char_data.get("anime")
+            if isinstance(direct_anime, str):
+                anime_name = direct_anime
+            elif isinstance(direct_anime, dict):
+                anime_name = direct_anime.get("title", direct_anime.get("name", "Unknown"))
+        
+        # Get character image
+        image_url = char_data.get("images", {}).get("jpg", {}).get("image_url")
+        if not image_url:
+            image_url = char_data.get("image_url")  # Fallback
+        
+        # Determine gender (basic detection)
+        name = char_data.get("name", "")
+        gender = "Unknown"
+        
+        # Simple gender detection based on name and other info
+        if any(indicator in name.lower() for indicator in ["-chan", "-ko", "mi", "ka", "na"]):
+            gender = "Female"
+        elif any(indicator in name.lower() for indicator in ["-kun", "-shi", "ro", "ki", "ta"]):
+            gender = "Male"
+        
+        # Get favorites count
+        favorites = char_data.get("favorites", 0)
+        
+        return {
+            "id": char_data.get("mal_id", random.randint(1, 999999)),
+            "name": char_data.get("name", "Unknown"),
+            "anime": anime_name,
+            "anime_popularity": anime_popularity,
+            "image_url": image_url,
+            "gender": gender,
+            "favorites": favorites,
+            "nicknames": char_data.get("nicknames", []),
+            "about": char_data.get("about", "")
+        }
+
     async def pull_gacha_cards(self, num_cards: int = 3, gender_filter: Optional[str] = None, guild_id: str = None) -> List[Dict]:
         """Pull gacha cards using pure RNG - extremely rare drops.
         
@@ -2498,11 +2668,167 @@ class Games(commands.Cog):
         else:
             return f"**{display_name}'s Draw**\nBalance: {balance:,} pts | {draws_left} draws left"
 
+    @draw.command(name="drop")
+    @commands.is_owner()
+    async def draw_drop(self, ctx, *, names: str = None):
+        """🎯 [DEV ONLY] Drop specific characters in the 3-card draw.
+        
+        Usage: `.draw drop --n Anya Forger, Loid Forger`
+               `.draw drop --n Naruto Uzumaki`
+               `.draw drop --n "Character1, Character2, Character3"` (quotes optional)
+        
+        Unfilled slots will be randomized using normal gacha logic.
+        Max 3 specific characters, rest will be random.
+        """
+        if not names:
+            return await ctx.reply("❌ Usage: `.draw drop --n Anya Forger, Loid Forger`", mention_author=False)
+        
+        # Parse character names - quotes are now optional
+        if "--n" not in names:
+            return await ctx.reply("❌ Use format: `.draw drop --n Anya Forger, Loid Forger`", mention_author=False)
+        
+        try:
+            name_part = names.split("--n", 1)[1].strip()
+            
+            # Handle both quoted and unquoted names
+            if name_part.startswith('"') and name_part.endswith('"'):
+                # Quoted format
+                name_part = name_part[1:-1]
+                requested_names = [name.strip() for name in name_part.split(",") if name.strip()]
+            else:
+                # Unquoted format - split by comma and handle multi-word names
+                raw_names = name_part.split(",")
+                requested_names = []
+                for raw_name in raw_names:
+                    clean_name = raw_name.strip()
+                    if clean_name:
+                        requested_names.append(clean_name)
+            
+            requested_names = requested_names[:3]  # Max 3 characters
+            
+            if not requested_names:
+                return await ctx.reply("❌ No valid character names provided", mention_author=False)
+                
+        except Exception as e:
+            return await ctx.reply(f"❌ Error parsing names: {e}", mention_author=False)
+        
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        # Send loading message
+        loading_msg = await ctx.reply(
+            embed=discord.Embed(
+                description=f"Looking for: **{', '.join(requested_names)}**\n```py\nFetching specific characters...```",
+                color=discord.Color.purple()
+            ),
+            mention_author=False
+        )
+        
+        # Fetch specific characters
+        specific_characters = []
+        for name in requested_names:
+            char = await self.fetch_character_by_name(name)
+            if char and char.get("image_url") and char.get("anime"):
+                # Use multisearch to find better character images
+                try:
+                    from utils.cogs.game.draw.multisearch import MultiSourceImageSearch
+                    searcher = MultiSourceImageSearch()
+                    
+                    # Search for character images using both name and anime
+                    search_results = await searcher.search_all_sources(
+                        character_name=char.get("name", ""),
+                        series_name=char.get("anime", ""),
+                        limit=5
+                    )
+                    
+                    if search_results:
+                        # Use the first (best) image result
+                        best_image = search_results[0]
+                        char["image_url"] = best_image.get("image_url", char.get("image_url"))
+                        logger.info(f"[Dev Drop] Found better image for {char.get('name')} via multisearch")
+                    else:
+                        logger.info(f"[Dev Drop] Using MAL API image for {char.get('name')} (no multisearch results)")
+                        
+                except Exception as e:
+                    logger.warning(f"[Dev Drop] Multisearch failed for {char.get('name')}: {e}, using MAL image")
+                
+                # Ensure proper rarity assignment
+                if not char.get("rarity"):
+                    anime_pop = char.get("anime_popularity", 0)
+                    char_favs = char.get("favorites", 0)
+                    char["rarity"] = get_combined_rarity(anime_pop, char_favs)
+                specific_characters.append(char)
+                logger.info(f"[Dev Drop] Found specific character: {name} -> {char.get('name', 'Unknown')} from {char.get('anime', 'Unknown')}")
+            else:
+                logger.warning(f"[Dev Drop] Could not find character: {name}")
+        
+        # Fill remaining slots with random characters
+        remaining_slots = 3 - len(specific_characters)
+        random_characters = []
+        
+        if remaining_slots > 0:
+            logger.info(f"[Dev Drop] Need {remaining_slots} random characters to fill remaining slots")
+            random_characters = await self.pull_gacha_cards(remaining_slots, gender_filter=None, guild_id=guild_id)
+        
+        # Combine specific and random characters
+        all_characters = specific_characters + random_characters
+        
+        # Ensure we have exactly 3 characters
+        while len(all_characters) < 3:
+            # Emergency fallback if we still don't have enough
+            fallback_char = await self.fetch_character_by_rarity("common")
+            if fallback_char and fallback_char.get("image_url"):
+                all_characters.append(fallback_char)
+            else:
+                break
+        
+        if len(all_characters) < 3:
+            await loading_msg.delete()
+            return await ctx.reply("❌ Failed to gather enough characters for the draw", mention_author=False)
+        
+        # Check ownership for each character
+        ownership_info = await self.check_character_ownership(ctx.guild, all_characters)
+        
+        # Generate draw image with ownership info
+        img_buffer = await generate_gacha_draw_image(all_characters, ownership_info=ownership_info)
+        file = discord.File(img_buffer, filename="dev_drop.png")
+        
+        # Get user balance for display
+        balance = await self.quest_data.get_balance(user_id, guild_id)
+        
+        # Delete loading message
+        try:
+            await loading_msg.delete()
+        except:
+            pass
+        
+        # Send the result - just the image, no embed
+        try:
+            # Create a simple view for claiming (no cost for dev drops)
+            view = GachaClaimView(self, ctx.author, guild_id, all_characters, balance, 
+                                draws_left=999, is_out_of_draws=False, is_dev_drop=True)
+            msg = await ctx.reply(file=file, view=view, mention_author=False)
+            view.message = msg
+        except Exception as e:
+            logger.error(f"Error creating dev drop view: {e}", exc_info=True)
+            # Fallback: send without view
+            await ctx.reply(file=file, mention_author=False)
+
     @draw.command(aliases=["gacha", "pull"])
     async def _execute_draw(self, ctx, gender_filter: str = None):
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
-        cost = GACHA_COST
+        # Get balance and inventory for dynamic pricing
+        balance = await self.quest_data.get_balance(user_id, guild_id)
+        inventory = await self.get_user_inventory(user_id, guild_id)
+        inv_count = len(inventory)
+        
+        # Dynamic Cost: Scales with collection size (Usage) and wealth (Balance)
+        # "Cookie Clicker" style scaling to keep rich players engaged
+        usage_mult = 1 + (inv_count / 50)      # +2% cost per card owned
+        wealth_mult = 1 + (balance / 50000)    # +100% cost per 50k balance
+        
+        cost = int(GACHA_COST * usage_mult * wealth_mult)
         
         # Check timer (cooldown + daily limit)
         timer_error = await self.check_timer(ctx, "gacha")
@@ -2510,9 +2836,8 @@ class Games(commands.Cog):
             return await ctx.reply(timer_error, mention_author=False)
         
         # Check balance
-        balance = await self.quest_data.get_balance(user_id, guild_id)
         if balance < cost:
-            return await ctx.reply(f"❌ Need **{cost}** but have **{balance:,}** pts!", mention_author=False)
+            return await ctx.reply(f"❌ Need **{cost:,}** but have **{balance:,}** pts!\n*Cost scales with your wealth & collection size!*", mention_author=False)
         
         # Set command cooldown, deduct cost and increment plays
         await self.set_cooldown(user_id, "gacha_command")
@@ -2522,8 +2847,8 @@ class Games(commands.Cog):
         # Send loading message
         loading_msg = await ctx.reply(
             embed=discord.Embed(
-                title="Pulling characters...",
-                description="```py\nFetching your gacha results...```",
+                title=f"Pulling characters... (-{cost:,} pts)",
+                description=f"Using **{cost:,}** pts based on your wealth/inventory.\n```py\nFetching your gacha results...```",
                 color=discord.Color.blue()
             ),
             mention_author=False
