@@ -1742,6 +1742,13 @@ def generate_paycheck_image(
 # PROFILE CARD IMAGE GENERATOR
 # ═══════════════════════════════════════════════════════════════
 
+import io
+import aiohttp
+from PIL import Image, ImageDraw, ImageFont
+
+# Note: _load_emoji_font is assumed to be defined somewhere in your codebase
+# If you don't have it, replace all font usages with ImageFont.load_default()
+
 async def generate_profile_card(
     user_name: str,
     avatar_url: str,
@@ -1820,12 +1827,17 @@ async def generate_profile_card(
                     output.paste(avatar, (0, 0), mask)
                     
                     # Draw border
-                    draw.ellipse([avatar_x - 3, avatar_y - 3, avatar_x + avatar_size + 3, avatar_y + avatar_size + 3],
-                               outline=(255, 255, 255), width=3)
+                    draw.ellipse(
+                        [avatar_x - 3, avatar_y - 3, avatar_x + avatar_size + 3, avatar_y + avatar_size + 3],
+                        outline=(255, 255, 255), width=3
+                    )
                     
                     img.paste(output, (avatar_x, avatar_y), output)
-    except:
-        draw.ellipse([avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size], fill=(60, 60, 65))
+    except Exception:
+        draw.ellipse(
+            [avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size],
+            fill=(60, 60, 65)
+        )
     
     # Draw username
     name_x = avatar_x + avatar_size + 15
@@ -1839,18 +1851,33 @@ async def generate_profile_card(
         job_text = "💼 Unemployed"
     draw.text((name_x, name_y + 25), job_text, fill=subtitle_color, font=small_font)
     
-    # Stats section
-    stats_y = 110
-    stat_width = (width - 40) // 3
+    # ─── Improved Stats Layout ──────────────────────────────────────────────────
     
-    # Balance (centered, larger)
+    # Vertical positions
+    stats_start_y = 75
+    balance_y = stats_start_y - 38
+    stats_row_y = stats_start_y
+    label_offset_y = 24
+    
+    # Horizontal layout
+    left_margin = 30
+    right_margin = 30
+    stat_width = (width - left_margin - right_margin) // 3
+    
+    # Balance (big & centered)
     balance_text = f"💰 {balance:,}"
     balance_bbox = draw.textbbox((0, 0), balance_text, font=big_font)
     balance_x = (width - (balance_bbox[2] - balance_bbox[0])) // 2
-    draw.text((balance_x, stats_y - 30), balance_text, fill=gold, font=big_font)
-    draw.text((balance_x, stats_y - 5), "Stella Points", fill=subtitle_color, font=small_font)
     
-    # Stats row
+    draw.text((balance_x, balance_y), balance_text, fill=gold, font=big_font)
+    
+    # "Stella Points" subtitle under balance
+    subtitle_text = "Stella Points"
+    subtitle_bbox = draw.textbbox((0, 0), subtitle_text, font=small_font)
+    subtitle_x = (width - (subtitle_bbox[2] - subtitle_bbox[0])) // 2
+    draw.text((subtitle_x, balance_y + 28), subtitle_text, fill=subtitle_color, font=small_font)
+    
+    # Three stats row
     stats = [
         ("🔥", f"{daily_streak}", "Streak"),
         ("🎮", f"{total_games:,}", "Games"),
@@ -1858,24 +1885,34 @@ async def generate_profile_card(
     ]
     
     for i, (emoji, value, label) in enumerate(stats):
-        stat_x = 20 + i * stat_width + stat_width // 2
-        
-        # Value
-        stat_text = f"{emoji} {value}"
-        stat_bbox = draw.textbbox((0, 0), stat_text, font=stat_font)
-        text_x = stat_x - (stat_bbox[2] - stat_bbox[0]) // 2
-        draw.text((text_x, stats_y + 30), stat_text, fill=text_color, font=stat_font)
-        
-        # Label
-        label_bbox = draw.textbbox((0, 0), label, font=small_font)
-        label_x = stat_x - (label_bbox[2] - label_bbox[0]) // 2
-        draw.text((label_x, stats_y + 50), label, fill=subtitle_color, font=small_font)
+        center_x = left_margin + i * stat_width + stat_width // 2
     
+        # Value + emoji
+        stat_text = f"{emoji} {value}"
+        bbox = draw.textbbox((0, 0), stat_text, font=stat_font)
+        text_w = bbox[2] - bbox[0]
+        draw.text(
+            (center_x - text_w // 2, stats_row_y),
+            stat_text,
+            fill=text_color,
+            font=stat_font
+        )
+    
+        # Label below
+        label_bbox = draw.textbbox((0, 0), label, font=small_font)
+        label_w = label_bbox[2] - label_bbox[0]
+        draw.text(
+            (center_x - label_w // 2, stats_row_y + label_offset_y),
+            label,
+            fill=subtitle_color,
+            font=small_font
+        )
+    
+    # Final output
     buffer = io.BytesIO()
     img.save(buffer, format='PNG')
     buffer.seek(0)
     return buffer
-
 
 # ═══════════════════════════════════════════════════════════════
 # PAYCHECK IMAGE GENERATOR (Work)
@@ -2471,7 +2508,7 @@ async def generate_gallery_image(
     title_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 64)
     subtitle_font = _load_font_from_assets(INTER_REGULAR_PATH, 32)
     name_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 30)
-    info_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 35)
+    info_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 32)      # ← smaller than before
     page_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 40)
 
     # =========================
@@ -2482,61 +2519,194 @@ async def generate_gallery_image(
 
     avatar_size = 200
     avatar_x = margin_x
-    avatar_y = (header_height - avatar_size) // 2
+    avatar_y = (header_height - avatar_size) // 2 - 10     # ← slightly lifted
+
     avatar_accent = accent_color
 
+    # Create modern header with glassmorphism effect
+    header_bg_layer = Image.new("RGBA", (total_width, header_height), (0, 0, 0, 0))
+    header_bg_draw = ImageDraw.Draw(header_bg_layer)
+    
+    # Glassmorphism background with blur effect simulation
+    for i in range(header_height):
+        alpha = int(180 * (1 - i / header_height * 0.3))
+        header_bg_draw.line([(0, i), (total_width, i)], fill=(25, 25, 35, alpha))
+    
+    # Add decorative gradient accent
+    accent_width = 8
+    for i in range(accent_width):
+        alpha = int(255 * (1 - i / accent_width * 0.5))
+        header_bg_draw.line([(i, 0), (i, header_height)], fill=(avatar_accent[0], avatar_accent[1], avatar_accent[2], alpha))
+    
+    img.paste(header_bg_layer, (0, 0), header_bg_layer)
+    
+    # Avatar with modern styling and glow effects
     if user_avatar_bytes:
         try:
             avatar = Image.open(io.BytesIO(user_avatar_bytes)).convert("RGBA")
             w, h = avatar.size
             size = min(w, h)
             avatar = avatar.crop(((w - size) // 2, (h - size) // 2,
-                                   (w + size) // 2, (h + size) // 2))
+                                 (w + size) // 2, (h + size) // 2))
             avatar = avatar.resize((avatar_size, avatar_size), Image.Resampling.LANCZOS)
             avatar_accent = _dominant_color(avatar, accent_color)
 
-            header_layer.paste(avatar, (avatar_x, avatar_y), avatar)
-            header_draw.rounded_rectangle(
+            # Modern avatar frame with glow effect
+            for glow_size in [8, 6, 4, 2]:
+                glow_alpha = int(40 * (1 - glow_size / 8))
+                draw.rounded_rectangle(
+                    [avatar_x - glow_size, avatar_y - glow_size, 
+                     avatar_x + avatar_size + glow_size, avatar_y + avatar_size + glow_size],
+                    radius=16,
+                    outline=(*avatar_accent, glow_alpha),
+                    width=2
+                )
+            
+            # Main avatar frame
+            draw.rounded_rectangle(
                 [avatar_x - 4, avatar_y - 4, avatar_x + avatar_size + 4, avatar_y + avatar_size + 4],
-                radius=8,
+                radius=12,
                 outline=avatar_accent,
                 width=3
             )
+            
+            header_layer = Image.new("RGBA", (total_width, header_height), (0, 0, 0, 0))
+            header_layer.paste(avatar, (avatar_x, avatar_y), avatar)
         except Exception:
             pass
 
-    title_x = avatar_x + avatar_size + 40
-    title_y = avatar_y + (avatar_size - 64) // 2
-    header_draw.text((title_x, title_y), f"{user_name}'s Gallery",
-                     fill=text_color, font=title_font)
+    # ==========================================
+    # MODERN TITLE LAYOUT - IMPROVED SPACING
+    # ==========================================
+    title_x = avatar_x + avatar_size + 80          # ← more horizontal breathing room
+    title_y = avatar_y + 45                        # ← better vertical positioning
 
-    # =========================
-    # PAGINATION INFO
-    # =========================
+    # Main title
+    draw.text((title_x, title_y), f"{user_name}'s Gallery",
+              fill=text_color, font=title_font)
+    
+    # Filter information display
+    filter_y = title_y + 90                        # ← more space after title
+
+    filter_items = []
+    if filter_type != "all":
+        filter_items.append(f"{filter_type.title()}")
+    if search_query:
+        filter_items.append(f"'{search_query[:20]}{'...' if len(search_query) > 20 else ''}'")
+    
+    if filter_items:
+        filter_text = " • ".join(filter_items)
+        filter_bbox = draw.textbbox((title_x, filter_y), filter_text, font=subtitle_font)
+        filter_width = filter_bbox[2] - filter_bbox[0] + 24
+        filter_height = 44
+        
+        # Glassmorphism filter container - softer
+        for i in range(filter_height):
+            alpha = int(110 * (1 - abs(i - filter_height/2) / (filter_height/2) * 0.35))
+            draw.line([(title_x - 12, filter_y + i), (title_x + filter_width - 12, filter_y + i)], 
+                      fill=(avatar_accent[0], avatar_accent[1], avatar_accent[2], alpha))
+        
+        draw.text((title_x, filter_y + 10), filter_text, fill=(255, 255, 255, 225), font=subtitle_font)
+    
+    # Stats badges - generous spacing (slightly higher placement)
+    stats_y = filter_y + 65 if filter_items else filter_y + 35
+
+    total_owned = len(characters)
+    
+    # Stats badges row - darker colors with Collection
+    stats_badges = [
+        (f"Collection", (80, 160, 215)),
+        (f"{total_owned} Cards", (215, 160, 80)),
+        (f"{max(1, (total_owned + cards_per_page - 1) // cards_per_page)} Pages", (80, 215, 160)),
+        (f"{cards_per_page} per page", (160, 120, 200))
+    ]
+    
+    def draw_badge(draw, x, y, text, color, font, shadow=True):
+        """Draw a properly centered badge with uniform dimensions."""
+        # Fixed badge dimensions for consistency
+        badge_height = 40  # Fixed height for all badges
+        padding_x = 12
+        padding_y = 8
+        
+        # Calculate text dimensions
+        text_bbox = draw.textbbox((0, 0), text, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+        
+        # Badge width based on text + padding, but fixed height
+        badge_width = text_width + (padding_x * 2)
+        
+        # Draw badge rectangle with fixed height
+        badge_rect = [x, y, x + badge_width, y + badge_height]
+        draw.rounded_rectangle(
+            badge_rect,
+            radius=8,
+            fill=(*color, 70),
+            outline=(*color, 170),
+            width=2
+        )
+        
+        # Calculate centered text position within fixed height - moved up
+        text_x = x + (badge_width - text_width) // 2
+        text_y = y + (badge_height - text_height) // 2 - 2  # Move text up by 2px
+        
+        # Draw text with shadow
+        if shadow:
+            draw.text((text_x + 1, text_y + 1), text, fill=(0, 0, 0, 100), font=font)
+        draw.text((text_x, text_y), text, fill=text_color, font=font)
+        
+        return badge_width
+    
+    # Draw stats badges
+    badge_x = title_x + 8
+    for badge_text, badge_color in stats_badges:
+        badge_width = draw_badge(draw, badge_x, stats_y, badge_text, badge_color, info_font)
+        badge_x += badge_width + 16
+    
+    # Filter badges - same row as stats, 20px to the right
+    filter_badges = [
+        ("All", (180, 180, 180)),
+        ("Waifu", (180, 180, 180)),
+        ("Husbando", (180, 180, 180)),
+        ("Other", (180, 180, 180)),
+        ("Favorites", (180, 180, 180))
+    ]
+    
+    # Highlight active filter - darker colors
+    active_colors = {
+        "all": (80, 160, 215),
+        "waifu": (215, 130, 180),
+        "husbando": (130, 180, 215),
+        "other": (180, 180, 180),
+        "favorites": (215, 180, 80)
+    }
+    
+    # Draw filter badges in same row - 20px to the right of stats badges
+    filter_badge_x = badge_x + 20
+    
+    for badge_text, default_color in filter_badges:
+        # Use active color if this filter is currently selected
+        badge_color = default_color
+        badge_text_lower = badge_text.lower()
+        
+        if (filter_type == badge_text_lower and filter_type != "all") or \
+           (filter_type == "all" and badge_text == "All"):
+            badge_color = active_colors.get(filter_type, default_color)
+        
+        badge_width = draw_badge(draw, filter_badge_x, stats_y, badge_text, badge_color, info_font, shadow=False)
+        filter_badge_x += badge_width + 16
+
+    img.paste(header_layer, (0, 0), header_layer)
+    
+    # ======================================================================================================
+    # FETCH IMAGES
+    # ======================================================================================================
+
     total_cards = len(characters)
     total_pages = max(1, (total_cards + cards_per_page - 1) // cards_per_page)
     start_idx = (page - 1) * cards_per_page
     end_idx = min(start_idx + cards_per_page, total_cards)
 
-    # =========================
-    # HEADER GRADIENT
-    # =========================
-    gradient = Image.new("RGBA", (total_width, header_height), (0, 0, 0, 0))
-    grad_draw = ImageDraw.Draw(gradient)
-
-    for y in range(header_height):
-        t = y / header_height
-        r = int(avatar_accent[0] * (0.5 * (1 - t)))
-        g = int(avatar_accent[1] * (0.5 * (1 - t)))
-        b = int(avatar_accent[2] * (0.5 * (1 - t)))
-        grad_draw.line([(0, y), (total_width, y)], fill=(r, g, b, 200))
-
-    img.paste(gradient, (0, 0), gradient)
-    img.paste(header_layer, (0, 0), header_layer)
-
-    # =========================
-    # FETCH IMAGES
-    # =========================
     async def fetch_image(session, url):
         try:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as r:
@@ -2555,9 +2725,10 @@ async def generate_gallery_image(
         ]
         char_images = await asyncio.gather(*tasks)
 
-    # =========================
+    # ======================================================================================================
     # DRAW GRID
-    # =========================
+    # ======================================================================================================
+
     grid_y = header_height + margin_y
 
     for i, char in enumerate(page_characters):
@@ -2565,6 +2736,7 @@ async def generate_gallery_image(
         x = margin_x + col * (card_width + card_spacing_x)
         y = grid_y + row * (card_height + card_spacing_y)
 
+        # Modern card design with enhanced styling
         card = Image.new("RGBA", (card_width, card_height), (0, 0, 0, 0))
         card_draw = ImageDraw.Draw(card)
 
@@ -2572,126 +2744,189 @@ async def generate_gallery_image(
         frame = RARITY_FRAMES.get(rarity, RARITY_FRAMES["common"])
         _draw_textured_card_frame(card_draw, card_width, card_height, frame, False, scale=2)
 
-        # Name bar
-        bar_h = 56
-        card_draw.rounded_rectangle([12, 12, card_width - 12, 12 + bar_h],
-                                    radius=8, fill=(5, 5, 10, 235))
+        # Modern name banner with glassmorphism
+        banner_h = 64
+        banner_y = 16
+        
+        for i in range(banner_h):
+            alpha = int(220 * (1 - abs(i - banner_h/2) / (banner_h/2) * 0.2))
+            card_draw.line([(16, banner_y + i), (card_width - 16, banner_y + i)], 
+                         fill=(10, 10, 20, alpha))
+        
+        rarity_colors = {
+            "common": (150, 150, 150),
+            "rare": (100, 150, 255), 
+            "epic": (200, 100, 255),
+            "legendary": (255, 200, 100)
+        }
+        rarity_color = rarity_colors.get(rarity, (150, 150, 150))
+        card_draw.rectangle([16, banner_y + banner_h - 3, card_width - 16, banner_y + banner_h], 
+                           fill=rarity_color)
 
         name = char.get("name", "Unknown")[:18]
-        bbox = card_draw.textbbox((0, 0), name, font=name_font)
-        card_draw.text(
-            ((card_width - (bbox[2] - bbox[0])) // 2,
-             12 + (bar_h - (bbox[3] - bbox[1])) // 2),
-            name,
-            fill=text_color,
-            font=name_font
-        )
+        name_bbox = card_draw.textbbox((0, 0), name, font=name_font)
+        name_x = (card_width - (name_bbox[2] - name_bbox[0])) // 2
+        name_y = banner_y + (banner_h - (name_bbox[3] - name_bbox[1])) // 2
         
-        # Favorites container below name
-        fav_h = 32
-        fav_y = 12 + bar_h + 4
-        card_draw.rounded_rectangle([12, fav_y, card_width - 12, fav_y + fav_h],
-                                    radius=6, fill=(5, 5, 10, 200))
+        card_draw.text((name_x + 1, name_y + 1), name, fill=(0, 0, 0, 100), font=name_font)
+        card_draw.text((name_x, name_y), name, fill=text_color, font=name_font)
         
+        # Modern favorites indicator
+        fav_y = banner_y + banner_h + 8
         favorites = char.get("favorites", 0)
-        fav_text = f"❤️{favorites:,}"
-        fav_font = _load_font_from_assets(SEGUIEMJ_PATH, 28)
+        
+        fav_bg_h = 36
+        for i in range(fav_bg_h):
+            alpha = int(180 * (1 - abs(i - fav_bg_h/2) / (fav_bg_h/2) * 0.3))
+            card_draw.line([(16, fav_y + i), (card_width - 16, fav_y + i)], 
+                         fill=(255, 100, 150, alpha // 3))
+        
+        fav_text = f"{favorites:,}"
+        fav_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 24)
         fav_bbox = card_draw.textbbox((0, 0), fav_text, font=fav_font)
         fav_x = (card_width - (fav_bbox[2] - fav_bbox[0])) // 2
-        fav_y_centered = fav_y + (fav_h - (fav_bbox[3] - fav_bbox[1])) // 2
-        card_draw.text((fav_x, fav_y_centered), fav_text, fill=(255, 100, 150), font=fav_font)
+        fav_y_centered = fav_y + (fav_bg_h - (fav_bbox[3] - fav_bbox[1])) // 2
+        card_draw.text((fav_x, fav_y_centered), fav_text, fill=(255, 120, 180), font=fav_font)
 
-        # Image area with reduced borders for more width
-        img_y = 12 + bar_h + 4 + fav_h + 8
-        img_h = card_height - img_y - 80
-        img_w = card_width - 16  # Reduced from 24 to 16 (8px border each side) for more width
+        # Enhanced image area
+        img_y = fav_y + fav_bg_h + 12
+        img_h = card_height - img_y - 90
+        img_w = card_width - 20
 
-        char_img = char_images[i]
+        char_img = char_images[i] if i < len(char_images) else None
         if char_img:
-            # Scale image to use more width while maintaining aspect ratio
             img_ratio = img_w / img_h
             char_ratio = char_img.width / char_img.height
             
-            # Always prioritize fitting to width for better character visibility
-            # Only fit to height if image is extremely tall (ratio > 2.5)
-            if char_ratio <= 2.5:
-                # Standard character images - fit to width, calculate height
+            if char_ratio <= 2.0:
                 new_width = img_w
                 new_height = int(img_w / char_ratio)
-                
-                # If height exceeds available space, scale down to fit
                 if new_height > img_h:
                     scale_factor = img_h / new_height
                     new_height = img_h
                     new_width = int(new_width * scale_factor)
             else:
-                # Very tall images - fit to height to prevent excessive width
                 new_height = img_h
                 new_width = int(img_h * char_ratio)
+                if new_width > img_w:
+                    scale_factor = img_w / new_width
+                    new_width = img_w
+                    new_height = int(new_height * scale_factor)
             
-            # Resize with high quality
             char_img = char_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
             
-            # Center the image within the designated area
-            px = 8 + (img_w - new_width) // 2  # 8px left border + centering
-            py = img_y + (img_h - new_height) // 2
+            shadow_offset = 3
+            shadow_alpha = 80
+            shadow_img = Image.new("RGBA", (new_width, new_height), (0, 0, 0, shadow_alpha))
+            
+            px = 10 + (img_w - new_width) // 2 + shadow_offset
+            py = img_y + (img_h - new_height) // 2 + shadow_offset
+            card.paste(shadow_img, (px, py), shadow_img)
+            
+            px -= shadow_offset
+            py -= shadow_offset
             card.paste(char_img, (px, py), char_img)
         else:
-            # Placeholder with adjusted borders
-            card_draw.rounded_rectangle(
-                [8, img_y, card_width - 8, img_y + img_h],
-                radius=8,
-                fill=(40, 40, 50)
-            )
+            for i in range(img_h):
+                alpha = int(60 * (1 - i / img_h * 0.3))
+                card_draw.line([(10, img_y + i), (card_width - 10, img_y + i)], 
+                             fill=(40, 40, 50, alpha))
+            
+            placeholder_text = "No Image"
+            placeholder_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 32)
+            placeholder_bbox = card_draw.textbbox((0, 0), placeholder_text, font=placeholder_font)
+            placeholder_x = (card_width - (placeholder_bbox[2] - placeholder_bbox[0])) // 2
+            placeholder_y = img_y + (img_h - (placeholder_bbox[3] - placeholder_bbox[1])) // 2
+            card_draw.text((placeholder_x, placeholder_y), placeholder_text, fill=(100, 100, 120), font=placeholder_font)
 
         img.paste(card, (x, y), card)
         
-        # Add anime name at bottom of card
-        # Bottom info container
-        info_y = y + card_height - 80
-        info_h = 68
-        draw.rounded_rectangle([x + 12, info_y, x + card_width - 12, info_y + info_h],
-                               radius=8, fill=(5, 5, 10, 235))
+        # Modern bottom info section
+        info_y = y + card_height - 85
+        info_h = 70
         
-        # Anime name
+        for i in range(info_h):
+            alpha = int(200 * (1 - abs(i - info_h/2) / (info_h/2) * 0.2))
+            draw.line([(x + 16, info_y + i), (x + card_width - 16, info_y + i)], 
+                    fill=(10, 10, 20, alpha))
+        
+        draw.rectangle([x + 16, info_y + info_h - 2, x + card_width - 16, info_y + info_h], 
+                     fill=rarity_color)
+        
         anime_name = char.get("anime", "Unknown")[:20]
         anime_bbox = draw.textbbox((0, 0), anime_name, font=name_font)
         anime_x = x + (card_width - (anime_bbox[2] - anime_bbox[0])) // 2
-        draw.text((anime_x, info_y + 8), anime_name, fill=text_color, font=name_font)
+        anime_y = info_y + (info_h - (anime_bbox[3] - anime_bbox[1])) // 2
+        
+        draw.text((anime_x + 1, anime_y + 1), anime_name, fill=(0, 0, 0, 80), font=name_font)
+        draw.text((anime_x, anime_y), anime_name, fill=(255, 255, 255, 240), font=name_font)
+        
+        if char.get("owned", False):
+            owned_indicator = "Owned"
+            owned_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 16)
+            draw.text((x + 25, info_y + 8), owned_indicator, fill=(100, 255, 100), font=owned_font)
 
-    # =========================
-    # FOOTER
-    # =========================
+    # ======================================================================================================
+    # MODERN FOOTER DESIGN (unchanged)
+    # ======================================================================================================
+
     footer_y = header_height + grid_height + margin_y
-    draw.rectangle([0, footer_y, total_width, total_height], fill=footer_bg)
-
-    page_label = f"Page {page} of {total_pages}"
+    
+    for i in range(footer_height):
+        alpha = int(160 * (1 - i / footer_height * 0.3))
+        draw.line([(0, footer_y + i), (total_width, footer_y + i)], 
+                 fill=(20, 20, 30, alpha))
+    
+    # Simple page number only
+    page_label = f"{page}"
     bbox = draw.textbbox((0, 0), page_label, font=page_font)
     page_x = (total_width - (bbox[2] - bbox[0])) // 2
-    draw.text((page_x, footer_y + 40), page_label, fill=accent_color, font=page_font)
     
-    # Draw showing container below page
+    page_bg_w = bbox[2] - bbox[0] + 40
+    page_bg_h = 60
+    page_bg_x = (total_width - page_bg_w) // 2
+    page_bg_y = footer_y + 25
+    
+    for i in range(page_bg_h):
+        alpha = int(180 * (1 - abs(i - page_bg_h/2) / (page_bg_h/2) * 0.3))
+        draw.line([(page_bg_x, page_bg_y + i), (page_bg_x + page_bg_w, page_bg_y + i)], 
+                 fill=(avatar_accent[0], avatar_accent[1], avatar_accent[2], alpha // 2))
+    
+    draw.rounded_rectangle(
+        [page_bg_x, page_bg_y, page_bg_x + page_bg_w, page_bg_y + page_bg_h],
+        radius=12,
+        outline=avatar_accent,
+        width=2
+    )
+    
+    draw.text((page_x, page_bg_y + 15), page_label, fill=text_color, font=page_font)
+    
     showing_text = f"Showing {start_idx + 1}-{end_idx} of {total_cards}"
     showing_bbox = draw.textbbox((0, 0), showing_text, font=subtitle_font)
     showing_width = showing_bbox[2] - showing_bbox[0]
     
-    container_padding = 12
+    container_padding = 16
     container_width = showing_width + (container_padding * 2)
-    container_height = 32 + (container_padding * 2)
+    container_height = 40 + (container_padding * 2)
     container_x = (total_width - container_width) // 2
-    container_y = footer_y + 110
+    container_y = footer_y + 100
+    
+    for i in range(container_height):
+        alpha = int(140 * (1 - abs(i - container_height/2) / (container_height/2) * 0.4))
+        draw.line([(container_x, container_y + i), (container_x + container_width, container_y + i)], 
+                 fill=(100, 150, 255, alpha // 3))
     
     draw.rounded_rectangle(
         [container_x, container_y, container_x + container_width, container_y + container_height],
-        radius=8,
-        fill=(20, 20, 28, 200),
-        outline=accent_color,
+        radius=10,
+        fill=(30, 30, 40, 120),
+        outline=(100, 150, 255, 180),
         width=2
     )
     
     showing_x = container_x + container_padding
-    showing_y = container_y + (container_height - 32) // 2
-    draw.text((showing_x, showing_y), showing_text, fill=subtitle_color, font=subtitle_font)
+    showing_y = container_y + (container_height - 40) // 2
+    draw.text((showing_x, showing_y), showing_text, fill=(255, 255, 255, 220), font=subtitle_font)
 
     # =========================
     # OUTPUT
@@ -2700,7 +2935,6 @@ async def generate_gallery_image(
     img.save(buffer, format="PNG", quality=95)
     buffer.seek(0)
     return buffer
-
 
 # ═══════════════════════════════════════════════════════════════
 # COINFLIP GIF GENERATOR & VIEW
