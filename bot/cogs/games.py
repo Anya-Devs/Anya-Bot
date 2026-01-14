@@ -1777,31 +1777,35 @@ class Games(commands.Cog):
             except asyncio.TimeoutError:
                 break
         
-        # Game over - much stricter partial winnings with attempt-based scaling
+        # Game over - balanced winnings: reward close guesses fairly
         if guesses_list:
             closest = min(guesses_list, key=lambda x: abs(x - secret))
             diff = abs(closest - secret)
             attempts_taken = len(guesses_list)
             
-            # Base winnings from closeness
+            # Balanced base winnings from closeness (profit, not total payout)
             if diff == 0:
-                base_winnings = bet * 5  # should be caught by perfect path, safe fallback
+                base_winnings = bet * 4  # should be caught by perfect path, safe fallback
             elif diff <= 2:
-                base_winnings = bet * 2
+                # Very close: excellent reward
+                base_winnings = int(bet * 1.0)  # 2x total payout = 1x profit
             elif diff <= 5:
-                base_winnings = int(bet * 1.5)
+                # Close: good reward
+                base_winnings = int(bet * 0.6)  # 1.6x total payout = 0.6x profit
             elif diff <= 10:
-                base_winnings = int(bet * 1.25)
-            elif diff <= 15:
-                base_winnings = int(bet * 1.1)
+                # Somewhat close: small reward
+                base_winnings = int(bet * 0.2)  # 1.2x total payout = 0.2x profit
             else:
+                # Too far: lose your bet
                 base_winnings = 0
             
             # Apply attempt-based scaling (fewer attempts = higher multiplier)
             if base_winnings > 0:
-                attempt_multiplier = max(0.2, 1.0 - (attempts_taken - 1) * 0.15)  # 1.0x, 0.85x, 0.7x, 0.55x, 0.4x
-                winnings = int(base_winnings * attempt_multiplier)
+                attempt_multiplier = max(0.7, 1.0 - (attempts_taken - 1) * 0.08)  # 1.0x, 0.92x, 0.84x, 0.76x, 0.68x, 0.6x
+                profit = int(base_winnings * attempt_multiplier)
+                winnings = profit + bet  # Total payout = profit + original bet
             else:
+                profit = 0
                 winnings = 0
         else:
             winnings = 0
@@ -1817,11 +1821,11 @@ class Games(commands.Cog):
         file = discord.File(img_buffer, filename="guess_result.png")
         
         embed = discord.Embed(
-            title="💀 Game Over" if profit <= 0 else "✅ Close!",
+            title="💀 Game Over" if profit < 0 else "✅ Close!",
             description=f"The number was **{secret}**\n"
-                       f"{'📉 Lost' if profit <= 0 else '💰 Won'}: **{profit:+,}** pts\n"
+                       f"{'📉 Lost' if profit < 0 else '💰 Won'}: **{profit:+,}** pts\n"
                        f"💳 Balance: **{new_balance:,}** pts",
-            color=discord.Color.green() if profit > 0 else discord.Color.red()
+            color=discord.Color.green() if profit >= 0 else discord.Color.red()
         )
         embed.set_image(url="attachment://guess_result.png")
         await msg.edit(embed=embed, attachments=[file])
@@ -2056,14 +2060,17 @@ class Games(commands.Cog):
                 await ctx.reply(f"❌ No cards found with filter: {filter_desc}", mention_author=False)
                 return
             
-            # Sort by rarity (legendary first) then by name
+            # Sort by rarity (legendary first) then by favorites/likes (descending)
             from utils.cogs.game.const import GACHA_RARITY_TIERS
             rarity_order = {"legendary": 0, "epic": 1, "rare": 2, "uncommon": 3, "common": 4}
             
             def sort_key(char):
-                rarity_score = rarity_order.get(char.get("rarity", "common"), 5)
-                name = char.get("name", "").lower()
-                return (rarity_score, name)
+                # Case-insensitive rarity comparison
+                rarity = char.get("rarity", "common").lower()
+                rarity_score = rarity_order.get(rarity, 5)
+                # Sort by favorites in descending order (negative for highest first)
+                favorites = -char.get("favorites", 0)
+                return (rarity_score, favorites)
             
             sorted_inventory = sorted(filtered_inventory, key=sort_key)
             
