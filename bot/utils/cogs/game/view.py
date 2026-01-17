@@ -150,7 +150,7 @@ class CharacterInfoView(discord.ui.View):
         
         # Create character info embed
         embed = discord.Embed(
-            title=f"{rarity_data['stars']} {char['name']}",
+            title=f"{char['name']}",
             description=f"*{char.get('anime', 'Unknown')}*",
             color=rarity_data["color"]
         )
@@ -165,7 +165,7 @@ class CharacterInfoView(discord.ui.View):
         embed.add_field(name="Character Details", value=details, inline=False)
         embed.add_field(
             name="Commands", 
-            value="• `.draw view <UID>` - Show off character\n• `.draw release <UID>` - Sell for points", 
+            value=f"• `.draw view {self.uid}` - Show off character\n• `.draw release {self.uid}` - Sell for points", 
             inline=False
         )
         

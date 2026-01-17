@@ -2755,13 +2755,21 @@ async def generate_gallery_image(
         
         # Favorites count with heart (center-left, using emoji font)
         favorites = char.get("favorites", 0)
-        heart_x = img_margin + 32
+        heart_x = img_margin + 45  # Moved further right to give more space from rarity dot
         heart_y = bar_y + (bar_h - 22) // 2
-        card_draw.text((heart_x, heart_y), "❤️    ", fill=(255, 120, 150), font=emoji_font)
         
+        # Draw heart emoji
+        card_draw.text((heart_x, heart_y), "❤️", fill=(255, 120, 150), font=emoji_font)
+        
+        # Calculate heart width for proper spacing
+        heart_bbox = card_draw.textbbox((heart_x, heart_y), "❤️", font=emoji_font)
+        heart_width = heart_bbox[2] - heart_bbox[0]
+        
+        # Draw favorites number with proper spacing (6px gap after heart)
         fav_text = f"{favorites:,}"
+        fav_text_x = heart_x + heart_width + 3
         fav_text_y = bar_y + (bar_h - 20) // 2
-        card_draw.text((heart_x + 26, fav_text_y), fav_text, fill=(255, 120, 150), font=fav_font)
+        card_draw.text((fav_text_x, fav_text_y), fav_text, fill=(255, 120, 150), font=fav_font)
 
         # UID on right side
         uid = char.get("uid", "???")
