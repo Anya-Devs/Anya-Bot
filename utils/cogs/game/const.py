@@ -806,7 +806,7 @@ GACHA_API_LOCAL = "http://localhost:3000"  # Local development
 async def fetch_from_gacha_api(session, target_rarity: str):
     """Ultra-fast fetch from custom gacha API - instant response from pre-cached characters."""
     urls = [GACHA_API_URL, GACHA_API_LOCAL]
-    
+     
     for base_url in urls:
         try:
             url = f"{base_url}/api/characters/random?rarity={target_rarity}"
