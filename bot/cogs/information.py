@@ -3,9 +3,9 @@ from itertools import islice
 from datetime import datetime
 from typing import Union, Optional, Literal
 
-from utils.cogs.information import *
-from utils.subcogs.utils.reviews import *
-from utils.cogs.information import (
+from bot.utils.cogs.information import *
+from bot.utils.subcogs.utils.reviews import *
+from bot.utils.cogs.information import (
     Information_Commands, Information_Embed, Information_View,
     ActivityUtils, ActivityDiscoveryView, format_number
 )

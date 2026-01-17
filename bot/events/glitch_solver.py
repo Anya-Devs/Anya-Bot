@@ -1,5 +1,5 @@
 from data.local.const import primary_color
-from utils.events.glitch_solver import *
+from bot.utils.events.glitch_solver import *
 from imports.discord_imports import *
 import cv2, numpy as np, requests, io, itertools, discord, re
 from collections import Counter

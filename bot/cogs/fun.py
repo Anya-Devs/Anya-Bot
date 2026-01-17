@@ -1,4 +1,4 @@
-from utils.cogs.fun import *
+from bot.utils.cogs.fun import *
 from imports.discord_imports import *
 from data.local.emojis import *
 from typing import Union, Literal

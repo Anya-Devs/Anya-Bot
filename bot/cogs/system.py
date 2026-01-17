@@ -1,6 +1,6 @@
 from imports.discord_imports import *
 from imports.log_imports import *
-from utils.cogs.ticket import *
+from bot.utils.cogs.ticket import *
 import data.local.const as const
 from data.local.const import primary_color, timestamp_gen
 import os, psutil, platform, time, json, socket, random

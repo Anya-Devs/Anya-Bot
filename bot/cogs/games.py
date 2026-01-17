@@ -10,10 +10,12 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
-from utils.cogs.game import *
-from utils.cogs.game.images import *
-from utils.cogs.game.const import *
-from utils.cogs.game.draw.cover_art import *
+from bot.utils.cogs.game import *
+from bot.utils.cogs.game.images import *
+from bot.utils.cogs.game.const import *
+from bot.utils.cogs.game.draw.cover_art import *
+from bot.utils.cogs.game.view import *
+from bot.cogs.quest import Quest_Data
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,6 @@ class Games(commands.Cog):
    
     def __init__(self, bot):
         self.bot = bot
-        from utils.cogs.quest import Quest_Data
         self.quest_data = Quest_Data(bot)
         self.session: Optional[aiohttp.ClientSession] = None
         self.active_games: Dict[str, Dict] = {}
@@ -504,7 +505,6 @@ class Games(commands.Cog):
     
     async def fetch_character_by_rarity(self, target_rarity: str) -> Optional[Dict]:
         """Fetch a character matching the target rarity tier - uses fast custom API first."""
-        from utils.cogs.game.const import get_combined_rarity, fetch_jikan_character, fetch_anilist_character, fetch_from_gacha_api
         session = await self.get_session()
         
         # Try fast custom API first (instant response from pre-cached characters)
@@ -542,12 +542,7 @@ class Games(commands.Cog):
             # Clean the character name for search
             clean_name = name.strip().lower()
             
-            # Import the new API functions
-            from utils.cogs.game.const import (
-                fetch_jikan_character_by_name,
-                fetch_anilist_character_by_name, 
-                fetch_kitsu_character_by_name
-            )
+      
             
             # Try API sources in order of preference
             api_sources = [
@@ -566,7 +561,6 @@ class Games(commands.Cog):
                         if not char.get("rarity"):
                             anime_pop = char.get("anime_popularity", 0)
                             char_favs = char.get("favorites", 0)
-                            from utils.cogs.game.const import get_combined_rarity
                             char["rarity"] = get_combined_rarity(anime_pop, char_favs)
                         
                         logger.info(f"[{api_name}] Found character: {name} -> {char.get('name', 'Unknown')}")
@@ -606,13 +600,7 @@ class Games(commands.Cog):
         session = await self.get_session()
         
         try:
-            # Import the API functions
-            from utils.cogs.game.const import (
-                fetch_jikan_character_by_name,
-                fetch_anilist_character_by_name, 
-                fetch_kitsu_character_by_name
-            )
-            
+           
             # Try fuzzy search with each API
             api_sources = [
                 ("Jikan", fetch_jikan_character_by_name),
@@ -771,7 +759,6 @@ class Games(commands.Cog):
         
         All characters in the same draw are guaranteed to be unique.
         """
-        from utils.cogs.game.const import roll_gacha_rarity
         cards = []
         drawn_character_ids = set()  # Track already drawn characters in this session
         global_character_pool = set()  # Track characters seen recently across all draws
@@ -871,7 +858,6 @@ class Games(commands.Cog):
 
     def get_random_rarity(self) -> str:
         """Get random rarity using the brutal drop rates."""
-        from utils.cogs.game.const import roll_gacha_rarity
         return roll_gacha_rarity()
    
     def get_slot_symbol(self) -> str:
@@ -901,7 +887,6 @@ class Games(commands.Cog):
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
            
-            from utils.cogs.game.const import generate_uid
             uid = generate_uid()
             favorites = character.get("favorites", 0)
            
@@ -2063,7 +2048,6 @@ class Games(commands.Cog):
     
     async def update_character_rarities_in_db(self, user_id: str, guild_id: str, inventory: list) -> list:
         """Update character rarities in database with corrected values and return updated inventory."""
-        from utils.cogs.game.const import get_rarity_from_favorites
         
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
@@ -2184,7 +2168,6 @@ class Games(commands.Cog):
                 return
             
             # Sort by rarity (legendary first) then by favorites/likes (descending)
-            from utils.cogs.game.const import GACHA_RARITY_TIERS
             rarity_order = {"legendary": 0, "epic": 1, "rare": 2, "uncommon": 3, "common": 4}
             
             def sort_key(char):
@@ -2219,7 +2202,6 @@ class Games(commands.Cog):
                 pass
             
             # Generate initial gallery image
-            from utils.cogs.game.images import generate_gallery_image
             buffer = await generate_gallery_image(
                 characters=sorted_inventory,
                 page=page,
@@ -2234,7 +2216,6 @@ class Games(commands.Cog):
             file = discord.File(buffer, filename=f"gallery_{user_id}_page_{page}.png")
             
             # Create interactive view with pagination and filters
-            from utils.cogs.game.view import GalleryView
             view = GalleryView(
                 cog=self,
                 user=ctx.author,
@@ -2320,7 +2301,6 @@ class Games(commands.Cog):
     @draw.command(name="info", aliases=["help", "rates", "?"])
     async def draw_info(self, ctx):
         """📊 Show gacha rates and command help."""
-        from utils.cogs.game.const import get_gacha_rates_display
         
         embed = discord.Embed(
             title="🎴 Anime Gacha - Draw Info",
@@ -2472,7 +2452,6 @@ class Games(commands.Cog):
         elif char.get("image_url"):
             embed.set_image(url=char["image_url"])
         
-        from utils.cogs.game.const import calculate_release_value
         release_value = calculate_release_value(favorites, rarity, char.get('name', 'unknown'))
         embed.set_footer(icon_url=ctx.author.avatar,text=f"Owned by {owner_name} • Release value: {release_value} pts")
         
@@ -2495,7 +2474,6 @@ class Games(commands.Cog):
                         other_char["display_owner_name"] = "Unknown"
         
         # Create the main character view with favorite and selection options
-        from utils.cogs.game.view import CharacterView
         view = CharacterView(self, char, uid, ctx.author.id, guild_id, same_anime_chars if anime_name else None)
         
         # Send with view
@@ -2523,7 +2501,6 @@ class Games(commands.Cog):
         # Calculate release value
         favorites = char.get("favorites", 0)
         rarity = char.get("rarity", "common")
-        from utils.cogs.game.const import calculate_release_value
         release_value = calculate_release_value(favorites, rarity, char.get('name', 'unknown'))
         
         # Remove from inventory
@@ -2912,7 +2889,6 @@ class Games(commands.Cog):
     def _get_draw_summary_content(self, display_name: str, balance: int, draws_left: int, is_out_of_draws: bool) -> str:
         """Generate the draw summary content string"""
         if is_out_of_draws:
-            from utils.cogs.game.const import GACHA_COST, get_timer_config
             config = get_timer_config("gacha")
             cooldown_hours = config['cooldown'] // 3600
             return (f"**{display_name}** - **No draws left!**\n"
@@ -4478,7 +4454,6 @@ class Games(commands.Cog):
     @memo_group.command(name="leaderboard")
     async def memo_leaderboard(self, ctx):
         """🏆 View memo streak leaderboard"""
-        from utils.cogs.fun import Memo_Data
         
         memo_data = Memo_Data()
         
@@ -4658,7 +4633,6 @@ class Games(commands.Cog):
                 embeds = await self.cover_art_system.create_cover_art_embeds(char, images, page=1, total_pages=max_pages)
                 
                 # Create view with Select dropdown for buying
-                from utils.cogs.game.draw.cover_gallery_view import CoverGalleryView
                 view = CoverGalleryView(self.cover_art_system, char, user_id, guild_id, images, current_page=1, total_pages=max_pages)
                 
                 msg = await ctx.reply(embeds=embeds, view=view, mention_author=False)
@@ -4767,7 +4741,6 @@ class Games(commands.Cog):
                 )
             
             # Create the view with buttons to select cover art
-            from utils.cogs.game.draw.cover_gallery_view import CoverSelectView
             view = CoverSelectView(
                 self.cover_art_system, char, user_id, guild_id, char_covers, current_page=0
             )
@@ -4883,7 +4856,6 @@ class Games(commands.Cog):
                 embeds.append(embed)
             
             # Create view with help button
-            from utils.cogs.game.draw.cover_collection_view import CoverCollectionView
             view = CoverCollectionView()
             
             msg = await ctx.reply(embeds=embeds, view=view, mention_author=False)
@@ -5054,7 +5026,6 @@ class Games(commands.Cog):
                 embed.set_footer(text="Use .cover gallery <UID> to purchase for your character")
                 
                 # Create view with clean button layout
-                from utils.cogs.game.draw.cover_art import CoverArtSearchView
                 view = CoverArtSearchView(
                     self.cover_art_system,
                     {"name": character_name, "anime": series_name or "Unknown", "uid": "SEARCH"},

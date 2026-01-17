@@ -32,9 +32,9 @@ from cachetools import TTLCache
 from imports.discord_imports import *
 from bot.token import use_test_bot as ut
 from bot.cogs.pokemon import PoketwoCommands
-from utils.subcogs.pokemon import MongoHelper
+from bot.utils.subcogs.pokemon import MongoHelper
 from data.events.poketwo_spawns.predict import Prediction
-from utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils, PokemonSpawnView
+from bot.utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils, PokemonSpawnView
 from tqdm.asyncio import tqdm_asyncio
 
 import random

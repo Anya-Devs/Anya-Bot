@@ -8,7 +8,7 @@ import discord
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from imports.discord_imports import *
-from utils.subcogs.utils.mongo import MongoHelper
+from bot.utils.subcogs.utils.mongo import MongoHelper
 
 
 class StarboardConfig:

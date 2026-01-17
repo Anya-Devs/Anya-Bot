@@ -2,7 +2,7 @@ import os, logging
 from datetime import datetime
 from PIL import Image
 from openai import AsyncOpenAI
-from utils.cogs.ai import *
+from bot.utils.cogs.ai import *
 from imports.discord_imports import *
 from imports.log_imports import logger
 from data.local.const import primary_color
