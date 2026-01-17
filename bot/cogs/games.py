@@ -2384,11 +2384,45 @@ class Games(commands.Cog):
     @draw.command(name="view", aliases=["show", "display", "v"])
     @commands.cooldown(1, 3, commands.BucketType.user)
     async def draw_view(self, ctx, uid: str = None):
-        """👁️ View and show off a character by UID."""
+        """👁️ View and show off a character by UID.
+        
+        Usage:
+        - `.draw v <UID>` - View by UID
+        - `.draw v latest` or `.draw v l` - View your last claimed character
+        """
         if not uid:
-            return await ctx.reply(f"Usage: `{ctx.prefix}draw view <UID>`\nFind UIDs in your collection!", mention_author=False)
+            return await ctx.reply(f"Usage: `{ctx.prefix}draw view <UID>`\nOr use `latest`/`l` for last claimed!", mention_author=False)
         
         guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        # Handle 'latest' or 'l' shortcut
+        if uid.lower() in ['latest', 'l']:
+            try:
+                db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+                server_col = db["Servers"]
+                result = await server_col.find_one(
+                    {"guild_id": guild_id},
+                    {f"members.{user_id}.gacha_inventory": 1}
+                )
+                
+                if not result:
+                    return await ctx.reply("❌ You don't have any characters yet!", mention_author=False)
+                
+                inventory = result.get("members", {}).get(user_id, {}).get("gacha_inventory", [])
+                if not inventory:
+                    return await ctx.reply("❌ You don't have any characters yet!", mention_author=False)
+                
+                # Get the most recently claimed character (last in inventory)
+                latest_char = inventory[-1]
+                uid = latest_char.get("uid")
+                
+                if not uid:
+                    return await ctx.reply("❌ Could not find your latest character!", mention_author=False)
+            except Exception as e:
+                logger.error(f"Error getting latest character: {e}")
+                return await ctx.reply("❌ Error finding your latest character!", mention_author=False)
+        
         owner_id, char = await self.get_character_by_uid(guild_id, uid)
         
         if not char:
@@ -2572,10 +2606,45 @@ class Games(commands.Cog):
     async def draw_favorite(self, ctx, *uids: str):
      """⭐ Favorite characters by UIDs.
   
-     Usage: `.draw f <UID1> <UID2> ...`
+     Usage: 
+     - `.draw f <UID1> <UID2> ...` - Favorite by UIDs
+     - `.draw f latest` or `.draw f l` - Favorite your last claimed character
      """
      if not uids:
-        return await ctx.reply(f"Usage: `{ctx.prefix}draw favorite <UID> [UID2 ...]`\nFind UIDs in your collection!", mention_author=False)
+        return await ctx.reply(f"Usage: `{ctx.prefix}draw favorite <UID> [UID2 ...]`\nOr use `latest`/`l` for last claimed!", mention_author=False)
+  
+     guild_id = str(ctx.guild.id)
+     user_id = str(ctx.author.id)
+     
+     # Handle 'latest' or 'l' shortcut
+     if len(uids) == 1 and uids[0].lower() in ['latest', 'l']:
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.gacha_inventory": 1}
+            )
+            
+            if not result:
+                return await ctx.reply("❌ You don't have any characters yet!", mention_author=False)
+            
+            inventory = result.get("members", {}).get(user_id, {}).get("gacha_inventory", [])
+            if not inventory:
+                return await ctx.reply("❌ You don't have any characters yet!", mention_author=False)
+            
+            # Get the most recently claimed character (last in inventory)
+            latest_char = inventory[-1]
+            latest_uid = latest_char.get("uid")
+            
+            if not latest_uid:
+                return await ctx.reply("❌ Could not find your latest character!", mention_author=False)
+            
+            # Replace uids with the latest UID
+            uids = (latest_uid,)
+        except Exception as e:
+            logger.error(f"Error getting latest character: {e}")
+            return await ctx.reply("❌ Error finding your latest character!", mention_author=False)
   
      guild_id = str(ctx.guild.id)
      user_id = str(ctx.author.id)
@@ -2683,10 +2752,45 @@ class Games(commands.Cog):
     async def draw_unfavorite(self, ctx, *uids: str):
      """☆ Unfavorite characters by UIDs.
   
-     Usage: `.draw unfav <UID1> <UID2> ...`
+     Usage: 
+     - `.draw unfav <UID1> <UID2> ...` - Unfavorite by UIDs
+     - `.draw unfav latest` or `.draw unfav l` - Unfavorite your last claimed character
      """
      if not uids:
-        return await ctx.reply(f"Usage: `{ctx.prefix}draw unfavorite <UID> [UID2 ...]`\nFind UIDs in your collection!", mention_author=False)
+        return await ctx.reply(f"Usage: `{ctx.prefix}draw unfavorite <UID> [UID2 ...]`\nOr use `latest`/`l` for last claimed!", mention_author=False)
+  
+     guild_id = str(ctx.guild.id)
+     user_id = str(ctx.author.id)
+     
+     # Handle 'latest' or 'l' shortcut
+     if len(uids) == 1 and uids[0].lower() in ['latest', 'l']:
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.gacha_inventory": 1}
+            )
+            
+            if not result:
+                return await ctx.reply("❌ You don't have any characters yet!", mention_author=False)
+            
+            inventory = result.get("members", {}).get(user_id, {}).get("gacha_inventory", [])
+            if not inventory:
+                return await ctx.reply("❌ You don't have any characters yet!", mention_author=False)
+            
+            # Get the most recently claimed character (last in inventory)
+            latest_char = inventory[-1]
+            latest_uid = latest_char.get("uid")
+            
+            if not latest_uid:
+                return await ctx.reply("❌ Could not find your latest character!", mention_author=False)
+            
+            # Replace uids with the latest UID
+            uids = (latest_uid,)
+        except Exception as e:
+            logger.error(f"Error getting latest character: {e}")
+            return await ctx.reply("❌ Error finding your latest character!", mention_author=False)
   
      guild_id = str(ctx.guild.id)
      user_id = str(ctx.author.id)
