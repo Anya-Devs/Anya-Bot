@@ -561,6 +561,423 @@ class GachaClaimView(discord.ui.View):
 # CHARACTER & COVER ART VIEWS
 # ═══════════════════════════════════════════════════════════════
 
+class CharacterView(discord.ui.View):
+    """Main view for character display with favorite and selection options"""
+    
+    def __init__(self, cog, character: dict, uid: str, user_id: int, guild_id: str, same_anime_chars: list = None):
+        super().__init__(timeout=180)
+        self.cog = cog
+        self.character = character
+        self.uid = uid
+        self.user_id = user_id
+        self.guild_id = guild_id
+        self.same_anime_chars = same_anime_chars or []
+        self.selection_view_shown = False
+        
+        # Add favorite button
+        self.add_item(FavoriteButton(cog, character, uid, user_id, guild_id))
+        
+        # Add character selection button if there are other characters from same anime
+        if same_anime_chars:
+            self.add_item(CharacterDetail(cog, uid, same_anime_chars, user_id))
+
+class FavoriteButton(discord.ui.Button):
+    """Button to favorite/unfavorite a character"""
+    
+    def __init__(self, cog, character: dict, uid: str, user_id: int, guild_id: str):
+        self.cog = cog
+        self.character = character
+        self.uid = uid
+        self.user_id = user_id
+        self.guild_id = guild_id
+        self.is_favorited = character.get("favorite", False)
+        
+        # Set button style and label based on favorite status
+        if self.is_favorited:
+            super().__init__(
+                style=discord.ButtonStyle.green,
+                label="Favorited",
+                emoji="⭐",
+                row=0
+            )
+        else:
+            super().__init__(
+                style=discord.ButtonStyle.secondary,
+                label="Favorite",
+                emoji="⭐",
+                row=0
+            )
+    
+    async def callback(self, interaction: discord.Interaction):
+        # Check if user owns this character
+        owner_id, char = await self.cog.get_character_by_uid(self.guild_id, self.uid)
+        
+        if owner_id != str(self.user_id):
+            await interaction.response.send_message(
+                "❌ You can only favorite your own characters!",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            # Toggle favorite status
+            db = self.cog.quest_data.mongoConnect[self.cog.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            
+            new_favorite_status = not self.is_favorited
+            
+            # Update the character in inventory
+            await server_col.update_one(
+                {"guild_id": self.guild_id, f"members.{self.user_id}.gacha_inventory.uid": self.uid},
+                {"$set": {f"members.{self.user_id}.gacha_inventory.$.favorite": new_favorite_status}}
+            )
+            
+            # Update button appearance
+            self.is_favorited = new_favorite_status
+            if new_favorite_status:
+                self.style = discord.ButtonStyle.green
+                self.label = "Favorited"
+                self.emoji = "⭐"
+                await interaction.response.send_message(
+                    f"⭐ **{self.character['name']}** has been favorited!",
+                    ephemeral=True
+                )
+            else:
+                self.style = discord.ButtonStyle.secondary
+                self.label = "Favorite"
+                self.emoji = "⭐"
+                await interaction.response.send_message(
+                    f"☆ **{self.character['name']}** has been unfavorited.",
+                    ephemeral=True
+                )
+            
+            # Update the view
+            await interaction.message.edit(view=self.view)
+            
+        except Exception as e:
+            await interaction.response.send_message(
+                "❌ Error updating favorite status. Please try again.",
+                ephemeral=True
+            )
+
+class CharacterDetail(discord.ui.Button):
+    """Button to show character selection dropdown"""
+    
+    def __init__(self, cog, uid: str, same_anime_chars: list, user_id: int):
+        self.cog = cog
+        self.uid = uid
+        self.same_anime_chars = same_anime_chars
+        self.user_id = user_id
+        
+        super().__init__(
+            style=discord.ButtonStyle.primary,
+            emoji="📚",
+            row=0
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        # Create an ephemeral embed with the character selection dropdown
+        from utils.cogs.game.view import CharacterSelectView
+        
+        # Create the selection view
+        selection_view = CharacterSelectView(self.cog, self.uid, self.same_anime_chars, self.user_id)
+        
+        # Create an ephemeral embed
+        embed = discord.Embed(
+            title="View Other Characters",
+            description="Select a character from the same anime to view:",
+            color=discord.Color.blue()
+        )
+        
+        # Send as ephemeral message
+        await interaction.response.send_message(embed=embed, view=selection_view, ephemeral=True)
+
+class CharacterSelectView(discord.ui.View):
+    """View with character selection dropdown for same anime characters"""
+    
+    def __init__(self, cog, current_uid: str, same_anime_chars: list, user_id: int):
+        super().__init__(timeout=180)
+        self.cog = cog
+        self.current_uid = current_uid
+        self.same_anime_chars = same_anime_chars
+        self.user_id = user_id
+        self.current_page = 0
+        self.per_page = 25
+        self.total_pages = (len(same_anime_chars) + self.per_page - 1) // self.per_page
+        
+        # Add dropdown and navigation buttons
+        self.add_item(CharacterSelectDropdown(cog, same_anime_chars, user_id, self.current_page, self.per_page))
+        
+        # Only add navigation buttons if there are multiple pages
+        if self.total_pages > 1:
+            self.add_item(PreviousPageButton(self))
+            self.add_item(NextPageButton(self))
+            self.add_item(PageIndicator(self))
+    
+    async def update_dropdown(self, interaction: discord.Interaction):
+        """Update the dropdown with new page data"""
+        # Remove old items
+        self.clear_items()
+        
+        # Add new dropdown with updated page
+        self.add_item(CharacterSelectDropdown(self.cog, self.same_anime_chars, self.user_id, self.current_page, self.per_page))
+        
+        # Re-add navigation buttons if needed
+        if self.total_pages > 1:
+            self.add_item(PreviousPageButton(self))
+            self.add_item(NextPageButton(self))
+            self.add_item(PageIndicator(self))
+        
+        # Update the view
+        await interaction.response.edit_message(view=self)
+
+class PreviousPageButton(discord.ui.Button):
+    """Button to go to previous page of characters"""
+    
+    def __init__(self, view):
+        self.view_ref = view
+        super().__init__(
+            style=discord.ButtonStyle.secondary,
+            emoji="⬅️",
+            row=1
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.view_ref.user_id:
+            await interaction.response.send_message("You can only use your own character dropdown!", ephemeral=True)
+            return
+        
+        if self.view_ref.current_page > 0:
+            self.view_ref.current_page -= 1
+            await self.view_ref.update_dropdown(interaction)
+
+class NextPageButton(discord.ui.Button):
+    """Button to go to next page of characters"""
+    
+    def __init__(self, view):
+        self.view_ref = view
+        super().__init__(
+            style=discord.ButtonStyle.secondary,
+            emoji="➡️",
+            row=1
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.view_ref.user_id:
+            await interaction.response.send_message("You can only use your own character dropdown!", ephemeral=True)
+            return
+        
+        if self.view_ref.current_page < self.view_ref.total_pages - 1:
+            self.view_ref.current_page += 1
+            await self.view_ref.update_dropdown(interaction)
+
+class PageIndicator(discord.ui.Button):
+    """Button showing current page info (disabled, for display only)"""
+    
+    def __init__(self, view):
+        self.view_ref = view
+        super().__init__(
+            style=discord.ButtonStyle.secondary,
+            label=f"Page {view.current_page + 1}/{view.total_pages}",
+            disabled=True,
+            row=1
+        )
+    
+    def update_label(self):
+        self.label = f"Page {self.view_ref.current_page + 1}/{self.view_ref.total_pages}"
+
+class CharacterSelectDropdown(discord.ui.Select):
+    """Dropdown for selecting characters from the same anime"""
+    
+    def __init__(self, cog, same_anime_chars: list, user_id: int, page: int = 0, per_page: int = 25):
+        self.cog = cog
+        self.same_anime_chars = same_anime_chars
+        self.user_id = user_id
+        self.page = page
+        self.per_page = per_page
+        
+        # Get characters for current page
+        start_idx = page * per_page
+        end_idx = start_idx + per_page
+        display_chars = same_anime_chars[start_idx:end_idx]
+        
+        options = []
+        for char in display_chars:
+            # Get owner info - use display_owner_name if available, otherwise fetch it
+            owner_id = char.get("owner_id")
+            owner_name = char.get("display_owner_name", "Unknown")
+            
+            if owner_name == "Unknown" and owner_id:
+                try:
+                    # We can't fetch guild members here directly, so we'll use a simplified format
+                    # The actual names will be updated in the callback
+                    owner_name = f"ID: {owner_id}"
+                except:
+                    pass
+            
+            # Create option label and description
+            label = char.get("name", "Unknown")[:25]  # Discord label limit
+            description = f"{char.get('anime', 'Unknown')} - {owner_name}"
+            if len(description) > 50:  # Discord description limit
+                description = description[:47] + "..."
+            
+            options.append(
+                discord.SelectOption(
+                    label=label,
+                    description=description,
+                    value=char.get("uid", "")
+                )
+            )
+        
+        super().__init__(
+            placeholder="View other characters from this anime...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("You can only use your own character dropdown!", ephemeral=True)
+            return
+        
+        selected_uid = self.values[0]
+        if not selected_uid:
+            await interaction.response.send_message("Invalid character selection!", ephemeral=True)
+            return
+        
+        # Get the selected character
+        guild_id = str(interaction.guild.id)
+        owner_id, char = await self.cog.get_character_by_uid(guild_id, selected_uid)
+        
+        if not char:
+            await interaction.response.send_message("Character not found!", ephemeral=True)
+            return
+        
+        # Create character information embed
+        rarity = char.get("rarity", "common")
+        from utils.cogs.game.const import GACHA_RARITY_TIERS
+        rarity_data = GACHA_RARITY_TIERS.get(rarity, GACHA_RARITY_TIERS["common"])
+        favorites = char.get("favorites", 0)
+        
+        # Get or generate character description
+        description = char.get("about", "")
+        if not description or len(description.strip()) < 10:
+            # Generate a description if none exists
+            description = await self.cog.fetch_enhanced_character_description(char.get("name", ""), char.get("anime", ""))
+        
+        # Clean up description
+        if description:
+            description = description.replace("\n\n", " ").replace("\n", " ")
+            if len(description) > 300:
+                description = description[:300].rsplit(" ", 1)[0] + "..."
+        else:
+            description = f"A character from {char.get('anime', 'Unknown')}."
+        
+        # Create character embed
+        char_embed = discord.Embed(
+            title=f"📋 Character Information",
+            description=f"```           {char['name']}```",
+            color=rarity_data["color"]
+        )
+        
+        # Add description
+        char_embed.add_field(name="📖 Description", value=description, inline=False)
+        
+        # Character details
+        details = f"**Series:** {char.get('anime', 'Unknown')}\n"
+        details += f"**Gender:** {char.get('gender', 'Unknown')}\n"
+        details += f"**Rarity:** {rarity.title()}\n"
+        details += f"**Favorites:** {favorites:,}\n"
+        details += f"**UID:** `{char.get('uid', selected_uid).upper()}`"
+        
+        char_embed.add_field(name="📊 Character Details", value=details, inline=False)
+        
+        # Set character image
+        if char.get("image_url"):
+            char_embed.set_image(url=char["image_url"])
+        
+        # Get owner info for footer
+        try:
+            owner = interaction.guild.get_member(int(owner_id))
+            owner_name = owner.display_name if owner else "Unknown"
+        except:
+            owner_name = "Unknown"
+        
+        char_embed.set_footer(icon_url=interaction.user.avatar, text=f"Owned by {owner_name}")
+        
+        # Now fetch anime information
+        anime_name = char.get('anime', '')
+        anime_embed = None
+        
+        if anime_name and anime_name != "Unknown":
+            try:
+                # Fetch anime data using Jikan API
+                session = await self.cog.get_session()
+                search_url = f"https://api.jikan.moe/v4/anime?q={anime_name}&limit=1"
+                
+                async with session.get(search_url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        anime_results = data.get("data", [])
+                        
+                        if anime_results:
+                            anime = anime_results[0]
+                            
+                            # Create anime embed using the same format as .anime search
+                            anime_embed = discord.Embed(title=anime["title"])
+                            
+                            # Get anime image
+                            image_url = self._get_anime_image_url(anime.get("images", {}))
+                            if image_url:
+                                anime_embed.set_image(url=image_url)
+                            
+                            # Anime details field
+                            anime_details = f"**Episodes:** `{anime.get('episodes', 'Unknown')}`\n"
+                            anime_details += f"**Status:** `{anime.get('status', 'Unknown')}`\n"
+                            anime_details += f"**Genres:** `{', '.join(genre.get('name', 'Unknown') for genre in anime.get('genres', []))}`\n"
+                            
+                            score = anime.get('score', 0)
+                            if score > 0:
+                                anime_details += f"```py\nScore: {score:>3} (out of 10)\n"
+                                anime_details += f"{'▰' * int(score * 10 / 10)}{'▱' * (10 - int(score * 10 / 10))}```"
+                            
+                            anime_embed.add_field(name="📺 Anime Information", value=anime_details, inline=False)
+                            
+                            # Anime description
+                            synopsis = anime.get("synopsis", "Synopsis not available")
+                            if len(synopsis) > 400:
+                                synopsis = synopsis[:400].rsplit(" ", 1)[0] + "..."
+                            anime_embed.description = synopsis
+                            
+                            anime_embed.set_footer(text=f"🎌 Anime Information for {anime_name}")
+                            
+            except Exception as e:
+                logger.debug(f"Failed to fetch anime info for '{anime_name}': {e}")
+        
+        # Send the embeds
+        if anime_embed:
+            # Send both character and anime embeds
+            await interaction.response.send_message(embeds=[char_embed, anime_embed], ephemeral=True)
+        else:
+            # Send only character embed if anime info failed
+            await interaction.response.send_message(embed=char_embed, ephemeral=True)
+    
+    @staticmethod
+    def _get_anime_image_url(images):
+        """Get anime image URL in preferred size order"""
+        size_order = ["large", "medium", "small"]
+        for size in size_order:
+            image_url = images.get("jpg", {}).get(f"{size}_image_url")
+            if image_url:
+                return image_url
+        for size in size_order:
+            image_url = images.get("webp", {}).get(f"{size}_image_url")
+            if image_url:
+                return image_url
+        return None
+
+
 class CharacterCoverArtView(discord.ui.View):
     """View with cover art button for gacha character display"""
     
@@ -1192,10 +1609,10 @@ class GalleryGenderSelect(discord.ui.Select):
             filtered_chars = inventory
             self.parent_view.filter_type = "all"
         elif selected_gender == "waifu":
-            filtered_chars = [c for c in inventory if c.get("gender", "").lower() in ["female", "girl"]]
+            filtered_chars = [c for c in inventory if (c.get("gender") or "").lower() in ["female", "girl"]]
             self.parent_view.filter_type = "waifu"
         elif selected_gender == "husbando":
-            filtered_chars = [c for c in inventory if c.get("gender", "").lower() in ["male", "boy"]]
+            filtered_chars = [c for c in inventory if (c.get("gender") or "").lower() in ["male", "boy"]]
             self.parent_view.filter_type = "husbando"
         
         # Always sort by favorites (most favorites first)

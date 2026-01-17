@@ -85,7 +85,7 @@ class Games(commands.Cog):
         async with session.get(
             search_url,
             params=params,
-            timeout=aiohttp.ClientTimeout(total=10)
+            timeout=aiohttp.ClientTimeout(total=3)
         ) as resp:
             if resp.status == 200:
                 data = await resp.json()
@@ -173,7 +173,7 @@ class Games(commands.Cog):
                 "limit": 5
             }
             
-            async with session.get(anime_search_url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            async with session.get(anime_search_url, params=params, timeout=aiohttp.ClientTimeout(total=3)) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     animes = data.get("data", [])
@@ -187,7 +187,7 @@ class Games(commands.Cog):
                             # Get characters for this anime
                             characters_url = f"https://api.jikan.moe/v4/anime/{anime_id}/characters"
                             
-                            async with session.get(characters_url, timeout=aiohttp.ClientTimeout(total=10)) as char_resp:
+                            async with session.get(characters_url, timeout=aiohttp.ClientTimeout(total=3)) as char_resp:
                                 if char_resp.status == 200:
                                     char_data = await char_resp.json()
                                     characters = char_data.get("data", [])
@@ -284,18 +284,30 @@ class Games(commands.Cog):
             logger.error(f"Error getting character: {e}")
         return None
    
-    async def check_cooldown(self, user_id: str, action: str, cooldown_seconds: int) -> Optional[timedelta]:
+    async def check_cooldown(self, user_id: str, action: str, cooldown_seconds: int, guild_id: str = None) -> Optional[timedelta]:
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
-           
+            
+            # Use guild-specific cooldowns for claim command, otherwise use global
+            if action == "claim" and guild_id:
+                collection_key = guild_id
+                query_field = f"members.{user_id}.cooldowns.{action}"
+            else:
+                collection_key = "global_cooldowns"
+                query_field = f"cooldowns.{user_id}.{action}"
+            
             result = await server_col.find_one(
-                {"guild_id": "global_cooldowns"},
-                {f"cooldowns.{user_id}.{action}": 1}
+                {"guild_id": collection_key},
+                {query_field: 1}
             )
-           
+            
             if result:
-                last_time_str = result.get("cooldowns", {}).get(user_id, {}).get(action)
+                if action == "claim" and guild_id:
+                    last_time_str = result.get("members", {}).get(user_id, {}).get("cooldowns", {}).get(action)
+                else:
+                    last_time_str = result.get("cooldowns", {}).get(user_id, {}).get(action)
+                    
                 if last_time_str:
                     last_time = datetime.fromisoformat(last_time_str)
                     elapsed = datetime.now(timezone.utc) - last_time
@@ -305,16 +317,24 @@ class Games(commands.Cog):
             logger.error(f"Cooldown check error: {e}")
         return None
    
-    async def set_cooldown(self, user_id: str, action: str):
+    async def set_cooldown(self, user_id: str, action: str, guild_id: str = None):
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
-           
-            await server_col.update_one(
-                {"guild_id": "global_cooldowns"},
-                {"$set": {f"cooldowns.{user_id}.{action}": datetime.now(timezone.utc).isoformat()}},
-                upsert=True
-            )
+            
+            # Use guild-specific cooldowns for claim command, otherwise use global
+            if action == "claim" and guild_id:
+                await server_col.update_one(
+                    {"guild_id": guild_id},
+                    {"$set": {f"members.{user_id}.cooldowns.{action}": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True
+                )
+            else:
+                await server_col.update_one(
+                    {"guild_id": "global_cooldowns"},
+                    {"$set": {f"cooldowns.{user_id}.{action}": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True
+                )
         except Exception as e:
             logger.error(f"Set cooldown error: {e}")
    
@@ -324,14 +344,14 @@ class Games(commands.Cog):
         config = get_timer_config(command)
        
         command_cooldown = config.get("command_cooldown", 5)
-        remaining = await self.check_cooldown(user_id, f"{command}_command", command_cooldown)
+        remaining = await self.check_cooldown(user_id, f"{command}_command", command_cooldown, guild_id)
         if remaining:
             return format_cooldown_message(remaining, command)
        
         if not uses_daily_reset(command):
             current_uses = await self.get_current_uses(user_id, guild_id, command)
             if current_uses >= config["max_uses"]:
-                main_remaining = await self.check_cooldown(user_id, f"{command}_main", config["cooldown"])
+                main_remaining = await self.check_cooldown(user_id, f"{command}_main", config["cooldown"], guild_id)
                 if main_remaining:
                     return format_cooldown_message(main_remaining, command)
                 else:
@@ -359,19 +379,23 @@ class Games(commands.Cog):
     async def set_cover_command_status(self, user_id: str, active: bool):
         self.active_searches[user_id] = active
    
-    async def get_daily_streak(self, user_id: str, guild_id: str) -> int:
+    async def get_daily_streak(self, user_id: str, guild_id: str) -> tuple[int, Optional[datetime]]:
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
             result = await server_col.find_one(
                 {"guild_id": guild_id},
-                {f"members.{user_id}.daily_streak": 1}
+                {f"members.{user_id}.daily_streak": 1, f"members.{user_id}.last_claim_date": 1}
             )
             if result:
-                return result.get("members", {}).get(user_id, {}).get("daily_streak", 0)
+                member_data = result.get("members", {}).get(user_id, {})
+                streak = member_data.get("daily_streak", 0)
+                last_claim_str = member_data.get("last_claim_date")
+                last_claim_date = datetime.fromisoformat(last_claim_str) if last_claim_str else None
+                return streak, last_claim_date
         except Exception as e:
             logger.error(f"Error getting streak: {e}")
-        return 0
+        return 0, None
    
     async def update_daily_streak(self, user_id: str, guild_id: str, streak: int):
         try:
@@ -379,7 +403,8 @@ class Games(commands.Cog):
             server_col = db["Servers"]
             await server_col.update_one(
                 {"guild_id": guild_id},
-                {"$set": {f"members.{user_id}.daily_streak": streak}},
+                {"$set": {f"members.{user_id}.daily_streak": streak, 
+                          f"members.{user_id}.last_claim_date": datetime.now(timezone.utc).isoformat()}},
                 upsert=True
             )
         except Exception as e:
@@ -478,9 +503,19 @@ class Games(commands.Cog):
     # ===================================================================
     
     async def fetch_character_by_rarity(self, target_rarity: str) -> Optional[Dict]:
-        """Fetch a character matching the target rarity tier based on anime popularity."""
-        from utils.cogs.game.const import get_combined_rarity, fetch_jikan_character, fetch_anilist_character
+        """Fetch a character matching the target rarity tier - uses fast custom API first."""
+        from utils.cogs.game.const import get_combined_rarity, fetch_jikan_character, fetch_anilist_character, fetch_from_gacha_api
         session = await self.get_session()
+        
+        # Try fast custom API first (instant response from pre-cached characters)
+        try:
+            char = await fetch_from_gacha_api(session, target_rarity)
+            if char and char.get("image_url") and char.get("anime"):
+                return char
+        except Exception as e:
+            logger.debug(f"Fast Gacha API failed: {e}")
+        
+        # Fallback to external APIs if custom API unavailable
         apis = [
             (fetch_jikan_character, "jikan"),
             (fetch_anilist_character, "anilist"),
@@ -491,7 +526,6 @@ class Games(commands.Cog):
             try:
                 char = await api_func(session, target_rarity)
                 if char:
-                    # Assign rarity based on anime popularity (70%) + character favorites (30%)
                     anime_pop = char.get("anime_popularity", 0)
                     char_favs = char.get("favorites", 0)
                     char["rarity"] = get_combined_rarity(anime_pop, char_favs)
@@ -499,66 +533,54 @@ class Games(commands.Cog):
             except Exception as e:
                 logger.debug(f"Gacha API error ({api_name}): {e}")
         return None
-
+   
     async def fetch_character_by_name(self, name: str) -> Optional[Dict]:
-        """Fetch a specific character by name from the API."""
+        """Fetch a specific character by name using multiple API sources with failover."""
         session = await self.get_session()
         
         try:
             # Clean the character name for search
             clean_name = name.strip().lower()
             
-            # Try multiple API endpoints
-            api_endpoints = [
-                "https://api.jikan.moe/v4/characters",
-                "https://api.jikan.moe/v4/people"  # Try people endpoint too
+            # Import the new API functions
+            from utils.cogs.game.const import (
+                fetch_jikan_character_by_name,
+                fetch_anilist_character_by_name, 
+                fetch_kitsu_character_by_name
+            )
+            
+            # Try API sources in order of preference
+            api_sources = [
+                ("Jikan", fetch_jikan_character_by_name),
+                ("AniList", fetch_anilist_character_by_name),
+                ("Kitsu", fetch_kitsu_character_by_name)
             ]
             
-            for endpoint in api_endpoints:
+            for api_name, fetch_func in api_sources:
                 try:
-                    # Search for character
-                    search_params = {
-                        'q': clean_name,
-                        'limit': 10
-                    }
+                    logger.debug(f"Trying {api_name} API for '{name}'")
+                    char = await fetch_func(session, clean_name)
                     
-                    async with session.get(f"{endpoint}?q={clean_name}&limit=10", timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            
-                            if endpoint.endswith("/characters"):
-                                results = data.get("data", [])
-                            else:  # people endpoint
-                                results = []
-                                people_data = data.get("data", [])
-                                for person in people_data:
-                                    # Get character voices from this person
-                                    if person.get("voices"):
-                                        for voice in person["voices"]:
-                                            if voice.get("character"):
-                                                results.append(voice["character"])
-                            
-                            # Look for exact name match
-                            for char_data in results:
-                                char_name = char_data.get("name", "").lower()
-                                if clean_name in char_name or char_name in clean_name:
-                                    # Found a match, get full character details
-                                    char_id = char_data.get("mal_id")
-                                    if char_id:
-                                        full_char = await self._get_full_character_details(char_id)
-                                        if full_char:
-                                            return full_char
-                                    
-                                    # Fallback to basic data
-                                    return self._format_character_data(char_data)
+                    if char and char.get("image_url") and char.get("anime"):
+                        # Ensure proper rarity assignment
+                        if not char.get("rarity"):
+                            anime_pop = char.get("anime_popularity", 0)
+                            char_favs = char.get("favorites", 0)
+                            from utils.cogs.game.const import get_combined_rarity
+                            char["rarity"] = get_combined_rarity(anime_pop, char_favs)
+                        
+                        logger.info(f"[{api_name}] Found character: {name} -> {char.get('name', 'Unknown')}")
+                        return char
+                    else:
+                        logger.debug(f"[{api_name}] No valid character found for '{name}'")
                         
                 except Exception as e:
-                    logger.debug(f"API endpoint {endpoint} failed: {e}")
-                    continue
+                    logger.debug(f"[{api_name}] API failed for '{name}': {e}")
+                    continue  # Move to next API source
             
-            # If no exact match, try fuzzy search
-            logger.info(f"No exact match for '{name}', trying fuzzy search")
-            return await self._fuzzy_character_search(clean_name)
+            # If all APIs failed, try enhanced fuzzy search as last resort
+            logger.info(f"All APIs failed for '{name}', trying enhanced fuzzy search")
+            return await self._enhanced_fuzzy_character_search(clean_name)
             
         except Exception as e:
             logger.error(f"Error fetching character by name '{name}': {e}")
@@ -569,7 +591,7 @@ class Games(commands.Cog):
         session = await self.get_session()
         
         try:
-            async with session.get(f"https://api.jikan.moe/v4/characters/{char_id}/full", timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            async with session.get(f"https://api.jikan.moe/v4/characters/{char_id}/full", timeout=aiohttp.ClientTimeout(total=3)) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     char_data = data.get("data", {})
@@ -579,6 +601,56 @@ class Games(commands.Cog):
         
         return None
     
+    async def _enhanced_fuzzy_character_search(self, name: str) -> Optional[Dict]:
+        """Enhanced fuzzy search using all available APIs."""
+        session = await self.get_session()
+        
+        try:
+            # Import the API functions
+            from utils.cogs.game.const import (
+                fetch_jikan_character_by_name,
+                fetch_anilist_character_by_name, 
+                fetch_kitsu_character_by_name
+            )
+            
+            # Try fuzzy search with each API
+            api_sources = [
+                ("Jikan", fetch_jikan_character_by_name),
+                ("AniList", fetch_anilist_character_by_name),
+                ("Kitsu", fetch_kitsu_character_by_name)
+            ]
+            
+            for api_name, fetch_func in api_sources:
+                try:
+                    # For short names, try more aggressive search
+                    if len(name) <= 3:
+                        # Try partial matches
+                        char = await fetch_func(session, name[:2] if len(name) > 2 else name)
+                        if char and char.get("image_url") and char.get("anime"):
+                            logger.info(f"[{api_name}] Fuzzy found: {name} -> {char.get('name', 'Unknown')}")
+                            return char
+                    else:
+                        # For longer names, try word parts
+                        name_parts = name.split()
+                        for part in name_parts:
+                            if len(part) >= 2:
+                                char = await fetch_func(session, part)
+                                if char and char.get("image_url") and char.get("anime"):
+                                    # Check if this result contains our original search terms
+                                    char_name = char.get("name", "").lower()
+                                    if any(p in char_name for p in name_parts if len(p) > 1):
+                                        logger.info(f"[{api_name}] Fuzzy found: {name} -> {char.get('name', 'Unknown')}")
+                                        return char
+                except Exception as e:
+                    logger.debug(f"[{api_name}] Fuzzy search failed for '{name}': {e}")
+                    continue
+            
+            return None
+        except Exception as e:
+            logger.debug(f"Enhanced fuzzy search failed for '{name}': {e}")
+        
+        return None
+
     async def _fuzzy_character_search(self, name: str) -> Optional[Dict]:
         """Try fuzzy search for character name."""
         session = await self.get_session()
@@ -587,11 +659,26 @@ class Games(commands.Cog):
             # Try with partial name matching
             name_parts = name.split()
             
+            # For short names (like "rem", "Ram"), try more aggressive search
+            if len(name) <= 3:
+                # Search for names that start with our short name
+                async with session.get(f"https://api.jikan.moe/v4/characters?q={name}&limit=10", timeout=aiohttp.ClientTimeout(total=8)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        results = data.get("data", [])
+                        
+                        for char_data in results:
+                            char_name = char_data.get("name", "").lower()
+                            # For short names, check if result starts with our search term
+                            if char_name.startswith(name):
+                                return self._format_character_data(char_data)
+            
+            # For longer names, try partial matching
             for part in name_parts:
-                if len(part) < 3:  # Skip very short parts
+                if len(part) < 2:  # Reduced threshold for better matching
                     continue
                     
-                async with session.get(f"https://api.jikan.moe/v4/characters?q={part}&limit=5", timeout=aiohttp.ClientTimeout(total=8)) as resp:
+                async with session.get(f"https://api.jikan.moe/v4/characters?q={part}&limit=8", timeout=aiohttp.ClientTimeout(total=8)) as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         results = data.get("data", [])
@@ -599,8 +686,14 @@ class Games(commands.Cog):
                         for char_data in results:
                             char_name = char_data.get("name", "").lower()
                             # Check if this result contains our search terms
-                            if all(p in char_name for p in name_parts if len(p) > 2):
-                                return self._format_character_data(char_data)
+                            if len(name_parts) == 1:
+                                # Single word search - be more lenient
+                                if part in char_name or char_name.startswith(part):
+                                    return self._format_character_data(char_data)
+                            else:
+                                # Multi-word search - require all parts to match
+                                if all(p in char_name for p in name_parts if len(p) > 1):
+                                    return self._format_character_data(char_data)
         except Exception as e:
             logger.debug(f"Fuzzy search failed for '{name}': {e}")
         
@@ -691,9 +784,9 @@ class Games(commands.Cog):
             # The API functions now properly filter by popularity ranges
             char = None
             attempts = 0
-            max_attempts = 20  # Increased attempts for better success rate
+            max_attempts = 1  # Single attempt for maximum speed
             
-            while char is None and attempts < max_attempts:
+            while char is None and attempts < 1:  # Only 1 attempt for maximum speed
                 char = await self.fetch_character_by_rarity(rolled_rarity)
                 attempts += 1
                 
@@ -742,7 +835,7 @@ class Games(commands.Cog):
             else:
                 # Fallback: Try one more time with any rarity if original rarity failed
                 logger.warning(f"Failed to fetch {rolled_rarity} character after {max_attempts} attempts, trying fallback")
-                fallback_attempts = 8
+                fallback_attempts = 2  # Reduced fallback attempts
                 for _ in range(fallback_attempts):
                     fallback_char = await self.fetch_character_by_rarity("common")  # Try common as fallback
                     if fallback_char and fallback_char.get("image_url") and fallback_char.get("anime"):
@@ -859,6 +952,36 @@ class Games(commands.Cog):
             logger.error(f"Error checking character ownership: {e}")
             return (False, None)
    
+    async def get_characters_from_same_anime(self, guild_id: str, anime_name: str, exclude_uid: str = None) -> list:
+        """Get other characters from the same anime in the server."""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            
+            server_data = await server_col.find_one({"guild_id": guild_id})
+            if not server_data or "members" not in server_data:
+                return []
+            
+            same_anime_chars = []
+            members = server_data.get("members", {})
+            
+            for member_id, member_data in members.items():
+                inventory = member_data.get("gacha_inventory", [])
+                for char in inventory:
+                    if char.get("anime") == anime_name:
+                        # Exclude the current character if specified
+                        if exclude_uid and char.get("uid", "").upper() == exclude_uid.upper():
+                            continue
+                        # Add owner info
+                        char_copy = char.copy()
+                        char_copy["owner_id"] = member_id
+                        same_anime_chars.append(char_copy)
+            
+            return same_anime_chars
+        except Exception as e:
+            logger.error(f"Error getting characters from same anime: {e}")
+            return []
+
     async def get_character_by_uid(self, guild_id: str, uid: str) -> tuple:
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
@@ -2319,10 +2442,30 @@ class Games(commands.Cog):
         release_value = calculate_release_value(favorites, rarity, char.get('name', 'unknown'))
         embed.set_footer(icon_url=ctx.author.avatar,text=f"Owned by {owner_name} • Release value: {release_value} pts")
         
-        # Add cover art view button (commented out)
-        # view = CharacterCoverArtView(char['uid'], ctx.author.id)
-        # await ctx.reply(embed=embed, view=view, mention_author=False)
-        await ctx.reply(embed=embed, mention_author=False)
+        # Check if there are other characters from the same anime
+        anime_name = char.get('anime', '')
+        view = None
+        
+        if anime_name:
+            # Get other characters from the same anime (excluding current character)
+            same_anime_chars = await self.get_characters_from_same_anime(guild_id, anime_name, exclude_uid=uid)
+            
+            if same_anime_chars:
+                # Populate owner names for the dropdown options
+                for other_char in same_anime_chars:
+                    try:
+                        other_owner_id = other_char.get("owner_id")
+                        other_owner = ctx.guild.get_member(int(other_owner_id))
+                        other_char["display_owner_name"] = other_owner.display_name if other_owner else "Unknown"
+                    except:
+                        other_char["display_owner_name"] = "Unknown"
+        
+        # Create the main character view with favorite and selection options
+        from utils.cogs.game.view import CharacterView
+        view = CharacterView(self, char, uid, ctx.author.id, guild_id, same_anime_chars if anime_name else None)
+        
+        # Send with view
+        await ctx.reply(embed=embed, view=view, mention_author=False)
 
     @draw.command(name="release", aliases=["sell", "remove"])
     @commands.cooldown(1, 5, commands.BucketType.user)
@@ -2677,47 +2820,61 @@ class Games(commands.Cog):
 
     @draw.command(name="drop")
     @commands.is_owner()
-    async def draw_drop(self, ctx, *, names: str = None):
+    async def draw_drop(self, ctx, *, args: str = None):
         """🎯 [DEV ONLY] Drop specific characters in the 3-card draw.
         
-        Usage: `.draw drop --n Anya Forger, Loid Forger`
-               `.draw drop --n Naruto Uzumaki`
-               `.draw drop --n "Character1, Character2, Character3"` (quotes optional)
+        Usage: `.draw drop Anya Forger, Loid Forger`
+               `.draw drop Naruto Uzumaki`
+               `.draw drop "Character1, Character2, Character3"` (quotes optional)
+               `.draw drop --anime "Re:Zero" rem, ram` (filter by anime)
         
         Unfilled slots will be randomized using normal gacha logic.
         Max 3 specific characters, rest will be random.
         """
-        if not names:
-            return await ctx.reply("❌ Usage: `.draw drop --n Anya Forger, Loid Forger`", mention_author=False)
+        if not args:
+            return await ctx.reply("❌ Usage: `.draw drop Anya Forger, Loid Forger` or `.draw drop --anime \"Re:Zero\" rem, ram`", mention_author=False)
         
-        # Parse character names - quotes are now optional
-        if "--n" not in names:
-            return await ctx.reply("❌ Use format: `.draw drop --n Anya Forger, Loid Forger`", mention_author=False)
+        # Parse arguments
+        anime_filter = None
+        character_names = None
         
         try:
-            name_part = names.split("--n", 1)[1].strip()
-            
-            # Handle both quoted and unquoted names
-            if name_part.startswith('"') and name_part.endswith('"'):
-                # Quoted format
-                name_part = name_part[1:-1]
-                requested_names = [name.strip() for name in name_part.split(",") if name.strip()]
+            # Check for anime filter
+            if "--anime" in args:
+                parts = args.split("--anime", 1)
+                if len(parts) < 2:
+                    return await ctx.reply("❌ Invalid format. Use: `.draw drop --anime \"Anime Name\" character1, character2`", mention_author=False)
+                
+                anime_part = parts[1].strip()
+                # Extract anime name (quoted or unquoted)
+                if anime_part.startswith('"'):
+                    # Quoted anime name
+                    end_quote = anime_part.find('"', 1)
+                    if end_quote == -1:
+                        return await ctx.reply("❌ Unclosed quote in anime name", mention_author=False)
+                    anime_filter = anime_part[1:end_quote]
+                    character_part = anime_part[end_quote + 1:].strip()
+                else:
+                    # Unquoted - take first word as anime name
+                    anime_parts = anime_part.split()
+                    if len(anime_parts) < 2:
+                        return await ctx.reply("❌ Please provide character names after anime filter", mention_author=False)
+                    anime_filter = anime_parts[0]
+                    character_part = " ".join(anime_parts[1:])
+                
+                # Clean character names
+                character_names = [name.strip() for name in character_part.split(",") if name.strip()]
             else:
-                # Unquoted format - split by comma and handle multi-word names
-                raw_names = name_part.split(",")
-                requested_names = []
-                for raw_name in raw_names:
-                    clean_name = raw_name.strip()
-                    if clean_name:
-                        requested_names.append(clean_name)
+                # No anime filter, just character names
+                character_names = [name.strip() for name in args.split(",") if name.strip()]
             
-            requested_names = requested_names[:3]  # Max 3 characters
+            character_names = character_names[:3]  # Max 3 characters
             
-            if not requested_names:
+            if not character_names:
                 return await ctx.reply("❌ No valid character names provided", mention_author=False)
                 
         except Exception as e:
-            return await ctx.reply(f"❌ Error parsing names: {e}", mention_author=False)
+            return await ctx.reply(f"❌ Error parsing arguments: {e}", mention_author=False)
         
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
@@ -2725,7 +2882,7 @@ class Games(commands.Cog):
         # Send loading message
         loading_msg = await ctx.reply(
             embed=discord.Embed(
-                description=f"Looking for: **{', '.join(requested_names)}**\n```py\nFetching specific characters...```",
+                description=f"Looking for: **{', '.join(character_names)}**" + (f"\nAnime filter: **{anime_filter}**" if anime_filter else "") + "\n```py\nFetching specific characters...```",
                 color=discord.Color.purple()
             ),
             mention_author=False
@@ -2733,9 +2890,14 @@ class Games(commands.Cog):
         
         # Fetch specific characters
         specific_characters = []
-        for name in requested_names:
+        for name in character_names:
             char = await self.fetch_character_by_name(name)
             if char and char.get("image_url") and char.get("anime"):
+                # Apply anime filter if specified
+                if anime_filter and anime_filter.lower() not in char.get("anime", "").lower():
+                    logger.info(f"[Dev Drop] Character {char.get('name')} filtered out (not from {anime_filter})")
+                    continue
+                
                 # Ensure proper rarity assignment
                 if not char.get("rarity"):
                     anime_pop = char.get("anime_popularity", 0)
@@ -4007,8 +4169,8 @@ class Games(commands.Cog):
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
         
-        # Check cooldown (24 hours)
-        remaining = await self.check_cooldown(user_id, "claim", 86400)
+        # Check cooldown (24 hours) - per-server
+        remaining = await self.check_cooldown(user_id, "claim", 86400, guild_id)
         if remaining:
             return await ctx.reply(f"⏳ Next daily in **{self.format_time(remaining)}**", mention_author=False)
         
@@ -4018,9 +4180,21 @@ class Games(commands.Cog):
         max_streak = config.get("max_streak", 30)
         milestones = config.get("streak_milestone_bonuses", {})
         
-        # Get and update streak
-        streak = await self.get_daily_streak(user_id, guild_id)
-        streak = min(streak + 1, max_streak)
+        # Get current streak and last claim date
+        current_streak, last_claim_date = await self.get_daily_streak(user_id, guild_id)
+        now = datetime.now(timezone.utc)
+        
+        # Check if streak should reset (missed a day)
+        if last_claim_date:
+            # Calculate days since last claim
+            days_diff = (now.date() - last_claim_date.date()).days
+            if days_diff > 1:  # Missed more than 1 day
+                streak = 1  # Reset streak
+            else:
+                streak = min(current_streak + 1, max_streak)  # Continue streak
+        else:
+            streak = 1  # First time claiming
+        
         await self.update_daily_streak(user_id, guild_id, streak)
         
         # Calculate reward
@@ -4040,7 +4214,7 @@ class Games(commands.Cog):
         total_reward = base_reward + streak_reward + char_bonus + milestone_bonus
         
         await self.quest_data.add_balance(user_id, guild_id, total_reward)
-        await self.set_cooldown(user_id, "claim")
+        await self.set_cooldown(user_id, "claim", guild_id)
         
         new_balance = await self.quest_data.get_balance(user_id, guild_id)
         
@@ -4082,7 +4256,7 @@ class Games(commands.Cog):
         job_emoji = job_data.get("emoji", "💼") if job_data else "💼"
         
         # Get streak
-        daily_streak = await self.get_daily_streak(user_id, guild_id)
+        daily_streak, _ = await self.get_daily_streak(user_id, guild_id)
         
         # Get total earned and games played from database
         total_earned = 0

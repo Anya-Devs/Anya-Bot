@@ -2486,7 +2486,7 @@ async def generate_gallery_image(
         print("→ Calculating layout...")
         cards_per_row = 5
         rows_per_page = 2
-        cards_per_page = cards_per_row * rows_per_page   # override input if needed
+        cards_per_page = cards_per_row * rows_per_page
 
         card_w, card_h = 528, 792
         spacing_x, spacing_y = 60, 70
@@ -2502,7 +2502,6 @@ async def generate_gallery_image(
         print(f"→ Image dimensions: {total_w}x{total_h} px "
               f"(grid: {grid_w}x{grid_h})")
 
-        # Colors
         bg_color = (12, 12, 16)
         accent_color = (120, 170, 255)
         text_color = (255, 255, 255)
@@ -2534,13 +2533,10 @@ async def generate_gallery_image(
         avatar_x = margin_x
         avatar_y = (header_h - avatar_size) // 2 - 10
 
-        print(f"→ Avatar position: x={avatar_x}, y={avatar_y}, size={avatar_size}")
-
         # Glassmorphism background
         header_bg_layer = Image.new("RGBA", (total_w, header_h), (0, 0, 0, 0))
         bg_draw = ImageDraw.Draw(header_bg_layer)
 
-        print("→ Drawing glassmorphism background gradient...")
         for i in range(header_h):
             alpha = int(180 * (1 - i / header_h * 0.3))
             bg_draw.line([(0, i), (total_w, i)], fill=(25, 25, 35, alpha))
@@ -2555,19 +2551,15 @@ async def generate_gallery_image(
         avatar_accent = accent_color
 
         if user_avatar_bytes:
-            print("→ Processing user avatar...")
             try:
                 avatar = Image.open(io.BytesIO(user_avatar_bytes)).convert("RGBA")
-                print(f"  Avatar original size: {avatar.size}")
                 w, h = avatar.size
                 size = min(w, h)
                 avatar = avatar.crop(((w-size)//2, (h-size)//2, (w+size)//2, (h+size)//2))
                 avatar = avatar.resize((avatar_size, avatar_size), Image.Resampling.LANCZOS)
                 
                 avatar_accent = _dominant_color(avatar, accent_color)
-                print(f"  Detected accent color: {avatar_accent}")
 
-                # Glow
                 for glow_size in [8, 6, 4, 2]:
                     glow_alpha = int(40 * (1 - glow_size / 8))
                     draw.rounded_rectangle(
@@ -2585,20 +2577,12 @@ async def generate_gallery_image(
             except Exception as exc:
                 print(f"→ Avatar processing failed: {exc.__class__.__name__}: {exc}")
 
-        # Title & filters
         title_x = avatar_x + avatar_size + 80
         title_y = avatar_y + 45
-
         title_text = f"{user_name}'s Gallery"
         draw.text((title_x, title_y), title_text, fill=text_color, font=title_font)
-        print(f"→ Drew title: '{title_text}' @ ({title_x}, {title_y})")
-
-        # ... rest of header (filter text, stats badges, filter badges) ...
-        # (keeping original logic, just adding prints would make it very long)
-        # You can add similar debug prints there if needed
 
         img.paste(header_layer, (0, 0), header_layer)
-
         print(f"Header completed in {time.perf_counter() - header_start:.3f}s\n")
 
     except Exception as e:
@@ -2663,21 +2647,16 @@ async def generate_gallery_image(
                 x = margin_x + col * (card_w + spacing_x)
                 y = grid_y + row * (card_h + spacing_y)
 
-                print(f"  Card {i+1:2d} ({char.get('name','?')}) @ grid pos ({col},{row}) → ({x},{y})")
-
-                # Create card
                 card = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
                 card_draw = ImageDraw.Draw(card)
 
-                # Draw textured frame
                 rarity = char.get("rarity", "common")
                 frame = RARITY_FRAMES.get(rarity, RARITY_FRAMES["common"])
                 _draw_textured_card_frame(card_draw, card_w, card_h, frame, False, scale=2)
 
-                # Name banner
+                # Name banner (16px padding)
                 banner_h = 64
                 banner_y = 16
-                
                 for j in range(banner_h):
                     alpha = int(220 * (1 - abs(j - banner_h/2) / (banner_h/2) * 0.2))
                     card_draw.line([(16, banner_y + j), (card_w - 16, banner_y + j)], 
@@ -2693,19 +2672,16 @@ async def generate_gallery_image(
                 card_draw.rectangle([16, banner_y + banner_h - 3, card_w - 16, banner_y + banner_h], 
                                    fill=rarity_color)
 
-                # Character name
                 name = char.get("name", "Unknown")[:18]
                 name_bbox = card_draw.textbbox((0, 0), name, font=name_font)
                 name_x = (card_w - (name_bbox[2] - name_bbox[0])) // 2
                 name_y = banner_y + (banner_h - (name_bbox[3] - name_bbox[1])) // 2
-                
                 card_draw.text((name_x + 1, name_y + 1), name, fill=(0, 0, 0, 100), font=name_font)
                 card_draw.text((name_x, name_y), name, fill=text_color, font=name_font)
-                
+
                 # Favorites indicator
                 fav_y = banner_y + banner_h + 8
                 favorites = char.get("favorites", 0)
-                
                 fav_bg_h = 36
                 for j in range(fav_bg_h):
                     alpha = int(180 * (1 - abs(j - fav_bg_h/2) / (fav_bg_h/2) * 0.3))
@@ -2719,80 +2695,76 @@ async def generate_gallery_image(
                 fav_y_centered = fav_y + (fav_bg_h - (fav_bbox[3] - fav_bbox[1])) // 2
                 card_draw.text((fav_x, fav_y_centered), fav_text, fill=(255, 120, 180), font=fav_font)
 
-                # Image area - reduced side margins for better fill
+                # ────────────────────────────────
+                #       MAIN CHARACTER IMAGE - FULL COVER STYLE
+                # ────────────────────────────────
                 img_y = fav_y + fav_bg_h + 12
                 img_h = card_h - img_y - 90
-                img_w = card_w - 32  # Match header/footer margins (16px each side)
+                
+                # Very tight padding to make image feel like a full cover
+                IMG_SIDE_PADDING = 8
+                img_x = IMG_SIDE_PADDING
+                img_w = card_w - (IMG_SIDE_PADDING * 2)   # 512px wide
 
                 char_img = char_images[i] if i < len(char_images) and not isinstance(char_images[i], Exception) else None
+                
                 if char_img:
                     try:
-                        img_ratio = img_w / img_h
-                        char_ratio = char_img.width / char_img.height
+                        # COVER mode: scale to fill entire area, then center-crop
+                        # This ensures no letterboxing and maximum visual impact
+                        cover = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
                         
-                        if char_ratio <= 2.0:
-                            new_width = img_w
-                            new_height = int(img_w / char_ratio)
-                            if new_height > img_h:
-                                scale_factor = img_h / new_height
-                                new_height = img_h
-                                new_width = int(new_width * scale_factor)
-                        else:
-                            new_height = img_h
-                            new_width = int(img_h * char_ratio)
-                            if new_width > img_w:
-                                scale_factor = img_w / new_width
-                            new_width = img_w
-                            new_height = int(new_height * scale_factor)
+                        # Resize while maintaining aspect ratio, making it large enough to cover
+                        ratio = max(img_w / char_img.width, img_h / char_img.height)
+                        new_w = int(char_img.width * ratio)
+                        new_h = int(char_img.height * ratio)
+                        resized = char_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
                         
-                        char_img = char_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                        # Center crop
+                        left = (new_w - img_w) // 2
+                        top = (new_h - img_h) // 2
+                        cropped = resized.crop((left, top, left + img_w, top + img_h))
                         
-                        # Shadow
-                        shadow_offset = 3
-                        shadow_img = Image.new("RGBA", (new_width, new_height), (0, 0, 0, 80))
+                        # Optional subtle inner shadow/glow for depth
+                        shadow = Image.new("RGBA", (img_w + 20, img_h + 20), (0, 0, 0, 0))
+                        shadow_draw = ImageDraw.Draw(shadow)
+                        shadow_draw.rectangle([10, 10, img_w + 10, img_h + 10], fill=(0, 0, 0, 80))
+                        card.paste(shadow, (img_x - 10, img_y - 10), shadow)
                         
-                        px = 16 + (img_w - new_width) // 2 + shadow_offset  # Match header/footer margins
-                        py = img_y + (img_h - new_height) // 2 + shadow_offset
-                        card.paste(shadow_img, (px, py), shadow_img)
-                        
-                        px -= shadow_offset
-                        py -= shadow_offset
-                        card.paste(char_img, (px, py), char_img)
+                        # Paste final cover image
+                        card.paste(cropped, (img_x, img_y), cropped)
+
                     except Exception as e:
-                        print(f"    → Image processing failed: {e}")
-                        # Placeholder
+                        print(f"    → Cover image processing failed: {e}")
+                        # Fallback placeholder
                         for j in range(img_h):
                             alpha = int(60 * (1 - j / img_h * 0.3))
-                            card_draw.line([(16, img_y + j), (card_w - 16, img_y + j)],  # Match header/footer margins
+                            card_draw.line([(img_x, img_y + j), (img_x + img_w, img_y + j)],
                                          fill=(40, 40, 50, alpha))
-                        
                         placeholder_text = "Image Error"
                         placeholder_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 32)
                         placeholder_bbox = card_draw.textbbox((0, 0), placeholder_text, font=placeholder_font)
-                        placeholder_x = (card_w - (placeholder_bbox[2] - placeholder_bbox[0])) // 2
-                        placeholder_y = img_y + (img_h - (placeholder_bbox[3] - placeholder_bbox[1])) // 2
-                        card_draw.text((placeholder_x, placeholder_y), placeholder_text, fill=(200, 100, 100), font=placeholder_font)
+                        px = img_x + (img_w - (placeholder_bbox[2] - placeholder_bbox[0])) // 2
+                        py = img_y + (img_h - (placeholder_bbox[3] - placeholder_bbox[1])) // 2
+                        card_draw.text((px, py), placeholder_text, fill=(200, 100, 100), font=placeholder_font)
                 else:
                     # No image placeholder
                     for j in range(img_h):
                         alpha = int(60 * (1 - j / img_h * 0.3))
-                        card_draw.line([(16, img_y + j), (card_w - 16, img_y + j)],  # Match header/footer margins
+                        card_draw.line([(img_x, img_y + j), (img_x + img_w, img_y + j)],
                                      fill=(40, 40, 50, alpha))
-                    
                     placeholder_text = "No Image"
                     placeholder_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 32)
                     placeholder_bbox = card_draw.textbbox((0, 0), placeholder_text, font=placeholder_font)
-                    placeholder_x = (card_w - (placeholder_bbox[2] - placeholder_bbox[0])) // 2
-                    placeholder_y = img_y + (img_h - (placeholder_bbox[3] - placeholder_bbox[1])) // 2
-                    card_draw.text((placeholder_x, placeholder_y), placeholder_text, fill=(100, 100, 120), font=placeholder_font)
+                    px = img_x + (img_w - (placeholder_bbox[2] - placeholder_bbox[0])) // 2
+                    py = img_y + (img_h - (placeholder_bbox[3] - placeholder_bbox[1])) // 2
+                    card_draw.text((px, py), placeholder_text, fill=(100, 100, 120), font=placeholder_font)
 
-                # Paste card to main image
                 img.paste(card, (x, y), card)
-                
-                # Bottom info section
+
+                # Bottom info section (16px padding)
                 info_y = y + card_h - 85
                 info_h = 70
-                
                 for j in range(info_h):
                     alpha = int(200 * (1 - abs(j - info_h/2) / (info_h/2) * 0.2))
                     draw.line([(x + 16, info_y + j), (x + card_w - 16, info_y + j)], 
@@ -2805,7 +2777,6 @@ async def generate_gallery_image(
                 anime_bbox = draw.textbbox((0, 0), anime_name, font=name_font)
                 anime_x = x + (card_w - (anime_bbox[2] - anime_bbox[0])) // 2
                 anime_y = info_y + (info_h - (anime_bbox[3] - anime_bbox[1])) // 2
-                
                 draw.text((anime_x + 1, anime_y + 1), anime_name, fill=(0, 0, 0, 80), font=name_font)
                 draw.text((anime_x, anime_y), anime_name, fill=(255, 255, 255, 240), font=name_font)
                 
@@ -2824,9 +2795,6 @@ async def generate_gallery_image(
 
     # ── FOOTER & FINAL OUTPUT ────────────────────────────────────────────────
     try:
-        print("=== FOOTER ===")
-        # ... original footer code ...
-
         print("→ Saving final PNG to buffer...")
         buffer = io.BytesIO()
         save_start = time.perf_counter()
@@ -2846,6 +2814,6 @@ async def generate_gallery_image(
 # ═══════════════════════════════════════════════════════════════
 # COINFLIP GIF GENERATOR & VIEW
 # ═══════════════════════════════════════════════════════════════
-m
+
 def generate_coinflip_gif(result: str) -> io.BytesIO:
     pass

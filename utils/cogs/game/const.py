@@ -3,6 +3,7 @@
 import logging
 import json
 import random
+import aiohttp
 from pathlib import Path
 from datetime import timedelta
 from PIL import ImageFont
@@ -221,7 +222,7 @@ GACHA_API_CONFIG = {
         "base_url": "https://api.jikan.moe/v4",
         "character_endpoint": "/characters/{}/full",
         "anime_endpoint": "/anime/{}",
-        "timeout": 2,  # Reduced for speed
+        "timeout": 1,  # Reduced for maximum speed
         # ID ranges for character fetching (lower IDs = older/more established)
         "character_id_ranges": {
             "legendary": (1, 5000),      # Very popular characters
@@ -273,7 +274,7 @@ GACHA_API_CONFIG = {
             }
         }
         ''',
-        "timeout": 2,  # Reduced for speed
+        "timeout": 1,  # Reduced for maximum speed
         # Popularity ranges for anime (higher = more popular)
         "anime_popularity_ranges": {
             "legendary": (200000, 999999),  # Extremely popular anime
@@ -448,6 +449,169 @@ def calculate_release_value(favorites: int, rarity: str, char_name: str = "unkno
     random.seed()  # Reset seed
     total_value = base + favorites_bonus + seed_variance + overflow_bonus
     return max(dynamic_min, min(total_value, dynamic_max))
+
+async def fetch_jikan_character_by_name(session, name: str):
+    """Fetch character by name using Jikan API."""
+    try:
+        # Search for character
+        search_url = f"https://api.jikan.moe/v4/characters?q={name}&limit=10"
+        async with session.get(search_url, timeout=aiohttp.ClientTimeout(total=8)) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                results = data.get("data", [])
+                
+                for char_data in results:
+                    char_name = char_data.get("name", "").lower()
+                    if name.lower() in char_name or char_name.startswith(name.lower()):
+                        # Get full character details
+                        char_id = char_data.get("mal_id")
+                        if char_id:
+                            detail_url = f"https://api.jikan.moe/v4/characters/{char_id}/full"
+                            async with session.get(detail_url, timeout=aiohttp.ClientTimeout(total=8)) as detail_resp:
+                                if detail_resp.status == 200:
+                                    detail_data = await detail_resp.json()
+                                    char_data = detail_data.get("data", char_data)
+                        
+                        # Format character data
+                        anime_name = "Unknown"
+                        anime_info = char_data.get("anime", [])
+                        if anime_info and isinstance(anime_info, list) and len(anime_info) > 0:
+                            first_anime = anime_info[0]
+                            if isinstance(first_anime, dict):
+                                if "anime" in first_anime:
+                                    anime_data = first_anime.get("anime", {})
+                                    anime_name = anime_data.get("title", anime_data.get("name", "Unknown"))
+                                else:
+                                    anime_name = first_anime.get("title", first_anime.get("name", "Unknown"))
+                        
+                        image_url = char_data.get("images", {}).get("jpg", {}).get("image_url")
+                        if not image_url:
+                            image_url = char_data.get("image_url")
+                        
+                        return {
+                            "id": char_data.get("mal_id", random.randint(1, 999999)),
+                            "name": char_data.get("name", "Unknown"),
+                            "anime": anime_name,
+                            "anime_popularity": char_data.get("anime", [{}])[0].get("popularity", 0) if char_data.get("anime") else 0,
+                            "image_url": image_url,
+                            "gender": char_data.get("gender", "Unknown"),
+                            "favorites": char_data.get("favorites", 0),
+                            "nicknames": char_data.get("nicknames", []),
+                            "about": char_data.get("about", ""),
+                            "api_source": "Jikan"
+                        }
+    except Exception as e:
+        logger.debug(f"Jikan API failed for '{name}': {e}")
+    
+    return None
+
+async def fetch_anilist_character_by_name(session, name: str):
+    """Fetch character by name using AniList API."""
+    try:
+        # AniList GraphQL query for character search
+        query = '''
+        query ($name: String) {
+            Character(search: $name) {
+                id
+                name { full }
+                image { large }
+                favourites
+                gender
+                media(sort: POPULARITY_DESC, perPage: 1, type: ANIME) {
+                    nodes {
+                        id
+                        title { romaji }
+                        popularity
+                    }
+                }
+            }
+        }
+        '''
+        
+        variables = {"name": name}
+        async with session.post(
+            "https://graphql.anilist.co",
+            json={"query": query, "variables": variables},
+            timeout=aiohttp.ClientTimeout(total=8)
+        ) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                char_data = data.get("data", {}).get("Character")
+                
+                if char_data:
+                    # Get anime information
+                    anime_name = "Unknown"
+                    anime_popularity = 0
+                    media_nodes = char_data.get("media", {}).get("nodes", [])
+                    if media_nodes:
+                        anime_name = media_nodes[0].get("title", {}).get("romaji", "Unknown")
+                        anime_popularity = media_nodes[0].get("popularity", 0)
+                    
+                    return {
+                        "id": char_data.get("id", random.randint(1, 999999)),
+                        "name": char_data.get("name", {}).get("full", "Unknown"),
+                        "anime": anime_name,
+                        "anime_popularity": anime_popularity,
+                        "image_url": char_data.get("image", {}).get("large"),
+                        "gender": char_data.get("gender", "Unknown"),
+                        "favorites": char_data.get("favourites", 0),
+                        "api_source": "AniList"
+                    }
+    except Exception as e:
+        logger.debug(f"AniList API failed for '{name}': {e}")
+    
+    return None
+
+async def fetch_kitsu_character_by_name(session, name: str):
+    """Fetch character by name using Kitsu API (fallback)."""
+    try:
+        # Kitsu API character search
+        search_url = f"https://api.kitsu.io/characters?filter[name]={name}&page[limit]=5"
+        async with session.get(search_url, timeout=aiohttp.ClientTimeout(total=8)) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                results = data.get("data", [])
+                
+                for char_data in results:
+                    attributes = char_data.get("attributes", {})
+                    char_name = attributes.get("name", "").lower()
+                    
+                    if name.lower() in char_name or char_name.startswith(name.lower()):
+                        # Get media relationships
+                        media_name = "Unknown"
+                        media_popularity = 0
+                        
+                        # Try to get primary media
+                        relationships = char_data.get("relationships", {})
+                        primary_media = relationships.get("primaryMedia", {}).get("data", [])
+                        if primary_media:
+                            media_id = primary_media[0].get("id")
+                            if media_id:
+                                try:
+                                    media_url = f"https://api.kitsu.io/anime/{media_id}"
+                                    async with session.get(media_url, timeout=aiohttp.ClientTimeout(total=5)) as media_resp:
+                                        if media_resp.status == 200:
+                                            media_data = await media_resp.json()
+                                            media_attributes = media_data.get("data", {}).get("attributes", {})
+                                            media_name = media_attributes.get("canonicalTitle", "Unknown")
+                                            media_popularity = media_attributes.get("userCount", 0)
+                                except:
+                                    pass
+                        
+                        return {
+                            "id": char_data.get("id", random.randint(1, 999999)),
+                            "name": attributes.get("name", "Unknown"),
+                            "anime": media_name,
+                            "anime_popularity": media_popularity,
+                            "image_url": attributes.get("image", {}).get("original"),
+                            "gender": "Unknown",  # Kitsu doesn't always provide gender
+                            "favorites": attributes.get("favoritesCount", 0),
+                            "api_source": "Kitsu"
+                        }
+    except Exception as e:
+        logger.debug(f"Kitsu API failed for '{name}': {e}")
+    
+    return None
 
 # ═══════════════════════════════════════════════════════════════
 # API FETCH FUNCTIONS
@@ -628,6 +792,71 @@ async def fetch_anilist_character(session, target_rarity: str):
                     "api_source": "AniList"
                 }
         except:
+            continue
+    
+    return None
+
+# ═══════════════════════════════════════════════════════════════
+# FAST GACHA API (Custom API - Primary Source)
+# ═══════════════════════════════════════════════════════════════
+
+GACHA_API_URL = "https://anya-bot-1-l2f2.onrender.com"  # Update this after deploying to render.com
+GACHA_API_LOCAL = "http://localhost:3000"  # Local development
+
+async def fetch_from_gacha_api(session, target_rarity: str):
+    """Ultra-fast fetch from custom gacha API - instant response from pre-cached characters."""
+    urls = [GACHA_API_URL, GACHA_API_LOCAL]
+    
+    for base_url in urls:
+        try:
+            url = f"{base_url}/api/characters/random?rarity={target_rarity}"
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=2)) as resp:
+                if resp.status == 200:
+                    char = await resp.json()
+                    if char and char.get("name") and char.get("image_url") and char.get("anime"):
+                        return {
+                            "id": char.get("id", random.randint(1, 999999)),
+                            "name": char.get("name", "Unknown"),
+                            "anime": char.get("anime", "Unknown"),
+                            "anime_popularity": char.get("anime_popularity", 0),
+                            "favorites": char.get("favorites", 0),
+                            "gender": char.get("gender", "Unknown"),
+                            "image_url": char.get("image_url"),
+                            "rarity": char.get("rarity", target_rarity),
+                            "api_source": "GachaAPI"
+                        }
+        except Exception as e:
+            logger.debug(f"Gacha API fetch failed ({base_url}): {e}")
+            continue
+    
+    return None
+
+async def fetch_batch_from_gacha_api(session, rarities: list):
+    """Fetch multiple characters in one request - even faster for gacha draws."""
+    urls = [GACHA_API_URL, GACHA_API_LOCAL]
+    rarity_str = ",".join(rarities)
+    
+    for base_url in urls:
+        try:
+            url = f"{base_url}/api/characters/batch?count={len(rarities)}&rarities={rarity_str}"
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=3)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    chars = data.get("characters", [])
+                    if chars:
+                        return [{
+                            "id": c.get("id", random.randint(1, 999999)),
+                            "name": c.get("name", "Unknown"),
+                            "anime": c.get("anime", "Unknown"),
+                            "anime_popularity": c.get("anime_popularity", 0),
+                            "favorites": c.get("favorites", 0),
+                            "gender": c.get("gender", "Unknown"),
+                            "image_url": c.get("image_url"),
+                            "rarity": c.get("rarity", "common"),
+                            "api_source": "GachaAPI"
+                        } for c in chars if c.get("name") and c.get("image_url")]
+        except Exception as e:
+            logger.debug(f"Gacha API batch fetch failed ({base_url}): {e}")
             continue
     
     return None
