@@ -3,7 +3,7 @@ from bot.cogs.quest import Quest_Data
 from imports.discord_imports import * 
 from imports.log_imports import *
 
-from utils.events.quest_tools import *
+from bot.utils.events.quest_tools import *
 
 class Quest_Tools(commands.Cog):
     def __init__(self, bot):

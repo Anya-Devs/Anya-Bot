@@ -2,7 +2,7 @@ import os, json, aiohttp
 from io import BytesIO
 from PIL import Image
 from data.local.const import *
-from utils.cogs.help import *
+from bot.utils.cogs.help import *
 from imports.log_imports import logger
 from imports.discord_imports import *
 

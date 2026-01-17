@@ -4,7 +4,7 @@ import asyncio, aiohttp, logging, random
 from datetime import datetime, timezone
 from typing import Optional, Literal
 from imports.discord_imports import *
-from utils.cogs.anime import *
+from bot.utils.cogs.anime import *
 from data.local.const import primary_color
 
 

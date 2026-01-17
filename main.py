@@ -10,8 +10,8 @@ from data.local.const import AvatarToTextArt
 from bot.token import get_bot_token, prefix  
 from imports.log_imports import logger  
 from imports.discord_imports import *  
-from utils.cogs.ticket import setup_persistent_views  
-from utils.cogs.fun import setup_persistent_views_fun  
+from bot.utils.cogs.ticket import setup_persistent_views  
+from bot.utils.cogs.fun import setup_persistent_views_fun  
 from art import text2art  
 from bot.token import get_bot_token as ut  
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))  

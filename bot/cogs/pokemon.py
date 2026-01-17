@@ -4,10 +4,10 @@ import numpy as np, cv2 as cv
 from PIL import Image
 from imports.log_imports import *
 from imports.discord_imports import *
-from utils.cogs.pokemon import *
-from utils.subcogs.pokemon import *
-from utils.subcogs.utils.mongo import *
-from utils.cogs.poketwo_commands import *
+from bot.utils.cogs.pokemon import *
+from bot.utils.subcogs.pokemon import *
+from bot.utils.subcogs.utils.mongo import *
+from bot.utils.cogs.poketwo_commands import *
 from bot.events.starboard import StarboardProcessor
 
 

@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 parent_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(parent_dir))
 
-from utils.cogs.game.const import get_rarity_from_favorites
+from bot.utils.cogs.game.const import get_rarity_from_favorites
 
 # Load environment variables from the .github directory
 env_path = parent_dir / '.github' / '.env'

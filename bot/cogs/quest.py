@@ -5,12 +5,12 @@ from io import BytesIO
 from data.local.const import *
 from imports.discord_imports import *
 from imports.log_imports import *
-from utils.cogs.quest import *
-from utils.cogs.leaderboard_image import LeaderboardImageGenerator
-from utils.character_utils import format_character_name
-from utils.cogs.quest import _safe_select_emoji
-from utils.character_utils import get_character_def
-from utils.character_utils import build_character_embed_with_files
+from bot.utils.cogs.quest import *
+from bot.utils.cogs.leaderboard_image import LeaderboardImageGenerator
+from bot.utils.character_utils import format_character_name
+from bot.utils.cogs.quest import _safe_select_emoji
+from bot.utils.character_utils import get_character_def
+from bot.utils.character_utils import build_character_embed_with_files
 
 
 

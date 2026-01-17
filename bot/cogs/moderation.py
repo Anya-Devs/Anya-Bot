@@ -5,7 +5,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import timedelta, datetime, timezone
 import os, asyncio, re
 from typing import Optional, Literal, Union
-from utils.cogs.moderation import (
+from bot.utils.cogs.moderation import (
     ModerationDB, ModerationEmbeds, ModerationViews, 
     ModerationUtils, RoleManagement
 )
