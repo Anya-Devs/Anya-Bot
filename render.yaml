@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: anime-gacha-api
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+    autoDeploy: true
+    healthCheckPath: /health
