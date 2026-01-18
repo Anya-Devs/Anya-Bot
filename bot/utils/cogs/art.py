@@ -25,7 +25,7 @@ ART_SOURCES = {
     "e926": {"name": "e926", "nsfw_only": False, "requires_nsfw_channel": False, "description": "SFW art database - Tag searchable"},
     "konachan_safe": {"name": "Konachan Safe", "nsfw_only": False, "requires_nsfw_channel": False, "description": "Anime wallpapers - Tag searchable SFW"},
     "wallhaven": {"name": "Wallhaven", "nsfw_only": False, "requires_nsfw_channel": False, "description": "HD wallpapers - Search anime characters"},
-    "sankaku_safe": {"name": "Sankaku Safe", "nsfw_only": False, "requires_nsfw_channel": False, "description": "Huge anime database - Tag searchable SFW"},
+    # "sankaku_safe": {"name": "Sankaku Safe", "nsfw_only": False, "requires_nsfw_channel": False, "description": "Huge anime database - Tag searchable SFW"},  # Disabled: Requires auth token
     "xbooru_safe": {"name": "XBooru Safe", "nsfw_only": False, "requires_nsfw_channel": False, "description": "Anime imageboard - Tag searchable SFW"},
     "rule34_safe": {"name": "Rule34 Safe", "nsfw_only": False, "requires_nsfw_channel": False, "description": "Large database - SFW filtered tags"},
     "hypnohub_safe": {"name": "Hypnohub Safe", "nsfw_only": False, "requires_nsfw_channel": False, "description": "Anime art - Tag searchable SFW"},
@@ -35,9 +35,9 @@ ART_SOURCES = {
     "gelbooru": {"name": "Gelbooru", "nsfw_only": False, "requires_nsfw_channel": True, "description": "Huge anime database - Tag searchable"},
     "yandere": {"name": "Yande.re", "nsfw_only": False, "requires_nsfw_channel": True, "description": "High quality anime art - Tag searchable"},
     "konachan": {"name": "Konachan", "nsfw_only": False, "requires_nsfw_channel": True, "description": "Anime wallpapers - Tag searchable"},
-    "zerochan": {"name": "Zerochan", "nsfw_only": False, "requires_nsfw_channel": True, "description": "Anime images - Character searchable"},
-    "anime_pictures": {"name": "Anime-Pictures", "nsfw_only": False, "requires_nsfw_channel": True, "description": "Anime artwork - Tag searchable"},
-    "sankaku": {"name": "Sankaku", "nsfw_only": False, "requires_nsfw_channel": True, "description": "Massive anime database - Tag searchable"},
+    # "zerochan": {"name": "Zerochan", "nsfw_only": False, "requires_nsfw_channel": True, "description": "Anime images - Character searchable"},  # Disabled: Cloudflare protection blocks automated requests
+    # "anime_pictures": {"name": "Anime-Pictures", "nsfw_only": False, "requires_nsfw_channel": True, "description": "Anime artwork - Tag searchable"},  # Disabled: Requires auth
+    # "sankaku": {"name": "Sankaku", "nsfw_only": False, "requires_nsfw_channel": True, "description": "Massive anime database - Tag searchable"},  # Disabled: Requires auth token
     # === NSFW Only Sources ===
     "rule34": {"name": "Rule34", "nsfw_only": True, "requires_nsfw_channel": True, "description": "Adult content - Tag searchable NSFW"},
     "e621": {"name": "e621", "nsfw_only": True, "requires_nsfw_channel": True, "description": "Furry art - Tag searchable NSFW"},
@@ -78,8 +78,14 @@ class Danbooru(ArtSource):
                 "page": page + 1
             }
             
+            # Danbooru requires proper User-Agent
+            headers = {
+                "User-Agent": "AnyaBot/1.0 (Discord Bot)",
+                "Accept": "application/json"
+            }
+            
             art_logger.debug(f"Danbooru: Searching '{tags}' page {page}")
-            async with self.session.get(f"{self.BASE_URL}/posts.json", params=params, headers=self.headers) as resp:
+            async with self.session.get(f"{self.BASE_URL}/posts.json", params=params, headers=headers) as resp:
                 art_logger.debug(f"Danbooru: Response status {resp.status}")
                 if resp.status == 200:
                     data = await resp.json()
@@ -398,14 +404,37 @@ class Rule34(ArtSource):
 
 
 class Zerochan(ArtSource):
-    """Zerochan API - Anime images"""
+    """Zerochan API - Anime images with enhanced browser simulation"""
     BASE_URL = "https://www.zerochan.net"
+    _failure_count = 0
+    _max_failures = 3
     
     async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
+        # Skip if too many consecutive failures
+        if self._failure_count >= self._max_failures:
+            return []
+        
         try:
+            import re
             # Zerochan uses search terms in URL path
-            search_term = query.replace(" ", "+")
+            search_term = query.replace(" ", "+").replace("_", "+")
             
+            # Enhanced headers to mimic real browser
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-User": "?1",
+                "Cache-Control": "max-age=0",
+            }
+            
+            # Try JSON API first
             params = {
                 "json": "",
                 "l": min(limit, 50),
@@ -415,39 +444,118 @@ class Zerochan(ArtSource):
             }
             
             art_logger.debug(f"Zerochan: Searching '{search_term}' page {page}")
-            async with self.session.get(f"{self.BASE_URL}/{search_term}", params=params, headers=self.headers) as resp:
+            
+            timeout = aiohttp.ClientTimeout(total=15, connect=8)
+            
+            async with self.session.get(
+                f"{self.BASE_URL}/{search_term}", 
+                params=params, 
+                headers=headers,
+                timeout=timeout,
+                allow_redirects=True
+            ) as resp:
                 art_logger.debug(f"Zerochan: Response status {resp.status}")
+                
+                if resp.status == 503:
+                    # Service unavailable - site is blocking, try HTML scraping
+                    art_logger.debug("Zerochan: 503 received, trying HTML scrape fallback")
+                    return await self._scrape_html(search_term, limit, page, headers, timeout)
+                
                 if resp.status == 200:
-                    try:
-                        data = await resp.json()
-                    except:
-                        art_logger.debug("Zerochan: Response is not JSON")
-                        return []
-                    results = []
-                    items = data.get("items", []) if isinstance(data, dict) else data if isinstance(data, list) else []
-                    for post in items:
-                        if isinstance(post, dict):
-                            img_url = post.get("full") or post.get("large") or post.get("medium")
-                            if img_url:
-                                results.append({
-                                    "source": "Zerochan",
-                                    "url": img_url,
-                                    "preview_url": post.get("thumbnail") or post.get("medium") or img_url,
-                                    "page_url": f"{self.BASE_URL}/{post.get('id')}",
-                                    "artist": post.get("source") or "Unknown",
-                                    "tags": post.get("tags", [])[:10] if isinstance(post.get("tags"), list) else [],
-                                    "rating": "s",
-                                    "score": post.get("fav") or 0,
-                                    "id": post.get("id"),
-                                    "width": post.get("width"),
-                                    "height": post.get("height")
-                                })
-                    art_logger.debug(f"Zerochan: Found {len(results)} results")
-                    return results
-        except Exception as e:
-            art_logger.error(f"Zerochan error: {e}")
+                    content_type = resp.headers.get('content-type', '')
+                    
+                    if 'application/json' in content_type:
+                        try:
+                            data = await resp.json()
+                            results = []
+                            items = data.get("items", []) if isinstance(data, dict) else data if isinstance(data, list) else []
+                            for post in items:
+                                if isinstance(post, dict):
+                                    img_url = post.get("full") or post.get("large") or post.get("medium")
+                                    if img_url:
+                                        results.append({
+                                            "source": "Zerochan",
+                                            "url": img_url,
+                                            "preview_url": post.get("thumbnail") or post.get("medium") or img_url,
+                                            "page_url": f"{self.BASE_URL}/{post.get('id')}",
+                                            "artist": post.get("source") or "Unknown",
+                                            "tags": post.get("tags", [])[:10] if isinstance(post.get("tags"), list) else [],
+                                            "rating": "s",
+                                            "score": post.get("fav") or 0,
+                                            "id": post.get("id"),
+                                            "width": post.get("width"),
+                                            "height": post.get("height")
+                                        })
+                            if results:
+                                self._failure_count = 0  # Reset on success
+                            art_logger.debug(f"Zerochan: Found {len(results)} results")
+                            return results
+                        except Exception:
+                            pass
+                    
+                    # Try HTML scraping as fallback
+                    return await self._scrape_html(search_term, limit, page, headers, timeout)
+                
+                # Non-200 status
+                self._failure_count += 1
+                return []
+                
+        except (aiohttp.ClientConnectorError, aiohttp.ClientSSLError, asyncio.TimeoutError) as e:
+            self._failure_count += 1
+            if self._failure_count >= self._max_failures:
+                art_logger.warning(f"Zerochan: Too many failures, temporarily disabling")
             return []
-        return []
+        except Exception as e:
+            art_logger.debug(f"Zerochan error: {e}")
+            self._failure_count += 1
+            return []
+    
+    async def _scrape_html(self, search_term: str, limit: int, page: int, headers: dict, timeout) -> List[Dict]:
+        """Fallback HTML scraping when JSON API fails"""
+        import re
+        try:
+            # Try direct HTML page without JSON param
+            url = f"{self.BASE_URL}/{search_term}?p={page + 1}"
+            
+            async with self.session.get(url, headers=headers, timeout=timeout, allow_redirects=True) as resp:
+                if resp.status != 200:
+                    return []
+                
+                html = await resp.text()
+                results = []
+                
+                # Parse image entries from HTML - look for image links
+                # Pattern: <a href="/12345" ...><img src="..." ...></a>
+                img_pattern = r'<a[^>]*href="/(\d+)"[^>]*>.*?<img[^>]*src="([^"]+)"[^>]*>.*?</a>'
+                matches = re.findall(img_pattern, html, re.DOTALL)[:limit]
+                
+                for post_id, thumb_url in matches:
+                    # Construct full image URL from thumbnail
+                    # Zerochan thumbnails: s3.zerochan.net/240/xx/xx/xxxxx.jpg
+                    # Full images: static.zerochan.net/xxx.full.xxxxx.jpg
+                    if thumb_url:
+                        results.append({
+                            "source": "Zerochan",
+                            "url": thumb_url.replace("/240/", "/full/").replace(".240.", ".full."),
+                            "preview_url": thumb_url,
+                            "page_url": f"{self.BASE_URL}/{post_id}",
+                            "artist": "Unknown",
+                            "tags": [],
+                            "rating": "s",
+                            "score": 0,
+                            "id": post_id,
+                            "width": None,
+                            "height": None
+                        })
+                
+                if results:
+                    self._failure_count = 0
+                    art_logger.debug(f"Zerochan HTML scrape: Found {len(results)} results")
+                return results
+                
+        except Exception as e:
+            art_logger.debug(f"Zerochan HTML scrape error: {e}")
+            return []
 
 
 class AnimePictures(ArtSource):
@@ -460,8 +568,15 @@ class AnimePictures(ArtSource):
             erotic_filter = "" if nsfw else "&erotic=0"
             url = f"{self.BASE_URL}/api/v3/posts?search_tag={tags}&page={page}&lim={min(limit, 80)}{erotic_filter}"
             
+            # AnimePictures requires proper headers
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "application/json",
+                "Referer": "https://anime-pictures.net/"
+            }
+            
             art_logger.debug(f"AnimePictures: Searching '{tags}' page {page}")
-            async with self.session.get(url, headers=self.headers) as resp:
+            async with self.session.get(url, headers=headers) as resp:
                 art_logger.debug(f"AnimePictures: Response status {resp.status}")
                 if resp.status == 200:
                     data = await resp.json()
@@ -731,8 +846,14 @@ class AIBooru(ArtSource):
                 "page": page + 1
             }
             
+            # AIBooru requires proper User-Agent
+            headers = {
+                "User-Agent": "AnyaBot/1.0 (Discord Bot)",
+                "Accept": "application/json"
+            }
+            
             art_logger.debug(f"AIBooru: Searching '{tags}' page {page}")
-            async with self.session.get(f"{self.BASE_URL}/posts.json", params=params, headers=self.headers) as resp:
+            async with self.session.get(f"{self.BASE_URL}/posts.json", params=params, headers=headers) as resp:
                 art_logger.debug(f"AIBooru: Response status {resp.status}")
                 if resp.status == 200:
                     data = await resp.json()
@@ -762,18 +883,19 @@ class AIBooru(ArtSource):
 
 
 class TBIB(ArtSource):
-    """TBIB (The Big ImageBoard) API - SFW mode"""
+    """TBIB (The Big ImageBoard) API - SFW mode with XML fallback"""
     BASE_URL = "https://tbib.org"
     
     async def search(self, query: str, limit: int = 10, nsfw: bool = False, page: int = 0) -> List[Dict]:
+        import re
         try:
             tags = query.replace(" ", "_")
             
+            # Try XML format first (more reliable)
             params = {
                 "page": "dapi",
                 "s": "post",
                 "q": "index",
-                "json": 1,
                 "tags": tags,
                 "limit": min(limit, 100),
                 "pid": page
@@ -783,39 +905,38 @@ class TBIB(ArtSource):
             async with self.session.get(f"{self.BASE_URL}/index.php", params=params, headers=self.headers) as resp:
                 art_logger.debug(f"TBIB: Response status {resp.status}")
                 if resp.status == 200:
-                    content_type = resp.headers.get('content-type', '').lower()
-                    if 'application/json' not in content_type:
-                        art_logger.debug(f"TBIB: Invalid content-type {content_type}, skipping")
-                        return []
-                    data = await resp.json()
+                    text = await resp.text()
                     results = []
-                    posts = data if isinstance(data, list) else data.get("post", []) if isinstance(data, dict) else []
-                    for post in posts:
-                        # TBIB uses 'image' and 'directory' fields to construct URL
-                        image = post.get("image", "")
-                        directory = post.get("directory")
-                        if image and directory is not None:
-                            file_url = f"https://tbib.org/images/{directory}/{image}"
-                            preview = f"https://tbib.org/thumbnails/{directory}/thumbnail_{post.get('hash', '')}.jpg"
-                            if post.get("sample"):
-                                preview = f"https://tbib.org/samples/{directory}/sample_{post.get('hash', '')}.jpg"
+                    
+                    # Parse XML response
+                    post_pattern = r'<post\s+([^>]+)/>'
+                    posts = re.findall(post_pattern, text)
+                    
+                    for post_attrs in posts[:limit]:
+                        def get_attr(name):
+                            match = re.search(rf'{name}="([^"]*)"', post_attrs)
+                            return match.group(1) if match else ""
+                        
+                        file_url = get_attr("file_url")
+                        if file_url:
                             results.append({
                                 "source": "TBIB",
                                 "url": file_url,
-                                "preview_url": preview,
-                                "page_url": f"{self.BASE_URL}/index.php?page=post&s=view&id={post.get('id')}",
-                                "artist": post.get("owner") or "Unknown",
-                                "tags": post.get("tags", "").split()[:10] if isinstance(post.get("tags"), str) else [],
-                                "rating": post.get("rating", "s"),
-                                "score": post.get("score") or 0,
-                                "id": post.get("id"),
-                                "width": post.get("width"),
-                                "height": post.get("height")
+                                "preview_url": get_attr("preview_url") or get_attr("sample_url") or file_url,
+                                "page_url": f"{self.BASE_URL}/index.php?page=post&s=view&id={get_attr('id')}",
+                                "artist": get_attr("owner") or "Unknown",
+                                "tags": get_attr("tags").split()[:10],
+                                "rating": get_attr("rating") or "s",
+                                "score": int(get_attr("score") or 0),
+                                "id": get_attr("id"),
+                                "width": int(get_attr("width") or 0),
+                                "height": int(get_attr("height") or 0)
                             })
+                    
                     art_logger.debug(f"TBIB: Found {len(results)} results")
                     return results
         except Exception as e:
-            art_logger.error(f"TBIB error: {e}")
+            art_logger.debug(f"TBIB error: {e}")
             return []
         return []
 
@@ -868,8 +989,16 @@ class SankakuSafe(ArtSource):
             tags = query.replace(" ", "_") + " rating:safe"
             params = {"tags": tags, "limit": min(limit, 40), "page": page + 1}
             
+            # Sankaku requires specific headers
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "application/json",
+                "Origin": "https://chan.sankakucomplex.com",
+                "Referer": "https://chan.sankakucomplex.com/"
+            }
+            
             art_logger.debug(f"SankakuSafe: Searching '{tags}' page {page}")
-            async with self.session.get(f"{self.BASE_URL}/posts", params=params, headers=self.headers) as resp:
+            async with self.session.get(f"{self.BASE_URL}/posts", params=params, headers=headers) as resp:
                 art_logger.debug(f"SankakuSafe: Response status {resp.status}")
                 if resp.status == 200:
                     data = await resp.json()
@@ -909,8 +1038,16 @@ class Sankaku(ArtSource):
                 tags += " rating:safe"
             params = {"tags": tags, "limit": min(limit, 40), "page": page + 1}
             
+            # Sankaku requires specific headers
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "application/json",
+                "Origin": "https://chan.sankakucomplex.com",
+                "Referer": "https://chan.sankakucomplex.com/"
+            }
+            
             art_logger.debug(f"Sankaku: Searching '{tags}' page {page}")
-            async with self.session.get(f"{self.BASE_URL}/posts", params=params, headers=self.headers) as resp:
+            async with self.session.get(f"{self.BASE_URL}/posts", params=params, headers=headers) as resp:
                 art_logger.debug(f"Sankaku: Response status {resp.status}")
                 if resp.status == 200:
                     data = await resp.json()
@@ -1132,7 +1269,7 @@ class ArtAggregator:
             "e926": E926(session),
             "konachan_safe": KonachanSafe(session),
             "wallhaven": Wallhaven(session),
-            "sankaku_safe": SankakuSafe(session),
+            # "sankaku_safe": SankakuSafe(session),  # Disabled: Requires auth token
             "xbooru_safe": XBooruSafe(session),
             "rule34_safe": Rule34Safe(session),
             "hypnohub_safe": HypnohubSafe(session),
@@ -1142,9 +1279,9 @@ class ArtAggregator:
             "gelbooru": Gelbooru(session),
             "yandere": Yandere(session),
             "konachan": Konachan(session),
-            "zerochan": Zerochan(session),
-            "anime_pictures": AnimePictures(session),
-            "sankaku": Sankaku(session),
+            # "zerochan": Zerochan(session),  # Disabled: Cloudflare blocks automated requests
+            # "anime_pictures": AnimePictures(session),  # Disabled: Requires auth
+            # "sankaku": Sankaku(session),  # Disabled: Requires auth token
             # === NSFW Only Sources ===
             "rule34": Rule34(session),
             "e621": E621(session),

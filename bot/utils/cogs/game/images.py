@@ -852,192 +852,224 @@ async def generate_card_image(
 
 
 # ═══════════════════════════════════════════════════════════════
-# GACHA MULTI-CARD DRAW IMAGE - PREMIUM DESIGN
+# GACHA MULTI-CARD DRAW IMAGE - REALISTIC ANIME CARD DESIGN
 # ═══════════════════════════════════════════════════════════════
 
-# Rarity frame materials - realistic metallic textures with gradients
+# Realistic anime trading card frame styles - inspired by actual collectible cards
 RARITY_FRAMES = {
-    # Common = Weathered Wood Grain
+    # Common = Aged Parchment/Tan Card
     "common": {
-        "base": (85, 65, 45),      # Dark weathered wood
-        "highlight": (125, 95, 65),  # Light wood grain highlights
-        "shadow": (55, 40, 25),    # Deep wood shadows
-        "accent": (105, 80, 55),   # Mid-tone wood
-        "banner": (65, 50, 35),    # Dark wood banner
-        "text": (210, 195, 175),   # Warm cream text
-        "grain": True,             # Wood grain effect
+        "outer_border": (95, 75, 55),      # Dark brown outer edge
+        "frame_base": (180, 160, 130),     # Tan/parchment base
+        "frame_light": (210, 195, 165),    # Light parchment highlight
+        "frame_dark": (140, 120, 90),      # Dark parchment shadow
+        "inner_border": (120, 100, 70),    # Inner decorative border
+        "corner_accent": (160, 140, 100),  # Corner decoration color
+        "title_bg": (45, 40, 35, 230),     # Title banner background
+        "title_border": (120, 100, 70),    # Title banner border
+        "texture": "parchment",
     },
-    # Uncommon = Brushed Bronze
+    # Uncommon = Cool Steel Blue
     "uncommon": {
-        "base": (130, 90, 45),     # Bronze base
-        "highlight": (185, 145, 85),  # Bronze metallic shine
-        "shadow": (85, 55, 25),    # Deep bronze shadows
-        "accent": (155, 115, 60),  # Bronze mid-tone
-        "banner": (100, 70, 35),   # Dark bronze banner
-        "text": (255, 235, 200),   # Warm cream text
-        "metallic": True,          # Metallic effect
-        "brushed": True,           # Brushed texture
+        "outer_border": (60, 80, 100),     # Dark steel blue
+        "frame_base": (140, 160, 180),     # Steel blue base
+        "frame_light": (180, 200, 220),    # Light steel highlight
+        "frame_dark": (90, 110, 130),      # Dark steel shadow
+        "inner_border": (100, 130, 160),   # Inner decorative border
+        "corner_accent": (120, 150, 180),  # Corner decoration
+        "title_bg": (35, 45, 55, 230),     # Title banner background
+        "title_border": (100, 130, 160),   # Title banner border
+        "texture": "brushed_metal",
     },
     # Rare = Polished Silver
     "rare": {
-        "base": (150, 155, 165),   # Silver base
-        "highlight": (210, 215, 225),  # Bright silver shine
-        "shadow": (90, 95, 105),   # Silver shadows
-        "accent": (175, 180, 190), # Silver mid-tone
-        "banner": (110, 115, 125), # Dark silver banner
-        "text": (255, 255, 255),   # Pure white text
-        "metallic": True,          # Metallic effect
-        "polished": True,          # Polished finish
+        "outer_border": (100, 105, 115),   # Dark silver edge
+        "frame_base": (175, 180, 190),     # Silver base
+        "frame_light": (220, 225, 235),    # Bright silver shine
+        "frame_dark": (130, 135, 145),     # Silver shadow
+        "inner_border": (150, 155, 170),   # Inner silver border
+        "corner_accent": (200, 205, 220),  # Silver corner shine
+        "title_bg": (40, 42, 48, 230),     # Title banner background
+        "title_border": (150, 155, 170),   # Title banner border
+        "texture": "polished_metal",
     },
-    # Epic = Brilliant Gold
+    # Epic = Rich Gold
     "epic": {
-        "base": (190, 150, 40),    # Rich gold base
-        "highlight": (245, 205, 95),  # Brilliant gold shine
-        "shadow": (130, 90, 15),   # Gold shadows
-        "accent": (215, 175, 60),  # Gold mid-tone
-        "banner": (150, 110, 25),  # Dark gold banner
-        "text": (255, 250, 220),   # Warm white text
-        "metallic": True,          # Metallic effect
-        "brilliant": True,         # Brilliant shine
+        "outer_border": (140, 100, 20),    # Dark gold edge
+        "frame_base": (210, 175, 65),      # Rich gold base
+        "frame_light": (250, 220, 120),    # Brilliant gold shine
+        "frame_dark": (170, 130, 30),      # Gold shadow
+        "inner_border": (190, 155, 45),    # Inner gold border
+        "corner_accent": (255, 230, 140),  # Gold corner shine
+        "title_bg": (50, 40, 20, 230),     # Title banner background
+        "title_border": (190, 155, 45),    # Title banner border
+        "texture": "gold_foil",
     },
-    # Legendary = Platinum Diamond
+    # Legendary = Holographic Platinum
     "legendary": {
-        "base": (190, 200, 215),   # Platinum base
-        "highlight": (250, 250, 255),  # Diamond white shine
-        "shadow": (130, 140, 160), # Platinum shadows
-        "accent": (215, 225, 240), # Platinum mid-tone
-        "banner": (160, 170, 190), # Dark platinum banner
-        "text": (255, 255, 255),   # Pure white text
-        "sparkle": True,           # Special sparkle effect
-        "metallic": True,          # Metallic effect
-        "diamond": True,           # Diamond-like finish
+        "outer_border": (140, 130, 160),   # Purple-tinted platinum
+        "frame_base": (200, 195, 220),     # Platinum base with purple tint
+        "frame_light": (245, 240, 255),    # Bright platinum shine
+        "frame_dark": (160, 155, 180),     # Platinum shadow
+        "inner_border": (180, 175, 200),   # Inner platinum border
+        "corner_accent": (255, 250, 255),  # Bright corner shine
+        "title_bg": (45, 40, 55, 230),     # Title banner background
+        "title_border": (180, 175, 200),   # Title banner border
+        "texture": "holographic",
     },
 }
 
-def _draw_textured_card_frame(draw, card_width: int, card_height: int, frame: dict, is_claimed: bool = False, scale: int = 1):
-    """Draw a textured card frame with metallic/wood effects."""
+def _draw_realistic_card_frame(card_img: Image.Image, card_width: int, card_height: int, frame: dict, is_claimed: bool = False):
+    """Draw a realistic anime trading card frame with proper layered borders and textures."""
+    draw = ImageDraw.Draw(card_img)
+    
     if is_claimed:
-        # Simple gray frame for claimed cards
-        draw.rounded_rectangle([0, 0, card_width - 1, card_height - 1], 12 * scale, 
-                            fill=(35, 35, 40, 250), outline=(55, 55, 60), width=4 * scale)
+        # Desaturated gray frame for claimed cards
+        draw.rounded_rectangle([0, 0, card_width - 1, card_height - 1], 12, 
+                              fill=(50, 50, 55), outline=(70, 70, 75), width=3)
+        draw.rounded_rectangle([6, 6, card_width - 7, card_height - 7], 8, 
+                              outline=(60, 60, 65), width=2)
         return
     
-    # Base frame
-    draw.rounded_rectangle([0, 0, card_width - 1, card_height - 1], 12 * scale, 
-                         fill=frame["base"], outline=frame["shadow"], width=4 * scale)
+    # === LAYER 1: Outer border (dark edge) ===
+    draw.rounded_rectangle([0, 0, card_width - 1, card_height - 1], 14, 
+                          fill=frame["outer_border"])
     
-    # Add texture effects based on rarity
-    if frame.get("grain"):
-        # Wood grain effect for common cards
-        for i in range(0, card_height, 3 * scale):
-            grain_y = i
-            if i % (6 * scale) == 0:
-                # Horizontal grain lines
-                draw.line([(8 * scale, grain_y), (card_width - 8 * scale, grain_y)], 
-                         fill=frame["highlight"], width=1 * scale)
+    # === LAYER 2: Main frame base ===
+    draw.rounded_rectangle([4, 4, card_width - 5, card_height - 5], 12, 
+                          fill=frame["frame_base"])
+    
+    # === LAYER 3: Frame texture based on rarity ===
+    texture = frame.get("texture", "parchment")
+    
+    if texture == "parchment":
+        # Subtle aged parchment texture - horizontal grain lines
+        for y in range(8, card_height - 8, 4):
+            alpha_var = (y % 12) * 5
+            line_color = tuple(max(0, c - 15 + alpha_var) for c in frame["frame_base"][:3])
+            draw.line([(8, y), (card_width - 8, y)], fill=line_color, width=1)
+    
+    elif texture == "brushed_metal":
+        # Horizontal brushed metal lines
+        for y in range(8, card_height - 8, 3):
+            if y % 6 == 0:
+                draw.line([(8, y), (card_width - 8, y)], fill=frame["frame_light"], width=1)
             else:
-                # Slight offset for variation
-                draw.line([(10 * scale, grain_y), (card_width - 10 * scale, grain_y)], 
-                         fill=frame["accent"], width=1 * scale)
+                draw.line([(8, y), (card_width - 8, y)], fill=frame["frame_dark"], width=1)
     
-    if frame.get("metallic"):
-        # Metallic shimmer effects
+    elif texture == "polished_metal":
+        # Smooth gradient shine effect
+        for y in range(10, card_height - 10, 6):
+            progress = y / card_height
+            if progress < 0.3:
+                draw.line([(10, y), (card_width - 10, y)], fill=frame["frame_light"], width=2)
+            elif progress > 0.7:
+                draw.line([(10, y), (card_width - 10, y)], fill=frame["frame_dark"], width=1)
+    
+    elif texture == "gold_foil":
+        # Rich gold foil with shine streaks
         import random
-        random.seed(42)  # Consistent shimmer pattern
-        
-        # Create shimmer lines
-        for i in range(5):
-            shimmer_x = random.randint(15 * scale, card_width - 15 * scale)
-            shimmer_y = random.randint(15 * scale, card_height - 15 * scale)
-            shimmer_length = random.randint(20 * scale, 40 * scale)
-            shimmer_angle = random.choice([0, 45, 90])
-            
-            if shimmer_angle == 0:
-                # Horizontal shimmer
-                draw.line([(shimmer_x, shimmer_y), 
-                          (min(shimmer_x + shimmer_length, card_width - 15 * scale), shimmer_y)], 
-                         fill=frame["highlight"], width=1 * scale)
-            elif shimmer_angle == 45:
-                # Diagonal shimmer
-                end_x = min(shimmer_x + shimmer_length, card_width - 15 * scale)
-                end_y = min(shimmer_y + shimmer_length, card_height - 15 * scale)
-                draw.line([(shimmer_x, shimmer_y), (end_x, end_y)], 
-                         fill=frame["highlight"], width=1 * scale)
-            else:
-                # Vertical shimmer
-                draw.line([(shimmer_x, shimmer_y), 
-                          (shimmer_x, min(shimmer_y + shimmer_length, card_height - 15 * scale))], 
-                         fill=frame["highlight"], width=1 * scale)
-        
-        random.seed()  # Reset seed
+        random.seed(42)
+        for _ in range(15):
+            sx = random.randint(10, card_width - 10)
+            sy = random.randint(10, card_height - 10)
+            length = random.randint(20, 50)
+            draw.line([(sx, sy), (min(sx + length, card_width - 10), sy)], 
+                     fill=frame["frame_light"], width=1)
+        random.seed()
+        # Add bright spots
+        for i in range(4):
+            spot_x = card_width // 5 * (i + 1)
+            spot_y = 20 + (i % 2) * 15
+            draw.ellipse([spot_x - 2, spot_y - 2, spot_x + 2, spot_y + 2], 
+                        fill=frame["corner_accent"])
     
-    if frame.get("brushed"):
-        # Brushed metal effect (horizontal lines)
-        for i in range(10 * scale, card_height - 10 * scale, 4 * scale):
-            draw.line([(10 * scale, i), (card_width - 10 * scale, i)], 
-                     fill=frame["accent"], width=1 * scale)
-    
-    if frame.get("polished"):
-        # Polished effect - smooth gradient lines
-        for i in range(5 * scale, card_height - 5 * scale, 8 * scale):
-            alpha = 100 - (i // (10 * scale))  # Fade out towards edges
-            if alpha < 0: alpha = 0
-            draw.line([(8 * scale, i), (card_width - 8 * scale, i)], 
-                     fill=frame["highlight"] + (alpha,), width=2 * scale)
-    
-    if frame.get("brilliant"):
-        # Brilliant gold - extra shine points
-        for i in range(3):
-            shine_x = (card_width // 4) * (i + 1)
-            shine_y = card_height // 3
-            # Small bright spots
-            draw.ellipse([shine_x - 3, shine_y - 3, shine_x + 3, shine_y + 3], 
-                         fill=frame["highlight"])
-            draw.ellipse([shine_x - 2, shine_y - 2, shine_x + 2, shine_y + 2], 
-                         fill=(255, 255, 255))
-    
-    if frame.get("diamond"):
-        # Diamond sparkle effect
+    elif texture == "holographic":
+        # Holographic rainbow shimmer effect
         import random
-        random.seed(123)  # Consistent sparkle pattern
-        
-        for i in range(8):
-            sparkle_x = random.randint(20, card_width - 20)
-            sparkle_y = random.randint(20, card_height - 20)
-            
-            # Draw small diamond-shaped sparkles
-            points = [
-                (sparkle_x, sparkle_y - 4),
-                (sparkle_x + 3, sparkle_y),
-                (sparkle_x, sparkle_y + 4),
-                (sparkle_x - 3, sparkle_y)
-            ]
-            draw.polygon(points, fill=frame["highlight"])
-            
-            # Center bright point
-            draw.ellipse([sparkle_x - 1, sparkle_y - 1, sparkle_x + 1, sparkle_y + 1], 
-                         fill=(255, 255, 255))
-        
-        random.seed()  # Reset seed
+        random.seed(789)
+        holo_colors = [
+            (255, 200, 220),  # Pink
+            (200, 220, 255),  # Light blue
+            (220, 255, 220),  # Light green
+            (255, 255, 200),  # Light yellow
+            (230, 200, 255),  # Light purple
+        ]
+        for _ in range(20):
+            sx = random.randint(8, card_width - 8)
+            sy = random.randint(8, card_height - 8)
+            color = random.choice(holo_colors)
+            length = random.randint(15, 40)
+            draw.line([(sx, sy), (min(sx + length, card_width - 8), sy + length // 3)], 
+                     fill=color, width=1)
+        random.seed()
+        # Diamond sparkles
+        for i in range(6):
+            sx = random.randint(15, card_width - 15)
+            sy = random.randint(15, card_height - 15)
+            draw.polygon([(sx, sy-3), (sx+2, sy), (sx, sy+3), (sx-2, sy)], 
+                        fill=(255, 255, 255))
     
-    if frame.get("sparkle"):
-        # General sparkle effect for legendary
-        import random
-        random.seed(456)  # Consistent sparkle
-        
-        for i in range(12):
-            sparkle_x = random.randint(15, card_width - 15)
-            sparkle_y = random.randint(15, card_height - 15)
-            size = random.randint(1, 2)
-            draw.ellipse([sparkle_x - size, sparkle_y - size, 
-                         sparkle_x + size, sparkle_y + size], 
-                         fill=frame["highlight"])
-        
-        random.seed()  # Reset seed
+    # === LAYER 4: Inner decorative border ===
+    inner_margin = 8
+    draw.rounded_rectangle(
+        [inner_margin, inner_margin, card_width - inner_margin - 1, card_height - inner_margin - 1], 
+        10, outline=frame["inner_border"], width=2
+    )
     
-    # Inner highlight border
-    draw.rounded_rectangle([4, 4, card_width - 5, card_height - 5], 10, 
-                         outline=frame["highlight"], width=2)
+    # === LAYER 5: Corner decorations (like real trading cards) ===
+    corner_size = 12
+    corners = [
+        (inner_margin + 2, inner_margin + 2),  # Top-left
+        (card_width - inner_margin - corner_size - 2, inner_margin + 2),  # Top-right
+        (inner_margin + 2, card_height - inner_margin - corner_size - 2),  # Bottom-left
+        (card_width - inner_margin - corner_size - 2, card_height - inner_margin - corner_size - 2),  # Bottom-right
+    ]
+    
+    for cx, cy in corners:
+        # Small decorative corner squares
+        draw.rectangle([cx, cy, cx + corner_size, cy + corner_size], 
+                      outline=frame["corner_accent"], width=1)
+        # Inner corner dot
+        draw.ellipse([cx + 4, cy + 4, cx + 8, cy + 8], fill=frame["corner_accent"])
+    
+    # === LAYER 6: Highlight edge (top and left for 3D effect) ===
+    draw.line([(6, 6), (card_width - 6, 6)], fill=frame["frame_light"], width=1)
+    draw.line([(6, 6), (6, card_height - 6)], fill=frame["frame_light"], width=1)
+    
+    # === LAYER 7: Shadow edge (bottom and right for 3D effect) ===
+    draw.line([(6, card_height - 6), (card_width - 6, card_height - 6)], fill=frame["frame_dark"], width=1)
+    draw.line([(card_width - 6, 6), (card_width - 6, card_height - 6)], fill=frame["frame_dark"], width=1)
+
+
+def _draw_textured_card_frame(draw, card_width: int, card_height: int, frame: dict, is_claimed: bool = False, scale: int = 1):
+    """Legacy wrapper - creates a temp image and draws realistic frame."""
+    if is_claimed:
+        draw.rounded_rectangle([0, 0, card_width - 1, card_height - 1], 12, 
+                              fill=(50, 50, 55), outline=(70, 70, 75), width=3)
+        draw.rounded_rectangle([6, 6, card_width - 7, card_height - 7], 8, 
+                              outline=(60, 60, 65), width=2)
+        return
+    
+    # Outer border
+    draw.rounded_rectangle([0, 0, card_width - 1, card_height - 1], 14, 
+                          fill=frame.get("outer_border", frame.get("shadow", (80, 80, 80))))
+    
+    # Main frame
+    draw.rounded_rectangle([4, 4, card_width - 5, card_height - 5], 12, 
+                          fill=frame.get("frame_base", frame.get("base", (150, 150, 150))))
+    
+    # Inner border
+    draw.rounded_rectangle([8, 8, card_width - 9, card_height - 9], 10, 
+                          outline=frame.get("inner_border", frame.get("accent", (120, 120, 120))), width=2)
+    
+    # Highlight edges
+    light = frame.get("frame_light", frame.get("highlight", (200, 200, 200)))
+    dark = frame.get("frame_dark", frame.get("shadow", (100, 100, 100)))
+    draw.line([(6, 6), (card_width - 6, 6)], fill=light, width=1)
+    draw.line([(6, 6), (6, card_height - 6)], fill=light, width=1)
+    draw.line([(6, card_height - 6), (card_width - 6, card_height - 6)], fill=dark, width=1)
+    draw.line([(card_width - 6, 6), (card_width - 6, card_height - 6)], fill=dark, width=1)
 
 
 def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: bool = False, is_owned: bool = False, owner_data: dict = None, card_width: int = 280, card_height: int = 400) -> Image.Image:
@@ -1234,9 +1266,9 @@ async def generate_gacha_draw_image(characters: list, claimed_indices: list = No
     if ownership_info is None:
         ownership_info = {}
 
-    card_width = 220
-    card_height = 340
-    card_spacing = 45
+    card_width = 300
+    card_height = 420
+    card_spacing = 50
     num_cards = len(characters)
 
     content_width = (card_width * num_cards) + (card_spacing * (num_cards - 1))
@@ -1304,31 +1336,54 @@ async def generate_gacha_draw_image(characters: list, claimed_indices: list = No
         card_bg = Image.new('RGBA', (card_width, card_height), (0, 0, 0, 0))
         card_draw = ImageDraw.Draw(card_bg)
 
-        if is_claimed:
-            _draw_textured_card_frame(card_draw, card_width, card_height, frame, is_claimed=True)
-        else:
-            _draw_textured_card_frame(card_draw, card_width, card_height, frame, is_claimed=False)
+        # Draw realistic trading card frame with textures
+        _draw_realistic_card_frame(card_bg, card_width, card_height, frame, is_claimed=is_claimed)
+        card_draw = ImageDraw.Draw(card_bg)  # Refresh draw object after frame
 
-        banner_h = 36
+        # === TOP TITLE BANNER (styled like trading card) ===
+        banner_h = 32
         banner_margin = 12
+        title_bg = frame.get("title_bg", (20, 20, 25, 250))
+        title_border = frame.get("title_border", (100, 100, 100))
+        
+        # Draw decorative title banner with border
         card_draw.rounded_rectangle(
             [banner_margin, banner_margin, card_width - banner_margin, banner_margin + banner_h],
             6,
-            fill=(20, 20, 25, 240) if not is_claimed else (40, 40, 45, 240)
+            fill=title_bg if not is_claimed else (40, 40, 45, 240),
+            outline=title_border if not is_claimed else (60, 60, 65),
+            width=2
         )
+        
+        # Small decorative lines on title banner edges
+        if not is_claimed:
+            card_draw.line([(banner_margin + 8, banner_margin + 4), (banner_margin + 25, banner_margin + 4)], 
+                          fill=frame["frame_light"], width=1)
+            card_draw.line([(card_width - banner_margin - 25, banner_margin + 4), (card_width - banner_margin - 8, banner_margin + 4)], 
+                          fill=frame["frame_light"], width=1)
 
         name = char.get("name", "Unknown")
-        if len(name) > 16:
-            name = name[:14] + "..."
+        if len(name) > 22:
+            name = name[:20] + "..."
         name_bbox = card_draw.textbbox((0, 0), name, font=name_font)
         name_x = (card_width - (name_bbox[2] - name_bbox[0])) // 2
-        card_draw.text((name_x + 1, banner_margin + 10), name, fill=(0, 0, 0, 180), font=name_font)
-        card_draw.text((name_x, banner_margin + 9), name, fill=(255, 255, 255), font=name_font)
+        card_draw.text((name_x + 1, banner_margin + 9), name, fill=(0, 0, 0, 180), font=name_font)
+        card_draw.text((name_x, banner_margin + 8), name, fill=(255, 255, 255), font=name_font)
 
-        img_area_x = 10
+        # === CHARACTER IMAGE AREA (with inner frame) ===
+        img_area_x = 14
         img_area_y = banner_margin + banner_h + 8
-        img_area_w = card_width - 20
-        img_area_h = card_height - (banner_margin + banner_h) - 68
+        img_area_w = card_width - 28
+        img_area_h = card_height - (banner_margin + banner_h) - 58
+        
+        # Draw inner image frame border (like real cards have)
+        if not is_claimed:
+            card_draw.rounded_rectangle(
+                [img_area_x - 2, img_area_y - 2, img_area_x + img_area_w + 2, img_area_y + img_area_h + 2],
+                4,
+                outline=frame["inner_border"],
+                width=2
+            )
 
         char_img = char_images[i]
         if char_img:
@@ -1407,20 +1462,20 @@ async def generate_gacha_draw_image(characters: list, claimed_indices: list = No
             card_draw.text((text_x + 1, owner_banner_y + 26), f"by {owner_name}", fill=(0, 0, 0, 200), font=small_font)
             card_draw.text((text_x,     owner_banner_y + 25), f"by {owner_name}", fill=(200, 200, 200), font=small_font)
 
-        bottom_banner_y = card_height - 48
+        bottom_banner_y = card_height - 42
         card_draw.rounded_rectangle(
-            [banner_margin, bottom_banner_y, card_width - banner_margin, bottom_banner_y + 32],
-            6,
-            fill=(20, 20, 25, 240)
+            [banner_margin, bottom_banner_y, card_width - banner_margin, bottom_banner_y + 28],
+            8,
+            fill=(20, 20, 25, 250)
         )
 
         anime = char.get("anime", "Unknown")
-        if len(anime) > 20:
-            anime = anime[:18] + "..."
+        if len(anime) > 28:
+            anime = anime[:26] + "..."
         anime_bbox = card_draw.textbbox((0, 0), anime, font=small_font)
         anime_x = (card_width - (anime_bbox[2] - anime_bbox[0])) // 2
-        card_draw.text((anime_x + 1, bottom_banner_y + 10), anime, fill=(0, 0, 0, 180), font=small_font)
-        card_draw.text((anime_x, bottom_banner_y + 9), anime, fill=(240, 240, 240), font=small_font)
+        card_draw.text((anime_x + 1, bottom_banner_y + 8), anime, fill=(0, 0, 0, 180), font=small_font)
+        card_draw.text((anime_x, bottom_banner_y + 7), anime, fill=(240, 240, 240), font=small_font)
 
         img.paste(card_bg, (card_x, card_y), card_bg)
 
@@ -2655,7 +2710,7 @@ async def generate_gallery_image(
         # ── CHARACTER IMAGE ──────────────────────────────────────────────────
         img_margin = 12
         img_x, img_y = img_margin, img_margin
-        img_w, img_h = card_w - (img_margin * 2), card_h - 140
+        img_w, img_h = card_w - (img_margin * 2), card_h - 110
 
         char_img = char_images[i] if i < len(char_images) else None
         
@@ -2717,7 +2772,7 @@ async def generate_gallery_image(
             card_draw.text((star_text_x, star_text_y), star_text, fill=(255, 255, 255), font=star_emoji_font)
 
         # ── INFO SECTION ─────────────────────────────────────────────────────
-        info_y = img_y + img_h + 8
+        info_y = img_y + img_h + 6
         
         # Name (centered, truncated)
         name = char.get("name", "Unknown")
@@ -2729,15 +2784,15 @@ async def generate_gallery_image(
 
         # Anime (smaller, muted)
         anime = char.get("anime", "Unknown")
-        if len(anime) > 24:
-            anime = anime[:22] + "..."
+        if len(anime) > 32:
+            anime = anime[:30] + "..."
         anime_bbox = card_draw.textbbox((0, 0), anime, font=info_font)
         anime_x = (card_w - (anime_bbox[2] - anime_bbox[0])) // 2
-        card_draw.text((anime_x, info_y + 28), anime, fill=(150, 150, 170), font=info_font)
+        card_draw.text((anime_x, info_y + 26), anime, fill=(150, 150, 170), font=info_font)
 
         # Bottom bar - Rarity indicator + favorites count + UID (better spacing)
-        bar_y = card_h - 48
-        bar_h = 36
+        bar_y = card_h - 42
+        bar_h = 30
         
         # Gradient background for bottom bar
         for j in range(bar_h):

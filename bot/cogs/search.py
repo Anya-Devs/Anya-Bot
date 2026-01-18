@@ -1174,7 +1174,7 @@ class Search(commands.Cog):
         self.processing_lock = set()  # Set of user_ids currently processing
         
         # Art command access control
-        self.art_commands_public = False  # Set to True when ready for public use
+        self.art_commands_public = True  # Public access enabled with proper TOS filtering
     
     async def cog_load(self):
         """Initialize session on load"""

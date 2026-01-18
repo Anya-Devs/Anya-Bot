@@ -1,6 +1,6 @@
 """
 Cover Art System for Gacha Characters
-Uses Danbooru and Safebooru for high-quality anime images
+Uses Node.js Image API for ultra-fast searching with fallback to direct search
 """
 
 import discord
@@ -10,19 +10,22 @@ from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timezone, timedelta
 import asyncio
 import logging
+from .api_client import get_api_client
 from .multisearch import MultiSourceImageSearch
 
 logger = logging.getLogger(__name__)
 
 class CoverArtSystem:
-    """Cover art system using Danbooru and Safebooru APIs"""
+    """Cover art system using Node.js Image API with fallback"""
     
     def __init__(self, quest_data):
         self.quest_data = quest_data
         self.session = None
-        self.multi_search = MultiSourceImageSearch()
+        self.api_client = get_api_client()
+        self.multi_search = MultiSourceImageSearch()  # Fallback
         self.image_cache = {}  # Cache: {character_uid: {sequential_id: image_data}}
         self.character_image_map = {}  # Map: {character_uid: {sequential_id: source_image_data}}
+        self.use_api = True  # Use Node.js API by default
         
     async def get_session(self):
         """Get or create aiohttp session"""
@@ -33,15 +36,49 @@ class CoverArtSystem:
             )
         return self.session
     
-    async def search_cover_art(self, character_name: str, series_name: str = None, page: int = 1, limit: int = 30, character_uid: str = None) -> Tuple[List[Dict], int]:
-        """Search for cover art using multiple sources with deduplication"""
-        logger.info(f"[Cover Art] Searching: '{character_name}' from '{series_name}' (page {page})")
+    async def search_cover_art(self, character_name: str, series_name: str = None, page: int = 1, limit: int = 100, character_uid: str = None) -> Tuple[List[Dict], int]:
+        """Search for cover art using Node.js API with fallback to direct search
+        
+        Args:
+            character_name: Character name to search for
+            series_name: Series/anime name for disambiguation
+            page: Page number (1-indexed)
+            limit: Images per page (default 100 for better pagination)
+            character_uid: Character UID for caching sequential IDs
+        
+        Returns:
+            Tuple of (images list, max_pages)
+        """
+        logger.info(f"[Cover Art] Searching: '{character_name}' from '{series_name}' (page {page}, limit {limit})")
         
         try:
-            # Use multi-source search with deduplication
-            images, max_pages = await self.multi_search.search_all_sources(
-                character_name, series_name, page, limit
-            )
+            # Try Node.js API first (ultra-fast with smart rate limiting)
+            if self.use_api:
+                api_healthy = await self.api_client.health_check()
+                if api_healthy:
+                    logger.info("[Cover Art] Using Node.js Image API")
+                    images, max_pages = await self.api_client.search(
+                        character_name, series_name, page, limit
+                    )
+                    if images:
+                        logger.info(f"[Cover Art] API returned {len(images)} images, {max_pages} pages")
+                    else:
+                        logger.warning("[Cover Art] API returned no results, falling back to direct search")
+                        images, max_pages = await self.multi_search.search_all_sources(
+                            character_name, series_name, page, limit
+                        )
+                else:
+                    logger.warning("[Cover Art] API not available, using direct search")
+                    images, max_pages = await self.multi_search.search_all_sources(
+                        character_name, series_name, page, limit
+                    )
+            else:
+                # Fallback to direct multi-source search
+                images, max_pages = await self.multi_search.search_all_sources(
+                    character_name, series_name, page, limit
+                )
+            
+            logger.info(f"[Cover Art] Result: {len(images)} images, max_pages={max_pages}")
             
             # Create character-specific sequential IDs on FIRST page only
             if character_uid and images:

@@ -14,6 +14,7 @@ from bot.utils.cogs.game import *
 from bot.utils.cogs.game.images import *
 from bot.utils.cogs.game.const import *
 from bot.utils.cogs.game.draw.cover_art import *
+from bot.utils.cogs.game.draw.cover_gallery_view import CoverGalleryView
 from bot.utils.cogs.game.view import *
 from bot.cogs.quest import Quest_Data
 
@@ -4518,31 +4519,135 @@ class Games(commands.Cog):
             )
             await ctx.reply(embed=embed, mention_author=False)
     
+    @commands.group(name="draw", invoke_without_command=True)
+    async def draw(self, ctx):
+        """🎨 Draw commands"""
+        pass
+    
+    @draw.command(name="cover", aliases=["ca", "art"])
+    async def draw_cover(self, ctx, *, uid: str = None):
+        """🎨 Browse cover art for your gacha characters with advanced filtering
+        
+        **Usage:**
+        • `.draw cover <UID>` - Browse art by character UID
+        • `.draw cover <character name>` - Browse art by character name
+        
+        **Features:**
+        • 🔍 Filter by image source (Danbooru, Gelbooru, Yande.re, etc.)
+        • 👁️ Switch between Gallery (3 images) and Single (1 image) view modes
+        • ◀️ ▶️ Navigate through pages with prev/next buttons
+        
+        **Examples:**
+        • `.draw cover F9D6E292`
+        • `.draw cover anya forger`
+        """
+        if not uid:
+            embed = discord.Embed(
+                title="🎨 Cover Art System",
+                description="Browse and purchase beautiful cover art for your characters!\n\n"
+                           "**Usage:**\n"
+                           f"• `{ctx.prefix}draw cover <UID or name>` - Browse art for your character\n\n"
+                           "**Features:**\n"
+                           "• 🔍 **Source Filtering** - Filter by Danbooru, Gelbooru, Yande.re, and more\n"
+                           "• 👁️ **View Modes** - Gallery (3 images) or Single (1 image) view\n"
+                           "• ◀️ ▶️ **Navigation** - Easy page navigation with buttons\n"
+                           "• 🌐 **8 Sources** - Searches across 8 anime-specialized sources\n\n"
+                           "**Examples:**\n"
+                           f"• `{ctx.prefix}draw cover F9D6E292`\n"
+                           f"• `{ctx.prefix}draw cover anya forger`\n\n"
+                           "**Image Sources:**\n"
+                           "• Safebooru, Danbooru, Gelbooru (Primary)\n"
+                           "• Yande.re, Konachan (High Quality)\n"
+                           "• TBIB, Anime-Pictures, Tumblr (Additional)",
+                color=discord.Color.purple()
+            )
+            return await ctx.reply(embed=embed, mention_author=False)
+        
+        uid = uid.strip()
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        if not await self.check_cover_command_cooldown(ctx):
+            return
+        
+        logger.info(f"[Cover Gallery] User {user_id} searching for: {uid}")
+        char = await self._get_character_from_inventory(user_id, guild_id, uid)
+        if not char:
+            logger.debug(f"[Cover Gallery] UID search failed, trying name search for: {uid}")
+            char = await self._get_character_from_name(user_id, guild_id, uid)
+            if not char:
+                logger.warning(f"[Cover Gallery] No character found with UID or name: {uid}")
+                return await ctx.reply(f"❌ No character found with UID or name `{uid}`", mention_author=False)
+        
+        logger.info(f"[Cover Gallery] Found character: {char.get('name')} (UID: {char.get('uid')})")
+        
+        owner_id = await self._get_character_owner(guild_id, char['uid'])
+        if owner_id != user_id:
+            logger.warning(f"[Cover Gallery] User {user_id} doesn't own character {char.get('uid')}")
+            return await ctx.reply("❌ You don't own this character!", mention_author=False)
+        
+        user_lock = self.get_user_lock(user_id)
+        
+        async with user_lock:
+            await self.set_cover_command_status(user_id, True)
+            
+            try:
+                wait_msg = await ctx.reply("🔍 **Initializing exhaustive search across 8 sources...**\n⏳ Fetching up to 200 pages per source (20,000+ images total)\n💫 This will take 30-60 seconds...", mention_author=False)
+                char_name = char.get('name', '')
+                series_name = char.get('anime', '')
+                logger.info(f"[Cover Gallery] Search started - Character: '{char_name}' | Series: '{series_name}' | User: {user_id}")
+                
+                try:
+                    # Fetch ALL images for better filtering and pagination (100 images per batch)
+                    images, max_pages = await self.cover_art_system.search_cover_art(char_name, series_name, page=1, limit=100, character_uid=char.get('uid'))
+                    logger.info(f"[Cover Gallery] API returned {len(images) if images else 0} images, max_pages: {max_pages}")
+                except Exception as search_error:
+                    logger.error(f"[Cover Gallery] Search API error: {search_error}", exc_info=True)
+                    images = []
+                    max_pages = 0
+                
+                try:
+                    await wait_msg.delete()
+                except:
+                    pass
+                
+                if not images:
+                    logger.warning(f"[Cover Gallery] No images found for '{char_name}' from '{series_name}'")
+                    await ctx.reply(f"❌ No cover art found for **{char_name}**!", mention_author=False)
+                    return
+                
+                logger.info(f"[Cover Gallery] Successfully found {len(images)} images for '{char_name}'")
+                
+                # Create initial embeds (gallery mode, 3 images)
+                embeds = await self.cover_art_system.create_cover_art_embeds(char, images[:3], page=1, total_pages=max_pages)
+                
+                # Create advanced view with ALL images for filtering
+                view = CoverGalleryView(self.cover_art_system, char, user_id, guild_id, images, current_page=1, total_pages=max_pages)
+                
+                msg = await ctx.reply(embeds=embeds, view=view, mention_author=False)
+                view.message = msg
+                
+            except asyncio.TimeoutError:
+                logger.error(f"[Cover Gallery] Timeout for user {user_id} searching '{char_name}'")
+                await ctx.reply("⏰ Search timed out! The servers might be busy. Please try again in a moment.", mention_author=False)
+            except Exception as e:
+                logger.error(f"[Cover Gallery] Unexpected error for user {user_id}: {e}", exc_info=True)
+                await ctx.reply(f"❌ Error loading cover art gallery! Please try again.\n*Debug: {str(e)[:100]}*", mention_author=False)
+            finally:
+                await self.set_cover_command_status(user_id, False)
+    
     @commands.group(name="cover", aliases=["ca"], invoke_without_command=True)
     async def cover(self, ctx):
-        """🎨 Cover art system for your gacha characters"""
+        """🎨 [DEPRECATED] Use `.draw cover` instead!"""
         embed = discord.Embed(
-            title="🎨 Cover Art System",
-            description="Browse and purchase beautiful cover art for your characters!\n\n"
-                       "**Commands:**\n"
-                       f"• `{ctx.prefix}cover gallery <UID or name>` - Browse art for your character\n"
-                       f"• `{ctx.prefix}cover buy <UID> <image_id>` - Buy cover art\n"
-                       f"• `{ctx.prefix}cover collection` - View your purchased art\n"
-                       f"• `{ctx.prefix}cover search <name> [| series]` - Preview art (no purchase)\n\n"
-                       "**Examples:**\n"
-                       f"• `{ctx.prefix}cover gallery F9D6E292`\n"
-                       f"• `{ctx.prefix}cover gallery anya forger`\n"
-                       f"• `{ctx.prefix}cover search emilia | re:zero`\n"
-                       f"• `{ctx.prefix}cover buy F9D6E292 10534304`\n\n"
-                       "**Pricing:**\n"
-                       "• Common: 100 pts | Uncommon: 200 pts\n"
-                       "• Rare: 500 pts | Epic: 1,000 pts\n"
-                       "• Legendary: 2,000 pts\n\n"
-                       "**Tips:**\n"
-                       "• Use `gallery` with your character's UID or name to purchase\n"
-                       "• Use `search` to preview art for any character\n"
-                       "• UIDs are shown in your collection (`.collection`)",
-            color=discord.Color.purple()
+            title="🎨 Cover Art Moved!",
+            description=f"The cover art system has been moved to `.draw cover`!\n\n"
+                       f"**New Command:**\n"
+                       f"• `{ctx.prefix}draw cover <UID or name>` - Browse cover art\n\n"
+                       f"**Example:**\n"
+                       f"• `{ctx.prefix}draw cover F9D6E292`\n"
+                       f"• `{ctx.prefix}draw cover anya forger`",
+            color=discord.Color.orange()
         )
         await ctx.reply(embed=embed, mention_author=False)
     
@@ -4607,9 +4712,9 @@ class Games(commands.Cog):
                 series_name = char.get('anime', '')
                 logger.info(f"[Cover Gallery] Search started - Character: '{char_name}' | Series: '{series_name}' | User: {user_id}")
                 
-                # Search for cover art - fetch 3 images per page for 3 embeds
+                # Search for cover art - fetch 100 images for better pagination
                 try:
-                    images, max_pages = await self.cover_art_system.search_cover_art(char_name, series_name, page=1, limit=3, character_uid=char.get('uid'))
+                    images, max_pages = await self.cover_art_system.search_cover_art(char_name, series_name, page=1, limit=100, character_uid=char.get('uid'))
                     logger.info(f"[Cover Gallery] API returned {len(images) if images else 0} images, max_pages: {max_pages}")
                 except Exception as search_error:
                     logger.error(f"[Cover Gallery] Search API error: {search_error}", exc_info=True)

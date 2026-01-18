@@ -1,7 +1,20 @@
 """
 Multi-Source Image Search System - MAXIMUM SAFETY FOR ALL-AGES BOT
-Searches ONLY safe-rated content from Safebooru.org, Konachan.net, and Danbooru
-with comprehensive filtering and deduplication
+Searches ONLY safe-rated content from 8 anime-specialized sources:
+
+PRIMARY SOURCES (Best for anime character art):
+- Safebooru.org - Curated safe anime art database
+- Danbooru - Largest anime art database with strict filtering
+- Gelbooru - Huge anime database with excellent character coverage
+
+HIGH-QUALITY SOURCES:
+- Yande.re - High-quality anime wallpapers and artwork
+- Konachan.net - Anime wallpapers with good character coverage
+
+ADDITIONAL SOURCES:
+- TBIB (The Big ImageBoard) - Large anime collection
+- Anime-Pictures.net - Dedicated anime artwork site
+- Tumblr - Community-driven anime fan art platform
 
 SAFETY FEATURES:
 - 150+ blocked tags covering ALL inappropriate content
@@ -16,11 +29,19 @@ import aiohttp
 import asyncio
 import hashlib
 import re
+import json
 from typing import List, Dict, Optional, Tuple
 from urllib.parse import quote_plus, urljoin
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Import smart tag discovery system
+try:
+    from .smart_tag_discovery import get_tag_discovery, SmartTagDiscovery
+except ImportError:
+    get_tag_discovery = None
+    SmartTagDiscovery = None
 
 # Smart character name patterns for booru tag generation
 COMMON_NAME_PATTERNS = {
@@ -39,9 +60,8 @@ SERIES_PATTERNS = {
 # Smart series name patterns for algorithmic generation
 SERIES_FORMATTING_RULES = {
     "common_substitutions": {
+        # === MAJOR SHONEN ===
         "spy x family": "spy_x_family",
-        "re:zero": "re:zero_kara_hajimeru_isekai_seikatsu",
-        "re zero": "re:zero_kara_hajimeru_isekai_seikatsu",
         "demon slayer": "kimetsu_no_yaiba",
         "kimetsu no yaiba": "kimetsu_no_yaiba",
         "jujutsu kaisen": "jujutsu_kaisen",
@@ -50,28 +70,146 @@ SERIES_FORMATTING_RULES = {
         "mha": "boku_no_hero_academia",
         "bnha": "boku_no_hero_academia",
         "attack on titan": "shingeki_no_kyojin",
+        "shingeki no kyojin": "shingeki_no_kyojin",
         "aot": "shingeki_no_kyojin",
         "chainsaw man": "chainsaw_man",
-        "darling in the franxx": "darling_in_the_franxx",
-        "ditf": "darling_in_the_franxx",
-        "genshin impact": "genshin_impact",
-        "genshin": "genshin_impact",
-        "fate": "fate_(series)",
-        "fate stay night": "fate/stay_night",
-        "fate grand order": "fate/grand_order",
-        "fgo": "fate/grand_order",
-        "hololive": "hololive",
-        "bocchi the rock": "bocchi_the_rock!",
-        "bocchi": "bocchi_the_rock!",
-        "oshi no ko": "oshi_no_ko",
-        "frieren": "sousou_no_frieren",
-        "blue lock": "blue_lock",
-        "arknights": "arknights",
-        "violet evergarden": "violet_evergarden",
         "one piece": "one_piece",
         "naruto": "naruto",
+        "naruto shippuden": "naruto",
+        "bleach": "bleach",
         "dragon ball": "dragon_ball",
+        "dragon ball z": "dragon_ball",
+        "dragon ball super": "dragon_ball",
+        "hunter x hunter": "hunter_x_hunter",
+        "hxh": "hunter_x_hunter",
+        "one punch man": "one_punch_man",
+        "opm": "one_punch_man",
+        "black clover": "black_clover",
+        "blue lock": "blue_lock",
+        "tokyo revengers": "tokyo_revengers",
+        
+        # === ISEKAI / FANTASY ===
+        "re:zero": "re:zero_kara_hajimeru_isekai_seikatsu",
+        "re zero": "re:zero_kara_hajimeru_isekai_seikatsu",
+        "rezero": "re:zero_kara_hajimeru_isekai_seikatsu",
+        "konosuba": "kono_subarashii_sekai_ni_shukufuku_wo!",
+        "sword art online": "sword_art_online",
+        "sao": "sword_art_online",
+        "overlord": "overlord_(maruyama)",
+        "that time i got reincarnated as a slime": "tensei_shitara_slime_datta_ken",
+        "tensura": "tensei_shitara_slime_datta_ken",
+        "slime": "tensei_shitara_slime_datta_ken",
+        "mushoku tensei": "mushoku_tensei",
+        "jobless reincarnation": "mushoku_tensei",
+        "shield hero": "tate_no_yuusha_no_nariagari",
+        "rising of the shield hero": "tate_no_yuusha_no_nariagari",
+        "frieren": "sousou_no_frieren",
+        "frieren beyond journeys end": "sousou_no_frieren",
+        "made in abyss": "made_in_abyss",
+        
+        # === ROMANCE / SLICE OF LIFE ===
+        "kaguya sama": "kaguya-sama_wa_kokurasetai",
+        "kaguya-sama love is war": "kaguya-sama_wa_kokurasetai",
+        "horimiya": "horimiya",
+        "quintessential quintuplets": "go-toubun_no_hanayome",
+        "5toubun": "go-toubun_no_hanayome",
+        "rent a girlfriend": "kanojo_okarishimasu",
+        "kanokari": "kanojo_okarishimasu",
+        "oshi no ko": "oshi_no_ko",
+        "my dress up darling": "sono_bisque_doll_wa_koi_wo_suru",
+        "bocchi the rock": "bocchi_the_rock!",
+        "bocchi": "bocchi_the_rock!",
+        "violet evergarden": "violet_evergarden",
+        "your name": "kimi_no_na_wa.",
+        "weathering with you": "tenki_no_ko",
+        
+        # === MECHA / SCI-FI ===
+        "darling in the franxx": "darling_in_the_franxx",
+        "ditf": "darling_in_the_franxx",
+        "evangelion": "neon_genesis_evangelion",
+        "neon genesis evangelion": "neon_genesis_evangelion",
+        "nge": "neon_genesis_evangelion",
+        "code geass": "code_geass",
+        "gundam": "gundam",
+        "86": "86_-eighty_six-",
+        "eighty six": "86_-eighty_six-",
+        "steins gate": "steins;gate",
+        "steins;gate": "steins;gate",
+        "psycho pass": "psycho-pass",
+        
+        # === FATE SERIES ===
+        "fate": "fate_(series)",
+        "fate stay night": "fate/stay_night",
+        "fate zero": "fate/zero",
+        "fate grand order": "fate/grand_order",
+        "fgo": "fate/grand_order",
+        "fate apocrypha": "fate/apocrypha",
+        
+        # === GAMES / GACHA ===
+        "genshin impact": "genshin_impact",
+        "genshin": "genshin_impact",
+        "honkai star rail": "honkai:_star_rail",
+        "hsr": "honkai:_star_rail",
+        "honkai impact": "honkai_impact_3rd",
+        "arknights": "arknights",
+        "azur lane": "azur_lane",
+        "blue archive": "blue_archive",
+        "girls frontline": "girls'_frontline",
+        "gfl": "girls'_frontline",
         "pokemon": "pokemon",
+        "fire emblem": "fire_emblem",
+        "persona": "persona",
+        "persona 5": "persona_5",
+        "nier automata": "nier_automata",
+        "nier": "nier_(series)",
+        
+        # === VTUBERS ===
+        "hololive": "hololive",
+        "nijisanji": "nijisanji",
+        "vtuber": "virtual_youtuber",
+        
+        # === CLASSIC / POPULAR ===
+        "death note": "death_note",
+        "fullmetal alchemist": "fullmetal_alchemist",
+        "fma": "fullmetal_alchemist",
+        "cowboy bebop": "cowboy_bebop",
+        "mob psycho 100": "mob_psycho_100",
+        "mob psycho": "mob_psycho_100",
+        "tokyo ghoul": "tokyo_ghoul",
+        "parasyte": "kiseijuu",
+        "vinland saga": "vinland_saga",
+        "berserk": "berserk",
+        "monster": "monster_(manga)",
+        "death parade": "death_parade",
+        
+        # === CUTE / MOE ===
+        "k-on": "k-on!",
+        "k on": "k-on!",
+        "lucky star": "lucky_star",
+        "nichijou": "nichijou",
+        "yuru camp": "yuru_camp",
+        "laid back camp": "yuru_camp",
+        "non non biyori": "non_non_biyori",
+        "kobayashi dragon maid": "kobayashi-san_chi_no_maidragon",
+        "miss kobayashi's dragon maid": "kobayashi-san_chi_no_maidragon",
+        "is the order a rabbit": "gochuumon_wa_usagi_desu_ka?",
+        "gochiusa": "gochuumon_wa_usagi_desu_ka?",
+        
+        # === SPORTS ===
+        "haikyuu": "haikyuu!!",
+        "kuroko no basket": "kuroko_no_basuke",
+        "kuroko's basketball": "kuroko_no_basuke",
+        "slam dunk": "slam_dunk",
+        "blue lock": "blue_lock",
+        
+        # === RECENT POPULAR ===
+        "dandadan": "dandadan",
+        "kaiju no 8": "kaiju_no._8",
+        "solo leveling": "solo_leveling",
+        "wind breaker": "wind_breaker_(nii_satoru)",
+        "undead unluck": "undead_unluck",
+        "mashle": "mashle",
+        "sakamoto days": "sakamoto_days",
     }
 }
 
@@ -120,8 +258,23 @@ class MultiSourceImageSearch:
         
         # Check for common image extensions or known image hosts
         valid_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.webp')
-        valid_hosts = ('safebooru.org', 'konachan.net', 'danbooru.donmai.us', 
-                       'safebooru.donmai.us', 'cdn.donmai.us')
+        valid_hosts = (
+            # Primary booru sites
+            'safebooru.org', 'konachan.net', 'danbooru.donmai.us', 
+            'safebooru.donmai.us', 'cdn.donmai.us',
+            # Additional anime art sources
+            'gelbooru.com', 'img3.gelbooru.com', 'img2.gelbooru.com',
+            'yande.re', 'files.yande.re',
+            'anime-pictures.net', 'images.anime-pictures.net',
+            'tbib.org', 'img.tbib.org',
+            'static.zerochan.net', 'zerochan.net',
+            's1.zerochan.net', 's2.zerochan.net', 's3.zerochan.net',
+            # Tumblr media domains
+            'tumblr.com', '64.media.tumblr.com', 'media.tumblr.com',
+            'static.tumblr.com', 'va.media.tumblr.com',
+            # CDN domains
+            'cdn.donmai.us', 'raikou1.donmai.us', 'raikou2.donmai.us',
+        )
         
         url_lower = url.lower()
         
@@ -299,42 +452,53 @@ class MultiSourceImageSearch:
                     return []
         return []
     
-    async def _fetch_source_pages(self, fetch_func, source_name: str, char_tag: str, max_pages: int = 20) -> List[Dict]:
-        """Fetch pages from a single source with smart batching and early stop"""
+    async def _fetch_source_pages(self, fetch_func, source_name: str, char_tag: str, max_pages: int = 200) -> List[Dict]:
+        """ULTRA CONCURRENT: Fetch ALL pages simultaneously - NO early stopping"""
         all_results = []
-        batch_size = 3  # Fetch 3 pages at a time
-        consecutive_empty = 0
         
-        for batch_start in range(1, max_pages + 1, batch_size):
-            batch_end = min(batch_start + batch_size, max_pages + 1)
-            
-            # Create tasks for this batch
-            tasks = []
-            for page in range(batch_start, batch_end):
-                tasks.append(self._fetch_with_retry(fetch_func, char_tag, page, 100))
-            
-            # Execute batch with small delay between batches
-            if batch_start > 1:
-                await asyncio.sleep(0.3)  # Rate limit delay between batches
-            
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            batch_found = 0
-            for result in results:
-                if isinstance(result, list) and result:
-                    all_results.extend(result)
-                    batch_found += len(result)
-            
-            # Early stop: if batch returned nothing, source is exhausted
-            if batch_found == 0:
-                consecutive_empty += 1
-                if consecutive_empty >= 2:  # 2 empty batches = stop
-                    logger.info(f"[{source_name}] Exhausted at page ~{batch_start}, got {len(all_results)} total")
-                    break
-            else:
-                consecutive_empty = 0
-                logger.debug(f"[{source_name}] Batch {batch_start}-{batch_end-1}: +{batch_found} images")
+        # Create ALL page fetch tasks at once for maximum speed
+        tasks = [self._fetch_with_retry(fetch_func, char_tag, page, 100) for page in range(1, max_pages + 1)]
         
+        # Execute ALL pages in parallel
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        total_found = 0
+        for page_num, result in enumerate(results, 1):
+            if isinstance(result, list) and result:
+                all_results.extend(result)
+                total_found += len(result)
+        
+        if total_found > 0:
+            logger.info(f"[{source_name}] Fetched {total_found} images from {max_pages} pages")
+        
+        return all_results
+    
+    async def _fetch_source_all_tags(self, fetch_func, source_name: str, tags: List[str], max_pages: int = 200) -> List[Dict]:
+        """ULTRA CONCURRENT: Fetch ALL pages for ALL tags simultaneously"""
+        all_results = []
+        
+        # Create tasks for every tag + every page combination
+        tasks = []
+        for tag in tags[:3]:  # Top 3 tags per source
+            for page in range(1, max_pages + 1):
+                tasks.append(self._fetch_with_retry(fetch_func, tag, page, 100))
+        
+        if not tasks:
+            return []
+        
+        # Execute ALL in parallel
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        seen_urls = set()
+        for result in results:
+            if isinstance(result, list):
+                for img in result:
+                    url = img.get('url', '')
+                    if url and url not in seen_urls:
+                        seen_urls.add(url)
+                        all_results.append(img)
+        
+        logger.info(f"[{source_name}] Total unique: {len(all_results)} images")
         return all_results
     
     async def search_all_sources(
@@ -342,10 +506,18 @@ class MultiSourceImageSearch:
         character_name: str, 
         series_name: str = None, 
         page: int = 1, 
-        limit: int = 30,
+        limit: int = 100,
         preferred_source: str = None
     ) -> Tuple[List[Dict], int]:
-        """Search multiple SFW sources with smart batching, rate limiting, and proper pagination"""
+        """
+        Search multiple SFW sources with SMART TAG DISCOVERY and parallel fetching.
+        
+        Features:
+        - Per-source tag discovery (finds correct tag format for each source)
+        - Parallel fetching from all 8 sources simultaneously
+        - Unlimited pagination (based on total results found)
+        - Fast caching for subsequent page requests
+        """
         # Create a cache key for this character search
         cache_key = f"{character_name.lower()}_{series_name.lower() if series_name else 'none'}"
         
@@ -353,186 +525,202 @@ class MultiSourceImageSearch:
         if not hasattr(self, '_search_cache'):
             self._search_cache = {}
         
-        # If not in cache, fetch all results with smart batching
+        # If not in cache, fetch all results with smart tag discovery
         if cache_key not in self._search_cache:
             self.seen_urls.clear()
             self.seen_hashes.clear()
             
             all_images = []
+            logger.info(f"[DEBUG CACHE] Cache miss for {cache_key} - fetching fresh results")
             
-            # Special case: If preferred_source is "konachan", prioritize Konachan search
-            if preferred_source == "konachan":
-                logger.info(f"[MultiSearch] Konachan preferred search for '{character_name}' from '{series_name}'")
-                
-                # First try fuzzy matching to find the best tag
+            # ═══════════════════════════════════════════════════════════════
+            # PHASE 1: SMART TAG DISCOVERY - Find correct tags for each source
+            # ═══════════════════════════════════════════════════════════════
+            discovered_tags = {}
+            
+            if get_tag_discovery is not None:
+                try:
+                    tag_discovery = get_tag_discovery()
+                    discovered_tags = await tag_discovery.discover_all_tags(character_name, series_name)
+                    logger.info(f"[MultiSearch] Smart tag discovery found: {discovered_tags}")
+                except Exception as e:
+                    logger.warning(f"[MultiSearch] Smart tag discovery failed: {e}")
+            
+            # Fallback: Generate algorithmic tags if discovery failed
+            if not discovered_tags:
+                logger.info(f"[MultiSearch] Using algorithmic tag generation")
                 best_tag = await self._fuzzy_match_tags(character_name, series_name)
+                fallback_tag = best_tag or self._get_booru_character_tag(character_name, series_name)
                 
-                # Create variations with the best tag first
-                name_variations = []
-                if best_tag and best_tag != self._get_booru_character_tag(character_name, series_name):
-                    name_variations.append(best_tag)
-                    logger.info(f"[MultiSearch] Konachan fuzzy match found: {best_tag}")
+                discovered_tags = {
+                    'safebooru': fallback_tag,
+                    'danbooru': fallback_tag,
+                    'gelbooru': fallback_tag,
+                    'yandere': fallback_tag,
+                    'konachan': fallback_tag,
+                    'tbib': fallback_tag,
+                    'anime_pictures': fallback_tag,
+                }
+            
+            # Also generate name variations for fallback searches
+            name_variations = self._get_name_variations(character_name, series_name)
+            
+            # ═══════════════════════════════════════════════════════════════
+            # PHASE 2: PARALLEL FETCH FROM ALL SOURCES WITH DISCOVERED TAGS
+            # ═══════════════════════════════════════════════════════════════
+            logger.info(f"[MultiSearch] Fetching from 8 sources in parallel...")
+            
+            # Create search tasks with source-specific tags
+            async def search_source_with_fallback(search_func, source_name, primary_tag, fallback_tags, max_pages):
+                """Search a source with primary tag, fallback to variations if needed"""
+                results = []
                 
-                # Add algorithmic variations as fallback
-                algorithmic_variations = self._get_name_variations(character_name, series_name)
-                for var in algorithmic_variations:
-                    if var not in name_variations:
-                        name_variations.append(var)
-                
-                logger.info(f"[MultiSearch] Konachan variations: {name_variations}")
-                
-                # Try each variation, focusing on Konachan
-                for char_tag in name_variations:
-                    if all_images:
-                        break
-                    
-                    logger.info(f"[MultiSearch] Konachan priority search for '{char_tag}'")
-                    
-                    # Priority Konachan search with more pages using special search
-                    konachan_results = await self._fetch_source_pages(
-                        self._search_konachan_special, "Konachan.net", char_tag, max_pages=30
+                # Try primary discovered tag first
+                try:
+                    primary_results = await self._fetch_source_pages(
+                        search_func, source_name, primary_tag, max_pages=max_pages
                     )
-                    
-                    # Process Konachan results
-                    if isinstance(konachan_results, list):
-                        for img in konachan_results:
-                            if img.get('url') and not self._is_duplicate(img['url']):
-                                all_images.append(img)
-                        logger.info(f"[MultiSearch] Konachan priority: {len(konachan_results)} raw images")
-                    
-                    # If Konachan gave good results, also try other sources for variety
-                    if len(all_images) >= 10:
-                        logger.info(f"[MultiSearch] Konachan gave sufficient results, adding other sources for variety")
-                        
-                        # Add limited results from other sources
-                        safebooru_results = await self._fetch_source_pages(
-                            self._search_safebooru_org, "Safebooru.org", char_tag, max_pages=5
-                        )
-                        danbooru_results = await self._fetch_source_pages(
-                            self._search_danbooru_safe_only, "Danbooru", char_tag, max_pages=5
-                        )
-                        
-                        # Process other sources with lower priority
-                        for source_results, source_name in [(safebooru_results, "Safebooru"), (danbooru_results, "Danbooru")]:
-                            if isinstance(source_results, list):
-                                for img in source_results:
-                                    if img.get('url') and not self._is_duplicate(img['url']):
-                                        all_images.append(img)
-                                logger.info(f"[MultiSearch] Added {len(source_results)} from {source_name} for variety")
-                    
-                    if all_images:
-                        logger.info(f"[MultiSearch] Konachan search found {len(all_images)} unique images with tag '{char_tag}'")
-                        break
-            else:
-                # Normal multi-source search (existing logic)
-                # First try fuzzy matching to find the best tag
-                logger.info(f"[MultiSearch] Starting fuzzy tag matching for '{character_name}' from '{series_name}'")
-                best_tag = await self._fuzzy_match_tags(character_name, series_name)
-            
-            # Create variations with the best tag first
-            name_variations = []
-            if best_tag and best_tag != self._get_booru_character_tag(character_name, series_name):
-                name_variations.append(best_tag)
-                logger.info(f"[MultiSearch] Fuzzy match found: {best_tag}")
-            
-            # Add algorithmic variations as fallback
-            algorithmic_variations = self._get_name_variations(character_name, series_name)
-            for var in algorithmic_variations:
-                if var not in name_variations:
-                    name_variations.append(var)
-            
-            logger.info(f"[MultiSearch] Character '{character_name}' -> final variations: {name_variations}")
-            
-            # Try each variation until we get results
-            for char_tag in name_variations:
-                if all_images:
-                    break  # Stop if we already found images
+                    if isinstance(primary_results, list):
+                        results.extend(primary_results)
+                except Exception as e:
+                    logger.debug(f"[{source_name}] Primary tag failed: {e}")
                 
-                logger.info(f"[MultiSearch] Fetching '{char_tag}' from sources (smart batching)...")
+                # If no results, try fallback variations
+                if not results and fallback_tags:
+                    for fallback_tag in fallback_tags[:2]:  # Try up to 2 fallbacks
+                        if fallback_tag != primary_tag:
+                            try:
+                                fallback_results = await self._fetch_source_pages(
+                                    search_func, source_name, fallback_tag, max_pages=max_pages // 2
+                                )
+                                if isinstance(fallback_results, list) and fallback_results:
+                                    results.extend(fallback_results)
+                                    break
+                            except Exception:
+                                pass
                 
-                # Fetch from all sources in parallel, but each source fetches sequentially with batching
-                safebooru_task = self._fetch_source_pages(
-                    self._search_safebooru_org, "Safebooru.org", char_tag, max_pages=20
-                )
-                konachan_task = self._fetch_source_pages(
-                    self._search_konachan, "Konachan.net", char_tag, max_pages=20
-                )
-                danbooru_task = self._fetch_source_pages(
-                    self._search_danbooru_safe_only, "Danbooru", char_tag, max_pages=20
-                )
-                
-                # Run all sources in parallel
-                safebooru_results, konachan_results, danbooru_results = await asyncio.gather(
-                    safebooru_task, konachan_task, danbooru_task, return_exceptions=True
-                )
-                
-                # Process Safebooru results
-                if isinstance(safebooru_results, list):
-                    for img in safebooru_results:
+                return results
+            
+            # Create all search tasks - UNLIMITED PAGES: Fetch until exhausted
+            tasks = [
+                # ALL sources - 200 pages each to ensure we get EVERYTHING
+                search_source_with_fallback(
+                    self._search_safebooru_org, "Safebooru",
+                    discovered_tags.get('safebooru', name_variations[0] if name_variations else ''),
+                    name_variations, max_pages=200
+                ),
+                search_source_with_fallback(
+                    self._search_danbooru_safe_only, "Danbooru",
+                    discovered_tags.get('danbooru', name_variations[0] if name_variations else ''),
+                    name_variations, max_pages=200
+                ),
+                search_source_with_fallback(
+                    self._search_gelbooru, "Gelbooru",
+                    discovered_tags.get('gelbooru', name_variations[0] if name_variations else ''),
+                    name_variations, max_pages=200
+                ),
+                search_source_with_fallback(
+                    self._search_yandere, "Yande.re",
+                    discovered_tags.get('yandere', name_variations[0] if name_variations else ''),
+                    name_variations, max_pages=200
+                ),
+                search_source_with_fallback(
+                    self._search_konachan_special, "Konachan",
+                    discovered_tags.get('konachan', name_variations[0] if name_variations else ''),
+                    name_variations, max_pages=200
+                ),
+                search_source_with_fallback(
+                    self._search_tbib, "TBIB",
+                    discovered_tags.get('tbib', name_variations[0] if name_variations else ''),
+                    name_variations, max_pages=200
+                ),
+                search_source_with_fallback(
+                    self._search_anime_pictures, "Anime-Pictures",
+                    discovered_tags.get('anime_pictures', name_variations[0] if name_variations else ''),
+                    name_variations, max_pages=200
+                ),
+            ]
+            
+            source_names = ["Safebooru", "Danbooru", "Gelbooru", "Yande.re", "Konachan", "TBIB", "Anime-Pictures"]
+            
+            # Run ALL sources in parallel for maximum speed
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # ═══════════════════════════════════════════════════════════════
+            # PHASE 3: PROCESS AND DEDUPLICATE RESULTS
+            # ═══════════════════════════════════════════════════════════════
+            source_counts = {}
+            
+            for source_results, source_name in zip(results, source_names):
+                if isinstance(source_results, list):
+                    added = 0
+                    for img in source_results:
                         if img.get('url') and not self._is_duplicate(img['url']):
                             all_images.append(img)
-                    logger.info(f"[MultiSearch] Safebooru: {len(safebooru_results)} raw -> {len([i for i in safebooru_results if not self._is_duplicate(i.get('url', ''))])} unique")
-                elif isinstance(safebooru_results, Exception):
-                    logger.warning(f"[MultiSearch] Safebooru failed with exception: {safebooru_results}")
-                
-                # Process Konachan results
-                if isinstance(konachan_results, list):
-                    for img in konachan_results:
-                        if img.get('url') and not self._is_duplicate(img['url']):
-                            all_images.append(img)
-                    logger.info(f"[MultiSearch] Konachan: {len(konachan_results)} raw")
-                elif isinstance(konachan_results, Exception):
-                    logger.warning(f"[MultiSearch] Konachan failed with exception: {konachan_results}")
-                
-                # Process Danbooru results
-                if isinstance(danbooru_results, list):
-                    for img in danbooru_results:
-                        if img.get('url') and not self._is_duplicate(img['url']):
-                            all_images.append(img)
-                    logger.info(f"[MultiSearch] Danbooru: {len(danbooru_results)} raw")
-                elif isinstance(danbooru_results, Exception):
-                    logger.warning(f"[MultiSearch] Danbooru failed with exception: {danbooru_results}")
-                
-                if all_images:
-                    logger.info(f"[MultiSearch] Found {len(all_images)} unique images with tag '{char_tag}'")
-                else:
-                    logger.warning(f"[MultiSearch] No images found for '{char_tag}' from any source")
+                            added += 1
+                    source_counts[source_name] = added
+                    if added > 0:
+                        logger.info(f"[MultiSearch] {source_name}: +{added} unique images")
+                elif isinstance(source_results, Exception):
+                    logger.debug(f"[MultiSearch] {source_name} failed: {source_results}")
+                    source_counts[source_name] = 0
             
-            # If still no images after all variations, try emergency fallback
+            # Log source distribution
+            total_from_sources = sum(source_counts.values())
+            logger.info(f"[DEBUG RESULTS] Source distribution: {source_counts}")
+            logger.info(f"[DEBUG RESULTS] Total unique images before filtering: {total_from_sources}")
+            
+            # ═══════════════════════════════════════════════════════════════
+            # PHASE 4: EMERGENCY FALLBACK IF NO RESULTS
+            # ═══════════════════════════════════════════════════════════════
             if not all_images:
                 logger.warning(f"[MultiSearch] All sources failed for '{character_name}', trying emergency fallback")
-                # Try a very simple search with just the character name without series
                 simple_name = self._clean_character_name(character_name)
                 emergency_results = await self._emergency_fallback_search(simple_name)
                 all_images.extend(emergency_results)
             
-            # Validate all images have working URLs
-            all_images = await self._validate_image_batch(all_images)
+            # ═══════════════════════════════════════════════════════════════
+            # PHASE 5: VALIDATE AND SORT
+            # ═══════════════════════════════════════════════════════════════
+            # Quick URL validation (skip slow HTTP checks)
+            validated_images = []
+            for img in all_images:
+                url = img.get('url') or img.get('preview_url')
+                if url and self._is_valid_image_url(url):
+                    validated_images.append(img)
+            
+            all_images = validated_images
             logger.info(f"[MultiSearch] After validation: {len(all_images)} valid images")
             
-            # Sort by score/relevance
+            # Sort by score (higher = better quality)
             all_images.sort(key=lambda x: x.get('score', 0), reverse=True)
             
-            # Cache the complete result set
+            # Cache the results for this character
             self._search_cache[cache_key] = all_images
-            logger.info(f"[MultiSearch] ✓ Cached {len(all_images)} total images for '{character_name}'")
+            logger.info(f"[DEBUG CACHE] Final cached count: {len(all_images)} unique images for '{character_name}'")
         else:
             all_images = self._search_cache[cache_key]
-            logger.info(f"[MultiSearch] Using cached {len(all_images)} images for '{character_name}'")
+            logger.info(f"[DEBUG CACHE] Using cached {len(all_images)} images for '{character_name}'")
         
-        # Calculate pagination based on total cached results
+        # ═══════════════════════════════════════════════════════════════
+        # PAGINATION - No artificial limits!
+        # ═══════════════════════════════════════════════════════════════
         total_images = len(all_images)
         max_pages = max(1, (total_images + limit - 1) // limit)
+        
+        # DEBUG: Log pagination calculation
+        logger.info(f"[DEBUG PAGINATION] total_images={total_images}, limit={limit}, calculated_max_pages={max_pages}")
+        logger.info(f"[DEBUG PAGINATION] Formula: ({total_images} + {limit} - 1) // {limit} = {max_pages}")
         
         # Get the correct page slice
         start_idx = (page - 1) * limit
         end_idx = start_idx + limit
         page_images = all_images[start_idx:end_idx]
         
-        logger.info(f"[MultiSearch] Total: {total_images} unique images | Page {page}/{max_pages} | Showing {len(page_images)} images")
+        logger.info(f"[MultiSearch] Total: {total_images} images | Page {page}/{max_pages} | Showing {len(page_images)}")
         return page_images, max_pages
     
-    async def _search_danbooru_safe(self, char_tag: str, page: int = 1, limit: int = 30) -> List[Dict]:
+    async def _search_danbooru_safe(self, char_tag: str, page: int = 1, limit: int = 100) -> List[Dict]:
         """Search safebooru.donmai.us (Danbooru's safe version) - no API key needed"""
         session = await self.get_session()
         
@@ -659,22 +847,12 @@ class MultiSourceImageSearch:
         
         return []
     
-    async def _search_danbooru_safe_only(self, char_tag: str, page: int = 1, limit: int = 30) -> List[Dict]:
+    async def _search_danbooru_safe_only(self, char_tag: str, page: int = 1, limit: int = 100) -> List[Dict]:
         """Search Danbooru with STRICT safe filter - matching Safebooru standards"""
         session = await self.get_session()
         
-        # ULTRA STRICT: rating:general + extensive blacklist to match Safebooru's safety
-        # Exclude ALL suggestive, fanservice, and softcore content
-        blacklist = [
-            '-suggestive', '-ecchi', '-nude', '-underwear', '-panties', '-bra', '-lingerie',
-            '-bikini', '-swimsuit', '-cleavage', '-underboob', '-sideboob', '-ass', '-butt',
-            '-thighs', '-pantyshot', '-upskirt', '-cameltoe', '-nipples', '-topless',
-            '-lewd', '-nsfw', '-loli', '-shota', '-sexy', '-seductive', '-provocative',
-            '-erotic', '-fanservice', '-bath', '-bathing', '-shower', '-wet_clothes',
-            '-see-through', '-transparent', '-spread_legs', '-bondage', '-breast_grab',
-            '-groping', '-sexual', '-revealing', '-skimpy', '-tight_clothes'
-        ]
-        safe_tags = f"{char_tag} rating:general {' '.join(blacklist)}"
+        # Simple safe search - let aiohttp handle URL encoding
+        safe_tags = f"{char_tag} rating:general"
         
         params = {
             'tags': safe_tags,
@@ -701,21 +879,8 @@ class MultiSourceImageSearch:
                     await asyncio.sleep(2)
                     return []
                 elif resp.status == 422:
-                    logger.warning(f"[Danbooru] Invalid tag format (422) for '{char_tag}' - trying simplified search")
-                    # Try fallback with simpler tag format
-                    fallback_params = {
-                        'tags': f"{char_tag} rating:general",
-                        'limit': min(limit, 50),
-                        'page': page
-                    }
-                    try:
-                        async with session.get('https://danbooru.donmai.us/posts.json', params=fallback_params, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as fallback_resp:
-                            if fallback_resp.status == 200:
-                                data = await fallback_resp.json()
-                                logger.info(f"[Danbooru] Fallback successful: {len(data) if isinstance(data, list) else 0} results")
-                                return self._process_danbooru_safe_results(data)
-                    except Exception as fallback_error:
-                        logger.debug(f"[Danbooru] Fallback also failed: {fallback_error}")
+                    logger.warning(f"[Danbooru] Invalid tag (422) for '{char_tag}' - tag may not exist")
+                    return []
                 elif resp.status == 403:
                     logger.warning(f"[Danbooru] Access forbidden (403) - API may require authentication or be blocking requests")
                     return []
@@ -867,8 +1032,8 @@ class MultiSourceImageSearch:
                         's': 'post',
                         'q': 'index',
                         'json': '1',
-                        'limit': 10,
                         'tags': exact_search,
+                        'limit': 10,
                         'pid': 0
                     }
                     
@@ -892,8 +1057,8 @@ class MultiSourceImageSearch:
                     's': 'post',
                     'q': 'index',
                     'json': '1',
-                    'limit': 50,
                     'tags': f"{variation}* rating:safe",
+                    'limit': 50,
                     'pid': 0
                 }
                 
@@ -1011,7 +1176,7 @@ class MultiSourceImageSearch:
         logger.info(f"[Scoring] Best match: {best_match} with score {best_score}")
         return best_match if best_score >= 80 else None  # Higher threshold for better quality
 
-    async def _search_safebooru_org(self, char_tag: str, page: int = 1, limit: int = 30) -> List[Dict]:
+    async def _search_safebooru_org(self, char_tag: str, page: int = 1, limit: int = 100) -> List[Dict]:
         """Search Safebooru.org - PRIMARY IMAGE SOURCE"""
         session = await self.get_session()
         
@@ -1052,95 +1217,59 @@ class MultiSourceImageSearch:
         
         return []
     
-    async def _search_konachan_special(self, char_tag: str, page: int = 1, limit: int = 30) -> List[Dict]:
-        """Special Konachan search with optimized parameters for better results"""
+    async def _search_konachan_special(self, char_tag: str, page: int = 1, limit: int = 100) -> List[Dict]:
+        """ULTRA AGGRESSIVE Konachan search - gets ALL results with minimal filtering"""
         session = await self.get_session()
         
-        # Special Konachan search: less restrictive blacklist for more results
-        # Still safe but allows more artistic content
-        relaxed_blacklist = [
-            '-nude', '-underwear', '-panties', '-bra', '-lingerie',
-            '-bikini', '-swimsuit', '-cleavage', '-underboob', '-sideboob',
-            '-pantyshot', '-upskirt', '-cameltoe', '-nipples', '-topless',
-            '-lewd', '-nsfw', '-loli', '-shota', '-sexy', '-seductive',
-            '-erotic', '-fanservice', '-bath', '-bathing', '-shower',
-            '-see-through', '-transparent', '-spread_legs', '-bondage', '-breast_grab',
-            '-groping', '-sexual', '-revealing', '-skimpy', '-tight_clothes'
+        # Minimal blacklist - only block truly inappropriate content
+        minimal_blacklist = '-nude -nsfw -loli -shota -explicit'
+        
+        # Try ALL strategies and combine results for maximum coverage
+        all_results = []
+        seen_ids = set()
+        
+        strategies = [
+            f"{char_tag} rating:safe",
+            f"{char_tag} rating:safe {minimal_blacklist}",
+            f"{char_tag}",  # No rating filter - will filter in post-processing
         ]
         
-        # Try multiple search strategies for Konachan
-        search_strategies = [
-            # Strategy 1: Relaxed safe search
-            f"{char_tag} rating:safe {' '.join(relaxed_blacklist)}",
-            # Strategy 2: General rating (still mostly safe)
-            f"{char_tag} rating:general -nude -nsfw -loli -shota",
-            # Strategy 3: Very basic search
-            f"{char_tag} rating:safe"
-        ]
-        
-        for strategy_idx, safe_tags in enumerate(search_strategies):
+        for strategy in strategies:
             params = {
-                'tags': safe_tags,
-                'limit': min(limit, 100),
+                'tags': strategy,
+                'limit': 100,  # Always request max
                 'page': page
             }
             
             try:
-                async with session.get('https://konachan.net/post.json', params=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                async with session.get('https://konachan.net/post.json', params=params, timeout=aiohttp.ClientTimeout(total=20)) as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        result_count = len(data) if isinstance(data, list) else 0
-                        if result_count > 0:
-                            logger.info(f"[Konachan Special] Strategy {strategy_idx + 1}: Page {page}: Found {result_count} results for '{char_tag}'")
-                            return self._process_konachan_results(data)
-                        else:
-                            logger.debug(f"[Konachan Special] Strategy {strategy_idx + 1}: No results for '{char_tag}'")
-                            continue
-                    elif resp.status == 500:
-                        logger.warning(f"[Konachan Special] Strategy {strategy_idx + 1}: Server error (500)")
-                        continue
-                    elif resp.status == 422:
-                        logger.warning(f"[Konachan Special] Strategy {strategy_idx + 1}: Invalid tag format (422) for '{char_tag}'")
-                        continue
-                    else:
-                        logger.warning(f"[Konachan Special] Strategy {strategy_idx + 1}: Status {resp.status} for '{char_tag}' page {page}")
-            except asyncio.TimeoutError:
-                logger.warning(f"[Konachan Special] Strategy {strategy_idx + 1}: Timeout for '{char_tag}' page {page}")
-                continue
+                        if isinstance(data, list):
+                            for post in data:
+                                post_id = post.get('id')
+                                rating = post.get('rating', '')
+                                tags = post.get('tags', '').lower()
+                                
+                                # Skip if already seen
+                                if post_id in seen_ids:
+                                    continue
+                                
+                                # Only keep safe-rated posts, filter out bad tags
+                                if rating == 's' and not any(bad in tags for bad in ['nude', 'nsfw', 'loli', 'shota', 'explicit']):
+                                    seen_ids.add(post_id)
+                                    all_results.append(post)
             except Exception as e:
-                logger.error(f"[Konachan Special] Strategy {strategy_idx + 1}: Error: {e}")
+                logger.debug(f"[Konachan] Strategy error: {e}")
                 continue
         
-        # If all strategies failed, try emergency fallback
-        logger.warning(f"[Konachan Special] All strategies failed for '{char_tag}', trying emergency fallback")
-        try:
-            emergency_params = {
-                'tags': f"{char_tag}",
-                'limit': min(limit // 2, 50),
-                'page': page
-            }
-            
-            async with session.get('https://konachan.net/post.json', params=emergency_params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    result_count = len(data) if isinstance(data, list) else 0
-                    if result_count > 0:
-                        logger.info(f"[Konachan Special] Emergency fallback: {result_count} results for '{char_tag}'")
-                        # Process with extra strict filtering for emergency results
-                        filtered_data = []
-                        for post in data:
-                            # Only keep clearly safe posts
-                            if post.get('rating') == 's' and not any(bad in post.get('tags', '').lower() for bad in ['nude', 'nsfw', 'loli', 'shota']):
-                                filtered_data.append(post)
-                        
-                        logger.info(f"[Konachan Special] Emergency filtered: {len(filtered_data)} safe results")
-                        return self._process_konachan_results(filtered_data)
-        except Exception as emergency_error:
-            logger.debug(f"[Konachan Special] Emergency fallback failed: {emergency_error}")
+        if all_results:
+            logger.info(f"[Konachan] Page {page}: {len(all_results)} unique safe results for '{char_tag}'")
+            return self._process_konachan_results(all_results)
         
         return []
     
-    async def _search_konachan(self, char_tag: str, page: int = 1, limit: int = 30) -> List[Dict]:
+    async def _search_konachan(self, char_tag: str, page: int = 1, limit: int = 100) -> List[Dict]:
         """Search Konachan.net - ULTRA STRICT safe filter matching Safebooru standards"""
         session = await self.get_session()
         
@@ -1241,30 +1370,26 @@ class MultiSourceImageSearch:
             
             try:
                 basic_params = {
-                    'page': 'dapi',
-                    's': 'post',
-                    'q': 'index',
-                    'json': '1',
-                    'tags': f"{first_part} rating:safe",
-                    'limit': 15,
-                    'pid': 0
+                    'tags': f"{first_part}",
+                    'limit': min(limit // 2, 50),
+                    'page': page
                 }
                 
-                async with session.get('https://safebooru.org/index.php', params=basic_params, timeout=aiohttp.ClientTimeout(total=8)) as resp:
+                async with session.get('https://konachan.net/post.json', params=basic_params, timeout=aiohttp.ClientTimeout(total=8)) as resp:
                     if resp.status == 200:
-                        text = await resp.text()
-                        if text.strip():
-                            try:
-                                import json
-                                data = json.loads(text)
-                                if isinstance(data, list) and data:
-                                    processed = self._process_safebooru_results(data)
-                                    for img in processed:
-                                        if img.get('url') and not self._is_duplicate(img['url']):
-                                            fallback_results.append(img)
-                                    logger.info(f"[Emergency Fallback] First name search: {len(fallback_results)} images")
-                            except json.JSONDecodeError:
-                                pass
+                        data = await resp.json()
+                        result_count = len(data) if isinstance(data, list) else 0
+                        if result_count > 0:
+                            logger.info(f"[Emergency Fallback] First name search: {result_count} results for '{first_part}'")
+                            # Process with extra strict filtering for emergency results
+                            filtered_data = []
+                            for post in data:
+                                # Only keep clearly safe posts
+                                if post.get('rating') == 's' and not any(bad in post.get('tags', '').lower() for bad in ['nude', 'nsfw', 'loli', 'shota']):
+                                    filtered_data.append(post)
+                            
+                            logger.info(f"[Emergency Fallback] Emergency filtered: {len(filtered_data)} safe results")
+                            return self._process_konachan_results(filtered_data)
             except Exception as e:
                 logger.debug(f"[Emergency Fallback] First name search failed: {e}")
         
@@ -1561,6 +1686,416 @@ class MultiSourceImageSearch:
         
         return processed
     
+    # ═══════════════════════════════════════════════════════════════
+    # ADDITIONAL ANIME-SPECIALIZED IMAGE SOURCES
+    # ═══════════════════════════════════════════════════════════════
+    
+    async def _search_gelbooru(self, char_tag: str, page: int = 1, limit: int = 100) -> List[Dict]:
+        """Search Gelbooru - Huge anime database with excellent character coverage"""
+        session = await self.get_session()
+        
+        # Gelbooru API with safe filter
+        params = {
+            'page': 'dapi',
+            's': 'post',
+            'q': 'index',
+            'json': '1',
+            'tags': f'{char_tag} rating:general -nude -nsfw -loli -shota -suggestive',
+            'limit': min(limit, 100),
+            'pid': page - 1
+        }
+        
+        try:
+            async with session.get('https://gelbooru.com/index.php', params=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    posts = data.get('post', []) if isinstance(data, dict) else data
+                    if posts:
+                        logger.info(f"[Gelbooru] Page {page}: Found {len(posts)} results for '{char_tag}'")
+                        return self._process_gelbooru_results(posts)
+        except asyncio.TimeoutError:
+            logger.warning(f"[Gelbooru] Timeout for '{char_tag}' page {page}")
+        except Exception as e:
+            logger.error(f"[Gelbooru] Error: {e}")
+        
+        return []
+    
+    def _process_gelbooru_results(self, data: List[Dict]) -> List[Dict]:
+        """Process Gelbooru results with safety filtering"""
+        processed = []
+        
+        if not isinstance(data, list):
+            return processed
+        
+        blocked_tags = {
+            'suggestive', 'ecchi', 'lewd', 'nsfw', 'nude', 'underwear', 'panties', 'bra',
+            'lingerie', 'bikini', 'swimsuit', 'cleavage', 'underboob', 'sideboob',
+            'pantyshot', 'upskirt', 'nipples', 'topless', 'loli', 'shota', 'sexy',
+            'bondage', 'bath', 'shower', 'see-through', 'spread_legs'
+        }
+        
+        for post in data:
+            try:
+                rating = post.get('rating', '')
+                if rating not in ('g', 'general', 's', 'safe'):
+                    continue
+                
+                file_url = post.get('file_url')
+                if not file_url:
+                    continue
+                
+                # Check tags for blocked content
+                tag_string = post.get('tags', '')
+                post_tags_set = set(tag_string.lower().split())
+                
+                if post_tags_set & blocked_tags:
+                    continue
+                
+                preview_url = post.get('sample_url') or post.get('preview_url') or file_url
+                
+                processed.append({
+                    'id': post.get('id', 0),
+                    'url': file_url,
+                    'preview_url': preview_url,
+                    'source': 'Gelbooru',
+                    'tags': tag_string.split()[:10] if isinstance(tag_string, str) else [],
+                    'score': int(post.get('score', 0) or 0),
+                    'width': int(post.get('width', 0) or 0),
+                    'height': int(post.get('height', 0) or 0),
+                })
+            except Exception as e:
+                logger.debug(f"Error processing Gelbooru post: {e}")
+                continue
+        
+        return processed
+    
+    async def _search_yandere(self, char_tag: str, page: int = 1, limit: int = 100) -> List[Dict]:
+        """Search Yande.re - High-quality anime wallpapers and artwork"""
+        session = await self.get_session()
+        
+        # Yande.re uses Moebooru API
+        params = {
+            'tags': f'{char_tag} rating:safe -nude -nsfw -loli -shota',
+            'limit': min(limit, 100),
+            'page': page
+        }
+        
+        try:
+            async with session.get('https://yande.re/post.json', params=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data:
+                        logger.info(f"[Yande.re] Page {page}: Found {len(data)} results for '{char_tag}'")
+                        return self._process_yandere_results(data)
+        except asyncio.TimeoutError:
+            logger.warning(f"[Yande.re] Timeout for '{char_tag}' page {page}")
+        except Exception as e:
+            logger.error(f"[Yande.re] Error: {e}")
+        
+        return []
+    
+    def _process_yandere_results(self, data: List[Dict]) -> List[Dict]:
+        """Process Yande.re results with safety filtering"""
+        processed = []
+        
+        if not isinstance(data, list):
+            return processed
+        
+        blocked_tags = {
+            'suggestive', 'ecchi', 'lewd', 'nsfw', 'nude', 'underwear', 'panties', 'bra',
+            'lingerie', 'bikini', 'swimsuit', 'cleavage', 'underboob', 'sideboob',
+            'pantyshot', 'upskirt', 'nipples', 'topless', 'loli', 'shota', 'sexy',
+            'bondage', 'bath', 'shower', 'see-through', 'spread_legs'
+        }
+        
+        for post in data:
+            try:
+                rating = post.get('rating', '')
+                if rating != 's':  # Only safe rating
+                    continue
+                
+                file_url = post.get('file_url') or post.get('jpeg_url')
+                if not file_url:
+                    continue
+                
+                tags = post.get('tags', '')
+                if isinstance(tags, str):
+                    post_tags_set = set(tags.lower().split())
+                else:
+                    post_tags_set = set()
+                
+                if post_tags_set & blocked_tags:
+                    continue
+                
+                preview_url = post.get('sample_url') or post.get('preview_url') or file_url
+                
+                processed.append({
+                    'id': post.get('id', 0),
+                    'url': file_url,
+                    'preview_url': preview_url,
+                    'source': 'Yande.re',
+                    'tags': tags.split()[:10] if isinstance(tags, str) else [],
+                    'score': int(post.get('score', 0) or 0),
+                    'width': int(post.get('width', 0) or 0),
+                    'height': int(post.get('height', 0) or 0),
+                })
+            except Exception as e:
+                logger.debug(f"Error processing Yande.re post: {e}")
+                continue
+        
+        return processed
+    
+    async def _search_tbib(self, char_tag: str, page: int = 1, limit: int = 100) -> List[Dict]:
+        """Search TBIB (The Big ImageBoard) - Large anime collection"""
+        session = await self.get_session()
+        
+        params = {
+            'page': 'dapi',
+            's': 'post',
+            'q': 'index',
+            'json': '1',
+            'tags': f'{char_tag} rating:safe',
+            'limit': min(limit, 100),
+            'pid': page - 1
+        }
+        
+        try:
+            async with session.get('https://tbib.org/index.php', params=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status == 200:
+                    text = await resp.text()
+                    if text.strip():
+                        import json
+                        try:
+                            data = json.loads(text)
+                            if isinstance(data, list) and data:
+                                logger.info(f"[TBIB] Page {page}: Found {len(data)} results for '{char_tag}'")
+                                return self._process_tbib_results(data)
+                        except json.JSONDecodeError:
+                            pass
+        except asyncio.TimeoutError:
+            logger.warning(f"[TBIB] Timeout for '{char_tag}' page {page}")
+        except Exception as e:
+            logger.error(f"[TBIB] Error: {e}")
+        
+        return []
+    
+    def _process_tbib_results(self, data: List[Dict]) -> List[Dict]:
+        """Process TBIB results"""
+        processed = []
+        
+        if not isinstance(data, list):
+            return processed
+        
+        blocked_tags = {
+            'suggestive', 'ecchi', 'lewd', 'nsfw', 'nude', 'underwear', 'panties', 'bra',
+            'lingerie', 'bikini', 'swimsuit', 'cleavage', 'underboob', 'sideboob',
+            'pantyshot', 'upskirt', 'nipples', 'topless', 'loli', 'shota', 'sexy',
+            'bondage', 'bath', 'shower', 'see-through', 'spread_legs'
+        }
+        
+        for post in data:
+            try:
+                # Build URLs similar to Safebooru
+                directory = post.get('directory', '')
+                image_name = post.get('image', '')
+                
+                if post.get('file_url'):
+                    image_url = post['file_url']
+                elif directory and image_name:
+                    image_url = f"https://tbib.org/images/{directory}/{image_name}"
+                else:
+                    continue
+                
+                tags = post.get('tags', '')
+                if isinstance(tags, str):
+                    post_tags_set = set(tags.lower().split())
+                else:
+                    post_tags_set = set()
+                
+                if post_tags_set & blocked_tags:
+                    continue
+                
+                preview_url = post.get('sample_url') or post.get('preview_url') or image_url
+                
+                processed.append({
+                    'id': post.get('id', 0),
+                    'url': image_url,
+                    'preview_url': preview_url,
+                    'source': 'TBIB',
+                    'tags': tags.split()[:10] if isinstance(tags, str) else [],
+                    'score': int(post.get('score', 0) or 0),
+                    'width': int(post.get('width', 0) or 0),
+                    'height': int(post.get('height', 0) or 0),
+                })
+            except Exception as e:
+                logger.debug(f"Error processing TBIB post: {e}")
+                continue
+        
+        return processed
+    
+    async def _search_anime_pictures(self, char_tag: str, page: int = 1, limit: int = 100) -> List[Dict]:
+        """Search Anime-Pictures.net - Dedicated anime artwork site"""
+        session = await self.get_session()
+        
+        # Anime-Pictures uses a different API structure
+        # Convert tag format: underscores to spaces for search
+        search_query = char_tag.replace('_', ' ')
+        
+        params = {
+            'search_tag': search_query,
+            'order_by': 'date',
+            'ldate': '0',
+            'lang': 'en',
+            'page': page - 1,
+            'posts_per_page': min(limit, 80)
+        }
+        
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json',
+                'Referer': 'https://anime-pictures.net/'
+            }
+            
+            async with session.get('https://anime-pictures.net/api/v3/posts', params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    posts = data.get('posts', [])
+                    if posts:
+                        logger.info(f"[Anime-Pictures] Page {page}: Found {len(posts)} results for '{char_tag}'")
+                        return self._process_anime_pictures_results(posts)
+        except asyncio.TimeoutError:
+            logger.warning(f"[Anime-Pictures] Timeout for '{char_tag}' page {page}")
+        except Exception as e:
+            logger.debug(f"[Anime-Pictures] Error: {e}")
+        
+        return []
+    
+    def _process_anime_pictures_results(self, data: List[Dict]) -> List[Dict]:
+        """Process Anime-Pictures.net results"""
+        processed = []
+        
+        if not isinstance(data, list):
+            return processed
+        
+        for post in data:
+            try:
+                # Anime-Pictures uses erotic level: 0 = safe, 1 = slightly erotic, 2+ = erotic
+                erotic_level = post.get('erotics', 0)
+                if erotic_level > 0:
+                    continue
+                
+                post_id = post.get('id')
+                if not post_id:
+                    continue
+                
+                # Build image URLs
+                # Anime-Pictures uses md5-based paths
+                md5 = post.get('md5', '')
+                ext = post.get('ext', 'jpg')
+                
+                if md5:
+                    # Full image URL
+                    image_url = f"https://images.anime-pictures.net/{md5[:3]}/{md5}.{ext}"
+                    # Preview URL
+                    preview_url = f"https://images.anime-pictures.net/{md5[:3]}/{md5}_bp.{ext}"
+                else:
+                    continue
+                
+                processed.append({
+                    'id': post_id,
+                    'url': image_url,
+                    'preview_url': preview_url,
+                    'source': 'Anime-Pictures',
+                    'tags': [],  # Tags require separate API call
+                    'score': int(post.get('score_number', 0) or 0),
+                    'width': int(post.get('width', 0) or 0),
+                    'height': int(post.get('height', 0) or 0),
+                })
+            except Exception as e:
+                logger.debug(f"Error processing Anime-Pictures post: {e}")
+                continue
+        
+        return processed
+    
+    async def _search_tumblr(self, char_tag: str, page: int = 1, limit: int = 100) -> List[Dict]:
+        """Search Tumblr for anime fan art using tag search
+        
+        Note: Tumblr has anti-bot protection that may block automated requests (403).
+        This function is included for potential future use with proper API access.
+        Currently may return limited or no results due to Cloudflare protection.
+        """
+        session = await self.get_session()
+        
+        # Convert tag format: underscores to spaces, remove parentheses
+        search_tag = char_tag.replace('_', ' ').replace('(', '').replace(')', '')
+        
+        try:
+            # Attempt to use Tumblr's public tagged posts endpoint
+            # Note: This may be blocked by Cloudflare/anti-bot protection
+            url = f"https://www.tumblr.com/tagged/{quote_plus(search_tag)}"
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://www.tumblr.com/',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+            }
+            
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    html = await resp.text()
+                    
+                    # Extract image URLs from Tumblr's HTML
+                    import re
+                    
+                    # Pattern 1: Direct media URLs
+                    pattern1 = r'https://(?:64\.media|media)\.tumblr\.com/[a-f0-9]+/tumblr_[a-zA-Z0-9_]+_\d+\.(?:jpg|png|gif)'
+                    matches1 = re.findall(pattern1, html)
+                    
+                    # Pattern 2: Static Tumblr images
+                    pattern2 = r'https://static\.tumblr\.com/[a-f0-9]+/[a-zA-Z0-9_]+/tumblr_[a-zA-Z0-9_]+\.(?:jpg|png|gif)'
+                    matches2 = re.findall(pattern2, html)
+                    
+                    # Combine and deduplicate
+                    all_urls = list(set(matches1 + matches2))
+                    
+                    if all_urls:
+                        logger.info(f"[Tumblr] Found {len(all_urls)} images for '{char_tag}'")
+                        
+                        # Create result objects
+                        results = []
+                        for idx, img_url in enumerate(all_urls[:limit], start=1):
+                            results.append({
+                                'id': f"tumblr_{page}_{idx}",
+                                'url': img_url,
+                                'preview_url': img_url,
+                                'source': 'Tumblr',
+                                'tags': [search_tag, 'anime', 'fan_art'],
+                                'score': 0,
+                                'width': 1280,
+                                'height': 1280,
+                            })
+                        
+                        return results
+                    else:
+                        logger.debug(f"[Tumblr] No images found in HTML for '{char_tag}'")
+                elif resp.status == 403:
+                    # Cloudflare/anti-bot protection blocking request
+                    logger.debug(f"[Tumblr] Access blocked (403) - anti-bot protection active")
+                else:
+                    logger.debug(f"[Tumblr] Status {resp.status} for '{char_tag}'")
+        except asyncio.TimeoutError:
+            logger.debug(f"[Tumblr] Timeout for '{char_tag}' page {page}")
+        except Exception as e:
+            logger.debug(f"[Tumblr] Error: {e}")
+        
+        # Return empty list - other sources will provide results
+        return []
+
     async def close(self):
         """Close the aiohttp session"""
         if self.session and not self.session.closed:
