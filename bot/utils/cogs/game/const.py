@@ -159,7 +159,7 @@ TIMER_CONFIG = {
     "job": {"max_uses": 5, "command_cooldown": 5, "cooldown": 3600},
     "rob": {"max_uses": 3, "command_cooldown": 5, "cooldown": 7200},
     "crime": {"max_uses": 3, "command_cooldown": 5, "cooldown": 3600},
-    "gacha": {"max_uses": 100 if ut else 10, "command_cooldown": 5, "cooldown": 1800},
+    "gacha": {"max_uses": 10 if ut else 10, "command_cooldown": 5, "cooldown": 1800},
     "claim": {"max_uses": 1, "command_cooldown": 5, "cooldown": 86400},
 }
 
@@ -199,12 +199,14 @@ def get_time_period_description(cooldown_seconds: int) -> str:
 # GACHA SYSTEM
 # ═══════════════════════════════════════════════════════════════
 
+# Pokemon-style rarity distribution (out of 10,000 for precision)
+# Common: 60% | Uncommon: 25% | Rare: 10% | Epic: 4% | Legendary: 1%
 GACHA_RARITY_TIERS = {
-    "common": {"weight": 50000, "color": 0x9E9E9E, "stars": 1, "emoji": GameEmojis.COMMON},
-    "uncommon": {"weight": 30000, "color": 0x4CAF50, "stars": 2, "emoji": GameEmojis.UNCOMMON},
-    "rare": {"weight": 15000, "color": 0x2196F3, "stars": 3, "emoji": GameEmojis.RARE},
-    "epic": {"weight": 4000, "color": 0x9C27B0, "stars": 4, "emoji": GameEmojis.EPIC},
-    "legendary": {"weight": 1000, "color": 0xFFD700, "stars": 5, "emoji": GameEmojis.LEGENDARY},
+    "common": {"weight": 6000, "color": 0x9E9E9E, "stars": 1, "emoji": GameEmojis.COMMON},
+    "uncommon": {"weight": 2500, "color": 0x4CAF50, "stars": 2, "emoji": GameEmojis.UNCOMMON},
+    "rare": {"weight": 1000, "color": 0x2196F3, "stars": 3, "emoji": GameEmojis.RARE},
+    "epic": {"weight": 400, "color": 0x9C27B0, "stars": 4, "emoji": GameEmojis.EPIC},
+    "legendary": {"weight": 100, "color": 0xFFD700, "stars": 5, "emoji": GameEmojis.LEGENDARY},
 }
 
 # Anime popularity thresholds (based on MAL members/AniList popularity)
@@ -217,11 +219,12 @@ GACHA_ANIME_POPULARITY_THRESHOLDS = {
 }
 
 # Character favorites thresholds (PRIMARY factor - this determines rarity!)
+# Adjusted to match Pokemon rarity philosophy: iconic characters are legendary
 GACHA_CHARACTER_FAVORITES_THRESHOLDS = {
-    "legendary": 7000,     # 7K+ favorites (Itachi: 18,686, Levi: 31,576, Izuku: 11,413)
-    "epic": 3000,          # 3K+ favorites (Very popular characters)
-    "rare": 800,           # 800+ favorites (Popular characters)
-    "uncommon": 150,       # 150+ favorites (Known characters)
+    "legendary": 10000,    # 10K+ favorites (Levi: 31K, Itachi: 18K, L: 27K) - True icons
+    "epic": 5000,          # 5K+ favorites (Very popular main characters)
+    "rare": 2000,          # 2K+ favorites (Popular characters)
+    "uncommon": 500,       # 500+ favorites (Known characters)
     "common": 0,           # Everything else
 }
 
@@ -303,8 +306,10 @@ GACHA_CLAIM_TIMEOUT = 30
 # ═══════════════════════════════════════════════════════════════
 
 def roll_gacha_rarity() -> str:
-    roll = random.randint(1, 1000000)
+    """Roll rarity using Pokemon-style distribution (60/25/10/4/1)."""
+    roll = random.randint(1, 10000)  # Total weight is 10,000
     cumulative = 0
+    # Process from rarest to most common for proper cumulative calculation
     for rarity in ["legendary", "epic", "rare", "uncommon", "common"]:
         cumulative += GACHA_RARITY_TIERS[rarity]["weight"]
         if roll <= cumulative:
@@ -338,20 +343,20 @@ def get_rarity_from_favorites(favorites: int) -> str:
     return "common"
 
 def get_combined_rarity(anime_popularity: int, char_favorites: int) -> str:
-    """Fast rarity calculation using CHARACTER FAVORITES (80%) + anime popularity (20%).
-    Character favorites are the PRIMARY factor - popular characters should be legendary!
+    """Pokemon-style rarity: CHARACTER FAVORITES (85%) + anime popularity (15%).
+    Character favorites are PRIMARY - iconic characters deserve legendary status!
     Optimized for speed with direct threshold checks.
     """
-    # Direct threshold checks - faster than string comparisons
-    # Character favorites are PRIMARY (80% weight)
+    # Character favorites are PRIMARY (85% weight) - Pokemon philosophy
     char_score = (
-        5 if char_favorites >= 7000 else
-        4 if char_favorites >= 3000 else
-        3 if char_favorites >= 800 else
-        2 if char_favorites >= 150 else 1
+        5 if char_favorites >= 10000 else  # Legendary icons (Levi, L, Itachi)
+        4 if char_favorites >= 5000 else   # Epic heroes (popular mains)
+        3 if char_favorites >= 2000 else   # Rare favorites
+        2 if char_favorites >= 500 else    # Uncommon known chars
+        1
     )
     
-    # Anime popularity is SECONDARY (20% weight)
+    # Anime popularity is SECONDARY (15% weight)
     anime_score = (
         5 if anime_popularity >= 2000000 else
         4 if anime_popularity >= 1000000 else
@@ -359,16 +364,15 @@ def get_combined_rarity(anime_popularity: int, char_favorites: int) -> str:
         2 if anime_popularity >= 100000 else 1
     )
     
-    # Weighted average: 80% character favorites, 20% anime popularity
-    # This ensures popular characters like Itachi (18,686 favs) are legendary!
-    combined_score = (char_score * 0.8) + (anime_score * 0.2)
+    # Weighted: 85% character, 15% anime (Pokemon TCG: card rarity > set rarity)
+    combined_score = (char_score * 0.85) + (anime_score * 0.15)
     
     # Direct return - fastest path
     return (
-        "legendary" if combined_score >= 4.5 else
-        "epic" if combined_score >= 3.5 else
-        "rare" if combined_score >= 2.5 else
-        "uncommon" if combined_score >= 1.5 else
+        "legendary" if combined_score >= 4.6 else  # Stricter for true legends
+        "epic" if combined_score >= 3.7 else
+        "rare" if combined_score >= 2.7 else
+        "uncommon" if combined_score >= 1.7 else
         "common"
     )
 
