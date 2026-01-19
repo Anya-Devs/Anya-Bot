@@ -15,6 +15,146 @@ import json
 
 logger = logging.getLogger(__name__)
 
+# Comprehensive character name to booru tag mapping
+# Format: "Character Name" -> "correct_booru_tag"
+CHARACTER_TAG_MAP = {
+    # === NARUTO / NARUTO SHIPPUDEN ===
+    "itachi uchiha": "uchiha_itachi",
+    "uchiha itachi": "uchiha_itachi",
+    "sasuke uchiha": "uchiha_sasuke",
+    "uchiha sasuke": "uchiha_sasuke",
+    "naruto uzumaki": "uzumaki_naruto",
+    "uzumaki naruto": "uzumaki_naruto",
+    "sakura haruno": "haruno_sakura",
+    "haruno sakura": "haruno_sakura",
+    "kakashi hatake": "hatake_kakashi",
+    "hatake kakashi": "hatake_kakashi",
+    "hinata hyuga": "hyuuga_hinata",
+    "hyuga hinata": "hyuuga_hinata",
+    "gaara": "gaara",
+    "rock lee": "rock_lee",
+    "neji hyuga": "hyuuga_neji",
+    "shikamaru nara": "nara_shikamaru",
+    "temari": "temari",
+    "tsunade": "tsunade_(naruto)",
+    "jiraiya": "jiraiya",
+    "orochimaru": "orochimaru",
+    "madara uchiha": "uchiha_madara",
+    "obito uchiha": "uchiha_obito",
+    "minato namikaze": "namikaze_minato",
+    "kushina uzumaki": "uzumaki_kushina",
+    "pain": "pain_(naruto)",
+    "konan": "konan",
+    
+    # === MY HERO ACADEMIA ===
+    "izuku midoriya": "midoriya_izuku",
+    "deku": "midoriya_izuku",
+    "katsuki bakugo": "bakugou_katsuki",
+    "bakugo": "bakugou_katsuki",
+    "shoto todoroki": "todoroki_shouto",
+    "todoroki": "todoroki_shouto",
+    "ochako uraraka": "uraraka_ochako",
+    "uraraka": "uraraka_ochako",
+    "momo yaoyorozu": "yaoyorozu_momo",
+    "tsuyu asui": "asui_tsuyu",
+    "all might": "all_might",
+    
+    # === ATTACK ON TITAN ===
+    "eren yeager": "eren_yeager",
+    "eren jaeger": "eren_yeager",
+    "mikasa ackerman": "mikasa_ackerman",
+    "levi ackerman": "levi_(shingeki_no_kyojin)",
+    "levi": "levi_(shingeki_no_kyojin)",
+    "armin arlert": "armin_arlert",
+    "historia reiss": "historia_reiss",
+    "sasha braus": "sasha_braus",
+    "annie leonhart": "annie_leonhart",
+    "reiner braun": "reiner_braun",
+    
+    # === DEMON SLAYER ===
+    "tanjiro kamado": "kamado_tanjirou",
+    "nezuko kamado": "kamado_nezuko",
+    "zenitsu agatsuma": "agatsuma_zenitsu",
+    "inosuke hashibira": "hashibira_inosuke",
+    "giyu tomioka": "tomioka_giyuu",
+    "shinobu kocho": "kochou_shinobu",
+    "mitsuri kanroji": "kanroji_mitsuri",
+    "kyojuro rengoku": "rengoku_kyoujurou",
+    
+    # === JUJUTSU KAISEN ===
+    "yuji itadori": "itadori_yuuji",
+    "megumi fushiguro": "fushiguro_megumi",
+    "nobara kugisaki": "kugisaki_nobara",
+    "satoru gojo": "gojou_satoru",
+    "gojo": "gojou_satoru",
+    "maki zenin": "zenin_maki",
+    "toge inumaki": "inumaki_toge",
+    "yuta okkotsu": "okkotsu_yuuta",
+    
+    # === SPY X FAMILY ===
+    "anya forger": "anya_(spy_x_family)",
+    "anya": "anya_(spy_x_family)",
+    "loid forger": "loid_forger",
+    "yor forger": "yor_forger",
+    "yor briar": "yor_forger",
+    "damian desmond": "damian_desmond",
+    "becky blackbell": "becky_blackbell",
+    
+    # === ONE PIECE ===
+    "monkey d luffy": "monkey_d._luffy",
+    "luffy": "monkey_d._luffy",
+    "roronoa zoro": "roronoa_zoro",
+    "zoro": "roronoa_zoro",
+    "nami": "nami_(one_piece)",
+    "sanji": "sanji",
+    "nico robin": "nico_robin",
+    "robin": "nico_robin",
+    "tony tony chopper": "tony_tony_chopper",
+    "chopper": "tony_tony_chopper",
+    "trafalgar law": "trafalgar_law",
+    "law": "trafalgar_law",
+    "portgas d ace": "portgas_d._ace",
+    "ace": "portgas_d._ace",
+    
+    # === CHAINSAW MAN ===
+    "denji": "denji_(chainsaw_man)",
+    "power": "power_(chainsaw_man)",
+    "makima": "makima_(chainsaw_man)",
+    "aki hayakawa": "aki_hayakawa",
+    "kobeni higashiyama": "higashiyama_kobeni",
+    
+    # === RE:ZERO ===
+    "subaru natsuki": "natsuki_subaru",
+    "emilia": "emilia_(re:zero)",
+    "rem": "rem_(re:zero)",
+    "ram": "ram_(re:zero)",
+    "beatrice": "beatrice_(re:zero)",
+    
+    # === FATE SERIES ===
+    "saber": "saber_(fate)",
+    "artoria pendragon": "artoria_pendragon_(fate)",
+    "rin tohsaka": "tohsaka_rin",
+    "archer": "archer_(fate/stay_night)",
+    "gilgamesh": "gilgamesh_(fate)",
+    "ishtar": "ishtar_(fate)",
+    "ereshkigal": "ereshkigal_(fate)",
+    "jeanne d'arc": "jeanne_d'arc_(fate)",
+    "mash kyrielight": "mash_kyrielight",
+    
+    # === GENSHIN IMPACT ===
+    "raiden shogun": "raiden_shogun",
+    "ei": "raiden_shogun",
+    "yae miko": "yae_miko",
+    "hu tao": "hu_tao_(genshin_impact)",
+    "ganyu": "ganyu_(genshin_impact)",
+    "keqing": "keqing_(genshin_impact)",
+    "zhongli": "zhongli_(genshin_impact)",
+    "venti": "venti_(genshin_impact)",
+    "nahida": "nahida_(genshin_impact)",
+    "furina": "furina_(genshin_impact)",
+    "neuvillette": "neuvillette_(genshin_impact)",
+}
+
 
 class SmartTagDiscovery:
     """Ultra-aggressive tag discovery - finds EVERY possible matching tag"""
@@ -41,6 +181,15 @@ class SmartTagDiscovery:
     def _generate_all_variations(self, character_name: str, series_name: str = None) -> List[str]:
         """Generate ALL possible name variations for maximum tag matching"""
         variations = set()
+        
+        # PRIORITY 1: Check CHARACTER_TAG_MAP for exact match
+        char_lower = character_name.lower().strip()
+        if char_lower in CHARACTER_TAG_MAP:
+            exact_tag = CHARACTER_TAG_MAP[char_lower]
+            variations.add(exact_tag)
+            logger.info(f"[TagDiscovery] Found exact mapping: '{character_name}' -> '{exact_tag}'")
+            # Add the exact tag as PRIMARY, but still generate variations as fallback
+        
         base = self._normalize(character_name)
         variations.add(base)
         
@@ -52,7 +201,7 @@ class SmartTagDiscovery:
         
         if len(parts) >= 2:
             variations.add(f"{parts[0]}_{parts[1]}")
-            variations.add(f"{parts[1]}_{parts[0]}")
+            variations.add(f"{parts[1]}_{parts[0]}")  # Japanese name order
             variations.add(parts[1])
             
         if len(parts) >= 3:
@@ -71,11 +220,6 @@ class SmartTagDiscovery:
             for v in list(variations):
                 if '(' not in v:  # Don't double-add series
                     variations.add(f"{v}_({series_norm})")
-        
-        # Special case: For "Anya Forger", also try just "Anya" with series
-        if series_name and 'anya' in base.lower():
-            variations.add('anya')
-            variations.add('anya_(spy_x_family)')
         
         return list(variations)
     

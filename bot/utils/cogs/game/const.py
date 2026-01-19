@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 def load_config(filename: str) -> dict:
     """Load JSON config from data/commands/minigames/{filename}"""
     try:
-        path = Path(__file__).parent.parent.parent.parent / "data" / "commands" / "minigames" / filename
+        # Path from bot/utils/cogs/game/const.py -> project root
+        path = Path(__file__).parent.parent.parent.parent.parent / "data" / "commands" / "minigames" / filename
         if path.exists():
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
@@ -142,6 +143,14 @@ RARITY_CONFIG = {
 # Users can draw up to 10 times (max_uses), but can only claim 3 characters total
 MAX_CLAIMS_PER_DRAW = 3
 
+# Gacha cooldown message template
+def get_gacha_cooldown_message(wait_time: str) -> str:
+    """Returns the gacha cooldown message with the wait time."""
+    return (
+        f"⏰ **Gacha is cooling down!** Wait **{wait_time}** before playing again.\n"
+        f"> You claimed the maximum of **{MAX_CLAIMS_PER_DRAW} characters**. Please wait to claim again."
+    )
+
 # ═══════════════════════════════════════════════════════════════
 # TIMER SYSTEM
 # ═══════════════════════════════════════════════════════════════
@@ -159,7 +168,7 @@ TIMER_CONFIG = {
     "job": {"max_uses": 5, "command_cooldown": 5, "cooldown": 3600},
     "rob": {"max_uses": 3, "command_cooldown": 5, "cooldown": 7200},
     "crime": {"max_uses": 3, "command_cooldown": 5, "cooldown": 3600},
-    "gacha": {"max_uses": 10 if ut else 10, "command_cooldown": 5, "cooldown": 1800},
+    "gacha": {"max_uses": 100 if ut else 10, "command_cooldown": 5, "cooldown": 1800},
     "claim": {"max_uses": 1, "command_cooldown": 5, "cooldown": 86400},
 }
 
@@ -199,32 +208,32 @@ def get_time_period_description(cooldown_seconds: int) -> str:
 # GACHA SYSTEM
 # ═══════════════════════════════════════════════════════════════
 
-# Pokemon-style rarity distribution (out of 10,000 for precision)
-# Common: 60% | Uncommon: 25% | Rare: 10% | Epic: 4% | Legendary: 1%
+# Much stricter rarity distribution (out of 10,000 for precision)
+# Common: 75% | Uncommon: 18% | Rare: 5% | Epic: 1.8% | Legendary: 0.2%
 GACHA_RARITY_TIERS = {
-    "common": {"weight": 6000, "color": 0x9E9E9E, "stars": 1, "emoji": GameEmojis.COMMON},
-    "uncommon": {"weight": 2500, "color": 0x4CAF50, "stars": 2, "emoji": GameEmojis.UNCOMMON},
-    "rare": {"weight": 1000, "color": 0x2196F3, "stars": 3, "emoji": GameEmojis.RARE},
-    "epic": {"weight": 400, "color": 0x9C27B0, "stars": 4, "emoji": GameEmojis.EPIC},
-    "legendary": {"weight": 100, "color": 0xFFD700, "stars": 5, "emoji": GameEmojis.LEGENDARY},
+    "common": {"weight": 7500, "color": 0x9E9E9E, "stars": 1, "emoji": GameEmojis.COMMON},
+    "uncommon": {"weight": 1800, "color": 0x4CAF50, "stars": 2, "emoji": GameEmojis.UNCOMMON},
+    "rare": {"weight": 500, "color": 0x2196F3, "stars": 3, "emoji": GameEmojis.RARE},
+    "epic": {"weight": 180, "color": 0x9C27B0, "stars": 4, "emoji": GameEmojis.EPIC},
+    "legendary": {"weight": 20, "color": 0xFFD700, "stars": 5, "emoji": GameEmojis.LEGENDARY},
 }
 
-# Anime popularity thresholds (based on MAL members/AniList popularity)
+# Anime popularity thresholds (based on MAL members/AniList popularity) - STRICTER
 GACHA_ANIME_POPULARITY_THRESHOLDS = {
-    "legendary": 2000000,  # 2M+ members (Attack on Titan, Demon Slayer, Frieren)
-    "epic": 1000000,       # 1M+ members (Jujutsu Kaisen, Spy x Family)
-    "rare": 500000,        # 500K+ members (Popular seasonal anime)
-    "uncommon": 100000,    # 100K+ members (Well-known anime)
+    "legendary": 3000000,  # 3M+ members (Only top-tier: Attack on Titan, Death Note)
+    "epic": 1500000,       # 1.5M+ members (Demon Slayer, Jujutsu Kaisen)
+    "rare": 800000,        # 800K+ members (Very popular anime)
+    "uncommon": 200000,    # 200K+ members (Well-known anime)
     "common": 0,           # Everything else
 }
 
-# Character favorites thresholds (PRIMARY factor - this determines rarity!)
-# Adjusted to match Pokemon rarity philosophy: iconic characters are legendary
+# Character favorites thresholds (PRIMARY factor - this determines rarity!) - STRICTER
+# Only true icons should be legendary/epic
 GACHA_CHARACTER_FAVORITES_THRESHOLDS = {
-    "legendary": 10000,    # 10K+ favorites (Levi: 31K, Itachi: 18K, L: 27K) - True icons
-    "epic": 5000,          # 5K+ favorites (Very popular main characters)
-    "rare": 2000,          # 2K+ favorites (Popular characters)
-    "uncommon": 500,       # 500+ favorites (Known characters)
+    "legendary": 15000,    # 15K+ favorites (Only absolute icons: Levi, L, Itachi)
+    "epic": 8000,          # 8K+ favorites (Very popular main characters)
+    "rare": 3000,          # 3K+ favorites (Popular characters)
+    "uncommon": 1000,      # 1K+ favorites (Known characters)
     "common": 0,           # Everything else
 }
 

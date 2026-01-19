@@ -128,8 +128,8 @@ class CharacterInfoView(discord.ui.View):
         self.session_claims = session_claims  # Track session claims
         self.message = None  # Will be set after creation
         
-        # Only add redraw button if user has draws left
-        if draws_left > 0 and guild_id:
+        # Only add redraw button if user has draws left AND hasn't reached claim limit
+        if draws_left > 0 and guild_id and session_claims < MAX_CLAIMS_PER_DRAW:
             self.add_item(self.create_redraw_button())
     
     @discord.ui.button(label="Info", style=discord.ButtonStyle.gray)
@@ -308,20 +308,34 @@ class GachaClaimView(discord.ui.View):
             except discord.InteractionResponded:
                 return await interaction.followup.send(f"{GameEmojis.ERROR} This isn't your draw!", ephemeral=True)
         
-        # Check if user has reached the session claim limit
-        if self.session_claims >= MAX_CLAIMS_PER_DRAW and not self.is_dev_drop:
-            try:
-                return await interaction.response.send_message(
-                    f"{GameEmojis.ERROR} You've reached the maximum of **{MAX_CLAIMS_PER_DRAW} claims** per session!\n"
-                    f"You can still draw more characters, but you can only claim {MAX_CLAIMS_PER_DRAW} total.",
-                    ephemeral=True
-                )
-            except discord.InteractionResponded:
-                return await interaction.followup.send(
-                    f"{GameEmojis.ERROR} You've reached the maximum of **{MAX_CLAIMS_PER_DRAW} claims** per session!\n"
-                    f"You can still draw more characters, but you can only claim {MAX_CLAIMS_PER_DRAW} total.",
-                    ephemeral=True
-                )
+        # Fetch fresh session claims from database to prevent bypass via old draw messages
+        user_id = str(self.user.id)
+        current_session_claims = await self.cog.get_session_claims(user_id, self.guild_id)
+        
+        # Check if user has reached the session claim limit (use fresh data from DB)
+        if current_session_claims >= MAX_CLAIMS_PER_DRAW and not self.is_dev_drop:
+            gacha_config = get_timer_config("gacha")
+            # Check remaining cooldown time
+            remaining = await self.cog.check_cooldown(user_id, "gacha_main", gacha_config["cooldown"], self.guild_id)
+            if remaining:
+                wait_time = self.cog.format_time(remaining)
+                message = get_gacha_cooldown_message(wait_time)
+                try:
+                    return await interaction.response.send_message(message, ephemeral=True)
+                except discord.InteractionResponded:
+                    return await interaction.followup.send(message, ephemeral=True)
+            else:
+                # Cooldown expired but they're trying to claim from old message
+                try:
+                    return await interaction.response.send_message(
+                        f"{GameEmojis.ERROR} Your cooldown has expired! Use `-draw` to start a new session.",
+                        ephemeral=True
+                    )
+                except discord.InteractionResponded:
+                    return await interaction.followup.send(
+                        f"{GameEmojis.ERROR} Your cooldown has expired! Use `-draw` to start a new session.",
+                        ephemeral=True
+                    )
         
         if self.claimed:
             try:
@@ -369,6 +383,15 @@ class GachaClaimView(discord.ui.View):
         self.claimed = True
         self.claimed_indices.append(index)
         self.session_claims += 1  # Increment session claims
+        
+        # Increment persistent session claims in database
+        await self.cog.increment_session_claims(user_id, self.guild_id)
+        
+        # If user just hit the claim limit, activate the gacha cooldown immediately
+        if self.session_claims >= MAX_CLAIMS_PER_DRAW:
+            gacha_config = get_timer_config("gacha")
+            await self.cog.set_cooldown(user_id, "gacha_main", self.guild_id)
+        
         self.stop()
         
         # Add to inventory in MongoDB and get UID

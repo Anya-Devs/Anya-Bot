@@ -291,8 +291,9 @@ class Games(commands.Cog):
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
             
-            # Use guild-specific cooldowns for claim command, otherwise use global
-            if action == "claim" and guild_id:
+            # Use guild-specific cooldowns for claim, gacha, and work commands
+            # Use global cooldowns for other actions
+            if guild_id and action in ["claim", "gacha_main", "work", "rob"]:
                 collection_key = guild_id
                 query_field = f"members.{user_id}.cooldowns.{action}"
             else:
@@ -305,7 +306,7 @@ class Games(commands.Cog):
             )
             
             if result:
-                if action == "claim" and guild_id:
+                if guild_id and action in ["claim", "gacha_main", "work", "rob"]:
                     last_time_str = result.get("members", {}).get(user_id, {}).get("cooldowns", {}).get(action)
                 else:
                     last_time_str = result.get("cooldowns", {}).get(user_id, {}).get(action)
@@ -324,8 +325,9 @@ class Games(commands.Cog):
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
             
-            # Use guild-specific cooldowns for claim command, otherwise use global
-            if action == "claim" and guild_id:
+            # Use guild-specific cooldowns for claim, gacha, and work commands
+            # Use global cooldowns for other actions
+            if guild_id and action in ["claim", "gacha_main", "work", "rob"]:
                 await server_col.update_one(
                     {"guild_id": guild_id},
                     {"$set": {f"members.{user_id}.cooldowns.{action}": datetime.now(timezone.utc).isoformat()}},
@@ -460,7 +462,7 @@ class Games(commands.Cog):
             await self.increment_current_uses(user_id, guild_id, command)
             current_uses = await self.get_current_uses(user_id, guild_id, command)
             if current_uses >= config["max_uses"]:
-                await self.set_cooldown(user_id, f"{command}_main")
+                await self.set_cooldown(user_id, f"{command}_main", guild_id)
    
     async def get_current_uses(self, user_id: str, guild_id: str, command: str) -> int:
         try:
@@ -499,6 +501,97 @@ class Games(commands.Cog):
             )
         except Exception as e:
             logger.error(f"Error resetting uses: {e}")
+    
+    async def get_session_claims(self, user_id: str, guild_id: str) -> int:
+        """Get the number of claims made in the current gacha session."""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.gacha_session_claims": 1, f"members.{user_id}.gacha_session_start": 1}
+            )
+            if result:
+                member_data = result.get("members", {}).get(user_id, {})
+                session_start = member_data.get("gacha_session_start")
+                claims = member_data.get("gacha_session_claims", 0)
+                
+                # Check if session is still valid (within cooldown period)
+                if session_start:
+                    from datetime import datetime, timezone, timedelta
+                    gacha_config = get_timer_config("gacha")
+                    cooldown_seconds = gacha_config["cooldown"]
+                    
+                    # Ensure session_start is timezone-aware
+                    if session_start.tzinfo is None:
+                        session_start = session_start.replace(tzinfo=timezone.utc)
+                    
+                    session_expiry = session_start + timedelta(seconds=cooldown_seconds)
+                    
+                    if datetime.now(timezone.utc) > session_expiry:
+                        # Session expired, reset claims
+                        await self.reset_session_claims(user_id, guild_id)
+                        return 0
+                
+                return claims
+        except Exception as e:
+            logger.error(f"Error getting session claims: {e}")
+        return 0
+    
+    async def increment_session_claims(self, user_id: str, guild_id: str):
+        """Increment the number of claims in the current gacha session."""
+        try:
+            from datetime import datetime, timezone
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            
+            # Check if session exists
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.gacha_session_start": 1}
+            )
+            
+            session_start = result.get("members", {}).get(user_id, {}).get("gacha_session_start") if result else None
+            
+            if not session_start:
+                # Start new session
+                await server_col.update_one(
+                    {"guild_id": guild_id},
+                    {
+                        "$set": {
+                            f"members.{user_id}.gacha_session_start": datetime.now(timezone.utc),
+                            f"members.{user_id}.gacha_session_claims": 1
+                        }
+                    },
+                    upsert=True
+                )
+            else:
+                # Increment existing session
+                await server_col.update_one(
+                    {"guild_id": guild_id},
+                    {"$inc": {f"members.{user_id}.gacha_session_claims": 1}},
+                    upsert=True
+                )
+        except Exception as e:
+            logger.error(f"Error incrementing session claims: {e}")
+    
+    async def reset_session_claims(self, user_id: str, guild_id: str):
+        """Reset gacha session claims."""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            await server_col.update_one(
+                {"guild_id": guild_id},
+                {
+                    "$unset": {
+                        f"members.{user_id}.gacha_session_claims": "",
+                        f"members.{user_id}.gacha_session_start": ""
+                    }
+                },
+                upsert=True
+            )
+        except Exception as e:
+            logger.error(f"Error resetting session claims: {e}")
 
     # ===================================================================
     # GACHA SYSTEM - EXTREMELY RARE (Shiny Pokemon level)
@@ -2957,12 +3050,18 @@ class Games(commands.Cog):
                     anime_filter = anime_part[1:end_quote]
                     character_part = anime_part[end_quote + 1:].strip()
                 else:
-                    # Unquoted - take first word as anime name
-                    anime_parts = anime_part.split()
-                    if len(anime_parts) < 2:
-                        return await ctx.reply("❌ Please provide character names after anime filter", mention_author=False)
-                    anime_filter = anime_parts[0]
-                    character_part = " ".join(anime_parts[1:])
+                    # Unquoted - take everything until comma as anime name
+                    if ',' in anime_part:
+                        comma_idx = anime_part.index(',')
+                        anime_filter = anime_part[:comma_idx].strip()
+                        character_part = anime_part[comma_idx + 1:].strip()
+                    else:
+                        # No comma found - take first word as anime, rest as single character
+                        anime_parts = anime_part.split(None, 1)
+                        if len(anime_parts) < 2:
+                            return await ctx.reply("❌ Please provide character names after anime filter", mention_author=False)
+                        anime_filter = anime_parts[0]
+                        character_part = anime_parts[1]
                 
                 # Clean character names
                 character_names = [name.strip() for name in character_part.split(",") if name.strip()]
@@ -3068,6 +3167,20 @@ class Games(commands.Cog):
         user_id = str(ctx.author.id)
         cost = GACHA_COST
         
+        # Check if user has reached claim limit
+        session_claims = await self.get_session_claims(user_id, guild_id)
+        if session_claims >= MAX_CLAIMS_PER_DRAW:
+            gacha_config = get_timer_config("gacha")
+            # Check remaining cooldown time
+            remaining = await self.check_cooldown(user_id, "gacha_main", gacha_config["cooldown"], guild_id)
+            if remaining:
+                wait_time = self.format_time(remaining)
+                message = get_gacha_cooldown_message(wait_time)
+                return await ctx.reply(message, mention_author=False)
+            else:
+                # Cooldown expired, reset claims
+                await self.reset_session_claims(user_id, guild_id)
+        
         # Check timer (cooldown + daily limit)
         timer_error = await self.check_timer(ctx, "gacha")
         if timer_error:
@@ -3125,9 +3238,12 @@ class Games(commands.Cog):
         except:
             pass
         
+        # Get current session claims
+        session_claims = await self.get_session_claims(user_id, guild_id)
+        
         # Create claim view and send instantly
         try:
-            view = GachaClaimView(self, ctx.author, guild_id, characters, new_balance, draws_left, is_out_of_draws)
+            view = GachaClaimView(self, ctx.author, guild_id, characters, new_balance, draws_left, is_out_of_draws, session_claims=session_claims)
             msg = await ctx.reply(file=file, view=view, mention_author=False)
             view.message = msg
         except Exception as e:
@@ -3467,7 +3583,7 @@ class Games(commands.Cog):
             async with session.get("https://random-word-api.herokuapp.com/word?length=5") as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    if data:
+                    if data and len(data[0]) == 5:
                         word = data[0].upper()
         except:
             pass
@@ -4114,52 +4230,100 @@ class Games(commands.Cog):
         # Increment activity
         await self.increment_activity(user_id, guild_id, 1)
         
-        # Check if user has a job
-        current_job_id = await self.get_user_job(user_id, guild_id)
-        if not current_job_id:
-            embed = discord.Embed(
-                title="❌ No Job!",
-                description="You don't have a job yet!\n\n"
-                           f"Use `{ctx.prefix}jobs` to view available jobs and apply for one.",
-                color=discord.Color.red()
-            )
-            return await ctx.reply(embed=embed, mention_author=False)
-        
-        # Get job data
-        job_data = self.get_job_by_id(current_job_id)
-        if not job_data:
-            # Job no longer exists, clear it
-            await self.set_user_job(user_id, guild_id, None)
-            embed = discord.Embed(
-                title="❌ Job Not Found!",
-                description=f"Your job no longer exists. Use `{ctx.prefix}jobs` to find a new one.",
-                color=discord.Color.red()
-            )
-            return await ctx.reply(embed=embed, mention_author=False)
+        # Get work config from JSON
+        work_config = GROUNDED_CONFIG.get("work", {})
+        cooldown = work_config.get("cooldown", 1800)
         
         # Check cooldown
-        cooldown = job_data.get("cooldown", 1800)
         remaining = await self.check_cooldown(user_id, "work", cooldown)
         if remaining:
             return await ctx.reply(f"⏳ You can work again in **{self.format_time(remaining)}**", mention_author=False)
         
-        # Show task selection view
-        view = WorkTaskView(self, ctx.author, guild_id, job_data)
+        # Get character info
+        character = await self.get_user_character(user_id, guild_id)
         
+        # Determine job title and message
+        if character:
+            char_bonus = work_config.get("character_bonuses", {}).get(character, {})
+            job_title = char_bonus.get("title", "Worker")
+            job_emoji = work_config.get("emoji", "💼")
+        else:
+            # Use default job
+            default_jobs = work_config.get("default_jobs", [])
+            if default_jobs:
+                job_info = random.choice(default_jobs)
+                job_title = job_info.get("title", "Worker")
+            else:
+                job_title = "Worker"
+            job_emoji = work_config.get("emoji", "💼")
+        
+        # Calculate reward
+        base_min, base_max = work_config.get("base_reward", [25, 75])
+        base_reward = random.randint(base_min, base_max)
+        
+        # Apply character multiplier
+        multiplier = 1.0
+        char_message = None
+        if character:
+            char_bonus = work_config.get("character_bonuses", {}).get(character, {})
+            multiplier = char_bonus.get("multiplier", 1.0)
+            char_message = char_bonus.get("message")
+        
+        # If no character message, use default job message
+        if not char_message:
+            default_jobs = work_config.get("default_jobs", [])
+            if default_jobs:
+                job_info = random.choice(default_jobs)
+                char_message = job_info.get("message", "You completed your work shift!")
+            else:
+                char_message = "You completed your work shift!"
+        
+        total_reward = int(base_reward * multiplier)
+        
+        # Add reward and set cooldown
+        await self.quest_data.add_balance(user_id, guild_id, total_reward)
+        await self.set_cooldown(user_id, "work")
+        
+        # Track total stars earned
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            await server_col.update_one(
+                {"guild_id": guild_id},
+                {"$inc": {f"members.{user_id}.total_stars_earned": total_reward}},
+                upsert=True
+            )
+        except Exception as e:
+            logger.error(f"Error tracking stars: {e}")
+        
+        new_balance = await self.quest_data.get_balance(user_id, guild_id)
+        
+        # Create embed
         embed = discord.Embed(
-            title=f"{job_data['emoji']} {job_data['title']}",
-            description=f"**Choose a task to complete:**\n\n"
-                       f"Select a task from the dropdown below to start working!",
-            color=discord.Color.blue()
+            title=f"{job_emoji} {job_title}",
+            description=char_message,
+            color=discord.Color.green()
         )
         embed.add_field(
-            name="💰 Pay Range",
-            value=f"{job_data['pay_range'][0]}-{job_data['pay_range'][1]} pts",
+            name="💰 Earned",
+            value=f"**+{total_reward:,}** pts",
+            inline=True
+        )
+        embed.add_field(
+            name="💳 Balance",
+            value=f"**{new_balance:,}** pts",
             inline=True
         )
         
-        await ctx.reply(embed=embed, view=view, mention_author=False)
-    
+        if character and multiplier != 1.0:
+            bonus_pct = int((multiplier - 1.0) * 100)
+            embed.add_field(
+                name=f"🌟 {character} Bonus",
+                value=f"+{bonus_pct}%",
+                inline=True
+            )
+        
+        await ctx.reply(embed=embed, mention_author=False)
     
     @commands.command(name="rob", aliases=["steal"])
     @commands.cooldown(1, 5, commands.BucketType.user)
@@ -4612,14 +4776,14 @@ class Games(commands.Cog):
             await self.set_cover_command_status(user_id, True)
             
             try:
-                wait_msg = await ctx.reply("🔍 **Initializing exhaustive search across 8 sources...**\n⏳ Fetching up to 200 pages per source (20,000+ images total)\n💫 This will take 30-60 seconds...", mention_author=False)
+                wait_msg = await ctx.reply("🔍 Please wait, searching for cover art...", mention_author=False)
                 char_name = char.get('name', '')
                 series_name = char.get('anime', '')
                 logger.info(f"[Cover Gallery] Search started - Character: '{char_name}' | Series: '{series_name}' | User: {user_id}")
                 
                 try:
-                    # Fetch ALL images for better filtering and pagination (100 images per batch)
-                    images, max_pages = await self.cover_art_system.search_cover_art(char_name, series_name, page=1, limit=100, character_uid=char.get('uid'))
+                    # Fetch ALL cached images for this character (use large limit to get everything)
+                    images, max_pages = await self.cover_art_system.search_cover_art(char_name, series_name, page=1, limit=99999, character_uid=char.get('uid'))
                     logger.info(f"[Cover Gallery] API returned {len(images) if images else 0} images, max_pages: {max_pages}")
                 except Exception as search_error:
                     logger.error(f"[Cover Gallery] Search API error: {search_error}", exc_info=True)

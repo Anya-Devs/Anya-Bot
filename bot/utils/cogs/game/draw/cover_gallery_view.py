@@ -19,12 +19,16 @@ class CoverGalleryView(discord.ui.View):
         self.all_images = all_images  # All images from all sources
         self.filtered_images = all_images  # Currently filtered images
         self.current_page = current_page
-        self.total_pages = total_pages
         self.message: Optional[discord.Message] = None
         
         # UI State
         self.selected_sources = []  # Empty = all sources
         self.view_mode = "gallery"  # "gallery" or "single"
+        
+        # Calculate total_pages based on actual image count (3 images per page in gallery mode)
+        # This overrides any passed-in total_pages which may have been calculated differently
+        images_per_page = 3  # Gallery mode default
+        self.total_pages = max(1, (len(all_images) + images_per_page - 1) // images_per_page)
         
         # Extract available sources dynamically
         self.available_sources = self._get_available_sources()
@@ -68,6 +72,7 @@ class CoverGalleryView(discord.ui.View):
             ]
         
         # Recalculate total pages based on filtered results
+        # Gallery mode shows 3 images per page (3 embeds), single mode shows 1
         images_per_page = 1 if self.view_mode == "single" else 3
         self.total_pages = max(1, (len(self.filtered_images) + images_per_page - 1) // images_per_page)
         
@@ -77,6 +82,7 @@ class CoverGalleryView(discord.ui.View):
     
     def _get_current_page_images(self) -> List[Dict]:
         """Get images for current page based on view mode"""
+        # Gallery mode shows 3 images per page (3 embeds), single mode shows 1
         images_per_page = 1 if self.view_mode == "single" else 3
         start_idx = (self.current_page - 1) * images_per_page
         end_idx = start_idx + images_per_page

@@ -452,7 +452,7 @@ class CoverArtSystem:
             embeds: List[discord.Embed] = []
             is_search_mode = uid == "SEARCH"
 
-            for i, img in enumerate(images[:3], start=1):
+            for i, img in enumerate(images[:10], start=1):
                 # Create embed with character info in title
                 if is_search_mode:
                     title = f"🔍 {char_name} - Option {i}"
@@ -476,7 +476,7 @@ class CoverArtSystem:
                 else:
                     # Use sequential ID assigned to this character
                     seq_id = img.get('sequential_id', img['id'])
-                    footer_text = f"💰 To buy this image → .cover buy {uid.upper()} {seq_id}"
+                    footer_text = f"💰 To buy this image → .draw cover buy {uid.upper()} {seq_id}"
                 
                 embed.set_footer(text=footer_text)
                 embeds.append(embed)
