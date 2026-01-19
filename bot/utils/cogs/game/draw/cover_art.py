@@ -6,6 +6,7 @@ Uses Node.js Image API for ultra-fast searching with fallback to direct search
 import discord
 import aiohttp
 import random
+import os
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timezone, timedelta
 import asyncio
@@ -39,6 +40,12 @@ class CoverArtSystem:
     async def search_cover_art(self, character_name: str, series_name: str = None, page: int = 1, limit: int = 100, character_uid: str = None) -> Tuple[List[Dict], int]:
         """Search for cover art using Node.js API with fallback to direct search
         
+        The API handles:
+        - Tag discovery (finds correct tags for each source)
+        - Parallel fetching from all sources
+        - Rate limiting and deduplication
+        - Caching for instant repeat searches
+        
         Args:
             character_name: Character name to search for
             series_name: Series/anime name for disambiguation
@@ -52,11 +59,11 @@ class CoverArtSystem:
         logger.info(f"[Cover Art] Searching: '{character_name}' from '{series_name}' (page {page}, limit {limit})")
         
         try:
-            # Try Node.js API first (ultra-fast with smart rate limiting)
+            # Try Node.js API first - it handles EVERYTHING (tags, fetching, caching)
             if self.use_api:
                 api_healthy = await self.api_client.health_check()
                 if api_healthy:
-                    logger.info("[Cover Art] Using Node.js Image API")
+                    logger.info("[Cover Art] Using Node.js Image API (handles tag discovery + fetching)")
                     images, max_pages = await self.api_client.search(
                         character_name, series_name, page, limit
                     )
@@ -68,17 +75,29 @@ class CoverArtSystem:
                             character_name, series_name, page, limit
                         )
                 else:
-                    logger.warning("[Cover Art] API not available, using direct search")
+                    logger.warning("[Cover Art] API not available, using direct search with local tag discovery")
                     images, max_pages = await self.multi_search.search_all_sources(
                         character_name, series_name, page, limit
                     )
             else:
-                # Fallback to direct multi-source search
+                # Fallback to direct multi-source search with local tag discovery
                 images, max_pages = await self.multi_search.search_all_sources(
                     character_name, series_name, page, limit
                 )
             
             logger.info(f"[Cover Art] Result: {len(images)} images, max_pages={max_pages}")
+            
+            # Log API URL being used
+            if self.use_api:
+                api_url = os.getenv('IMAGE_API_URL', 'http://localhost:3456')
+                print(f"[Cover Art] API URL: {api_url}")
+                logger.info(f"[Cover Art] API URL: {api_url}")
+            
+            # Log image URLs for debugging
+            if images:
+                image_urls = [img.get('url', img.get('preview_url', 'NO_URL')) for img in images[:10]]
+                logger.info(f"[Cover Art] embeds {image_urls}")
+                print(f"[Cover Art] total images: {len(images)}")
             
             # Create character-specific sequential IDs on FIRST page only
             if character_uid and images:

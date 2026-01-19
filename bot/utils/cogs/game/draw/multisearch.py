@@ -541,13 +541,19 @@ class MultiSourceImageSearch:
             if get_tag_discovery is not None:
                 try:
                     tag_discovery = get_tag_discovery()
-                    discovered_tags = await tag_discovery.discover_all_tags(character_name, series_name)
+                    # Get ALL tags per source, not just the best one
+                    multi_tags = await tag_discovery.discover_best_tags(character_name, series_name)
+                    # Convert to comma-separated strings for logging
+                    discovered_tags = {source: ', '.join(tags) for source, tags in multi_tags.items()}
                     logger.info(f"[MultiSearch] Smart tag discovery found: {discovered_tags}")
+                    # Keep the original multi_tags for actual searching
+                    discovered_tags_multi = multi_tags
                 except Exception as e:
                     logger.warning(f"[MultiSearch] Smart tag discovery failed: {e}")
+                    discovered_tags_multi = None
             
             # Fallback: Generate algorithmic tags if discovery failed
-            if not discovered_tags:
+            if not discovered_tags or discovered_tags_multi is None:
                 logger.info(f"[MultiSearch] Using algorithmic tag generation")
                 best_tag = await self._fuzzy_match_tags(character_name, series_name)
                 fallback_tag = best_tag or self._get_booru_character_tag(character_name, series_name)
@@ -561,6 +567,8 @@ class MultiSourceImageSearch:
                     'tbib': fallback_tag,
                     'anime_pictures': fallback_tag,
                 }
+                # Convert to multi_tags format for consistency
+                discovered_tags_multi = {source: [tag] for source, tag in discovered_tags.items()}
             
             # Also generate name variations for fallback searches
             name_variations = self._get_name_variations(character_name, series_name)
@@ -571,33 +579,33 @@ class MultiSourceImageSearch:
             logger.info(f"[MultiSearch] Fetching from 8 sources in parallel...")
             
             # Create search tasks with source-specific tags
-            async def search_source_with_fallback(search_func, source_name, primary_tag, fallback_tags, max_pages):
-                """Search a source with primary tag, fallback to variations if needed"""
+            async def search_source_with_fallback(search_func, source_name, primary_tags, fallback_tags, max_pages):
+                """Search a source with multiple tags, trying each until we get results"""
                 results = []
                 
-                # Try primary discovered tag first
-                try:
-                    primary_results = await self._fetch_source_pages(
-                        search_func, source_name, primary_tag, max_pages=max_pages
-                    )
-                    if isinstance(primary_results, list):
-                        results.extend(primary_results)
-                except Exception as e:
-                    logger.debug(f"[{source_name}] Primary tag failed: {e}")
+                # Try all discovered tags in order of preference
+                tags_to_try = primary_tags if primary_tags else []
+                if not tags_to_try and fallback_tags:
+                    tags_to_try = fallback_tags
                 
-                # If no results, try fallback variations
-                if not results and fallback_tags:
-                    for fallback_tag in fallback_tags[:2]:  # Try up to 2 fallbacks
-                        if fallback_tag != primary_tag:
-                            try:
-                                fallback_results = await self._fetch_source_pages(
-                                    search_func, source_name, fallback_tag, max_pages=max_pages // 2
-                                )
-                                if isinstance(fallback_results, list) and fallback_results:
-                                    results.extend(fallback_results)
-                                    break
-                            except Exception:
-                                pass
+                for i, tag in enumerate(tags_to_try[:3]):  # Try up to 3 tags
+                    if not tag:
+                        continue
+                    
+                    try:
+                        # Use full pages for first tag, fewer for subsequent
+                        pages = max_pages if i == 0 else max_pages // 2
+                        tag_results = await self._fetch_source_pages(
+                            search_func, source_name, tag, max_pages=pages
+                        )
+                        if isinstance(tag_results, list) and tag_results:
+                            results.extend(tag_results)
+                            logger.info(f"[{source_name}] Found {len(tag_results)} images with tag: '{tag}'")
+                            # If we got good results, don't try more tags
+                            if len(tag_results) > 10:
+                                break
+                    except Exception as e:
+                        logger.debug(f"[{source_name}] Tag '{tag}' failed: {e}")
                 
                 return results
             
@@ -606,42 +614,43 @@ class MultiSourceImageSearch:
                 # ALL sources - 200 pages each to ensure we get EVERYTHING
                 search_source_with_fallback(
                     self._search_safebooru_org, "Safebooru",
-                    discovered_tags.get('safebooru', name_variations[0] if name_variations else ''),
+                    discovered_tags_multi.get('safebooru', name_variations),
                     name_variations, max_pages=200
                 ),
                 search_source_with_fallback(
                     self._search_danbooru_safe_only, "Danbooru",
-                    discovered_tags.get('danbooru', name_variations[0] if name_variations else ''),
+                    discovered_tags_multi.get('danbooru', name_variations),
                     name_variations, max_pages=200
                 ),
                 search_source_with_fallback(
                     self._search_gelbooru, "Gelbooru",
-                    discovered_tags.get('gelbooru', name_variations[0] if name_variations else ''),
+                    discovered_tags_multi.get('gelbooru', name_variations),
                     name_variations, max_pages=200
                 ),
                 search_source_with_fallback(
                     self._search_yandere, "Yande.re",
-                    discovered_tags.get('yandere', name_variations[0] if name_variations else ''),
+                    discovered_tags_multi.get('yandere', name_variations),
                     name_variations, max_pages=200
                 ),
                 search_source_with_fallback(
-                    self._search_konachan_special, "Konachan",
-                    discovered_tags.get('konachan', name_variations[0] if name_variations else ''),
+                    self._search_konachan, "Konachan",
+                    discovered_tags_multi.get('konachan', name_variations),
                     name_variations, max_pages=200
                 ),
                 search_source_with_fallback(
                     self._search_tbib, "TBIB",
-                    discovered_tags.get('tbib', name_variations[0] if name_variations else ''),
+                    discovered_tags_multi.get('tbib', name_variations),
                     name_variations, max_pages=200
                 ),
                 search_source_with_fallback(
-                    self._search_anime_pictures, "Anime-Pictures",
-                    discovered_tags.get('anime_pictures', name_variations[0] if name_variations else ''),
+                    self._search_anime_pictures, "Anime Pictures",
+                    discovered_tags_multi.get('anime_pictures', name_variations),
                     name_variations, max_pages=200
                 ),
             ]
             
-            source_names = ["Safebooru", "Danbooru", "Gelbooru", "Yande.re", "Konachan", "TBIB", "Anime-Pictures"]
+            # Define source names for logging
+            source_names = ["Safebooru", "Danbooru", "Gelbooru", "Yande.re", "Konachan", "TBIB", "Anime Pictures"]
             
             # Run ALL sources in parallel for maximum speed
             results = await asyncio.gather(*tasks, return_exceptions=True)

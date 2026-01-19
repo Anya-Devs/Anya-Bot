@@ -159,7 +159,7 @@ TIMER_CONFIG = {
     "job": {"max_uses": 5, "command_cooldown": 5, "cooldown": 3600},
     "rob": {"max_uses": 3, "command_cooldown": 5, "cooldown": 7200},
     "crime": {"max_uses": 3, "command_cooldown": 5, "cooldown": 3600},
-    "gacha": {"max_uses": 10 if ut else 10, "command_cooldown": 5, "cooldown": 1800},
+    "gacha": {"max_uses": 100 if ut else 10, "command_cooldown": 5, "cooldown": 1800},
     "claim": {"max_uses": 1, "command_cooldown": 5, "cooldown": 86400},
 }
 
@@ -808,7 +808,7 @@ async def fetch_anilist_character(session, target_rarity: str):
 # FAST GACHA API (Custom API - Primary Source)
 # ═══════════════════════════════════════════════════════════════
 
-GACHA_API_URL = "https://anya-bot-1-uk6n.onrender.com"  # Update this after deploying to render.com
+GACHA_API_URL = "https://anime-gacha-api.onrender.com"  # Update this after deploying to render.com
 GACHA_API_LOCAL = "http://localhost:3000"  # Local development
 
 async def fetch_from_gacha_api(session, target_rarity: str):

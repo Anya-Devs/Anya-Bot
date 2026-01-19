@@ -84,6 +84,8 @@ class CoverGalleryView(discord.ui.View):
     
     async def refresh_view(self, interaction: discord.Interaction):
         """Refresh the view with current filters and settings"""
+        import asyncio
+        
         self._apply_filters()
         
         current_images = self._get_current_page_images()
@@ -105,6 +107,9 @@ class CoverGalleryView(discord.ui.View):
             if isinstance(child, PageButton):
                 child.label = f"{self.current_page}/{self.total_pages}"
                 break
+        
+        # Give Discord a moment to process/cache the image URLs
+        await asyncio.sleep(0.1)
         
         try:
             await interaction.response.edit_message(embeds=embeds, view=self)

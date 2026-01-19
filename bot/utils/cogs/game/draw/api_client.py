@@ -24,8 +24,9 @@ class ImageAPIClient:
     
     async def get_session(self) -> aiohttp.ClientSession:
         if self.session is None or self.session.closed:
+            # MASS PRODUCTION: No timeout, let API run as fast as it can
             self.session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=120)
+                timeout=aiohttp.ClientTimeout(total=None)
             )
         return self.session
     

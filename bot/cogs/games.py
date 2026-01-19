@@ -1114,35 +1114,56 @@ class Games(commands.Cog):
             server_col = db["Servers"]
             guild_id = str(guild.id)
            
-            server_data = await server_col.find_one({"guild_id": guild_id})
-            if not server_data or "members" not in server_data:
-                return ownership
-           
+            # Build list of character IDs and names to search for
+            char_ids = [char.get("id") for char in characters if char.get("id")]
+            char_names_lower = [char.get("name", "").lower() for char in characters]
+            
+            # Use aggregation to efficiently find owners
+            pipeline = [
+                {"$match": {"guild_id": guild_id}},
+                {"$project": {
+                    "members": {"$objectToArray": "$members"}
+                }},
+                {"$unwind": "$members"},
+                {"$project": {
+                    "user_id": "$members.k",
+                    "inventory": "$members.v.gacha_inventory"
+                }},
+                {"$unwind": "$inventory"},
+                {"$match": {
+                    "$or": [
+                        {"inventory.id": {"$in": char_ids}},
+                        {"inventory.name": {"$in": char_names_lower}}
+                    ]
+                }},
+                {"$limit": len(characters)}
+            ]
+            
+            cursor = server_col.aggregate(pipeline)
+            results = await cursor.to_list(length=len(characters))
+            
+            # Map results back to character indices
             for i, char in enumerate(characters):
-                char_name = char.get("name", "").lower()
                 char_id = char.get("id")
-               
-                for user_id, member_data in server_data.get("members", {}).items():
-                    inventory = member_data.get("gacha_inventory", [])
-                   
-                    for owned_char in inventory:
-                        if (owned_char.get("id") == char_id or
-                            owned_char.get("name", "").lower() == char_name):
-                           
-                            try:
-                                member = guild.get_member(int(user_id))
-                                if member:
-                                    ownership[i] = {
-                                        "user_id": user_id,
-                                        "username": member.display_name,
-                                        "avatar_url": member.display_avatar.url if member.display_avatar else None
-                                    }
-                                    break
-                            except:
-                                pass
-                   
-                    if i in ownership:
-                        break
+                char_name = char.get("name", "").lower()
+                
+                for result in results:
+                    owned_char = result.get("inventory", {})
+                    if (owned_char.get("id") == char_id or 
+                        owned_char.get("name", "").lower() == char_name):
+                        
+                        user_id = result.get("user_id")
+                        try:
+                            member = guild.get_member(int(user_id))
+                            if member:
+                                ownership[i] = {
+                                    "user_id": user_id,
+                                    "username": member.display_name,
+                                    "avatar_url": member.display_avatar.url if member.display_avatar else None
+                                }
+                                break
+                        except:
+                            pass
                        
         except Exception as e:
             logger.debug(f"Error checking ownership: {e}")
@@ -4519,18 +4540,17 @@ class Games(commands.Cog):
             )
             await ctx.reply(embed=embed, mention_author=False)
     
-    @commands.group(name="draw", invoke_without_command=True)
-    async def draw(self, ctx):
-        """🎨 Draw commands"""
-        pass
-    
-    @draw.command(name="cover", aliases=["ca", "art"])
-    async def draw_cover(self, ctx, *, uid: str = None):
+    # ═══════════════════════════════════════════════════════════════
+    # COVER ART SYSTEM - .draw cover subcommands
+    # ═══════════════════════════════════════════════════════════════
+
+    @draw.group(name="cover", invoke_without_command=True)
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    async def draw_cover_group(self, ctx, uid: str = None):
         """🎨 Browse cover art for your gacha characters with advanced filtering
         
         **Usage:**
         • `.draw cover <UID>` - Browse art by character UID
-        • `.draw cover <character name>` - Browse art by character name
         
         **Features:**
         • 🔍 Filter by image source (Danbooru, Gelbooru, Yande.re, etc.)
@@ -4621,6 +4641,9 @@ class Games(commands.Cog):
                 # Create initial embeds (gallery mode, 3 images)
                 embeds = await self.cover_art_system.create_cover_art_embeds(char, images[:3], page=1, total_pages=max_pages)
                 
+                # Give Discord time to process/cache image URLs before sending
+                await asyncio.sleep(0.15)
+                
                 # Create advanced view with ALL images for filtering
                 view = CoverGalleryView(self.cover_art_system, char, user_id, guild_id, images, current_page=1, total_pages=max_pages)
                 
@@ -4636,22 +4659,7 @@ class Games(commands.Cog):
             finally:
                 await self.set_cover_command_status(user_id, False)
     
-    @commands.group(name="cover", aliases=["ca"], invoke_without_command=True)
-    async def cover(self, ctx):
-        """🎨 [DEPRECATED] Use `.draw cover` instead!"""
-        embed = discord.Embed(
-            title="🎨 Cover Art Moved!",
-            description=f"The cover art system has been moved to `.draw cover`!\n\n"
-                       f"**New Command:**\n"
-                       f"• `{ctx.prefix}draw cover <UID or name>` - Browse cover art\n\n"
-                       f"**Example:**\n"
-                       f"• `{ctx.prefix}draw cover F9D6E292`\n"
-                       f"• `{ctx.prefix}draw cover anya forger`",
-            color=discord.Color.orange()
-        )
-        await ctx.reply(embed=embed, mention_author=False)
-    
-    @cover.command(name="gallery", aliases=["browse", "shop"])
+    @draw_cover_group.command(name="gallery", aliases=["browse", "shop"])
     async def cover_gallery(self, ctx, *, query: str = None):
         """🖼️ Browse and buy cover art for your character
         
@@ -4753,285 +4761,7 @@ class Games(commands.Cog):
                 # Clear active status
                 await self.set_cover_command_status(user_id, False)
     
-    @cover.command(name="buy")
-    async def cover_buy(self, ctx, uid: str, sequential_id: int):
-        """🛍️ Buy cover art for your character
-        
-        **Usage:** `.cover buy <UID> <sequential_id>`
-        
-        **Example:** `.cover buy F9D6E292 1`
-        """
-        guild_id = str(ctx.guild.id)
-        user_id = str(ctx.author.id)
-        
-        # Check if user is already running a command
-        if not await self.check_cover_command_cooldown(ctx):
-            return
-        
-        # Get user-specific lock for queuing
-        user_lock = self.get_user_lock(user_id)
-        
-        async with user_lock:
-            # Set active status
-            await self.set_cover_command_status(user_id, True)
-            
-            try:
-                # Check if user owns the character
-                char = await self.cover_art_system._get_character(user_id, guild_id, uid)
-                if not char:
-                    return await ctx.reply("❌ You don't own this character!", mention_author=False)
-                
-                # Get the image data from character-specific map
-                if uid not in self.cover_art_system.character_image_map or sequential_id not in self.cover_art_system.character_image_map[uid]:
-                    return await ctx.reply(f"❌ Image #{sequential_id} not found! View the gallery first with `.cover gallery {uid}`", mention_author=False)
-                
-                img_data = self.cover_art_system.character_image_map[uid][sequential_id]
-                
-                # Generate custom name using character name and sequential ID
-                char_name = char.get('name', 'Unknown')
-                snake_case_name = char_name.lower().replace(' ', '_').replace('-', '_')
-                custom_name = f"{snake_case_name}_{sequential_id}"
-                
-                # Purchase the cover art
-                success, message = await self.cover_art_system.purchase_cover_art(
-                    user_id, guild_id, uid, sequential_id, custom_name
-                )
-                
-                if success:
-                    await ctx.reply(f"✅ {message}\n\nUse `.cover set {uid.upper()} {custom_name}` to set this as your selected cover art!", mention_author=False)
-                else:
-                    await ctx.reply(f"❌ {message}", mention_author=False)
-                
-            except Exception as e:
-                logger.error(f"Error in cover buy: {e}", exc_info=True)
-                await ctx.reply("❌ Error purchasing cover art!", mention_author=False)
-            finally:
-                await self.set_cover_command_status(user_id, False)
-    
-    @cover.command(name="view", aliases=["select", "switch"])
-    async def cover_view(self, ctx, uid: str = None):
-        """👁️ View and select your purchased cover art for a character
-        
-        **Usage:** `.cover view <UID>`
-        
-        **Example:** `.cover view B9EB6DCF`
-        """
-        if not uid:
-            return await ctx.reply(
-                f"Usage: `{ctx.prefix}cover view <UID>`\n"
-                "Example: `.cover view B9EB6DCF`",
-                mention_author=False
-            )
-        
-        guild_id = str(ctx.guild.id)
-        user_id = str(ctx.author.id)
-        
-        try:
-            # Verify user owns the character
-            char = await self.cover_art_system._get_character(user_id, guild_id, uid)
-            if not char:
-                return await ctx.reply("❌ You don't own this character!", mention_author=False)
-            
-            # Get user's cover art collection for this character
-            all_cover_arts = await self.cover_art_system._get_user_cover_arts(user_id, guild_id)
-            
-            # Filter to only this character's cover arts
-            char_covers = [art for art in all_cover_arts if art.get('character_uid', '').upper() == uid.upper()]
-            
-            if not char_covers:
-                return await ctx.reply(
-                    f"❌ No cover art purchased for this character!\n"
-                    f"Use `.cover gallery {uid}` to browse and buy cover art.",
-                    mention_author=False
-                )
-            
-            # Create the view with buttons to select cover art
-            view = CoverSelectView(
-                self.cover_art_system, char, user_id, guild_id, char_covers, current_page=0
-            )
-            
-            embeds = view.create_embeds()
-            msg = await ctx.reply(embeds=embeds, view=view, mention_author=False)
-            view.message = msg
-            
-        except Exception as e:
-            logger.error(f"Error viewing cover art: {e}", exc_info=True)
-            await ctx.reply("❌ Error loading cover art!", mention_author=False)
-    
-    @cover.command(name="set")
-    async def cover_set(self, ctx, uid: str = None, cover_id: str = None):
-        """🖼️ Set a purchased cover art as the selected image for your character
-        
-        **Usage:** `.cover set <UID> <cover_id>`
-        
-        **Examples:**
-        • `.cover set B9EB6DCF ken_kaneki_1`
-        • `.cover set F9D6E292 emilia_2`
-        """
-        if not uid or not cover_id:
-            return await ctx.reply(
-                f"Usage: `{ctx.prefix}cover set <UID> <cover_id>`\n"
-                "Example: `.cover set B9EB6DCF ken_kaneki_176196`",
-                mention_author=False
-            )
-        
-        guild_id = str(ctx.guild.id)
-        user_id = str(ctx.author.id)
-        
-        try:
-            # Verify user owns the character
-            char = await self.cover_art_system._get_character(user_id, guild_id, uid)
-            if not char:
-                return await ctx.reply("❌ You don't own this character!", mention_author=False)
-            
-            # Get user's cover art collection
-            cover_arts = await self.cover_art_system._get_user_cover_arts(user_id, guild_id)
-            
-            # Find the specific cover art by name and verify it belongs to this character
-            target_art = None
-            
-            for art in cover_arts:
-                if art.get('custom_name') == cover_id and art.get('character_uid', '').upper() == uid.upper():
-                    target_art = art
-                    break
-            
-            if not target_art:
-                return await ctx.reply(f"❌ Cover art '{cover_id}' not found for this character!", mention_author=False)
-            
-            # Set the selected cover art
-            success, message = await self.cover_art_system.set_selected_cover_art(
-                user_id, guild_id, uid, cover_id
-            )
-            
-            if success:
-                await ctx.reply(f"✅ {message}", mention_author=False)
-            else:
-                await ctx.reply(f"❌ {message}", mention_author=False)
-        except Exception as e:
-            logger.error(f"Error setting cover art: {e}", exc_info=True)
-            await ctx.reply("❌ Error setting cover art!", mention_author=False)
-            
-    @cover.command(name="collection", aliases=["list", "mine", "c"])
-    async def cover_collection(self, ctx, uid: str = None):
-        """📚 View all your purchased cover art
-        
-        **Usage:** `.cover collection` or `.cover c <UID>`
-        
-        **Example:** `.cover c B9EB6DCF` - View covers for specific character
-        """
-        guild_id = str(ctx.guild.id)
-        user_id = str(ctx.author.id)
-        
-        try:
-            cover_arts = await self.cover_art_system._get_user_cover_arts(user_id, guild_id)
-            
-            if not cover_arts:
-                return await ctx.reply("You haven't purchased any cover art yet!\nUse `.cover gallery <UID>` to browse and purchase.", mention_author=False)
-            
-            # Filter by UID if provided
-            if uid:
-                uid_lower = uid.lower()
-                cover_arts = [art for art in cover_arts if art.get('character_uid', '').lower() == uid_lower]
-                
-                if not cover_arts:
-                    return await ctx.reply(f"❌ You don't have any cover art for character `{uid.upper()}`!", mention_author=False)
-            
-            # Create 3 embeds showing cover art images
-            embeds = []
-            for i, art in enumerate(cover_arts[:3], 1):
-                char_name = art.get('character_name', 'Unknown')
-                char_uid = art.get('character_uid', 'N/A')
-                custom_name = art.get('custom_name', 'N/A')
-                image_url = art.get('image_url', '')
-                selected = art.get('selected', False)
-                
-                status = "✅ Active" if selected else "🔹 Owned"
-                
-                title_suffix = f" [{uid.upper()}]" if uid else ""
-                embed = discord.Embed(
-                    title=f"🎨 {char_name}{title_suffix} - Option {i}",
-                    description=f"**Status:** {status}\n**Cover ID:** `{custom_name}`\n**Character UID:** `{char_uid.upper()}`",
-                    color=discord.Color.green() if selected else discord.Color.purple()
-                )
-                
-                if image_url:
-                    embed.set_image(url=image_url)
-                
-                embed.set_footer(text=f"Set: .cover set {char_uid.upper()} {custom_name} | Release: .cover release {custom_name}")
-                embeds.append(embed)
-            
-            # Create view with help button
-            view = CoverCollectionView()
-            
-            msg = await ctx.reply(embeds=embeds, view=view, mention_author=False)
-            view.message = msg
-            
-        except Exception as e:
-            logger.error(f"Error showing cover art collection: {e}", exc_info=True)
-            await ctx.reply("❌ Error loading your cover art collection!", mention_author=False)
-    
-    @cover.command(name="release", aliases=["delete", "refund"])
-    async def cover_release(self, ctx, cover_id: str = None):
-        """💸 Release cover art for 10% refund
-        
-        **Usage:** `.cover release <cover_id>`
-        
-        **Example:** `.cover release ken_kaneki_176196`
-        """
-        if not cover_id:
-            return await ctx.reply(
-                f"Usage: `{ctx.prefix}cover release <cover_id>`\n"
-                "Example: `.cover release ken_kaneki_176196`",
-                mention_author=False
-            )
-        
-        guild_id = str(ctx.guild.id)
-        user_id = str(ctx.author.id)
-        
-        try:
-            # Get user's cover art collection
-            cover_arts = await self.cover_art_system._get_user_cover_arts(user_id, guild_id)
-            
-            # Find the cover art
-            target_art = None
-            for art in cover_arts:
-                if art.get('custom_name') == cover_id:
-                    target_art = art
-                    break
-            
-            if not target_art:
-                return await ctx.reply(f"❌ Cover art '{cover_id}' not found in your collection!", mention_author=False)
-            
-            # Calculate 10% refund
-            original_cost = target_art.get('cost', 0)
-            refund = int(original_cost * 0.10)
-            
-            # Delete the cover art
-            success = await self.cover_art_system.delete_cover_art(user_id, guild_id, cover_id)
-            
-            if not success:
-                return await ctx.reply("❌ Failed to release cover art!", mention_author=False)
-            
-            # Add refund
-            await self.quest_data.add_balance(user_id, guild_id, refund)
-            new_balance = await self.quest_data.get_balance(user_id, guild_id)
-            
-            embed = discord.Embed(
-                title="💸 Cover Art Released",
-                description=f"**Cover ID:** `{cover_id}`\n"
-                           f"**Character:** {target_art.get('character_name', 'Unknown')}\n\n"
-                           f"**Refund (10%):** +{refund:,} pts\n"
-                           f"**New Balance:** {new_balance:,} pts",
-                color=discord.Color.orange()
-            )
-            
-            await ctx.reply(embed=embed, mention_author=False)
-            
-        except Exception as e:
-            logger.error(f"Error releasing cover art: {e}", exc_info=True)
-            await ctx.reply("❌ Error releasing cover art!", mention_author=False)
-    
-    @cover.command(name="search")
+    @draw_cover_group.command(name="search")
     async def cover_search(self, ctx, *, query: str = None):
         """🔍 Search for cover art (preview only)
         
