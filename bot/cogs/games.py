@@ -1106,6 +1106,8 @@ class Games(commands.Cog):
                 {"guild_id": guild_id},
                 {"$pull": {f"members.{user_id}.gacha_inventory": {"uid": char_to_remove["uid"]}}}
             )
+            
+            return char_to_remove
            
         except Exception as e:
             logger.error(f"Error removing character: {e}")

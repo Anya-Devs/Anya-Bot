@@ -1249,15 +1249,16 @@ class BooruAllthefallen(ArtSource):
 
 
 class ArtAggregator:
-    """SS+ Tier Art Aggregator - Maximum coverage, no missed results"""
+    """EXTREME Tier Art Aggregator - Maximum speed and depth for videos"""
     
-    # SS+ Configuration
-    MAX_CONCURRENT_REQUESTS = 25  # Concurrent requests per batch
-    MAX_PAGES_PER_SOURCE = 25     # Pages to scrape per source
-    RESULTS_PER_PAGE = 100        # Max results per API call
-    RETRY_ATTEMPTS = 3            # Retry failed requests
-    RETRY_DELAY = 0.5             # Base delay between retries
-    BATCH_DELAY = 0.1             # Small delay between batches to avoid rate limits
+    # EXTREME Configuration - INSANE MODE
+    MAX_CONCURRENT_REQUESTS = 100  # Increased from 50 for maximum concurrency
+    MAX_PAGES_PER_SOURCE = 100     # Increased from 50 for much deeper search
+    RESULTS_PER_PAGE = 300         # Increased from 200 for more results per call
+    RETRY_ATTEMPTS = 1            # Reduced from 2 for fastest failures
+    RETRY_DELAY = 0.1             # Reduced from 0.2 for instant retries
+    BATCH_DELAY = 0.01            # Reduced from 0.05 for minimal delays
+    ULTRA_BATCH_SIZE = 200        # Increased from 100 for extreme throughput
     
     def __init__(self, session: aiohttp.ClientSession):
         self.session = session
@@ -1288,6 +1289,7 @@ class ArtAggregator:
             "realbooru": Realbooru(session),
         }
         self._semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_REQUESTS)
+        self._ultra_semaphore = asyncio.Semaphore(self.ULTRA_BATCH_SIZE)  # Extreme-fast semaphore
     
     def get_available_sources(self, nsfw: bool = False) -> Dict[str, dict]:
         """Get available sources based on NSFW setting"""
@@ -1322,21 +1324,22 @@ class ArtAggregator:
         return list(variations)[:3]  # Limit to top 3 variations
     
     async def _fetch_with_retry(self, source, query: str, limit: int, nsfw: bool, page: int, source_name: str) -> List[Dict]:
-        """Fetch with retry logic and rate limit handling"""
-        async with self._semaphore:
+        """Fetch with retry logic and rate limit handling - EXTREME FAST"""
+        # Use extreme semaphore for maximum concurrency
+        async with self._ultra_semaphore:
             for attempt in range(self.RETRY_ATTEMPTS):
                 try:
                     results = await source.search(query, limit=limit, nsfw=nsfw, page=page)
                     if results:
-                        art_logger.debug(f"SS+ {source_name} page {page}: Got {len(results)} results")
+                        art_logger.debug(f"EXTREME {source_name} page {page}: Got {len(results)} results")
                     return results
                 except Exception as e:
                     if attempt < self.RETRY_ATTEMPTS - 1:
-                        delay = self.RETRY_DELAY * (2 ** attempt)  # Exponential backoff
-                        art_logger.warning(f"SS+ {source_name} retry {attempt + 1}/{self.RETRY_ATTEMPTS} after {delay}s: {e}")
+                        delay = self.RETRY_DELAY  # Instant retry for maximum speed
+                        art_logger.warning(f"EXTREME {source_name} retry {attempt + 1}/{self.RETRY_ATTEMPTS} after {delay}s: {e}")
                         await asyncio.sleep(delay)
                     else:
-                        art_logger.error(f"SS+ {source_name} failed after {self.RETRY_ATTEMPTS} attempts: {e}")
+                        art_logger.error(f"EXTREME {source_name} failed after {self.RETRY_ATTEMPTS} attempts: {e}")
             return []
     
     async def search_all(
@@ -1384,7 +1387,7 @@ class ArtAggregator:
         if not active_sources:
             return []
         
-        art_logger.info(f"SS+ Scraping: '{query}' across {len(active_sources)} sources, {pages_to_fetch} pages each")
+        art_logger.info(f"EXTREME Scraping: '{query}' across {len(active_sources)} sources, {pages_to_fetch} pages each")
         
         # Generate query variations for maximum coverage
         query_variations = self._generate_query_variations(query) if aggressive_load else [query]
@@ -1405,10 +1408,10 @@ class ArtAggregator:
                             all_tasks.append(task)
             
             total_tasks = len(all_tasks)
-            art_logger.info(f"SS+ Launching {total_tasks} parallel requests...")
+            art_logger.info(f"EXTREME Launching {total_tasks} parallel requests...")
             
-            # Execute in batches to avoid overwhelming
-            batch_size = self.MAX_CONCURRENT_REQUESTS * 2
+            # Execute in ultra-large batches for maximum throughput
+            batch_size = self.ULTRA_BATCH_SIZE
             for i in range(0, len(all_tasks), batch_size):
                 batch = all_tasks[i:i + batch_size]
                 batch_results = await asyncio.gather(*batch, return_exceptions=True)
@@ -1417,11 +1420,11 @@ class ArtAggregator:
                     if isinstance(res, list):
                         results.extend(res)
                 
-                # Small delay between batches
+                # Minimal delay between batches for maximum speed
                 if i + batch_size < len(all_tasks):
                     await asyncio.sleep(self.BATCH_DELAY)
             
-            art_logger.info(f"SS+ Raw results: {len(results)}")
+            art_logger.info(f"EXTREME Raw results: {len(results)}")
         else:
             # Standard loading: one page per source (fallback)
             tasks = []
@@ -1436,7 +1439,7 @@ class ArtAggregator:
                 if isinstance(res, list):
                     results.extend(res)
         
-        # SS+ Deduplication - by URL hash for true uniqueness
+        # EXTREME Deduplication - by URL hash for true uniqueness
         seen_urls = set()
         seen_ids = set()
         unique_results = []

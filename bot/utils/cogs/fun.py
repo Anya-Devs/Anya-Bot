@@ -85,46 +85,75 @@ class ActionBackView(discord.ui.View):
 
     @discord.ui.button(label="Do it back", style=discord.ButtonStyle.primary)
     async def do_it_back(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user != self.target:
-            await interaction.response.send_message("Only the recipient can do this back!", ephemeral=True)
-            return
+        try:
+            if interaction.user != self.target:
+                await interaction.response.send_message("Only the recipient can do this back!", ephemeral=True)
+                return
 
-        async with aiohttp.ClientSession() as s:
-            gif = (await (await s.get(self.fun.action_api.format(self.action))).json())["url"]
-        emote = next((e for e, acts in self.fun.emotes.items() if self.action in acts), "")
+            async with aiohttp.ClientSession() as s:
+                gif = (await (await s.get(self.fun.action_api.format(self.action))).json())["url"]
+            emote = next((e for e, acts in self.fun.emotes.items() if self.action in acts), "")
 
-        target_name = self.ctx.author.display_name
-        phrase = self.fun.phrases["other"].get(self.action, f"{self.action}s")
-        plain = "[no_embed]" in phrase
-        phrase = phrase.replace("[no_embed]", "").strip()
-        msg_back = f"{phrase.format(user=interaction.user.display_name, target=target_name)} {self.extra}".strip()
+            target_name = self.ctx.author.display_name
+            phrase = self.fun.phrases["other"].get(self.action, f"{self.action}s")
+            plain = "[no_embed]" in phrase
+            phrase = phrase.replace("[no_embed]", "").strip()
+            
+            # Get natural-sounding do_it_back phrases from JSON
+            do_it_back_phrases = self.fun.phrases.get("do_it_back", {}).get(self.action, [
+                f"{interaction.user.display_name} responds back",
+                f"{interaction.user.display_name} returns the {self.action}",
+                f"{interaction.user.display_name} {self.action}s back"
+            ])
+            
+            # Reference the initial message content
+            original_msg = self.ctx.message.content if hasattr(self.ctx, 'message') else ""
+            msg_back = f"{random.choice(do_it_back_phrases).format(user=interaction.user.display_name, target=self.ctx.author.display_name)} {self.extra}".strip()
 
-        sid = str(interaction.guild.id)
-        aid = str(interaction.user.id)
+            sid = str(interaction.guild.id)
+            aid = str(interaction.user.id)
 
-        await self.fun.mongo.update_one(
-            {"server_id": sid},
-            {"$inc": {f"members.{self.action}.intake.{self.ctx.author.id}": 1}},
-            upsert=True
-        )
+            await self.fun.mongo.update_one(
+                {"server_id": sid},
+                {"$inc": {f"members.{self.action}.intake.{self.ctx.author.id}": 1}},
+                upsert=True
+            )
 
-        await self.fun.mongo.update_one(
-            {"server_id": sid},
-            {"$inc": {f"members.{self.action}.outtake.{aid}": 1}},
-            upsert=True
-        )
+            await self.fun.mongo.update_one(
+                {"server_id": sid},
+                {"$inc": {f"members.{self.action}.outtake.{aid}": 1}},
+                upsert=True
+            )
 
-        doc = await self.fun.mongo.find_one({"server_id": sid}) or {}
-        sent = doc.get("members", {}).get(self.action, {}).get("outtake", {}).get(aid, 0)
-        received = doc.get("members", {}).get(self.action, {}).get("intake", {}).get(aid, 0)
+            doc = await self.fun.mongo.find_one({"server_id": sid}) or {}
+            sent = doc.get("members", {}).get(self.action, {}).get("outtake", {}).get(aid, 0)
+            received = doc.get("members", {}).get(self.action, {}).get("intake", {}).get(aid, 0)
 
-        embed_back = None if plain else discord.Embed(title=msg_back, color=primary_color()).set_image(url=gif).set_footer(text=f"Sent: {sent} | Received: {received}")
+            embed_back = None if plain else discord.Embed(
+                title=msg_back, 
+            ).set_image(url=gif).set_footer(
+                text=f"Sent: {sent} | Received: {received} | Responding to {self.ctx.author.display_name}'s {self.action}"
+            )
 
-        await interaction.message.reply(content=msg_back if plain else None, embed=embed_back)
+            await interaction.message.reply(content=msg_back if plain else None, embed=embed_back)
 
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
-        self.stop()
+            button.disabled = True
+            await interaction.response.edit_message(view=self)
+            self.stop()
+            
+        except Exception as e:
+            print(f"❌ ERROR in ActionBackView.do_it_back: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Try to respond to the user about the error
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("❌ An error occurred while processing your action back.", ephemeral=True)
+                else:
+                    await interaction.followup.send("❌ An error occurred while processing your action back.", ephemeral=True)
+            except:
+                pass  # If we can't even send an error message, just give up
         
 
 

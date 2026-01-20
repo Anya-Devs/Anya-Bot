@@ -386,17 +386,14 @@ def get_combined_rarity(anime_popularity: int, char_favorites: int) -> str:
     )
 
 def matches_target_rarity(actual_rarity: str, target_rarity: str) -> bool:
-    """Fast rarity matching check - single function for all validation."""
-    if target_rarity == "legendary":
-        return actual_rarity == "legendary"
-    elif target_rarity == "epic":
-        return actual_rarity in ("epic", "rare")
-    elif target_rarity == "rare":
-        return actual_rarity in ("rare", "uncommon")
-    elif target_rarity == "uncommon":
-        return actual_rarity in ("uncommon", "common", "rare")
-    else:  # common
-        return actual_rarity in ("common", "uncommon")
+    """Strict rarity matching - must match exactly or be lower rarity only."""
+    # Only allow exact matches or lower rarity (never higher)
+    rarity_hierarchy = ["common", "uncommon", "rare", "epic", "legendary"]
+    actual_index = rarity_hierarchy.index(actual_rarity)
+    target_index = rarity_hierarchy.index(target_rarity)
+    
+    # Actual rarity must be equal to or lower than target rarity
+    return actual_index <= target_index
 
 def get_gacha_rates_display() -> str:
     return (

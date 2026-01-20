@@ -241,6 +241,76 @@ class ArtViewModeSelect(discord.ui.Select):
         await interaction.response.edit_message(embeds=embeds, view=view)
 
 
+class ArtContentTypeSelect(discord.ui.Select):
+    """Multi-select dropdown for filtering content type (images/videos)"""
+    
+    def __init__(self, current_filter: Set[str] = None, row: int = 2):
+        # Default to showing both images and videos
+        if current_filter is None:
+            current_filter = {"images", "videos"}
+        
+        options = [
+            discord.SelectOption(
+                label="🖼️ Images",
+                value="images",
+                description="Show static images (JPG, PNG, GIF, WebP)",
+                default="images" in current_filter
+            ),
+            discord.SelectOption(
+                label="🎬 Videos", 
+                value="videos",
+                description="Show videos (MP4, WebM, GIFV)",
+                default="videos" in current_filter
+            )
+        ]
+        
+        super().__init__(
+            placeholder="Content type...",
+            min_values=1,
+            max_values=2,  # Allow both to be selected
+            options=options,
+            row=row
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        view: ArtGalleryView = self.view
+        if interaction.user != view.author:
+            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
+        
+        await interaction.response.defer()
+        
+        # Update content filter based on selections
+        selected_values = set(self.values)
+        
+        if "images" in selected_values and "videos" in selected_values:
+            view.content_filter = "all"  # Both selected = show all
+        elif "images" in selected_values:
+            view.content_filter = "images"  # Only images selected
+        elif "videos" in selected_values:
+            view.content_filter = "videos"  # Only videos selected
+        else:
+            view.content_filter = "all"  # Fallback to all
+        
+        # Update select defaults
+        for opt in self.options:
+            opt.default = opt.value in self.values
+        
+        # Refilter current results and rebuild embeds
+        view.page = 0  # Reset to first page
+        
+        # If switching to videos-only, fetch more video-specific content
+        if view.content_filter == "videos":
+            # Check if we have enough video content using enhanced detection
+            video_count = len(view.get_filtered_results())  # This now uses enhanced detection
+            if video_count < 500:  # If not enough videos, fetch more
+                await interaction.followup.send("🎬 Fetching more video content...", ephemeral=True)
+                await view.fetch_results(aggressive=True)
+        
+        embeds = view.build_embeds()
+        view.update_buttons()
+        await interaction.edit_original_response(embeds=embeds, view=view)
+
+
 class ArtGalleryView(discord.ui.View):
     """Advanced art gallery with multi-source selection and gallery mode"""
     
@@ -265,10 +335,13 @@ class ArtGalleryView(discord.ui.View):
         self.view_mode = "gallery"  # gallery, single, preview
         self.loading_more = False
         self.api_page = 0  # Track API pagination
-        self.source_pages = {}  # Track page number per source for pagination
+        self.source_pages = dict()  # Track page number per source for pagination
         self.total_loaded = len(initial_results) if initial_results else 0
         self.background_loading = False
         self.all_loaded = False
+        
+        # Content type filter: "all", "images", "videos"
+        self.content_filter = "all"  # Default to show all content
         
         # Source category filter: "all", "safe", "mix", "nsfw"
         self.source_category = "mix"
@@ -309,11 +382,80 @@ class ArtGalleryView(discord.ui.View):
         self.mode_select = ArtViewModeSelect(self.view_mode, row=1)
         self.add_item(self.mode_select)
         
-        # Row 2: Navigation buttons (simplified)
+        # Row 2: Content type filter (NEW)
+        current_filter_set = {"images", "videos"} if self.content_filter == "all" else {self.content_filter}
+        self.content_select = ArtContentTypeSelect(current_filter_set, row=2)
+        self.add_item(self.content_select)
+        
+        # Row 3: Navigation buttons (simplified)
         self.add_item(self.prev_btn)
         self.add_item(self.page_indicator)
         self.add_item(self.next_btn)
-        self.add_item(self.load_more_btn)
+        self.add_item(self.random_page_btn)
+    
+    def get_filtered_results(self) -> list:
+        """Get results filtered by content type"""
+        if self.content_filter == "all":
+            return self.results
+        
+        filtered = []
+        video_debug_count = 0
+        image_debug_count = 0
+        
+        for result in self.results:
+            content_url = result.get("url", "").lower()
+            preview_url = result.get("preview_url", "").lower()
+            
+            # Enhanced video detection - check both content and preview URLs
+            video_extensions = ['.mp4', '.webm', '.gifv', '.mov', '.avi', '.mkv', '.flv', '.m4v', '.3gp']
+            video_indicators = ['video', 'webm', 'mp4', 'gifv', 'mov', 'anim']
+            
+            # Check if it's a video by URL extension
+            is_video_by_url = any(content_url.endswith(ext) for ext in video_extensions)
+            is_video_by_preview = any(preview_url.endswith(ext) for ext in video_extensions)
+            
+            # Check if it's a video by URL content indicators
+            is_video_by_content = any(indicator in content_url for indicator in video_indicators)
+            is_video_by_preview_content = any(indicator in preview_url for indicator in video_indicators)
+            
+            # Check file type metadata if available
+            file_type = result.get("file_type", "").lower()
+            is_video_by_type = file_type in ['video', 'webm', 'mp4', 'gifv', 'mov']
+            
+            # Check tags for video indicators
+            tags = result.get("tags", [])
+            if isinstance(tags, str):
+                tags = tags.lower().split()
+            is_video_by_tags = any(tag in tags for tag in ['video', 'animated', 'gif', 'webm', 'mp4'])
+            
+            # Consider it a video if any indicator matches
+            is_video = (is_video_by_url or is_video_by_preview or 
+                       is_video_by_content or is_video_by_preview_content or
+                       is_video_by_type or is_video_by_tags)
+            
+            if is_video:
+                video_debug_count += 1
+            else:
+                image_debug_count += 1
+            
+            if self.content_filter == "images" and not is_video:
+                filtered.append(result)
+            elif self.content_filter == "videos" and is_video:
+                filtered.append(result)
+        
+        # Debug logging (can be removed later)
+        if self.content_filter == "videos":
+            print(f"DEBUG: Found {video_debug_count} videos, {image_debug_count} images out of {len(self.results)} total results")
+            print(f"DEBUG: Filtered to {len(filtered)} videos")
+        
+        return filtered
+    
+    def get_page_results(self) -> list:
+        """Get results for current page with content filtering"""
+        filtered_results = self.get_filtered_results()
+        start = self.page * self.images_per_page
+        end = start + self.images_per_page
+        return filtered_results[start:end]
     
     @property
     def images_per_page(self) -> int:
@@ -322,10 +464,11 @@ class ArtGalleryView(discord.ui.View):
     
     @property
     def max_pages(self) -> int:
-        """Calculate max pages"""
-        if not self.results:
+        """Calculate max pages based on filtered results"""
+        filtered_results = self.get_filtered_results()
+        if not filtered_results:
             return 1
-        return max(1, (len(self.results) + self.images_per_page - 1) // self.images_per_page)
+        return max(1, (len(filtered_results) + self.images_per_page - 1) // self.images_per_page)
     
     async def fetch_results(self, aggressive: bool = True):
         """Fetch art results from selected sources
@@ -339,13 +482,26 @@ class ArtGalleryView(discord.ui.View):
                 self.cog.session = aiohttp.ClientSession()
             self.cog.art_aggregator = ArtAggregator(self.cog.session)
         
+        # Adjust search depth based on content filter
+        if self.content_filter == "videos":
+            # For videos, go much deeper to get more results
+            max_pages = 200  # Double the depth for videos
+            limit = 3000     # Higher limit for videos
+        elif self.content_filter == "images":
+            max_pages = 100  # Standard depth for images
+            limit = 2000
+        else:
+            max_pages = 150  # Balanced for mixed content
+            limit = 2500
+        
         new_results = await self.cog.art_aggregator.search_all(
             self.query,
-            limit=500,  # Higher limit for aggressive loading
+            limit=limit,
             nsfw=self.is_nsfw,
             selected_sources=self.selected_sources,
             page=self.api_page,
-            aggressive_load=aggressive
+            aggressive_load=True,
+            max_pages_per_source=max_pages
         )
         
         # Filter out prohibited content
@@ -519,15 +675,10 @@ class ArtGalleryView(discord.ui.View):
 
             self._setup_components()
     
-    def get_page_results(self) -> list:
-        """Get results for current page"""
-        start = self.page * self.images_per_page
-        end = start + self.images_per_page
-        return self.results[start:end]
-    
     def build_embeds(self) -> list:
         """Build embeds for current page based on view mode"""
         page_results = self.get_page_results()
+        filtered_results = self.get_filtered_results()
         
         if not page_results:
             loading_msg = "Loading more results..." if self.background_loading else "No artwork found. Try different sources or search terms."
@@ -541,10 +692,25 @@ class ArtGalleryView(discord.ui.View):
                 value=", ".join([ART_SOURCES.get(s, {}).get("name", s) for s in self.selected_sources][:5]) or "None",
                 inline=False
             )
+            # Add content filter info
+            if self.content_filter == "all":
+                filter_text = "🖼️🎬 Images + Videos"
+            elif self.content_filter == "images":
+                filter_text = "🖼️ Images Only"
+            elif self.content_filter == "videos":
+                filter_text = "🎬 Videos Only"
+            else:
+                filter_text = "🖼️🎬 Images + Videos"
+            
+            embed.add_field(
+                name="Content Filter",
+                value=filter_text,
+                inline=True
+            )
             if self.total_loaded > 0:
                 embed.add_field(
                     name="Progress",
-                    value=f"Loaded {self.total_loaded} results" + (" (still loading...)" if self.background_loading else ""),
+                    value=f"Loaded {self.total_loaded} results ({len(filtered_results)} after filter)" + (" (still loading...)" if self.background_loading else ""),
                     inline=False
                 )
             return [embed]
@@ -727,8 +893,8 @@ class ArtGalleryView(discord.ui.View):
         # Update page indicator
         self.page_indicator.label = f"{self.page + 1}/{self.max_pages}"
     
-    # Navigation buttons (Row 2) - Simplified
-    @discord.ui.button(label="◀️", style=discord.ButtonStyle.primary, row=2)
+    # Navigation buttons (Row 3) - Main navigation
+    @discord.ui.button(label="◀️", style=discord.ButtonStyle.primary, row=3)
     async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user != self.author:
             return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
@@ -737,7 +903,7 @@ class ArtGalleryView(discord.ui.View):
         embeds = self.build_embeds()
         await interaction.response.edit_message(embeds=embeds, view=self)
     
-    @discord.ui.button(label="1/1", style=discord.ButtonStyle.secondary, row=2)
+    @discord.ui.button(label="1/1", style=discord.ButtonStyle.secondary, row=3)
     async def page_indicator(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Page selector - opens modal to jump to specific page"""
         if interaction.user != self.author:
@@ -754,17 +920,19 @@ class ArtGalleryView(discord.ui.View):
             embeds = self.build_embeds()
             await interaction.edit_original_response(embeds=embeds, view=self)
     
-    @discord.ui.button(label="▶️", style=discord.ButtonStyle.primary, row=2)
+    @discord.ui.button(label="▶️", style=discord.ButtonStyle.primary, row=3)
     async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user != self.author:
             return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
         
         self.page = min(self.max_pages - 1, self.page + 1)
         
-        # Fetch more if approaching end
-        if self.page >= self.max_pages - 2 and len(self.results) < 500:
+        # Auto-fetch more content if approaching end and filtering videos
+        if (self.page >= self.max_pages - 3 and 
+            self.content_filter == "videos" and 
+            not self.all_loaded):
             await interaction.response.defer()
-            await self.fetch_more()
+            await self.fetch_results(aggressive=True)
             self.update_buttons()
             embeds = self.build_embeds()
             await interaction.edit_original_response(embeds=embeds, view=self)
@@ -773,39 +941,20 @@ class ArtGalleryView(discord.ui.View):
             embeds = self.build_embeds()
             await interaction.response.edit_message(embeds=embeds, view=self)
     
-    @discord.ui.button(label="🔀", style=discord.ButtonStyle.secondary, row=2)
-    async def shuffle_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Shuffle/randomize results order"""
+    @discord.ui.button(label="🎲", style=discord.ButtonStyle.success, row=3)
+    async def random_page_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Instantly jump to a random page"""
         if interaction.user != self.author:
             return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
         
         import random
-        random.shuffle(self.results)
-        self.page = 0  # Reset to first page after shuffle
+        # Jump to random page instantly
+        self.page = random.randint(0, self.max_pages - 1)
         self.update_buttons()
         embeds = self.build_embeds()
         await interaction.response.edit_message(embeds=embeds, view=self)
     
-    @discord.ui.button(label="📥 More", style=discord.ButtonStyle.secondary, row=2)
-    async def load_more_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user != self.author:
-            return await interaction.response.send_message("❌ This isn't your search!", ephemeral=True)
-        
-        if self.loading_more:
-            return await interaction.response.send_message("⏳ Already loading more results...", ephemeral=True)
-        
-        await interaction.response.defer()
-        
-        # Fetch next page from all selected sources simultaneously
-        added = await self.fetch_more(aggressive=True)
-        
-        if added > 0:
-            self.update_buttons()
-            embeds = self.build_embeds()
-            await interaction.edit_original_response(embeds=embeds, view=self)
-        else:
-            await interaction.followup.send("ℹ️ No more results available.", ephemeral=True)
-
+    
 
 class SaveArtModal(discord.ui.Modal, title="Save Art to Favorites"):
     folder = discord.ui.TextInput(
@@ -1520,12 +1669,26 @@ class Search(commands.Cog):
                 if not hasattr(self, 'art_aggregator'):
                     self.art_aggregator = ArtAggregator(self.session)
                 
-                # Fetch initial results with aggressive loading (get all available results)
+                # Fetch initial results with EXTREME loading (get maximum results)
+                # Adjust search depth based on potential video interest
+                video_keywords = ['video', 'mp4', 'webm', 'gifv', 'animation', 'animated', 'gif', 'motion', 'moving', 'clip', 'movie']
+                is_video_search = any(keyword in query.lower() for keyword in video_keywords)
+                
+                if is_video_search:
+                    # For video-related searches, go extremely deep
+                    max_pages = 200
+                    limit = 3000
+                else:
+                    # Standard extreme search
+                    max_pages = 100
+                    limit = 2000
+                
                 results = await self.art_aggregator.search_all(
                     query, 
-                    limit=500, 
+                    limit=limit,
                     nsfw=is_nsfw,
-                    aggressive_load=True
+                    aggressive_load=True,
+                    max_pages_per_source=max_pages
                 )
                 
                 # Filter out prohibited content from results

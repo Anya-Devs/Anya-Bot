@@ -54,9 +54,76 @@
             "cry": "{user} is crying",
             "slowclap": "{user} starts clapping slowly at everyone",
             "wave": "{user} waves at the whole server",
-            "smug": "{user} looks smug ;)",
-            "dance": "{user} is dancing, nice moves!",
-            "happy": "{user} is happy!"
+            "smug": "{user} looks smug",
+            "dance": "{user} is dancing",
+            "happy": "{user} is happy"
+        },
+        "do_it_back": {
+            "pat": [
+                "{user} pats {target} back gently",
+                "{user} returns the pat to {target}",
+                "{user} pats {target} back"
+            ],
+            "cuddle": [
+                "{user} cuddles {target} back warmly",
+                "{user} returns the cuddle to {target}",
+                "{user} cuddles {target} back"
+            ],
+            "kiss": [
+                "{user} kisses {target} back sweetly",
+                "{user} returns the kiss to {target}",
+                "{user} kisses {target} back"
+            ],
+            "hug": [
+                "{user} hugs {target} back tightly",
+                "{user} returns the warm hug to {target}",
+                "{user} hugs {target} back"
+            ],
+            "bite": [
+                "{user} bites {target} back playfully",
+                "{user} returns the bite to {target}",
+                "{user} bites {target} back"
+            ],
+            "lick": [
+                "{user} licks {target} back playfully",
+                "{user} returns the lick to {target}",
+                "{user} licks {target} back"
+            ],
+            "slap": [
+                "{user} slaps {target} back",
+                "{user} returns the slap to {target}",
+                "{user} strikes {target} back"
+            ],
+            "cry": [
+                "{user} cries along with {target}",
+                "{user} tears up with {target}",
+                "{user} cries with {target}"
+            ],
+            "slowclap": [
+                "{user} joins the slow clap for {target}",
+                "{user} claps along slowly for {target}",
+                "{user} adds to the applause for {target}"
+            ],
+            "wave": [
+                "{user} waves {target} back happily",
+                "{user} returns the wave to {target}",
+                "{user} waves {target} back"
+            ],
+            "smug": [
+                "{user} looks even more smug at {target}",
+                "{user} smugs back at {target}",
+                "{user} returns the smug look to {target}"
+            ],
+            "dance": [
+                "{user} dances along with {target}",
+                "{user} joins the dance with {target}",
+                "{user} dances with {target} too"
+            ],
+            "happy": [
+                "{user} feels happy with {target}",
+                "{user} shares the happiness with {target}",
+                "{user} smiles along with {target}"
+            ]
         }
     }
 }
