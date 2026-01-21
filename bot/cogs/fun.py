@@ -31,6 +31,71 @@ class Fun(commands.Cog):
         )
         await ctx.reply(embed=embed, mention_author=False)
 
+    @commands.command(name='trope')
+    async def trope(self, ctx, user: discord.Member = None):
+        """Discover what kind of anime character you would be!"""
+        target = user or ctx.author
+        
+        # Load trope data
+        trope_path = 'data/commands/fun/anime-tropes.json'
+        try:
+            with open(trope_path, 'r', encoding='utf-8') as f:
+                trope_data = json.load(f)
+        except FileNotFoundError:
+            await ctx.reply("❌ Trope data file not found!", mention_author=False)
+            return
+        
+        # Randomly select attributes
+        personality = random.choice(trope_data['personalities'])
+        expression = random.choice(trope_data['facial_expressions'])
+        gender = random.choice(trope_data['genders'])
+        size = random.choice(trope_data['sizes'])
+        description = trope_data['personality_descriptions'].get(personality, "A unique personality!")
+        color_hex = trope_data['color_palette'].get(personality, "#FF69B4")
+        
+        # Convert hex to discord.Color
+        color = discord.Color(int(color_hex.replace('#', ''), 16))
+        
+        # Create embed
+        embed = discord.Embed(
+            title=f"✨ {target.display_name}'s Anime Character Profile",
+            description=f"*{description}*",
+            color=color,
+            timestamp=datetime.now()
+        )
+        
+        embed.add_field(
+            name="🎭 Personality Type",
+            value=f"**{personality}**",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="😊 Facial Expression",
+            value=f"`{expression}`",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="⚧️ Gender",
+            value=f"**{gender}**",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="📏 Size",
+            value=f"**{size}**",
+            inline=False
+        )
+        
+        embed.set_thumbnail(url=target.display_avatar.url)
+        embed.set_footer(
+            text=f"Requested by {ctx.author}",
+            icon_url=ctx.author.avatar.url if ctx.author.avatar else None
+        )
+        
+        await ctx.reply(embed=embed, mention_author=False)
+
     def _create_actions(self):
         try:
             with open(self._path, 'r+') as f:

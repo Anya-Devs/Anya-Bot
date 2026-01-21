@@ -14,7 +14,7 @@ from bot.utils.cogs.game import *
 from bot.utils.cogs.game.images import *
 from bot.utils.cogs.game.const import *
 from bot.utils.cogs.game.draw.cover_art import *
-from bot.utils.cogs.game.draw.cover_gallery_view import CoverGalleryView
+from bot.utils.cogs.game.draw.cover_gallery_view import CoverGalleryView, CoverCollectionView
 from bot.utils.cogs.game.view import *
 from bot.cogs.quest import Quest_Data
 
@@ -3003,18 +3003,264 @@ class Games(commands.Cog):
         )
         await ctx.reply(embed=embed, mention_author=False)
     
-    def _get_draw_summary_content(self, display_name: str, balance: int, draws_left: int, is_out_of_draws: bool) -> str:
-        """Generate the draw summary content string"""
-        if is_out_of_draws:
-            config = get_timer_config("gacha")
-            cooldown_hours = config['cooldown'] // 3600
-            return (f"**{display_name}** - **No draws left!**\n"
-                   f"Balance: {balance:,} pts\n"
-                   f" **Tip:** You get {config['max_uses']} draws every {cooldown_hours}h\n"
-                   f" Play `.work`, `.daily`, or other games to earn more points!")
+    @draw.command(name="steal", aliases=["thief", "rob"])
+    @commands.cooldown(1, 1800, commands.BucketType.user)  # 30 minutes cooldown
+    async def draw_steal(self, ctx, uid: str = None):
+        """🎭 Attempt to steal a character from another player!
+        
+        Fair Success Rate System:
+        • Equal collection value: 40% success chance
+        • Lower collection value: Proportional chance (0.5%-39%)
+        • Higher collection value: Bonus chance (40%-50% max)
+        • Bot developer: 100% success chance
+        • On failure: Sacrifice a random card to target
+        
+        Usage: `.draw steal <UID>`
+        """
+        if not uid:
+            embed = discord.Embed(
+                title="❌ Invalid Usage",
+                description=f"Usage: `{ctx.prefix}draw steal <UID>`\n"
+                           f"Steal a character from another player!",
+                color=discord.Color.red()
+            )
+            return await ctx.reply(embed=embed, mention_author=False)
+        
+        guild_id = str(ctx.guild.id)
+        thief_id = str(ctx.author.id)
+        
+        # Get target character
+        owner_id, target_char = await self.get_character_by_uid(guild_id, uid)
+        
+        if not target_char:
+            return await ctx.reply(f"❌ No character found with UID `{uid.upper()}`", mention_author=False)
+        
+        # Can't steal from yourself
+        if owner_id == thief_id:
+            return await ctx.reply("❌ You can't steal from yourself!", mention_author=False)
+        
+        # Get target user
+        try:
+            target_user = ctx.guild.get_member(int(owner_id))
+            target_name = target_user.display_name if target_user else "Unknown"
+        except:
+            target_name = "Unknown"
+        
+        # Get both inventories
+        thief_inventory = await self.get_user_inventory(thief_id, guild_id)
+        target_inventory = await self.get_user_inventory(owner_id, guild_id)
+        
+        if not thief_inventory:
+            return await ctx.reply("❌ You need at least 1 character to attempt a steal!", mention_author=False)
+        
+        # Calculate collection values
+        thief_value = self._calculate_collection_value(thief_inventory)
+        target_value = self._calculate_collection_value(target_inventory)
+        
+        # Check if thief has sufficient collection value
+        if thief_value < target_value:
+            # Calculate fair success chance based on collection value ratio
+            value_ratio = thief_value / target_value  # 0.0 to 0.99
+            
+            # Fair chance calculation: base chance scaled by value ratio
+            # This creates a smooth curve where weaker collections have proportionally lower chances
+            base_chance = 0.4  # 40% base chance for equal values
+            success_chance = base_chance * value_ratio
+            
+            # Minimum chance of 0.5% for very weak collections (still possible but very unlikely)
+            success_chance = max(0.005, success_chance)
+            
+            embed = discord.Embed(
+                title="⚠️ Risky Steal Attempt!",
+                description=f"Your collection value is significantly lower!\n\n"
+                           f"**Your Collection:** {thief_value:,} pts\n"
+                           f"**{target_name}'s Collection:** {target_value:,} pts\n\n"
+                           f"**Success Chance:** {success_chance*100:.2f}%\n"
+                           f"*Collection Power Ratio: {value_ratio*100:.1f}%*",
+                color=discord.Color.orange()
+            )
+            embed.set_footer(text="💡 Tip: Build your collection value for better odds!")
+            
+            # Show warning but allow the attempt
+            await ctx.reply(embed=embed, mention_author=False)
         else:
-            return f"**{display_name}'s Draw**\nBalance: {balance:,} pts | {draws_left} draws left"
-
+            # For equal or stronger collections, use fair calculation
+            if thief_value == target_value:
+                success_chance = 0.4  # 40% for equal collections
+            else:
+                # Bonus chance for stronger collections (capped at 50%)
+                strength_ratio = min(target_value / thief_value, 1.5)
+                success_chance = min(0.5, 0.4 * strength_ratio)
+        
+        # Check if user is bot developer (100% success rate)
+        is_developer = await self._is_bot_developer(ctx.author.id)
+        if is_developer:
+            success_chance = 1.0  # Guaranteed success for developers
+        
+        # Attempt the steal
+        import random
+        success = random.random() < success_chance
+        
+        if success:
+            # SUCCESS: Transfer the character
+            try:
+                # Remove from target's inventory
+                await self._remove_character_from_inventory(owner_id, guild_id, uid)
+                
+                # Add to thief's inventory
+                await self._add_character_to_inventory(thief_id, guild_id, target_char)
+                
+                # Create success embed
+                rarity = target_char.get("rarity", "common")
+                rarity_data = GACHA_RARITY_TIERS.get(rarity, GACHA_RARITY_TIERS["common"])
+                char_name = target_char.get("name", "Unknown")
+                
+                embed = discord.Embed(
+                    title="Steal Successful!",
+                    description=f"You successfully stole **{char_name}** from {target_name}!",
+                    color=rarity_data["color"]
+                )
+                embed.add_field(name="Character", value=f"**{char_name}**\n{rarity_data['emoji']} {rarity.title()}", inline=True)
+                embed.add_field(name="Anime", value=f"*{target_char.get('anime', 'Unknown')}*", inline=True)
+                embed.add_field(name="New Owner", value=f"{ctx.author.mention}", inline=True)
+                embed.add_field(name="Previous Owner", value=f"{target_name}", inline=True)
+                embed.set_thumbnail(url=target_char.get("image_url"))
+                
+                await ctx.reply(embed=embed, mention_author=False)
+                
+                # Notify the victim (optional - could be removed)
+                if target_user:
+                    try:
+                        victim_embed = discord.Embed(
+                            title="💔 Your Character Was Stolen!",
+                            description=f"**{char_name}** was stolen from your collection by {ctx.author.display_name}!",
+                            color=discord.Color.red()
+                        )
+                        victim_embed.add_field(name="Character", value=f"**{char_name}**\n{rarity_data['emoji']} {rarity.title()}", inline=True)
+                        victim_embed.add_field(name="Anime", value=f"*{target_char.get('anime', 'Unknown')}*", inline=True)
+                        victim_embed.add_field(name="Thief", value=f"{ctx.author.display_name}", inline=True)
+                        victim_embed.set_thumbnail(url=target_char.get("image_url"))
+                        victim_embed.set_footer(text="💔 Keep your collection secure!")
+                        await target_user.send(embed=victim_embed)
+                    except:
+                        pass  # Can't DM user
+                        
+            except Exception as e:
+                logger.error(f"Error transferring stolen character: {e}")
+                await ctx.reply("❌ Error occurred during steal transfer. Please contact support!", mention_author=False)
+        
+        else:
+            # FAILURE: Sacrifice a random card
+            try:
+                # Select random character from thief's inventory
+                sacrifice_char = random.choice(thief_inventory)
+                sacrifice_uid = sacrifice_char.get("uid")
+                
+                # Remove from thief's inventory
+                await self._remove_character_from_inventory(thief_id, guild_id, sacrifice_uid)
+                
+                # Add to target's inventory
+                await self._add_character_to_inventory(owner_id, guild_id, sacrifice_char)
+                
+                # Create failure embed
+                sacrifice_name = sacrifice_char.get("name", "Unknown")
+                sacrifice_rarity = sacrifice_char.get("rarity", "common")
+                sacrifice_rarity_data = GACHA_RARITY_TIERS.get(sacrifice_rarity, GACHA_RARITY_TIERS["common"])
+                
+                embed = discord.Embed(
+                    title="💔 Steal Failed!",
+                    description=f"You got caught trying to steal **{target_char.get('name', 'Unknown')}**!\n\n"
+                               f"You lost **{sacrifice_name}** as punishment.",
+                    color=discord.Color.red()
+                )
+                embed.add_field(name="Sacrificed Character", value=f"**{sacrifice_name}**\n{sacrifice_rarity_data['emoji']} {sacrifice_rarity.title()}", inline=True)
+                embed.add_field(name="Victim", value=target_name, inline=True)
+                embed.set_thumbnail(url=sacrifice_char.get("image_url"))
+                await ctx.reply(embed=embed, mention_author=False)
+                
+                # Notify the target about their new card
+                if target_user:
+                    try:
+                        target_embed = discord.Embed(
+                            title=":gift: Caught a Thief!",
+                            description=f"{ctx.author.display_name} tried to steal **{target_char.get('name', 'Unknown')}** from you!\n\n"
+                                       f"You caught them and received **{sacrifice_name}** as compensation!",
+                            color=discord.Color.green()
+                        )
+                        target_embed.add_field(name="Failed Target", value=f"**{target_char.get('name', 'Unknown')}**\n*{target_char.get('anime', 'Unknown')}*", inline=True)
+                        target_embed.add_field(name="Your Reward", value=f"**{sacrifice_name}**\n{sacrifice_rarity_data['emoji']} {sacrifice_rarity.title()}\n*{sacrifice_char.get('anime', 'Unknown')}*", inline=True)
+                        target_embed.add_field(name="Thief", value=f"{ctx.author.display_name}", inline=True)
+                        target_embed.set_thumbnail(url=sacrifice_char.get("image_url"))
+                        target_embed.set_footer(text="🛡️ Justice served - You gained a new character!")
+                        await target_user.send(embed=target_embed)
+                    except:
+                        pass  # Can't DM user
+                        
+            except Exception as e:
+                logger.error(f"Error handling steal failure: {e}")
+                await ctx.reply("❌ Error occurred during failed steal. Please contact support!", mention_author=False)
+    
+    def _calculate_collection_value(self, inventory: list) -> int:
+        """Calculate total collection value based on character rarity and favorites"""
+        total_value = 0
+        for char in inventory:
+            rarity = char.get("rarity", "common")
+            favorites = char.get("favorites", 0)
+            char_name = char.get("name", "unknown")
+            
+            # Use the same value calculation as release system
+            char_value = calculate_release_value(favorites, rarity, char_name)
+            total_value += char_value
+        
+        return total_value
+    
+    async def _is_bot_developer(self, user_id: str) -> bool:
+        """Check if user is a bot developer"""
+        # Replace with actual bot owner ID(s)
+        # You can get this from ctx.bot.owner_id or check specific user IDs
+        try:
+            # Method 1: Check if bot owner
+            app_info = await self.bot.application_info()
+            if user_id == str(app_info.owner.id):
+                return True
+            
+            # Method 2: Check specific developer IDs (add yours here)
+            developer_ids = [
+                # Add your Discord user ID here
+                # "YOUR_DISCORD_USER_ID_HERE",
+            ]
+            return user_id in developer_ids
+        except:
+            return False
+    
+    async def _remove_character_from_inventory(self, user_id: str, guild_id: str, uid: str):
+        """Remove a character from user's inventory by UID"""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            
+            await server_col.update_one(
+                {"guild_id": guild_id},
+                {"$pull": {f"members.{user_id}.gacha_inventory": {"uid": uid.upper()}}}
+            )
+        except Exception as e:
+            logger.error(f"Error removing character from inventory: {e}")
+            raise
+    
+    async def _add_character_to_inventory(self, user_id: str, guild_id: str, character: dict):
+        """Add a character to user's inventory"""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            
+            await server_col.update_one(
+                {"guild_id": guild_id},
+                {"$push": {f"members.{user_id}.gacha_inventory": character}}
+            )
+        except Exception as e:
+            logger.error(f"Error adding character to inventory: {e}")
+            raise
+    
     @draw.command(name="drop")
     @commands.is_owner()
     async def draw_drop(self, ctx, *, args: str = None):
@@ -4886,9 +5132,17 @@ class Games(commands.Cog):
                 series_name = char.get('anime', '')
                 logger.info(f"[Cover Gallery] Search started - Character: '{char_name}' | Series: '{series_name}' | User: {user_id}")
                 
+                # Get owned hashes for filtering
+                try:
+                    user_arts = await self.cover_art_system._get_user_cover_arts(user_id, guild_id)
+                    char_uid = char.get('uid')
+                    owned_hashes = {art.get('image_hash') for art in user_arts if art.get('character_uid') == char_uid and art.get('image_hash')}
+                except:
+                    owned_hashes = set()
+
                 # Search for cover art - fetch 100 images for better pagination
                 try:
-                    images, max_pages = await self.cover_art_system.search_cover_art(char_name, series_name, page=1, limit=100, character_uid=char.get('uid'))
+                    images, max_pages = await self.cover_art_system.search_cover_art(char_name, series_name, page=1, limit=100, character_uid=char.get('uid'), owned_hashes=owned_hashes)
                     logger.info(f"[Cover Gallery] API returned {len(images) if images else 0} images, max_pages: {max_pages}")
                 except Exception as search_error:
                     logger.error(f"[Cover Gallery] Search API error: {search_error}", exc_info=True)
@@ -5050,6 +5304,270 @@ class Games(commands.Cog):
                 # Clear active status
                 await self.set_cover_command_status(user_id, False)
     
+    @draw_cover_group.command(name="collection", aliases=["c"])
+    async def cover_collection(self, ctx, *, uid: str = None):
+        """🖼️ View your cover art collection for a character with pagination
+        
+        **Usage:**
+        • `.draw cover collection <UID>` - View cover art collection
+        • `.draw cover c <UID>` - Short version
+        
+        **Features:**
+        • 📖 Paginated view (3 images per page)
+        • 🔢 Navigate with buttons
+        • 🎨 Beautiful gallery layout
+        
+        **Examples:**
+        • `.draw cover collection 9C231F46`
+        • `.draw cover c 9C231F46`
+        """
+        if not uid:
+            return await ctx.reply(
+                f"Usage: `{ctx.prefix}draw cover collection <UID>`\n"
+                f"Short version: `{ctx.prefix}draw cover c <UID>`\n\n"
+                "Examples:\n"
+                "• `.draw cover collection 9C231F46`\n"
+                "• `.draw cover c 9C231F46`",
+                mention_author=False
+            )
+        
+        uid = uid.strip()
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        # Check if user is already running a command
+        if not await self.check_cover_command_cooldown(ctx):
+            return
+        
+        logger.info(f"[Cover Collection] User {user_id} viewing collection for: {uid}")
+        char = await self._get_character_from_inventory(user_id, guild_id, uid)
+        if not char:
+            logger.debug(f"[Cover Collection] UID search failed, trying name search for: {uid}")
+            char = await self._get_character_from_name(user_id, guild_id, uid)
+            if not char:
+                logger.warning(f"[Cover Collection] No character found with UID or name: {uid}")
+                return await ctx.reply(f"❌ No character found with UID or name `{uid}`", mention_author=False)
+        
+        logger.info(f"[Cover Collection] Found character: {char.get('name')} (UID: {char.get('uid')})")
+        
+        # Check if user owns the character
+        owner_id = await self._get_character_owner(guild_id, char['uid'])
+        if owner_id != user_id:
+            logger.warning(f"[Cover Collection] User {user_id} doesn't own character {char.get('uid')}")
+            return await ctx.reply("❌ You don't own this character!", mention_author=False)
+        
+        # Fetch cover art data from characters collection and merge it
+        char_uid_lower = char['uid'].lower()
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.characters.{char_uid_lower}": 1}
+            )
+            
+            if result:
+                char_data = result.get("members", {}).get(user_id, {}).get("characters", {}).get(char_uid_lower, {})
+                # Merge cover art data into character object
+                if char_data.get('cover_unlocked'):
+                    char['cover_unlocked'] = char_data['cover_unlocked']
+                    char['cover_art'] = char_data.get('cover_art', {})
+                    if 'cover_collection' in char_data:
+                        char['cover_collection'] = char_data['cover_collection']
+                    logger.info(f"[Cover Collection] Merged cover art data for character {char['uid']}")
+        except Exception as e:
+            logger.error(f"[Cover Collection] Error fetching cover art data: {e}")
+        
+        # Check if character has cover art unlocked
+        if not char.get('cover_unlocked', False):
+            return await ctx.reply(
+                f"❌ **{char.get('name', 'Unknown')}** doesn't have any cover art yet!\n"
+                f"Use `{ctx.prefix}draw cover gallery {char.get('uid')}` to browse and purchase cover art.",
+                mention_author=False
+            )
+        
+        # Get user-specific lock for queuing
+        user_lock = self.get_user_lock(user_id)
+        
+        async with user_lock:
+            # Set active status
+            await self.set_cover_command_status(user_id, True)
+            
+            try:
+                # Create collection view with pagination
+                view = CoverCollectionView(
+                    self.cover_art_system,
+                    char,
+                    user_id,
+                    guild_id,
+                    current_page=1
+                )
+                
+                # Get initial embeds
+                embeds = await view.get_current_embeds()
+                
+                if not embeds:
+                    await ctx.reply("❌ No cover art found for this character!", mention_author=False)
+                    return
+                
+                msg = await ctx.reply(embeds=embeds, view=view, mention_author=False)
+                view.message = msg
+                
+            except Exception as e:
+                logger.error(f"[Cover Collection] Error for user {user_id}: {e}", exc_info=True)
+                await ctx.reply("❌ Error loading cover art collection! Please try again.", mention_author=False)
+            finally:
+                # Clear active status
+                await self.set_cover_command_status(user_id, False)
+    
+    @draw.command(name="covers")
+    async def draw_covers(self, ctx, *, uid: str = None):
+        """🖼️ View your cover art collection for a character (alias for .draw cover collection)
+        
+        **Usage:**
+        • `.draw covers <UID>` - View cover art collection
+        
+        **Examples:**
+        • `.draw covers F9D6E292`
+        • `.draw covers 9C231F46`
+        
+        **Features:**
+        • Automatically scans for duplicate images
+        • Generates hashes for images that don't have one
+        • Removes duplicate cover art to clean up your inventory
+        """
+        # First, run duplicate detection and cleanup
+        if uid:
+            await self._scan_and_fix_duplicates(ctx, uid)
+        
+        # Then call the cover_collection command
+        await ctx.invoke(self.cover_collection, uid=uid)
+    
+    async def _scan_and_fix_duplicates(self, ctx, uid: str):
+        """Aggressively scan for duplicate cover art and remove them from database.
+        Also removes images with bad aspect ratios (too wide for cards)."""
+        import hashlib
+        
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        # Get character
+        char = await self._get_character_from_inventory(user_id, guild_id, uid)
+        if not char:
+            char = await self._get_character_from_name(user_id, guild_id, uid)
+        if not char:
+            return
+        
+        char_uid_lower = char['uid'].lower()
+        
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.characters.{char_uid_lower}": 1}
+            )
+            
+            if not result:
+                return
+            
+            char_data = result.get("members", {}).get(user_id, {}).get("characters", {}).get(char_uid_lower, {})
+            
+            # Get all cover arts - handle both formats
+            original_cover_arts = []
+            if 'cover_collection' in char_data and isinstance(char_data['cover_collection'], list):
+                original_cover_arts = list(char_data['cover_collection'])
+            elif char_data.get('cover_art'):
+                original_cover_arts = [char_data['cover_art']]
+            
+            if not original_cover_arts:
+                return
+            
+            original_count = len(original_cover_arts)
+            logger.info(f"[Duplicate Scan] Scanning {original_count} cover arts for {char_uid_lower}")
+            
+            # Track unique items using multiple identifiers
+            seen_urls = set()
+            seen_image_ids = set()
+            unique_arts = []
+            duplicates_removed = 0
+            bad_ratio_removed = 0
+            
+            for art in original_cover_arts:
+                is_duplicate = False
+                is_bad_ratio = False
+                
+                # Get all possible identifiers
+                image_url = art.get('image_url', '')
+                image_id = art.get('image_id')
+                width = art.get('width', 0)
+                height = art.get('height', 0)
+                
+                # Check aspect ratio - remove wide/landscape images
+                # Good ratio for cards: width/height <= 1.2 (portrait or square-ish)
+                if width and height and width > height * 1.2:
+                    is_bad_ratio = True
+                    logger.info(f"[Duplicate Scan] Removing bad ratio image: {width}x{height} (ratio: {width/height:.2f})")
+                
+                # Check by URL first (most reliable)
+                if not is_bad_ratio and image_url:
+                    # Normalize URL for comparison
+                    normalized_url = image_url.strip().lower()
+                    if normalized_url in seen_urls:
+                        is_duplicate = True
+                        logger.info(f"[Duplicate Scan] Removing URL duplicate: {image_url[:60]}...")
+                    else:
+                        seen_urls.add(normalized_url)
+                
+                # Check by image_id
+                if not is_duplicate and not is_bad_ratio and image_id is not None:
+                    if image_id in seen_image_ids:
+                        is_duplicate = True
+                        logger.info(f"[Duplicate Scan] Removing image_id duplicate: {image_id}")
+                    else:
+                        seen_image_ids.add(image_id)
+                
+                if is_bad_ratio:
+                    bad_ratio_removed += 1
+                elif is_duplicate:
+                    duplicates_removed += 1
+                else:
+                    # Keep this art, ensure it has a hash
+                    if not art.get('image_hash') and image_url:
+                        art['image_hash'] = hashlib.md5(image_url.encode()).hexdigest()
+                    unique_arts.append(art)
+            
+            total_removed = duplicates_removed + bad_ratio_removed
+            
+            # Only update if we actually removed items
+            if total_removed > 0:
+                logger.info(f"[Duplicate Scan] Removed {duplicates_removed} duplicates, {bad_ratio_removed} bad ratio, keeping {len(unique_arts)}")
+                
+                # Force update the database with cleaned list
+                await server_col.update_one(
+                    {"guild_id": guild_id},
+                    {"$set": {f"members.{user_id}.characters.{char_uid_lower}.cover_collection": unique_arts}}
+                )
+                
+                # Notify user
+                message_parts = ["**🧹 Cover Art Inventory Cleaned!**"]
+                if duplicates_removed > 0:
+                    message_parts.append(f"🗑️ Removed **{duplicates_removed}** duplicate(s)")
+                if bad_ratio_removed > 0:
+                    message_parts.append(f"📐 Removed **{bad_ratio_removed}** landscape/wide image(s)")
+                message_parts.append(f"📦 You now have **{len(unique_arts)}** unique cover art(s)")
+                
+                await ctx.send("\n".join(message_parts), delete_after=15)
+                logger.info(f"[Duplicate Scan] Successfully cleaned inventory for {char['uid']}")
+            else:
+                logger.info(f"[Duplicate Scan] No issues found for {char_uid_lower}")
+        
+        except Exception as e:
+            logger.error(f"[Duplicate Scan] Error scanning for duplicates: {e}", exc_info=True)
+
+
     async def _get_character_from_inventory(self, user_id: str, guild_id: str, uid: str) -> Optional[Dict]:
         """Get character from user's inventory by UID"""
         try:

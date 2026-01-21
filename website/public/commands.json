@@ -3,13 +3,17 @@
     "imagine": {
       "description": "Generate AI images using Animagine XL 4.0 diffusion model. Supports anime-style prompts with quality tags like masterpiece, high score, absurdres.",
       "example": ".imagine 1girl, blue archive, long hair, masterpiece, absurdres",
-      "aliases": ["i"],
+      "aliases": [
+        "i"
+      ],
       "related_commands": ".vision"
     },
     "vision": {
       "description": "Analyze images using Google Gemini 2.0 vision AI. Detects images from attachments, replies, or URLs and provides detailed analysis.",
       "example": ".vision [attach image or reply to one]",
-      "aliases": ["v"],
+      "aliases": [
+        "v"
+      ],
       "related_commands": ".imagine"
     }
   },
@@ -17,25 +21,36 @@
     "google": {
       "description": "Search Google and get top 5 results with titles, snippets, and links.",
       "example": ".google discord bot development",
-      "aliases": ["g", "search"],
+      "aliases": [
+        "g",
+        "search"
+      ],
       "related_commands": ".image, .youtube, .wiki"
     },
     "image": {
       "description": "Search for images on Google and browse results.",
       "example": ".image anime wallpaper",
-      "aliases": ["img", "images"],
+      "aliases": [
+        "img",
+        "images"
+      ],
       "related_commands": ".google, .art"
     },
     "youtube": {
       "description": "Search YouTube videos with interactive pagination and video previews.",
       "example": ".youtube anime opening",
-      "aliases": ["yt", "video"],
+      "aliases": [
+        "yt",
+        "video"
+      ],
       "related_commands": ".google"
     },
     "art": {
       "description": "Search anime/manga art from 6 sources: Danbooru, Gelbooru, Safebooru, Konachan, Yande.re, and Rule34 (NSFW only). Save favorites to folders, organized in MongoDB. NSFW mode auto-activates in NSFW channels.",
       "example": ".art naruto",
-      "aliases": ["artwork"],
+      "aliases": [
+        "artwork"
+      ],
       "related_commands": ".art source, .art save, .art favorites"
     },
     "art source": {
@@ -47,7 +62,10 @@
     "art save": {
       "description": "Save art to your favorites with optional folder organization. Art stored in MongoDB.",
       "example": ".art save danbooru_12345 anime",
-      "aliases": ["favorite", "fav"],
+      "aliases": [
+        "favorite",
+        "fav"
+      ],
       "related_commands": ".art favorites, .art folder"
     },
     "art folder": {
@@ -59,49 +77,74 @@
     "art favorites": {
       "description": "View your saved favorite art organized by folders. Browse your personal collection.",
       "example": ".art favorites wallpapers",
-      "aliases": ["favs", "saved"],
+      "aliases": [
+        "favs",
+        "saved"
+      ],
       "related_commands": ".art save, .art folder"
     },
     "translate": {
       "description": "Translate text to another language. Supports 50+ languages including Japanese, Spanish, French, German, Chinese.",
       "example": ".translate es Hello, how are you?",
-      "aliases": ["tr", "trans"],
+      "aliases": [
+        "tr",
+        "trans"
+      ],
       "related_commands": ".translate detect"
     },
     "weather": {
       "description": "Get current weather and forecast for any location worldwide.",
       "example": ".weather Tokyo",
-      "aliases": ["w", "forecast"],
+      "aliases": [
+        "w",
+        "forecast"
+      ],
       "related_commands": ""
     },
     "define": {
       "description": "Look up word definitions, pronunciations, and examples from the dictionary.",
       "example": ".define serendipity",
-      "aliases": ["dict", "dictionary", "meaning"],
+      "aliases": [
+        "dict",
+        "dictionary",
+        "meaning"
+      ],
       "related_commands": ".urban"
     },
     "urban": {
       "description": "Look up slang and internet terms on Urban Dictionary with examples and votes.",
       "example": ".urban yeet",
-      "aliases": ["ud", "urbandictionary"],
+      "aliases": [
+        "ud",
+        "urbandictionary"
+      ],
       "related_commands": ".define"
     },
     "wiki": {
       "description": "Search Wikipedia articles with summaries and links to full articles.",
       "example": ".wiki Quantum Computing",
-      "aliases": ["wikipedia", "wp"],
+      "aliases": [
+        "wikipedia",
+        "wp"
+      ],
       "related_commands": ".google"
     },
     "color": {
       "description": "Designer's color toolkit! Analyze colors, get role/user colors, extract from images, generate palettes, and check WCAG accessibility.",
       "example": ".color #FF5733",
-      "aliases": ["colour", "clr"],
+      "aliases": [
+        "colour",
+        "clr"
+      ],
       "related_commands": ".color palette, .color contrast, .color image"
     },
     "color random": {
       "description": "Generate a random color for design inspiration with full color analysis.",
       "example": ".color random",
-      "aliases": ["rand", "rng"],
+      "aliases": [
+        "rand",
+        "rng"
+      ],
       "related_commands": ".color palette"
     },
     "color role": {
@@ -113,55 +156,80 @@
     "color user": {
       "description": "Get the display color from a user's top colored role.",
       "example": ".color user @someone",
-      "aliases": ["member"],
+      "aliases": [
+        "member"
+      ],
       "related_commands": ".color role"
     },
     "color palette": {
       "description": "Generate a color harmony palette with complementary, analogous, triadic colors, shades and tints.",
       "example": ".color palette #FF5733",
-      "aliases": ["harmony", "scheme"],
+      "aliases": [
+        "harmony",
+        "scheme"
+      ],
       "related_commands": ".color contrast"
     },
     "color contrast": {
       "description": "Check WCAG accessibility contrast ratio between two colors. Shows AA/AAA compliance.",
       "example": ".color contrast #FFFFFF #000000",
-      "aliases": ["check", "wcag"],
+      "aliases": [
+        "check",
+        "wcag"
+      ],
       "related_commands": ".color preview"
     },
     "color preview": {
       "description": "Preview how a color looks on UI elements with CSS/Tailwind/Discord code snippets.",
       "example": ".color preview #FF5733",
-      "aliases": ["demo", "show"],
+      "aliases": [
+        "demo",
+        "show"
+      ],
       "related_commands": ".color palette"
     },
     "color image": {
       "description": "Extract dominant colors from an attached image. Great for creating palettes from photos!",
       "example": ".color image (with image attached)",
-      "aliases": ["extract", "img"],
+      "aliases": [
+        "extract",
+        "img"
+      ],
       "related_commands": ".color palette"
     },
     "qr": {
       "description": "Generate a QR code from text or URL. Share links, WiFi passwords, or any text instantly!",
       "example": ".qr https://discord.gg/yourserver",
-      "aliases": ["qrcode"],
+      "aliases": [
+        "qrcode"
+      ],
       "related_commands": ".shorten"
     },
     "screenshot": {
       "description": "Take a screenshot of any website. Preview pages without leaving Discord!",
       "example": ".screenshot google.com",
-      "aliases": ["ss", "snap"],
+      "aliases": [
+        "ss",
+        "snap"
+      ],
       "related_commands": ".qr"
     },
     "shorten": {
       "description": "Shorten long URLs using TinyURL. Perfect for sharing links in chat!",
       "example": ".shorten https://very-long-url.com/with/many/paths",
-      "aliases": ["short", "tinyurl"],
+      "aliases": [
+        "short",
+        "tinyurl"
+      ],
       "related_commands": ".qr"
     },
     "calc": {
       "description": "Calculate math expressions safely. Supports +, -, *, /, **, % operations.",
       "example": ".calc (5 + 3) * 2",
-      "aliases": ["calculate", "math"],
+      "aliases": [
+        "calculate",
+        "math"
+      ],
       "related_commands": ""
     }
   },
@@ -199,7 +267,9 @@
     "anime schedule": {
       "description": "View anime airing schedule for any day of the week. Shows currently airing anime with episode counts and scores.",
       "example": ".anime schedule monday",
-      "aliases": ["airing"],
+      "aliases": [
+        "airing"
+      ],
       "related_commands": ".anime search, .topanime"
     },
     "anime trivia": {
@@ -289,19 +359,27 @@
     "anime wallpaper": {
       "description": "Get random anime wallpapers with artist credits and download button.",
       "example": ".anime wallpaper",
-      "aliases": ["wall"],
+      "aliases": [
+        "wall"
+      ],
       "related_commands": ".waifu, .art"
     },
     "topanime": {
       "description": "Get top anime lists by popularity, airing status, upcoming, or favorites.",
       "example": ".topanime bypopularity",
-      "aliases": ["top", "popular"],
+      "aliases": [
+        "top",
+        "popular"
+      ],
       "related_commands": ".anime search, .anime schedule"
     },
     "wallpaper": {
       "description": "Get random anime wallpapers with artist credits and download links.",
       "example": ".wallpaper",
-      "aliases": ["wall", "animewallpaper"],
+      "aliases": [
+        "wall",
+        "animewallpaper"
+      ],
       "related_commands": ".art, .waifu"
     }
   },
@@ -309,43 +387,62 @@
     "game": {
       "description": "Anya's Game Corner! View all available mini-games organized by category. Shows your balance and character bonuses.",
       "example": ".game",
-      "aliases": ["games"],
+      "aliases": [
+        "games"
+      ],
       "related_commands": ".slots, .coinflip, .hangman, .work"
     },
     "game pokemon": {
       "description": "Draw a random Pokémon card for 100 stella points. Gacha-style rarity system with multiplied rewards!",
       "example": ".game pokemon",
-      "aliases": ["poke", "pkm"],
+      "aliases": [
+        "poke",
+        "pkm"
+      ],
       "related_commands": ".game anime"
     },
     "game anime": {
       "description": "Draw a random anime character card for 100 stella points. Features characters from various anime!",
       "example": ".game anime",
-      "aliases": ["char", "character"],
+      "aliases": [
+        "char",
+        "character"
+      ],
       "related_commands": ".game pokemon"
     },
     "slots": {
       "description": "Spin the slot machine! Match symbols to win. Three-of-a-kind = jackpot with symbol multiplier!",
       "example": ".slots 100",
-      "aliases": ["slot", "spin"],
+      "aliases": [
+        "slot",
+        "spin"
+      ],
       "related_commands": ".coinflip, .guess"
     },
     "coinflip": {
       "description": "Flip a coin! Call heads or tails to double your bet. Simple 50/50 gambling.",
       "example": ".coinflip 100 heads",
-      "aliases": ["cf", "flip"],
+      "aliases": [
+        "cf",
+        "flip"
+      ],
       "related_commands": ".slots, .guess"
     },
     "guess": {
       "description": "Guess a number 1-100 in 5 attempts! Closer guesses win more. Perfect guess = 10x bet!",
       "example": ".guess 50",
-      "aliases": ["number", "guessnumber"],
+      "aliases": [
+        "number",
+        "guessnumber"
+      ],
       "related_commands": ".slots, .coinflip"
     },
     "hangman": {
       "description": "Play hangman! Guess letters to reveal the word. Win points based on word length and mistakes.",
       "example": ".hangman",
-      "aliases": ["hm"],
+      "aliases": [
+        "hm"
+      ],
       "related_commands": ".wordle"
     },
     "wordle": {
@@ -363,19 +460,25 @@
     "job": {
       "description": "Take on a risky mission for bigger rewards. May fail! 1-hour cooldown. Character-specific missions.",
       "example": ".job",
-      "aliases": ["mission"],
+      "aliases": [
+        "mission"
+      ],
       "related_commands": ".work, .rob"
     },
     "rob": {
       "description": "Attempt to steal stella points from another user. High risk - you may get fined if caught!",
       "example": ".rob @user",
-      "aliases": ["steal"],
+      "aliases": [
+        "steal"
+      ],
       "related_commands": ".job, .work"
     },
     "claim": {
       "description": "Claim your daily stella points reward! Streak bonuses increase rewards up to 30 days.",
       "example": ".claim",
-      "aliases": ["daily"],
+      "aliases": [
+        "daily"
+      ],
       "related_commands": ".work, .balance"
     }
   },
@@ -523,7 +626,10 @@
     "purge": {
       "description": "Bulk delete messages from a channel. Supports various filters. Requires Manage Messages.",
       "example": ".purge 50",
-      "aliases": ["clear", "clean"],
+      "aliases": [
+        "clear",
+        "clean"
+      ],
       "related_commands": ".purge user, .purge bots"
     },
     "purge user": {
@@ -627,7 +733,10 @@
     "pokedex": {
       "description": "Look up Pokémon info from PokeAPI - stats, types, abilities, evolutions, and artwork. Supports shiny and regional forms.",
       "example": ".pokedex pikachu",
-      "aliases": ["dex", "d"],
+      "aliases": [
+        "dex",
+        "d"
+      ],
       "related_commands": ".pt"
     },
     "pt": {
@@ -651,7 +760,9 @@
     "pt config protection": {
       "description": "Configure shiny and collection protection channels. Requires Manage Server.",
       "example": ".pt config protection",
-      "aliases": ["p"],
+      "aliases": [
+        "p"
+      ],
       "related_commands": ".pt config"
     },
     "pt tp": {
@@ -669,13 +780,18 @@
     "pt shiny": {
       "description": "Set your shiny hunt target. Get pinged when it spawns! One target at a time.\n\n`.pt sh <pokemon>` → Set target\n`.pt sh` → View current\n`.pt sh remove` → Remove",
       "example": ".pt sh alolan vulpix",
-      "aliases": ["sh"],
+      "aliases": [
+        "sh"
+      ],
       "related_commands": ".pt cl, .pt tp"
     },
     "pt collection": {
       "description": "Manage your collection watchlist (max 50). Get pinged when any spawn!\n\n`.pt cl add <pokemon>` → Add\n`.pt cl remove <pokemon>` → Remove\n`.pt cl` → View\n`.pt cl clear` → Clear all",
       "example": ".pt cl add eevee, pikachu, vulpix",
-      "aliases": ["cl", "col"],
+      "aliases": [
+        "cl",
+        "col"
+      ],
       "related_commands": ".pt sh, .pt tp"
     }
   },
@@ -683,7 +799,9 @@
     "quest": {
       "description": "Main quest command group. View active quests, manage settings, and interact with characters.",
       "example": ".quest",
-      "aliases": ["q"],
+      "aliases": [
+        "q"
+      ],
       "related_commands": ".quest character, .quest roles, .profile"
     },
     "quest roles": {
@@ -693,21 +811,30 @@
       "related_commands": ".quest"
     },
     "quest leaderboard": {
-      "description": "Show the stella points leaderboard for the server with top earners.",
+      "description": "Show the stella points leaderboard for the server. Displays top earners with cards, reviews, and quest completion stats in a premium 3D image. Also available as standalone `.leaderboard` command.",
       "example": ".quest leaderboard",
-      "aliases": ["lb", "top", "ranking"],
-      "related_commands": ".balance, .profile"
+      "aliases": [
+        "lb",
+        "top",
+        "ranking"
+      ],
+      "related_commands": ".leaderboard, .balance, .profile"
     },
     "quest character": {
       "description": "View your active character with HP, stats, and feeding status. Part of the quest reward system.",
       "example": ".quest character",
-      "aliases": ["char", "view"],
+      "aliases": [
+        "char",
+        "view"
+      ],
       "related_commands": ".character"
     },
     "character": {
       "description": "View your active character (shortcut). Shows character info, HP bar, and inventory options.",
       "example": ".character",
-      "aliases": ["char"],
+      "aliases": [
+        "char"
+      ],
       "related_commands": ".inventory"
     },
     "cook": {
@@ -725,19 +852,28 @@
     "profile": {
       "description": "View your quest profile with level, XP, stella points, and server rank.",
       "example": ".profile @user",
-      "aliases": ["pf"],
+      "aliases": [
+        "pf"
+      ],
       "related_commands": ".balance, .inventory"
     },
     "inventory": {
       "description": "View your quest inventory with items, meals, and characters organized by category.",
       "example": ".inventory",
-      "aliases": ["inv"],
+      "aliases": [
+        "inv"
+      ],
       "related_commands": ".profile, .shop"
     },
     "balance": {
       "description": "Check your stella points balance and server leaderboard position.",
       "example": ".balance @user",
-      "aliases": ["bal", "points", "stars", "stp"],
+      "aliases": [
+        "bal",
+        "points",
+        "stars",
+        "stp"
+      ],
       "related_commands": ".profile, .quest leaderboard"
     },
     "shop": {
@@ -748,6 +884,31 @@
     }
   },
   "Information": {
+    "leaderboard": {
+      "description": "Show the stella points leaderboard with a stunning 3D visual. Displays top earners with their cards, reviews, and quest completion stats in a premium image.",
+      "example": ".leaderboard 15",
+      "aliases": [
+        "lb",
+        "top",
+        "ranking"
+      ],
+      "related_commands": ".quest leaderboard, .balance, .profile"
+    },
+    "reviews": {
+      "description": "Review system for rating server members. View, add, edit, or remove reviews.",
+      "example": ".reviews @user view",
+      "aliases": [],
+      "related_commands": ".reviews leaderboard"
+    },
+    "reviews leaderboard": {
+      "description": "Show the reviews leaderboard - members ranked by their review scores and count.",
+      "example": ".reviews leaderboard",
+      "aliases": [
+        "lb",
+        "top"
+      ],
+      "related_commands": ".reviews, .leaderboard"
+    },
     "info": {
       "description": "Information commands hub - shows all available info commands organized by category.",
       "example": ".info",
@@ -757,13 +918,20 @@
     "user": {
       "description": "Get detailed user profile: ID, status, badges, roles, account age, join date, activity, and boosting status.",
       "example": ".user @someone",
-      "aliases": ["userinfo", "ui", "whois"],
+      "aliases": [
+        "userinfo",
+        "ui",
+        "whois"
+      ],
       "related_commands": ".avatar, .banner, .permissions"
     },
     "avatar": {
       "description": "Get a user's avatar in full resolution with download button. Shows both server and global avatars.",
       "example": ".avatar @user",
-      "aliases": ["av", "pfp"],
+      "aliases": [
+        "av",
+        "pfp"
+      ],
       "related_commands": ".banner, .user"
     },
     "banner": {
@@ -793,19 +961,28 @@
     "members": {
       "description": "Detailed member statistics: total count, humans vs bots, and status breakdown (online/idle/dnd/offline).",
       "example": ".members",
-      "aliases": ["membercount", "mc"],
+      "aliases": [
+        "membercount",
+        "mc"
+      ],
       "related_commands": ".server, .user"
     },
     "channel": {
       "description": "Channel information: ID, type, position, category, NSFW status, slowmode, topic, or voice settings.",
       "example": ".channel #general",
-      "aliases": ["channelinfo", "ci"],
+      "aliases": [
+        "channelinfo",
+        "ci"
+      ],
       "related_commands": ".server"
     },
     "role": {
       "description": "Role details: ID, color, position, member count, permissions, mentionable/hoisted status.",
       "example": ".role @Moderator",
-      "aliases": ["roleinfo", "ri"],
+      "aliases": [
+        "roleinfo",
+        "ri"
+      ],
       "related_commands": ".roles, .perms"
     },
     "roles": {
@@ -817,31 +994,45 @@
     "emojis": {
       "description": "List all server emojis with counts for static and animated, plus usage limits.",
       "example": ".emojis",
-      "aliases": ["emojilist", "serveremojis"],
+      "aliases": [
+        "emojilist",
+        "serveremojis"
+      ],
       "related_commands": ".emoji, .server"
     },
     "emoji": {
       "description": "Get detailed info about a specific emoji: ID, name, animated status, creation date, and download link.",
       "example": ".emoji :custom_emoji:",
-      "aliases": ["emojiinfo", "ei"],
+      "aliases": [
+        "emojiinfo",
+        "ei"
+      ],
       "related_commands": ".emojis"
     },
     "botinfo": {
       "description": "Bot statistics: server count, user count, latency, Python/Discord.py versions, and creation date.",
       "example": ".botinfo",
-      "aliases": ["bot", "stats"],
+      "aliases": [
+        "bot",
+        "stats"
+      ],
       "related_commands": ".ping, .invite"
     },
     "ping": {
       "description": "Check bot latency with color-coded status (green=excellent, yellow=good, red=poor).",
       "example": ".ping",
-      "aliases": ["latency", "pong"],
+      "aliases": [
+        "latency",
+        "pong"
+      ],
       "related_commands": ".botinfo"
     },
     "permissions": {
       "description": "View permissions for a user or role with categorized breakdown.",
       "example": ".permissions @user",
-      "aliases": ["perms"],
+      "aliases": [
+        "perms"
+      ],
       "related_commands": ".role, .user"
     },
     "invite": {
@@ -853,7 +1044,10 @@
     "activity": {
       "description": "Discover what members are playing, streaming, listening to, or watching. Find players for specific games.",
       "example": ".activity Minecraft",
-      "aliases": ["playing", "activities"],
+      "aliases": [
+        "playing",
+        "activities"
+      ],
       "related_commands": ".user"
     }
   },

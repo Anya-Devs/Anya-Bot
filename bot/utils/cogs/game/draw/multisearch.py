@@ -998,6 +998,7 @@ class MultiSourceImageSearch:
                     'score': post.get('score', 0),
                     'width': post.get('image_width', 0),
                     'height': post.get('image_height', 0),
+                    'hash': post.get('md5', ''),
                 })
             except Exception as e:
                 logger.debug(f"Error processing Danbooru post: {e}")
@@ -1483,6 +1484,7 @@ class MultiSourceImageSearch:
                 'score': post.get('score', 0),
                 'width': post.get('image_width', 0),
                 'height': post.get('image_height', 0),
+                'hash': post.get('md5', ''),
             })
         
         return processed
@@ -1549,7 +1551,9 @@ class MultiSourceImageSearch:
                     'tags': (post.get('tags', '') or '').split()[:10],
                     'score': score,
                     'width': width,
+                    'width': width,
                     'height': height,
+                    'hash': post.get('hash', '') or post.get('md5', ''),
                 })
             except Exception as e:
                 logger.debug(f"Error processing safebooru post: {e}")
@@ -1687,7 +1691,9 @@ class MultiSourceImageSearch:
                     'tags': tags,
                     'score': score,
                     'width': width,
+                    'width': width,
                     'height': height,
+                    'hash': post.get('md5', ''),
                 })
             except Exception as e:
                 logger.debug(f"Error processing Konachan post: {e}")
@@ -1770,7 +1776,9 @@ class MultiSourceImageSearch:
                     'tags': tag_string.split()[:10] if isinstance(tag_string, str) else [],
                     'score': int(post.get('score', 0) or 0),
                     'width': int(post.get('width', 0) or 0),
+                    'width': int(post.get('width', 0) or 0),
                     'height': int(post.get('height', 0) or 0),
+                    'hash': post.get('md5', '') or post.get('hash', ''),
                 })
             except Exception as e:
                 logger.debug(f"Error processing Gelbooru post: {e}")
@@ -1846,7 +1854,9 @@ class MultiSourceImageSearch:
                     'tags': tags.split()[:10] if isinstance(tags, str) else [],
                     'score': int(post.get('score', 0) or 0),
                     'width': int(post.get('width', 0) or 0),
+                    'width': int(post.get('width', 0) or 0),
                     'height': int(post.get('height', 0) or 0),
+                    'hash': post.get('md5', ''),
                 })
             except Exception as e:
                 logger.debug(f"Error processing Yande.re post: {e}")
@@ -1934,7 +1944,9 @@ class MultiSourceImageSearch:
                     'tags': tags.split()[:10] if isinstance(tags, str) else [],
                     'score': int(post.get('score', 0) or 0),
                     'width': int(post.get('width', 0) or 0),
+                    'width': int(post.get('width', 0) or 0),
                     'height': int(post.get('height', 0) or 0),
+                    'hash': post.get('md5', '') or post.get('hash', ''),
                 })
             except Exception as e:
                 logger.debug(f"Error processing TBIB post: {e}")
@@ -2019,7 +2031,9 @@ class MultiSourceImageSearch:
                     'tags': [],  # Tags require separate API call
                     'score': int(post.get('score_number', 0) or 0),
                     'width': int(post.get('width', 0) or 0),
+                    'width': int(post.get('width', 0) or 0),
                     'height': int(post.get('height', 0) or 0),
+                    'hash': md5,
                 })
             except Exception as e:
                 logger.debug(f"Error processing Anime-Pictures post: {e}")
@@ -2078,6 +2092,8 @@ class MultiSourceImageSearch:
                         # Create result objects
                         results = []
                         for idx, img_url in enumerate(all_urls[:limit], start=1):
+                            # Generate hash from URL for Tumblr images
+                            url_hash = hashlib.md5(img_url.encode()).hexdigest()
                             results.append({
                                 'id': f"tumblr_{page}_{idx}",
                                 'url': img_url,
@@ -2087,6 +2103,7 @@ class MultiSourceImageSearch:
                                 'score': 0,
                                 'width': 1280,
                                 'height': 1280,
+                                'hash': url_hash,
                             })
                         
                         return results

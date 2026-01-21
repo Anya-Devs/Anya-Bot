@@ -23,7 +23,8 @@ class Information(commands.Cog):
         self.mongo = MongoManager()
         self.utils_review = ReviewUtils(self.mongo)
 
-    @commands.command(name="reviews")
+
+    @commands.group(name="reviews", invoke_without_command=True)
     async def reviews_command(
         self,
         ctx,
@@ -91,25 +92,140 @@ class Information(commands.Cog):
         result = await func(ctx, member)
         return result if isinstance(result, tuple) else (result, None)
 
-    @commands.command(name="leaderboard")
-    async def leaderboard(self, ctx):
-     try:
-        mongo = MongoManager()
-        data = await mongo.get_leaderboard_data(str(ctx.guild.id), min_reviews=1, limit=200)
-        if not data:
-            return await ctx.reply(embed=discord.Embed(
-                title="Review Leaderboard",
-                description="No reviews found for this server.",
-                color=primary_color()
-            ), mention_author=False)
+    @reviews_command.command(name="leaderboard", aliases=["lb", "top"])
+    async def reviews_leaderboard(self, ctx):
+        """Show the reviews leaderboard for this server."""
+        try:
+            mongo = MongoManager()
+            data = await mongo.get_leaderboard_data(str(ctx.guild.id), min_reviews=1, limit=200)
+            if not data:
+                return await ctx.reply(embed=discord.Embed(
+                    title="Review Leaderboard",
+                    description="No reviews found for this server.",
+                    color=primary_color()
+                ), mention_author=False)
 
-        members = {str(m.id): m for m in ctx.guild.members}
-        per_page = 25
-        pages = [data[i:i + per_page] for i in range(0, len(data), per_page)]
-        view = LeaderboardView(self, pages, members, ctx, per_page)
-        await ctx.reply(embed=view.build_embed(), view=view, mention_author=False)
-     except Exception as e:
-        await ctx.reply(f"Error loading leaderboard: `{e}`", mention_author=False)
+            members = {str(m.id): m for m in ctx.guild.members}
+            per_page = 25
+            pages = [data[i:i + per_page] for i in range(0, len(data), per_page)]
+            view = LeaderboardView(self, pages, members, ctx, per_page)
+            await ctx.reply(embed=view.build_embed(), view=view, mention_author=False)
+        except Exception as e:
+            await ctx.reply(f"Error loading leaderboard: `{e}`", mention_author=False)
+
+    @commands.command(name="leaderboard", aliases=["lb", "top", "ranking"])
+    async def leaderboard(self, ctx, limit: int = 10):
+        """Show the stella points leaderboard for this server with detailed stats."""
+        try:
+            # Import here to avoid circular imports
+            from bot.utils.cogs.quest import Quest_Data
+            from bot.utils.cogs.leaderboard_image import LeaderboardImageGenerator
+            
+            guild_id = str(ctx.guild.id)
+            
+            # Cap limit between 1 and 15 for image
+            limit = max(1, min(15, limit))
+            
+            # Initialize Quest_Data to access leaderboard
+            quest_data = Quest_Data(self.bot)
+            leaderboard_data = await quest_data.get_leaderboard(guild_id, limit)
+            
+            if not leaderboard_data:
+                embed = discord.Embed(
+                    description="No users with stella points found yet!\nComplete quests to earn points and appear on the leaderboard.",
+                    color=discord.Color.yellow()
+                )
+                embed.set_author(name=f"{ctx.guild.name} Leaderboard", icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+                await ctx.reply(embed=embed, mention_author=False)
+                return
+            
+            # Fetch additional stats for each user (cards and reviews)
+            db = quest_data.mongoConnect[quest_data.DB_NAME]
+            server_col = db["Servers"]
+            reviews_col = quest_data.mongoConnect["Commands"]["reviews"]
+            
+            # Get server data for card counts
+            server_data = await server_col.find_one({"guild_id": guild_id}, {"members": 1})
+            members_data = server_data.get("members", {}) if server_data else {}
+            
+            # Build entries for image generator
+            entries = []
+            author_rank = None
+            author_points = None
+            
+            for i, entry in enumerate(leaderboard_data):
+                user_id = entry.get("user_id")
+                points = int(entry.get("stella_points", 0))
+                quests_done = int(entry.get("quests_done", 0))
+                
+                if user_id == str(ctx.author.id):
+                    author_rank = i + 1
+                    author_points = points
+                
+                try:
+                    member = ctx.guild.get_member(int(user_id)) if user_id else None
+                except Exception:
+                    member = None
+                
+                username = member.display_name if member else f"User {user_id[-4:]}" if user_id else "Unknown"
+                avatar_url = str(member.display_avatar.url) if member and member.display_avatar else None
+                
+                # Get card count from gacha_inventory
+                cards = 0
+                try:
+                    user_member_data = members_data.get(user_id, {})
+                    gacha_inventory = user_member_data.get("gacha_inventory", [])
+                    cards = len(gacha_inventory) if isinstance(gacha_inventory, list) else 0
+                except Exception:
+                    cards = 0
+                
+                # Get review count
+                reviews = 0
+                try:
+                    review_count = await reviews_col.count_documents({
+                        "target_id": user_id,
+                        "guild_id": guild_id
+                    })
+                    reviews = review_count
+                except Exception:
+                    reviews = 0
+                
+                entries.append({
+                    "rank": i + 1,
+                    "username": username,
+                    "points": points,
+                    "quests_done": quests_done,
+                    "cards": cards,
+                    "reviews": reviews,
+                    "avatar_url": avatar_url
+                })
+            
+            # Generate leaderboard image
+            generator = LeaderboardImageGenerator()
+            image_buffer = await generator.generate(entries)
+            
+            # Send image directly without embed
+            file = discord.File(image_buffer, filename="leaderboard.png")
+            
+            # Add user's rank info as text content
+            content = None
+            if author_rank:
+                content = f"-# Your rank: **#{author_rank}** with **{author_points:,}** stella points"
+            else:
+                user_balance = await quest_data.get_balance(str(ctx.author.id), guild_id)
+                if user_balance > 0:
+                    content = f"-# Your stella points: **{user_balance:,}**"
+            
+            await ctx.reply(content=content, file=file, mention_author=False)
+            
+        except Exception as e:
+            import traceback
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in leaderboard command: {e}")
+            traceback.print_exc()
+            await ctx.send("An error occurred while fetching the leaderboard.")
+
 
     @commands.command(name="about", aliases=["info", "details"])
     async def about(self, ctx, args: Union[discord.Member, int, str] = None):

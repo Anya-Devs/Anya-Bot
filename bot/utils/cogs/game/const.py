@@ -408,6 +408,24 @@ def generate_uid() -> str:
     import uuid
     return uuid.uuid4().hex[:8].upper()
 
+def generate_cover_art_uid() -> str:
+    """Generate a unique long hash UID for cover art identification"""
+    import uuid
+    import hashlib
+    import time
+    
+    # Generate UUID and combine with timestamp for uniqueness
+    base_uuid = uuid.uuid4().hex
+    timestamp = str(int(time.time() * 1000))  # Millisecond precision
+    
+    # Create hash from UUID + timestamp for extra uniqueness
+    hash_input = f"{base_uuid}_{timestamp}"
+    hash_object = hashlib.sha256(hash_input.encode())
+    hash_hex = hash_object.hexdigest()
+    
+    # Return first 16 characters as uppercase for a nice long UID
+    return hash_hex[:16].upper()
+
 def calculate_release_value(favorites: int, rarity: str, char_name: str = "unknown") -> int:
     """Calculate dynamic release value based on popularity with uniqueness and overflow."""
     import hashlib

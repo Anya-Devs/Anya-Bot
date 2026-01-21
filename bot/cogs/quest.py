@@ -416,6 +416,10 @@ class Quest(commands.Cog):
     @quest.command(name="leaderboard", aliases=["lb", "top", "ranking"])
     async def quest_leaderboard(self, ctx, limit: int = 10):
         """Show the stella points leaderboard for this server."""
+        await self._generate_leaderboard(ctx, limit)
+
+    async def _generate_leaderboard(self, ctx, limit: int = 10):
+        """Generate and send the leaderboard image with detailed stats."""
         try:
             guild_id = str(ctx.guild.id)
             
@@ -432,6 +436,15 @@ class Quest(commands.Cog):
                 embed.set_author(name=f"{ctx.guild.name} Leaderboard", icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
                 await ctx.reply(embed=embed, mention_author=False)
                 return
+            
+            # Fetch additional stats for each user (cards and reviews)
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            reviews_col = self.quest_data.mongoConnect["Commands"]["reviews"]
+            
+            # Get server data for card counts
+            server_data = await server_col.find_one({"guild_id": guild_id}, {"members": 1})
+            members_data = server_data.get("members", {}) if server_data else {}
             
             # Build entries for image generator
             entries = []
@@ -455,11 +468,33 @@ class Quest(commands.Cog):
                 username = member.display_name if member else f"User {user_id[-4:]}" if user_id else "Unknown"
                 avatar_url = str(member.display_avatar.url) if member and member.display_avatar else None
                 
+                # Get card count from gacha_inventory
+                cards = 0
+                try:
+                    user_member_data = members_data.get(user_id, {})
+                    gacha_inventory = user_member_data.get("gacha_inventory", [])
+                    cards = len(gacha_inventory) if isinstance(gacha_inventory, list) else 0
+                except Exception:
+                    cards = 0
+                
+                # Get review count
+                reviews = 0
+                try:
+                    review_count = await reviews_col.count_documents({
+                        "target_id": user_id,
+                        "guild_id": guild_id
+                    })
+                    reviews = review_count
+                except Exception:
+                    reviews = 0
+                
                 entries.append({
                     "rank": i + 1,
                     "username": username,
                     "points": points,
                     "quests_done": quests_done,
+                    "cards": cards,
+                    "reviews": reviews,
                     "avatar_url": avatar_url
                 })
             
