@@ -16,11 +16,19 @@ class Fun_Commands:
         self._8ball_file = "data/commands/fun/8ball-responses.txt"
         action_file = "data/commands/fun/action-response.json"
         self.action_api = "https://api.otakugifs.xyz/gif?reaction={}"
+        self.fallback_api = "https://api.waifu.pics/sfw/{}"
+        self.nekos_api = "https://nekos.best/api/v2/{}"
         self.mongo = AsyncIOMotorClient(os.getenv("MONGO_URI")).Commands.fun
         with open(action_file) as f:
             data = json.load(f)
             self.emotes = data["emotes"]
             self.phrases = data["phrases"]
+        
+        # Map actions to API endpoints
+        self.api_mapping = {
+            "waifu.pics": ["hug", "kiss", "slap", "pat", "cuddle", "poke", "tickle", "bite", "bonk", "kick", "blush", "wave", "smile", "dance", "cry", "wink"],
+            "nekos.best": ["hug", "kiss", "slap", "pat", "cuddle", "poke", "tickle", "bite", "kick", "blush", "wave", "smile", "dance", "cry", "wink", "punch", "feed", "laugh", "stare", "pout", "nod", "yawn"]
+        }
 
     async def eight_ball(self):
         async with aiofiles.open(self._8ball_file, "r") as f:
@@ -31,8 +39,45 @@ class Fun_Commands:
         if user is None:
             user = ctx.author
         action = ctx.command.name
+        
+        # Try to get GIF from multiple APIs with fallback
+        gif = None
         async with aiohttp.ClientSession() as s:
-            gif = (await (await s.get(self.action_api.format(action))).json())["url"]
+            # Try primary API (otakugifs)
+            try:
+                resp = await s.get(self.action_api.format(action))
+                if resp.status == 200:
+                    data = await resp.json()
+                    gif = data.get("url")
+            except:
+                pass
+            
+            # Try nekos.best API if primary failed
+            if not gif and action in self.api_mapping.get("nekos.best", []):
+                try:
+                    resp = await s.get(self.nekos_api.format(action))
+                    if resp.status == 200:
+                        data = await resp.json()
+                        results = data.get("results", [])
+                        if results:
+                            gif = results[0].get("url")
+                except:
+                    pass
+            
+            # Try waifu.pics API if still no GIF
+            if not gif and action in self.api_mapping.get("waifu.pics", []):
+                try:
+                    resp = await s.get(self.fallback_api.format(action))
+                    if resp.status == 200:
+                        data = await resp.json()
+                        gif = data.get("url")
+                except:
+                    pass
+            
+            # Fallback to a default GIF if all APIs fail
+            if not gif:
+                gif = "https://media.tenor.com/images/d8c9e1b1e5c5e5e5e5e5e5e5e5e5e5e5/tenor.gif"
+        
         emote = next((e for e, acts in self.emotes.items() if action in acts), "")
 
         if isinstance(user, str) and user.lower() == "everyone":
@@ -175,7 +220,199 @@ class Mini_Games:
         return f"<t:{int(datetime.utcfromtimestamp(ts).replace(tzinfo=timezone.utc).timestamp())}:R>"
 
 
-# ---------------- Memo Game ---------------- #
+# ---------------- Reaction Game (renamed from Memo) ---------------- #
+class Reaction(discord.ui.View):
+    """Reaction game view with save streak and continue playing features"""
+    def __init__(self, ctx, emojis, chosen_emoji, message, bot=None):
+        super().__init__(timeout=None)  # No timeout - handled by command
+        self.ctx = ctx
+        self.emojis = list(emojis)
+        self.chosen_emoji = chosen_emoji
+        self.message = message
+        self.bot = bot
+        self.quest_data = Quest_Data(bot) if bot else Quest_Data(ctx.bot)
+        self.reaction_data = Reaction_Data()
+        self.user_points = {}
+        self.streak_increment = 1
+        self.base_points = 5
+        self.points_multiplier = 2
+        self.answered = False
+
+        # Shuffle and create emoji buttons
+        options = random.sample(list(set(self.emojis) - {chosen_emoji}), min(4, len(set(self.emojis))-1))
+        all_options = options + [chosen_emoji]
+        random.shuffle(all_options)
+        
+        for idx, emoji in enumerate(all_options):
+            btn = discord.ui.Button(
+                style=discord.ButtonStyle.gray,
+                custom_id="correct_emoji" if emoji == chosen_emoji else f"emoji_{idx}",
+                emoji=emoji,
+                row=0
+            )
+            btn.callback = self.on_button_click
+            self.add_item(btn)
+
+    async def on_button_click(self, inter: discord.Interaction):
+        if inter.user != self.ctx.author:
+            return await inter.response.send_message("This isn't your game!", ephemeral=True)
+        
+        self.answered = True
+        cid = inter.data["custom_id"]
+        
+        if cid == "correct_emoji":
+            # Correct answer - increment streak
+            current_streak = await self.reaction_data.get_streak(inter.guild.id, inter.user.id)
+            new_streak = current_streak + self.streak_increment
+            await self.reaction_data.set_streak(inter.guild.id, inter.user.id, new_streak)
+            
+            # Update best streak if needed
+            best_streak = await self.reaction_data.get_best_streak(inter.guild.id, inter.user.id)
+            if new_streak > best_streak:
+                await self.reaction_data.set_best_streak(inter.guild.id, inter.user.id, new_streak)
+            
+            # Calculate points
+            pts = self.base_points if new_streak <= 1 else int(new_streak * self.points_multiplier)
+            await self.quest_data.add_balance(str(inter.user.id), str(inter.guild.id), pts)
+            bal = await self.quest_data.get_balance(str(inter.user.id), str(inter.guild.id))
+            
+            # Show success with save/continue options
+            embed = discord.Embed(
+                title="✅ Correct!",
+                description=f"You earned **+{pts}** pts!\n\n"
+                           f"🔥 **Streak:** {new_streak}\n"
+                           f"💰 **Balance:** {bal:,} pts",
+                color=discord.Color.green()
+            )
+            
+            # Create new view with Save and Continue buttons
+            continue_view = ReactionContinueView(self.ctx, self.emojis, self.message, self.bot, new_streak)
+            
+            self.clear_items()
+            await inter.response.edit_message(embed=embed, view=continue_view)
+        else:
+            # Wrong answer - reset streak
+            old_streak = await self.reaction_data.get_streak(inter.guild.id, inter.user.id)
+            await self.reaction_data.set_streak(inter.guild.id, inter.user.id, 0)
+            
+            embed = discord.Embed(
+                title="❌ Wrong!",
+                description=f"The correct emoji was {self.chosen_emoji}\n\n"
+                           f"💔 **Streak Lost:** {old_streak} → 0",
+                color=discord.Color.red()
+            )
+            
+            self.clear_items()
+            await inter.response.edit_message(embed=embed, view=None)
+        
+        self.stop()
+
+
+class ReactionContinueView(discord.ui.View):
+    """View with Save Streak and Continue Playing buttons"""
+    def __init__(self, ctx, emojis, message, bot, current_streak):
+        super().__init__(timeout=30)
+        self.ctx = ctx
+        self.emojis = emojis
+        self.message = message
+        self.bot = bot
+        self.current_streak = current_streak
+        self.reaction_data = Reaction_Data()
+        self.quest_data = Quest_Data(bot) if bot else Quest_Data(ctx.bot)
+
+    @discord.ui.button(label="🛑 Save Streak", style=discord.ButtonStyle.red, row=0)
+    async def save_streak(self, inter: discord.Interaction, button: discord.ui.Button):
+        if inter.user != self.ctx.author:
+            return await inter.response.send_message("This isn't your game!", ephemeral=True)
+        
+        best_streak = await self.reaction_data.get_best_streak(inter.guild.id, inter.user.id)
+        
+        embed = discord.Embed(
+            title="🏆 Streak Saved!",
+            description=f"You saved your streak of **{self.current_streak}**!\n\n"
+                       f"🏅 **Best Streak:** {max(best_streak, self.current_streak)}",
+            color=discord.Color.gold()
+        )
+        
+        self.clear_items()
+        await inter.response.edit_message(embed=embed, view=None)
+        self.stop()
+
+    @discord.ui.button(label="▶️ Continue Playing", style=discord.ButtonStyle.green, row=0)
+    async def continue_playing(self, inter: discord.Interaction, button: discord.ui.Button):
+        if inter.user != self.ctx.author:
+            return await inter.response.send_message("This isn't your game!", ephemeral=True)
+        
+        await inter.response.defer()
+        
+        # Calculate difficulty based on streak
+        base_time = 10
+        param = self.current_streak * 0.5
+        play_time = max(2.5, base_time - param)
+        
+        # Pick new emoji
+        chosen = random.choice(self.emojis)
+        
+        # Show the emoji to remember
+        embed = discord.Embed(
+            title=f"🧠 Level {self.current_streak + 1}",
+            description=f"Remember this emoji: {chosen}\n\n"
+                       f"🔥 **Streak:** {self.current_streak}\n"
+                       f"⏱️ **Time:** {play_time:.1f}s",
+            color=discord.Color.blue()
+        )
+        
+        self.clear_items()
+        await self.message.edit(embed=embed, view=None)
+        
+        await asyncio.sleep(2)
+        
+        # Create new game view
+        new_view = Reaction(self.ctx, self.emojis, chosen, self.message, self.bot)
+        future = int((datetime.now(timezone.utc) + timedelta(seconds=play_time)).timestamp())
+        
+        embed = discord.Embed(
+            description=f"Click the emoji you remembered!\n`Remaining Time:` <t:{future}:R>",
+            color=discord.Color.blue()
+        )
+        
+        await self.message.edit(embed=embed, view=new_view)
+        
+        # Wait for answer or timeout
+        try:
+            await asyncio.wait_for(new_view.wait(), timeout=play_time)
+        except asyncio.TimeoutError:
+            if not new_view.answered:
+                # Time's up - reset streak
+                await self.reaction_data.set_streak(inter.guild.id, inter.user.id, 0)
+                
+                timeout_embed = discord.Embed(
+                    title="⏰ Time's Up!",
+                    description=f"You didn't click {chosen} in time!\n\n"
+                               f"💔 **Streak Lost:** {self.current_streak} → 0",
+                    color=discord.Color.red()
+                )
+                
+                for child in new_view.children:
+                    child.disabled = True
+                await self.message.edit(embed=timeout_embed, view=None)
+        
+        self.stop()
+
+    async def on_timeout(self):
+        # If they don't choose, save their streak
+        embed = discord.Embed(
+            title="⏰ Time to decide expired",
+            description=f"Your streak of **{self.current_streak}** has been saved!",
+            color=discord.Color.orange()
+        )
+        try:
+            await self.message.edit(embed=embed, view=None)
+        except:
+            pass
+
+
+# ---------------- Memo Game (Legacy) ---------------- #
 class Memo(discord.ui.View):
     def __init__(self, ctx, emojis, chosen_emoji, message, bot=None):
         super().__init__(timeout=10)
@@ -283,6 +520,41 @@ class Memo_Data:
         await self._update("highscores",{"guild_id":g,"user_id":u},{"highscore":s})
     async def set_streak(self,g,u,s):
         await self._update("streaks",{"guild_id":g,"user_id":u},{"streak":s})
+
+
+class Reaction_Data:
+    """Database layer for Reaction game (renamed from Memo)"""
+    def __init__(self):
+        uri=os.getenv("MONGO_URI")
+        if not uri:
+            raise ValueError("Missing MONGO_URI env var")
+        self.mongo=motor.motor_asyncio.AsyncIOMotorClient(uri)["Reaction"]
+
+    async def _fetch(self,c,q,f):
+        try:
+            d=await self.mongo[c].find_one(q) or {}
+            return d.get(f,0)
+        except PyMongoError:
+            return 0
+
+    async def _update(self,c,q,d):
+        try:
+            await self.mongo[c].update_one(q,{"$set":d},upsert=True)
+        except PyMongoError:
+            pass
+
+    async def get_user_highscore(self,g,u):
+        return await self._fetch("highscores",{"guild_id":g,"user_id":u},"highscore")
+    async def get_streak(self,g,u):
+        return await self._fetch("streaks",{"guild_id":g,"user_id":u},"streak")
+    async def set_user_highscore(self,g,u,s):
+        await self._update("highscores",{"guild_id":g,"user_id":u},{"highscore":s})
+    async def set_streak(self,g,u,s):
+        await self._update("streaks",{"guild_id":g,"user_id":u},{"streak":s})
+    async def get_best_streak(self,g,u):
+        return await self._fetch("highscores",{"guild_id":g,"user_id":u},"best_streak")
+    async def set_best_streak(self,g,u,s):
+        await self._update("highscores",{"guild_id":g,"user_id":u},{"best_streak":s})
 
 
 # ---------------- Embeds ---------------- #

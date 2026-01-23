@@ -162,70 +162,132 @@ class Anime(commands.Cog):
 
 
     # ═══════════════════════════════════════════════════════════════
-    # WAIFU / HUSBANDO COMMANDS
+    # WAIFU / HUSBANDO COMMANDS (Enhanced)
     # ═══════════════════════════════════════════════════════════════
     @commands.command(name="waifu")
     @commands.cooldown(1, 3, commands.BucketType.user)
-    async def waifu(self, ctx, category: str = "waifu"):
-        """💕 Get a random waifu image
+    async def waifu(self, ctx, *, query: str = None):
+        """💕 Search for waifu characters with detailed info and image gallery
         
-        Categories: waifu, neko, shinobu, megumin, awoo, bully, cuddle, cry, hug, kiss, pat, smug, bonk, wave, highfive, nom, bite, slap, happy, wink, poke, dance
+        Usage:
+        - `.waifu` - Random waifu image
+        - `.waifu Asuna` - Search for specific character
+        - `.waifu Rem Re:Zero` - Search with anime name
         """
-        valid_sfw = ["waifu", "neko", "shinobu", "megumin", "awoo", "bully", "cuddle", "cry", 
-                     "hug", "kiss", "pat", "smug", "bonk", "wave", "highfive", "nom", "bite", 
-                     "slap", "happy", "wink", "poke", "dance"]
+        from bot.utils.cogs.anime_enhanced import CharacterInfo, CharacterSelectView
         
-        if category.lower() not in valid_sfw:
-            category = "waifu"
-        
-        session = await self.get_session()
-        try:
-            async with session.get(f"{self.waifu_api}/sfw/{category}") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    url = data.get("url", "")
-                    
-                    embed = discord.Embed(
-                        title=f"💕 {category.title()}",
-                        color=discord.Color.from_rgb(255, 182, 193),
-                        timestamp=datetime.now(timezone.utc)
-                    )
-                    embed.set_image(url=url)
-                    embed.set_footer(text=f"Requested by {ctx.author}")
-                    
-                    return await ctx.reply(embed=embed, mention_author=False)
-        except Exception as e:
-            logging.error(f"Waifu API error: {e}")
-        
-        await ctx.reply("❌ Could not fetch waifu image", mention_author=False)
-
-    @commands.command(name="husbando")
-    @commands.cooldown(1, 3, commands.BucketType.user)
-    async def husbando(self, ctx):
-        """💙 Get a random husbando image"""
-        session = await self.get_session()
-        try:
-            async with session.get(f"{self.nekos_api}/husbando") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    results = data.get("results", [])
-                    if results:
-                        url = results[0].get("url", "")
-                        artist = results[0].get("artist_name", "Unknown")
+        if not query:
+            # Random waifu image (fallback to simple mode)
+            session = await self.get_session()
+            try:
+                async with session.get(f"{self.waifu_api}/sfw/waifu") as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        url = data.get("url", "")
                         
                         embed = discord.Embed(
-                            title="Husbando",
-                            color=primary_color(),
+                            title="💕 Random Waifu",
+                            description="Use `.waifu <name>` to search for specific characters!",
+                            color=discord.Color.from_rgb(255, 182, 193),
                             timestamp=datetime.now(timezone.utc)
                         )
                         embed.set_image(url=url)
-                        embed.set_footer(text=f"Artist: {artist} • Requested by {ctx.author}")
+                        embed.set_footer(text=f"Requested by {ctx.author}")
                         
                         return await ctx.reply(embed=embed, mention_author=False)
-        except Exception as e:
-            logging.error(f"Husbando API error: {e}")
+            except Exception as e:
+                logging.error(f"Waifu API error: {e}")
+                return await ctx.reply("❌ Could not fetch waifu image", mention_author=False)
         
-        await ctx.reply("❌ Could not fetch husbando image", mention_author=False)
+        # Character search mode
+        async with ctx.typing():
+            char_info = CharacterInfo()
+            characters = await char_info.search_characters(query, limit=25)
+            
+            if not characters:
+                return await ctx.reply(f"❌ No characters found for `{query}`", mention_author=False)
+            
+            # Filter for female characters
+            female_chars = [c for c in characters if "Female" in str(c.get("name_kanji", "")) or 
+                           any("female" in str(a.get("role", "")).lower() for a in c.get("anime", []))]
+            
+            if not female_chars:
+                female_chars = characters  # Fallback to all results
+            
+            # Show character selection
+            embed = discord.Embed(
+                title=f"💕 Waifu Search Results for '{query}'",
+                description="Select a character from the dropdown to view detailed information, anime appearances, and image gallery!",
+                color=discord.Color.from_rgb(255, 182, 193)
+            )
+            embed.set_footer(text=f"Found {len(female_chars)} character(s)")
+            
+            view = CharacterSelectView(female_chars, ctx)
+            await ctx.reply(embed=embed, view=view, mention_author=False)
+
+    @commands.command(name="husbando")
+    @commands.cooldown(1, 3, commands.BucketType.user)
+    async def husbando(self, ctx, *, query: str = None):
+        """💙 Search for husbando characters with detailed info and image gallery
+        
+        Usage:
+        - `.husbando` - Random husbando image
+        - `.husbando Kirito` - Search for specific character
+        - `.husbando Levi Attack on Titan` - Search with anime name
+        """
+        from bot.utils.cogs.anime_enhanced import CharacterInfo, CharacterSelectView
+        
+        if not query:
+            # Random husbando image (fallback to simple mode)
+            session = await self.get_session()
+            try:
+                async with session.get(f"{self.nekos_api}/husbando") as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        results = data.get("results", [])
+                        if results:
+                            url = results[0].get("url", "")
+                            artist = results[0].get("artist_name", "Unknown")
+                            
+                            embed = discord.Embed(
+                                title="💙 Random Husbando",
+                                description="Use `.husbando <name>` to search for specific characters!",
+                                color=discord.Color.blue(),
+                                timestamp=datetime.now(timezone.utc)
+                            )
+                            embed.set_image(url=url)
+                            embed.set_footer(text=f"Artist: {artist} • Requested by {ctx.author}")
+                            
+                            return await ctx.reply(embed=embed, mention_author=False)
+            except Exception as e:
+                logging.error(f"Husbando API error: {e}")
+                return await ctx.reply("❌ Could not fetch husbando image", mention_author=False)
+        
+        # Character search mode
+        async with ctx.typing():
+            char_info = CharacterInfo()
+            characters = await char_info.search_characters(query, limit=25)
+            
+            if not characters:
+                return await ctx.reply(f"❌ No characters found for `{query}`", mention_author=False)
+            
+            # Filter for male characters
+            male_chars = [c for c in characters if "Male" in str(c.get("name_kanji", "")) or 
+                         any("male" in str(a.get("role", "")).lower() for a in c.get("anime", []))]
+            
+            if not male_chars:
+                male_chars = characters  # Fallback to all results
+            
+            # Show character selection
+            embed = discord.Embed(
+                title=f"💙 Husbando Search Results for '{query}'",
+                description="Select a character from the dropdown to view detailed information, anime appearances, and image gallery!",
+                color=discord.Color.blue()
+            )
+            embed.set_footer(text=f"Found {len(male_chars)} character(s)")
+            
+            view = CharacterSelectView(male_chars, ctx)
+            await ctx.reply(embed=embed, view=view, mention_author=False)
 
     # ═══════════════════════════════════════════════════════════════
     # ANIME REACTION GIFS
@@ -233,14 +295,96 @@ class Anime(commands.Cog):
     @commands.command(name="neko")
     @commands.cooldown(1, 3, commands.BucketType.user)
     async def neko(self, ctx):
-        """🐱 Get a random neko image"""
-        await self._send_nekos_image(ctx, "neko", "🐱 Neko")
+        """🐱 Get neko/catgirl images with artist credits and gallery
+        
+        Features high-quality SFW images from multiple sources with artist attribution.
+        Use the navigation buttons to browse through multiple images!
+        """
+        from bot.utils.cogs.anime_enhanced import ImageSource, NekoKitsuneGalleryView
+        
+        loading_msg = await ctx.reply("🐱 Fetching neko images from multiple sources...", mention_author=False)
+        
+        try:
+            img_source = ImageSource()
+            images = await img_source.fetch_neko_images(limit=20)
+            
+            if not images:
+                return await loading_msg.edit(content="❌ Could not fetch neko images")
+            
+            # Create gallery view and show first image
+            view = NekoKitsuneGalleryView(images, "neko", ctx)
+            
+            # Build first image embed
+            img = images[0]
+            embed = discord.Embed(
+                title="🐱 Neko Gallery",
+                color=discord.Color.from_rgb(255, 182, 193),
+                timestamp=datetime.now(timezone.utc)
+            )
+            embed.set_image(url=img["url"])
+            
+            artist = img.get("artist", "Unknown")
+            source = img.get("source", "")
+            site = img.get("site", "Unknown")
+            score = img.get("score", 0)
+            
+            footer_text = f"Artist: {artist} • Source: {site}"
+            if score > 0:
+                footer_text += f" • Score: {score}"
+            footer_text += f" • Image 1/{len(images)}"
+            embed.set_footer(text=footer_text)
+            
+            await loading_msg.edit(content=None, embed=embed, view=view)
+        except Exception as e:
+            logging.error(f"Neko command error: {e}")
+            await loading_msg.edit(content="❌ Error fetching neko images")
 
     @commands.command(name="kitsune")
     @commands.cooldown(1, 3, commands.BucketType.user)
     async def anime_kitsune(self, ctx):
-        """🦊 Get a random kitsune image"""
-        await self._send_nekos_image(ctx, "kitsune", "Kitsune")
+        """🦊 Get kitsune/foxgirl images with artist credits and gallery
+        
+        Features high-quality SFW images from multiple sources with artist attribution.
+        Use the navigation buttons to browse through multiple images!
+        """
+        from bot.utils.cogs.anime_enhanced import ImageSource, NekoKitsuneGalleryView
+        
+        loading_msg = await ctx.reply("🦊 Fetching kitsune images from multiple sources...", mention_author=False)
+        
+        try:
+            img_source = ImageSource()
+            images = await img_source.fetch_kitsune_images(limit=20)
+            
+            if not images:
+                return await loading_msg.edit(content="❌ Could not fetch kitsune images")
+            
+            # Create gallery view and show first image
+            view = NekoKitsuneGalleryView(images, "kitsune", ctx)
+            
+            # Build first image embed
+            img = images[0]
+            embed = discord.Embed(
+                title="🦊 Kitsune Gallery",
+                color=discord.Color.from_rgb(255, 182, 193),
+                timestamp=datetime.now(timezone.utc)
+            )
+            embed.set_image(url=img["url"])
+            
+            artist = img.get("artist", "Unknown")
+            source = img.get("source", "")
+            site = img.get("site", "Unknown")
+            score = img.get("score", 0)
+            
+            footer_text = f"Artist: {artist} • Source: {site}"
+            if score > 0:
+                footer_text += f" • Score: {score}"
+            footer_text += f" • Image 1/{len(images)}"
+            embed.set_footer(text=footer_text)
+            
+            await loading_msg.edit(content=None, embed=embed, view=view)
+        except Exception as e:
+            logging.error(f"Kitsune command error: {e}")
+            await loading_msg.edit(content="❌ Error fetching kitsune images")
 
     @anime_group.command(name="smug")
     @commands.cooldown(1, 3, commands.BucketType.user)

@@ -1,16 +1,18 @@
 # Comprehensive Moderation System
-# Commands: mod, warn, kick, ban, unban, timeout, mute, unmute, purge, slowmode, lock, unlock, role, cases, notes, log
+# Commands: mod, warn, timeout, mute, unmute, purge, slowmode, lock, unlock, role, notes
 from imports.discord_imports import *
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import timedelta, datetime, timezone
 import os, asyncio, re
 from typing import Optional, Literal, Union
 from bot.utils.cogs.moderation import (
-    ModerationDB, ModerationEmbeds, ModerationViews, 
-    ModerationUtils, RoleManagement
+    ModerationDB,
+    ModerationEmbeds,
+    ModerationViews,
+    ModerationUtils,
+    RoleManagement
 )
 from data.local.const import primary_color
-
 
 class Moderation(commands.Cog):
     """Server Moderation - Complete moderation toolkit for server management"""
@@ -19,11 +21,11 @@ class Moderation(commands.Cog):
         self.bot = bot
         self.mod_db = ModerationDB()
         self.legacy_db = AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["moderation"]
-
+    
     async def get_log_channel(self, guild: discord.Guild) -> Optional[discord.TextChannel]:
         """Get the mod log channel for a guild"""
         return await self.mod_db.get_log_channel(guild)
-
+    
     async def log_action(self, guild: discord.Guild, embed: discord.Embed):
         """Send an embed to the mod log channel if configured"""
         log_channel = await self.get_log_channel(guild)
@@ -36,6 +38,7 @@ class Moderation(commands.Cog):
     # ═══════════════════════════════════════════════════════════════
     # MOD GROUP - Main moderation command hub
     # ═══════════════════════════════════════════════════════════════
+    
     @commands.group(name="mod", invoke_without_command=True)
     @commands.has_permissions(manage_messages=True)
     async def mod_group(self, ctx):
@@ -49,10 +52,11 @@ class Moderation(commands.Cog):
         
         embed.add_field(
             name="User Actions",
-            value=f"`{ctx.prefix}warn` - Warn a member\n"
-                  f"`{ctx.prefix}kick` - Kick a member\n"
-                  f"`{ctx.prefix}ban` - Ban a member\n"
-                  f"`{ctx.prefix}unban` - Unban a user\n"
+            value=f"`{ctx.prefix}mod kick` - Kick a member\n"
+                  f"`{ctx.prefix}mod ban` - Ban a member\n"
+                  f"`{ctx.prefix}mod unban` - Unban a user\n"
+                  f"`{ctx.prefix}mod softban` - Softban a member\n"
+                  f"`{ctx.prefix}warn` - Warn a member\n"
                   f"`{ctx.prefix}timeout` - Timeout a member\n"
                   f"`{ctx.prefix}mute` - Mute a member\n"
                   f"`{ctx.prefix}unmute` - Unmute a member",
@@ -88,9 +92,9 @@ class Moderation(commands.Cog):
             inline=True
         )
         
-        embed.set_footer(text=f"Use {ctx.prefix}help <command> for more details")
+        embed.set_footer(text=f"Use {ctx.prefix}help for more details")
         await ctx.reply(embed=embed, mention_author=False)
-
+    
     @mod_group.command(name="log")
     @commands.has_permissions(manage_guild=True)
     async def mod_log(self, ctx, channel: discord.TextChannel = None):
@@ -116,7 +120,7 @@ class Moderation(commands.Cog):
             color=discord.Color.green()
         )
         await ctx.reply(embed=embed, mention_author=False)
-
+    
     @mod_group.command(name="muterole")
     @commands.has_permissions(manage_guild=True)
     async def mod_muterole(self, ctx, role: discord.Role = None):
@@ -132,7 +136,7 @@ class Moderation(commands.Cog):
         
         await self.mod_db.set_config(ctx.guild.id, "mute_role", role.id)
         await ctx.reply(f"Mute role set to {role.mention}", mention_author=False)
-
+    
     @mod_group.command(name="cases")
     @commands.has_permissions(manage_messages=True)
     async def mod_cases(self, ctx, member: discord.Member = None):
@@ -148,8 +152,96 @@ class Moderation(commands.Cog):
         await ctx.reply(embed=view.build_embed(), view=view, mention_author=False)
 
     # ═══════════════════════════════════════════════════════════════
+    # KICK COMMAND (now under mod group)
+    # ═══════════════════════════════════════════════════════════════
+    
+    @mod_group.command(name="kick")
+    @commands.has_permissions(kick_members=True)
+    async def mod_kick(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
+        """Kick a member from the server"""
+        can_mod, msg = ModerationUtils.can_moderate(ctx.author, member)
+        if not can_mod:
+            return await ctx.reply(f"❌ {msg}", mention_author=False)
+        
+        # DM before kick
+        dm_embed = discord.Embed(
+            title=f"Kicked from {ctx.guild.name}",
+            description=f"**Reason:** {reason}",
+            color=discord.Color.orange()
+        )
+        await ModerationUtils.send_dm(member, dm_embed)
+        
+        await member.kick(reason=f"{ctx.author}: {reason}")
+        case_num = await self.mod_db.add_case(ctx.guild.id, "kick", member.id, ctx.author.id, reason)
+        
+        embed = ModerationEmbeds.action_embed("Kick", member, ctx.author, reason, case_num=case_num)
+        await ctx.reply(embed=embed, mention_author=False)
+        await self.log_action(ctx.guild, embed)
+
+    # ═══════════════════════════════════════════════════════════════
+    # BAN / UNBAN COMMANDS (now under mod group)
+    # ═══════════════════════════════════════════════════════════════
+    
+    @mod_group.command(name="ban")
+    @commands.has_permissions(ban_members=True)
+    async def mod_ban(self, ctx, member: Union[discord.Member, discord.User], *, reason: str = "No reason provided"):
+        """Ban a member from the server"""
+        if isinstance(member, discord.Member):
+            can_mod, msg = ModerationUtils.can_moderate(ctx.author, member)
+            if not can_mod:
+                return await ctx.reply(f"❌ {msg}", mention_author=False)
+            
+            # DM before ban
+            dm_embed = discord.Embed(
+                title=f"Banned from {ctx.guild.name}",
+                description=f"**Reason:** {reason}",
+                color=discord.Color.red()
+            )
+            await ModerationUtils.send_dm(member, dm_embed)
+        
+        await ctx.guild.ban(member, reason=f"{ctx.author}: {reason}", delete_message_days=0)
+        case_num = await self.mod_db.add_case(ctx.guild.id, "ban", member.id, ctx.author.id, reason)
+        
+        embed = ModerationEmbeds.action_embed("Ban", member, ctx.author, reason, case_num=case_num)
+        await ctx.reply(embed=embed, mention_author=False)
+        await self.log_action(ctx.guild, embed)
+    
+    @mod_group.command(name="unban")
+    @commands.has_permissions(ban_members=True)
+    async def mod_unban(self, ctx, user: discord.User, *, reason: str = "No reason provided"):
+        """Unban a user from the server"""
+        try:
+            await ctx.guild.unban(user, reason=f"{ctx.author}: {reason}")
+            case_num = await self.mod_db.add_case(ctx.guild.id, "unban", user.id, ctx.author.id, reason)
+            
+            embed = ModerationEmbeds.action_embed("Unban", user, ctx.author, reason, case_num=case_num)
+            await ctx.reply(embed=embed, mention_author=False)
+            await self.log_action(ctx.guild, embed)
+        except discord.NotFound:
+            await ctx.reply("❌ This user is not banned.", mention_author=False)
+    
+    @mod_group.command(name="softban")
+    @commands.has_permissions(ban_members=True)
+    async def mod_softban(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
+        """Softban (ban + unban) to delete messages"""
+        can_mod, msg = ModerationUtils.can_moderate(ctx.author, member)
+        if not can_mod:
+            return await ctx.reply(f"❌ {msg}", mention_author=False)
+        
+        await ctx.guild.ban(member, reason=f"Softban by {ctx.author}: {reason}", delete_message_days=7)
+        await ctx.guild.unban(member, reason="Softban unban")
+        
+        case_num = await self.mod_db.add_case(ctx.guild.id, "softban", member.id, ctx.author.id, reason)
+        
+        embed = ModerationEmbeds.action_embed("Softban", member, ctx.author, reason, case_num=case_num)
+        embed.description = "User was banned and unbanned to delete their messages."
+        await ctx.reply(embed=embed, mention_author=False)
+        await self.log_action(ctx.guild, embed)
+
+    # ═══════════════════════════════════════════════════════════════
     # WARN COMMAND
     # ═══════════════════════════════════════════════════════════════
+    
     @commands.group(name="warn", invoke_without_command=True)
     @commands.has_permissions(manage_messages=True)
     async def warn(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
@@ -180,7 +272,7 @@ class Moderation(commands.Cog):
         
         await ctx.reply(embed=embed, mention_author=False)
         await self.log_action(ctx.guild, embed)
-
+    
     @warn.command(name="list")
     @commands.has_permissions(manage_messages=True)
     async def warn_list(self, ctx, member: discord.Member):
@@ -188,7 +280,7 @@ class Moderation(commands.Cog):
         warnings = await self.mod_db.get_warnings(ctx.guild.id, member.id)
         embed = ModerationEmbeds.warnings_embed(member, warnings, ctx.guild)
         await ctx.reply(embed=embed, mention_author=False)
-
+    
     @warn.command(name="clear")
     @commands.has_permissions(manage_guild=True)
     async def warn_clear(self, ctx, member: discord.Member):
@@ -200,12 +292,13 @@ class Moderation(commands.Cog):
             color=discord.Color.green()
         )
         await ctx.reply(embed=embed, mention_author=False)
-
+    
     @warn.command(name="remove")
     @commands.has_permissions(manage_guild=True)
     async def warn_remove(self, ctx, member: discord.Member, index: int):
         """Remove a specific warning by index (1-based)"""
         success = await self.mod_db.remove_warning(ctx.guild.id, member.id, index - 1)
+        
         if success:
             embed = discord.Embed(
                 title="Warning Removed",
@@ -221,92 +314,9 @@ class Moderation(commands.Cog):
         await ctx.reply(embed=embed, mention_author=False)
 
     # ═══════════════════════════════════════════════════════════════
-    # KICK COMMAND
-    # ═══════════════════════════════════════════════════════════════
-    @commands.command(name="kick")
-    @commands.has_permissions(kick_members=True)
-    async def kick(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
-        """Kick a member from the server"""
-        can_mod, msg = ModerationUtils.can_moderate(ctx.author, member)
-        if not can_mod:
-            return await ctx.reply(f"❌ {msg}", mention_author=False)
-        
-        # DM before kick
-        dm_embed = discord.Embed(
-            title=f"Kicked from {ctx.guild.name}",
-            description=f"**Reason:** {reason}",
-            color=discord.Color.orange()
-        )
-        await ModerationUtils.send_dm(member, dm_embed)
-        
-        await member.kick(reason=f"{ctx.author}: {reason}")
-        case_num = await self.mod_db.add_case(ctx.guild.id, "kick", member.id, ctx.author.id, reason)
-        
-        embed = ModerationEmbeds.action_embed("Kick", member, ctx.author, reason, case_num=case_num)
-        await ctx.reply(embed=embed, mention_author=False)
-        await self.log_action(ctx.guild, embed)
-
-    # ═══════════════════════════════════════════════════════════════
-    # BAN / UNBAN COMMANDS
-    # ═══════════════════════════════════════════════════════════════
-    @commands.command(name="ban")
-    @commands.has_permissions(ban_members=True)
-    async def ban(self, ctx, member: Union[discord.Member, discord.User], *, reason: str = "No reason provided"):
-        """Ban a member from the server"""
-        if isinstance(member, discord.Member):
-            can_mod, msg = ModerationUtils.can_moderate(ctx.author, member)
-            if not can_mod:
-                return await ctx.reply(f"❌ {msg}", mention_author=False)
-            
-            # DM before ban
-            dm_embed = discord.Embed(
-                title=f"Banned from {ctx.guild.name}",
-                description=f"**Reason:** {reason}",
-                color=discord.Color.red()
-            )
-            await ModerationUtils.send_dm(member, dm_embed)
-        
-        await ctx.guild.ban(member, reason=f"{ctx.author}: {reason}", delete_message_days=0)
-        case_num = await self.mod_db.add_case(ctx.guild.id, "ban", member.id, ctx.author.id, reason)
-        
-        embed = ModerationEmbeds.action_embed("Ban", member, ctx.author, reason, case_num=case_num)
-        await ctx.reply(embed=embed, mention_author=False)
-        await self.log_action(ctx.guild, embed)
-
-    @commands.command(name="unban")
-    @commands.has_permissions(ban_members=True)
-    async def unban(self, ctx, user: discord.User, *, reason: str = "No reason provided"):
-        """Unban a user from the server"""
-        try:
-            await ctx.guild.unban(user, reason=f"{ctx.author}: {reason}")
-            case_num = await self.mod_db.add_case(ctx.guild.id, "unban", user.id, ctx.author.id, reason)
-            
-            embed = ModerationEmbeds.action_embed("Unban", user, ctx.author, reason, case_num=case_num)
-            await ctx.reply(embed=embed, mention_author=False)
-            await self.log_action(ctx.guild, embed)
-        except discord.NotFound:
-            await ctx.reply("❌ This user is not banned.", mention_author=False)
-
-    @commands.command(name="softban")
-    @commands.has_permissions(ban_members=True)
-    async def softban(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
-        """Softban (ban + unban) to delete messages"""
-        can_mod, msg = ModerationUtils.can_moderate(ctx.author, member)
-        if not can_mod:
-            return await ctx.reply(f"❌ {msg}", mention_author=False)
-        
-        await ctx.guild.ban(member, reason=f"Softban by {ctx.author}: {reason}", delete_message_days=7)
-        await ctx.guild.unban(member, reason="Softban unban")
-        case_num = await self.mod_db.add_case(ctx.guild.id, "softban", member.id, ctx.author.id, reason)
-        
-        embed = ModerationEmbeds.action_embed("Softban", member, ctx.author, reason, case_num=case_num)
-        embed.description = "User was banned and unbanned to delete their messages."
-        await ctx.reply(embed=embed, mention_author=False)
-        await self.log_action(ctx.guild, embed)
-
-    # ═══════════════════════════════════════════════════════════════
     # TIMEOUT / MUTE COMMANDS
     # ═══════════════════════════════════════════════════════════════
+    
     @commands.command(name="timeout")
     @commands.has_permissions(moderate_members=True)
     async def timeout(self, ctx, member: discord.Member, duration: str, *, reason: str = "No reason provided"):
@@ -324,10 +334,12 @@ class Moderation(commands.Cog):
         
         until = discord.utils.utcnow() + td
         await member.timeout(until, reason=f"{ctx.author}: {reason}")
-        case_num = await self.mod_db.add_case(ctx.guild.id, "timeout", member.id, ctx.author.id, reason)
         
+        case_num = await self.mod_db.add_case(ctx.guild.id, "timeout", member.id, ctx.author.id, reason)
         duration_str = ModerationUtils.format_duration(td)
-        embed = ModerationEmbeds.action_embed("Timeout", member, ctx.author, reason, duration=duration_str, case_num=case_num)
+        
+        embed = ModerationEmbeds.action_embed("Timeout", member, ctx.author, reason, 
+                                              duration=duration_str, case_num=case_num)
         
         # DM user
         dm_embed = discord.Embed(
@@ -339,7 +351,7 @@ class Moderation(commands.Cog):
         
         await ctx.reply(embed=embed, mention_author=False)
         await self.log_action(ctx.guild, embed)
-
+    
     @commands.command(name="untimeout", aliases=["removetimeout"])
     @commands.has_permissions(moderate_members=True)
     async def untimeout(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
@@ -350,7 +362,7 @@ class Moderation(commands.Cog):
         embed = ModerationEmbeds.action_embed("Timeout Removed", member, ctx.author, reason, case_num=case_num)
         await ctx.reply(embed=embed, mention_author=False)
         await self.log_action(ctx.guild, embed)
-
+    
     @commands.command(name="mute")
     @commands.has_permissions(manage_roles=True)
     async def mute(self, ctx, member: discord.Member, duration: str = None, *, reason: str = "No reason provided"):
@@ -382,10 +394,11 @@ class Moderation(commands.Cog):
                 if mute_role in member.roles:
                     await member.remove_roles(mute_role, reason="Mute duration expired")
         
-        embed = ModerationEmbeds.action_embed("Mute", member, ctx.author, reason, duration=duration_str, case_num=case_num)
+        embed = ModerationEmbeds.action_embed("Mute", member, ctx.author, reason, 
+                                              duration=duration_str, case_num=case_num)
         await ctx.reply(embed=embed, mention_author=False)
         await self.log_action(ctx.guild, embed)
-
+    
     @commands.command(name="unmute")
     @commands.has_permissions(manage_roles=True)
     async def unmute(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
@@ -410,6 +423,7 @@ class Moderation(commands.Cog):
     # ═══════════════════════════════════════════════════════════════
     # PURGE COMMANDS
     # ═══════════════════════════════════════════════════════════════
+    
     @commands.group(name="purge", aliases=["clear", "prune"], invoke_without_command=True)
     @commands.has_permissions(manage_messages=True)
     async def purge(self, ctx, amount: int):
@@ -436,9 +450,8 @@ class Moderation(commands.Cog):
             await msg.delete()
         except:
             pass
-        
         await self.log_action(ctx.guild, embed)
-
+    
     @purge.command(name="user")
     @commands.has_permissions(manage_messages=True)
     async def purge_user(self, ctx, member: discord.Member, amount: int = 100):
@@ -460,7 +473,7 @@ class Moderation(commands.Cog):
             await msg.delete()
         except:
             pass
-
+    
     @purge.command(name="bots")
     @commands.has_permissions(manage_messages=True)
     async def purge_bots(self, ctx, amount: int = 100):
@@ -482,7 +495,7 @@ class Moderation(commands.Cog):
             await msg.delete()
         except:
             pass
-
+    
     @purge.command(name="embeds")
     @commands.has_permissions(manage_messages=True)
     async def purge_embeds(self, ctx, amount: int = 100):
@@ -504,7 +517,7 @@ class Moderation(commands.Cog):
             await msg.delete()
         except:
             pass
-
+    
     @purge.command(name="images")
     @commands.has_permissions(manage_messages=True)
     async def purge_images(self, ctx, amount: int = 100):
@@ -526,7 +539,7 @@ class Moderation(commands.Cog):
             await msg.delete()
         except:
             pass
-
+    
     @purge.command(name="contains")
     @commands.has_permissions(manage_messages=True)
     async def purge_contains(self, ctx, text: str, amount: int = 100):
@@ -552,6 +565,7 @@ class Moderation(commands.Cog):
     # ═══════════════════════════════════════════════════════════════
     # CHANNEL MANAGEMENT
     # ═══════════════════════════════════════════════════════════════
+    
     @commands.command(name="slowmode")
     @commands.has_permissions(manage_channels=True)
     async def slowmode(self, ctx, seconds: int = 0, channel: discord.TextChannel = None):
@@ -575,15 +589,13 @@ class Moderation(commands.Cog):
                 description=f"Slowmode set to **{seconds}** seconds in {channel.mention}",
                 color=discord.Color.green()
             )
-        
         await ctx.reply(embed=embed, mention_author=False)
-
+    
     @commands.command(name="lock")
     @commands.has_permissions(manage_channels=True)
     async def lock(self, ctx, channel: discord.TextChannel = None, *, reason: str = "No reason provided"):
         """Lock a channel"""
         channel = channel or ctx.channel
-        
         await channel.set_permissions(ctx.guild.default_role, send_messages=False, reason=f"{ctx.author}: {reason}")
         
         embed = discord.Embed(
@@ -593,16 +605,14 @@ class Moderation(commands.Cog):
             timestamp=datetime.now(timezone.utc)
         )
         embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
-        
         await ctx.reply(embed=embed, mention_author=False)
         await self.log_action(ctx.guild, embed)
-
+    
     @commands.command(name="unlock")
     @commands.has_permissions(manage_channels=True)
     async def unlock(self, ctx, channel: discord.TextChannel = None, *, reason: str = "No reason provided"):
         """Unlock a channel"""
         channel = channel or ctx.channel
-        
         await channel.set_permissions(ctx.guild.default_role, send_messages=None, reason=f"{ctx.author}: {reason}")
         
         embed = discord.Embed(
@@ -612,16 +622,14 @@ class Moderation(commands.Cog):
             timestamp=datetime.now(timezone.utc)
         )
         embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
-        
         await ctx.reply(embed=embed, mention_author=False)
         await self.log_action(ctx.guild, embed)
-
+    
     @commands.command(name="nuke")
     @commands.has_permissions(manage_channels=True)
     async def nuke(self, ctx):
         """Clone and delete channel (reset all messages)"""
         view = ModerationViews.ConfirmAction(ctx.author)
-        
         embed = discord.Embed(
             title="Confirm Channel Nuke",
             description=f"This will **delete** {ctx.channel.mention} and create an identical copy.\n"
@@ -659,6 +667,7 @@ class Moderation(commands.Cog):
     # ═══════════════════════════════════════════════════════════════
     # ROLE MANAGEMENT
     # ═══════════════════════════════════════════════════════════════
+    
     @commands.group(name="role", invoke_without_command=True)
     @commands.has_permissions(manage_roles=True)
     async def role_group(self, ctx):
@@ -674,7 +683,7 @@ class Moderation(commands.Cog):
             color=primary_color()
         )
         await ctx.reply(embed=embed, mention_author=False)
-
+    
     @role_group.command(name="add")
     @commands.has_permissions(manage_roles=True)
     async def role_add(self, ctx, member: discord.Member, role: discord.Role, *, reason: str = "No reason"):
@@ -686,14 +695,13 @@ class Moderation(commands.Cog):
             return await ctx.reply("❌ I cannot assign a role equal to or higher than my top role.", mention_author=False)
         
         await member.add_roles(role, reason=f"{ctx.author}: {reason}")
-        
         embed = discord.Embed(
             title="Role Added",
             description=f"Added {role.mention} to {member.mention}",
             color=discord.Color.green()
         )
         await ctx.reply(embed=embed, mention_author=False)
-
+    
     @role_group.command(name="remove")
     @commands.has_permissions(manage_roles=True)
     async def role_remove(self, ctx, member: discord.Member, role: discord.Role, *, reason: str = "No reason"):
@@ -702,14 +710,13 @@ class Moderation(commands.Cog):
             return await ctx.reply("❌ You cannot remove a role equal to or higher than your top role.", mention_author=False)
         
         await member.remove_roles(role, reason=f"{ctx.author}: {reason}")
-        
         embed = discord.Embed(
             title="Role Removed",
             description=f"Removed {role.mention} from {member.mention}",
             color=discord.Color.green()
         )
         await ctx.reply(embed=embed, mention_author=False)
-
+    
     @role_group.command(name="all")
     @commands.has_permissions(administrator=True)
     async def role_all(self, ctx, role: discord.Role):
@@ -718,7 +725,6 @@ class Moderation(commands.Cog):
             return await ctx.reply("❌ I cannot assign this role.", mention_author=False)
         
         msg = await ctx.reply("⏳ Adding role to all members...", mention_author=False)
-        
         count = 0
         for member in ctx.guild.members:
             if role not in member.roles:
@@ -734,7 +740,7 @@ class Moderation(commands.Cog):
             color=discord.Color.green()
         )
         await msg.edit(content=None, embed=embed)
-
+    
     @role_group.command(name="bots")
     @commands.has_permissions(administrator=True)
     async def role_bots(self, ctx, role: discord.Role):
@@ -743,7 +749,6 @@ class Moderation(commands.Cog):
             return await ctx.reply("❌ I cannot assign this role.", mention_author=False)
         
         msg = await ctx.reply("⏳ Adding role to all bots...", mention_author=False)
-        
         count = 0
         for member in ctx.guild.members:
             if member.bot and role not in member.roles:
@@ -759,7 +764,7 @@ class Moderation(commands.Cog):
             color=discord.Color.green()
         )
         await msg.edit(content=None, embed=embed)
-
+    
     @role_group.command(name="humans")
     @commands.has_permissions(administrator=True)
     async def role_humans(self, ctx, role: discord.Role):
@@ -768,7 +773,6 @@ class Moderation(commands.Cog):
             return await ctx.reply("❌ I cannot assign this role.", mention_author=False)
         
         msg = await ctx.reply("⏳ Adding role to all humans...", mention_author=False)
-        
         count = 0
         for member in ctx.guild.members:
             if not member.bot and role not in member.roles:
@@ -784,7 +788,7 @@ class Moderation(commands.Cog):
             color=discord.Color.green()
         )
         await msg.edit(content=None, embed=embed)
-
+    
     @role_group.command(name="removeall")
     @commands.has_permissions(administrator=True)
     async def role_removeall(self, ctx, role: discord.Role):
@@ -793,7 +797,6 @@ class Moderation(commands.Cog):
             return await ctx.reply("❌ I cannot remove this role.", mention_author=False)
         
         msg = await ctx.reply("⏳ Removing role from all members...", mention_author=False)
-        
         count = 0
         for member in ctx.guild.members:
             if role in member.roles:
@@ -811,8 +814,9 @@ class Moderation(commands.Cog):
         await msg.edit(content=None, embed=embed)
 
     # ═══════════════════════════════════════════════════════════════
-    # NOTES SYSTEM (kept from original)
+    # NOTES SYSTEM
     # ═══════════════════════════════════════════════════════════════
+    
     @commands.group(name="notes", invoke_without_command=True)
     @commands.has_permissions(manage_messages=True)
     async def notes_group(self, ctx, member: discord.Member = None):
@@ -831,33 +835,30 @@ class Moderation(commands.Cog):
                 color=primary_color()
             )
             await ctx.reply(embed=embed, mention_author=False)
-
+    
     @notes_group.command(name="add")
     @commands.has_permissions(manage_messages=True)
     async def notes_add(self, ctx, member: discord.Member, *, note: str):
         """Add a note to a member"""
         await self.mod_db.add_warning(ctx.guild.id, member.id, ctx.author.id, f"[NOTE] {note}")
-        
         embed = discord.Embed(
             title="Note Added",
             description=f"Added note for {member.mention}:\n```{note}```",
             color=discord.Color.green()
         )
         await ctx.reply(embed=embed, mention_author=False)
-
+    
     @notes_group.command(name="clear")
     @commands.has_permissions(manage_guild=True)
     async def notes_clear(self, ctx, member: discord.Member):
         """Clear all notes for a member"""
         count = await self.mod_db.clear_warnings(ctx.guild.id, member.id)
-        
         embed = discord.Embed(
             title="Notes Cleared",
             description=f"Cleared **{count}** note(s) for {member.mention}",
             color=discord.Color.green()
         )
         await ctx.reply(embed=embed, mention_author=False)
-
 
 async def setup(bot):
     await bot.add_cog(Moderation(bot))

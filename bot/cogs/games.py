@@ -14,14 +14,16 @@ from bot.utils.cogs.game import *
 from bot.utils.cogs.game.images import *
 from bot.utils.cogs.game.const import *
 from bot.utils.cogs.game.draw.cover_art import *
-from bot.utils.cogs.game.draw.cover_gallery_view import CoverGalleryView, CoverCollectionView
+from bot.utils.cogs.game.draw.cover_gallery_view import CoverGalleryView, CoverCollectionView, DeleteConfirmationView
 from bot.utils.cogs.game.view import *
 from bot.cogs.quest import Quest_Data
+from bot.utils.cogs.fun import Memo_Data, Memo, MemoEmbeds, Reaction_Data, Reaction
+from data.local.const import primary_color
 
 logger = logging.getLogger(__name__)
 
 class Games(commands.Cog):
-    """🎮 Mini-games that use stella points - Gamble, Classic Games & Grounded Economy!"""
+    """ Mini-games that use stella points - Gamble, Classic Games & Grounded Economy!"""
    
     def __init__(self, bot):
         self.bot = bot
@@ -1326,37 +1328,8 @@ class Games(commands.Cog):
         await ctx.reply(embed=embed, mention_author=False)
     
     # ═══════════════════════════════════════════════════════════════
-    # GAMBLING GAMES
+    # GAMBLING GAMES (slots command moved to gamble.py cog)
     # ═══════════════════════════════════════════════════════════════
-    
-    @commands.command(name="slots", aliases=["slot", "spin"])
-    @commands.cooldown(1, 3, commands.BucketType.user)
-    async def slots_command(self, ctx, bet: int = 50):
-        """🎰 Spin the slot machine! Match symbols to win big."""
-        guild_id = str(ctx.guild.id)
-        user_id = str(ctx.author.id)
-        
-        # Check timer (cooldown + daily limit)
-        timer_error = await self.check_timer(ctx, "slots")
-        if timer_error:
-            return await ctx.reply(timer_error, mention_author=False)
-        
-        # Validate bet
-        if bet < 10:
-            return await ctx.reply("❌ Minimum bet is **10** stella points!", mention_author=False)
-        if bet > 10000:
-            return await ctx.reply("❌ Maximum bet is **10,000** stella points!", mention_author=False)
-        
-        # Check balance
-        balance = await self.quest_data.get_balance(user_id, guild_id)
-        if balance < bet:
-            return await ctx.reply(f"❌ You need **{bet:,}** but only have **{balance:,}** stella points!", mention_author=False)
-        
-        # Set command cooldown and increment plays
-        await self.set_cooldown(user_id, "slots_command")
-        await self.increment_plays(user_id, guild_id, "slots")
-        
-        await self._run_slot_machine(ctx.channel, ctx.author, bet)
     
     def _generate_slot_gif(self, results: list) -> io.BytesIO:
         """Generate hyper-realistic slot machine GIF with physics-based animation"""
@@ -1649,7 +1622,6 @@ class Games(commands.Cog):
             await self.quest_data.add_balance(user_id, guild_id, winnings)
         
         new_balance = balance - bet + winnings
-        profit = winnings - bet
         
         # Create clean final embed with GIF
         final_embed = discord.Embed(
@@ -1658,19 +1630,16 @@ class Games(commands.Cog):
             color=final_color
         )
         
-        if profit > 0:
-            final_embed.add_field(name="Won", value=f"+{profit:,} pts", inline=True)
+        if winnings > 0:
+            final_embed.add_field(name="Won", value=f"+{winnings:,} pts", inline=True)
         else:
-            final_embed.add_field(name="Lost", value=f"{abs(profit):,} pts", inline=True)
+            final_embed.add_field(name="Lost", value=f"{abs(winnings):,} pts", inline=True)
         
         final_embed.add_field(name="Balance", value=f"{new_balance:,} pts", inline=True)
         final_embed.set_image(url="attachment://slots.gif")
         
-        # Create view with Play Again button
-        view = SlotMachineView(self, user_id, guild_id, bet, results)
-        
         file = discord.File(gif_buffer, filename="slots.gif")
-        await spin_msg.edit(embed=final_embed, attachments=[file], view=view)
+        await spin_msg.edit(embed=final_embed, attachments=[file])
     
     def parse_bet(self, bet_str: str) -> int:
         """Parse a bet string that may contain commas (e.g., '5,000' -> 5000)."""
@@ -1680,392 +1649,20 @@ class Games(commands.Cog):
         cleaned = str(bet_str).replace(",", "").replace(" ", "")
         return int(cleaned)
     
-    @commands.command(name="coinflip", aliases=["cf", "flip"])
-    @commands.cooldown(1, 2, commands.BucketType.user)
-    async def coinflip_command(self, ctx, bet: str = "50", choice: str = None):
-        """🪙 Flip a coin! Call heads or tails to double your bet."""
-        guild_id = str(ctx.guild.id)
-        user_id = str(ctx.author.id)
-        
-        if choice is None:
-            embed = discord.Embed(
-                title="🪙 Coin Flip",
-                description=f"**How to play:**\n"
-                           f"`{ctx.prefix}coinflip <bet> <heads/tails>`\n\n"
-                           f"Call it right and **double** your bet!\n\n"
-                           f"**Example:** `{ctx.prefix}coinflip 100 heads`",
-                color=discord.Color.gold()
-            )
-            return await ctx.reply(embed=embed, mention_author=False)
-        
-        # Parse bet (handles commas like "5,000")
-        try:
-            bet = self.parse_bet(bet)
-        except ValueError:
-            return await ctx.reply("❌ Invalid bet amount! Use numbers like `100` or `5,000`", mention_author=False)
-        
-        # Normalize choice
-        choice = choice.lower()
-        if choice in ["h", "head", "heads"]:
-            choice = "heads"
-        elif choice in ["t", "tail", "tails"]:
-            choice = "tails"
-        else:
-            return await ctx.reply("❌ Choose **heads** or **tails**!", mention_author=False)
-        
-        # Check timer (cooldown + daily limit)
-        timer_error = await self.check_timer(ctx, "coinflip")
-        if timer_error:
-            return await ctx.reply(timer_error, mention_author=False)
-        
-        # Validate bet
-        if bet < 10:
-            return await ctx.reply("❌ Minimum bet is **10** stella points!", mention_author=False)
-        if bet > 5000:
-            return await ctx.reply("❌ Maximum bet is **5,000** stella points!", mention_author=False)
-        
-        # Check balance
-        balance = await self.quest_data.get_balance(user_id, guild_id)
-        if balance < bet:
-            return await ctx.reply(f"❌ You need **{bet:,}** but only have **{balance:,}** stella points!", mention_author=False)
-        
-        # Set command cooldown, deduct bet and increment plays
-        await self.set_cooldown(user_id, "coinflip_command")
-        await self.increment_plays(user_id, guild_id, "coinflip")
-        await self.quest_data.add_balance(user_id, guild_id, -bet)
-        
-        # Flip!
-        result = random.choice(["heads", "tails"])
-        won = result == choice
-        
-        # Send spinning message first (no GIF attachment to avoid lingering files)
-        spin_embed = discord.Embed(
-            title="🪙 Flipping...",
-            description=f"You called **{choice.upper()}**!",
-            color=discord.Color.gold()
-        )
-        msg = await ctx.reply(embed=spin_embed, mention_author=False)
-        
-        # Wait for animation
-        await asyncio.sleep(1.2)
-        
-        if won:
-            winnings = bet * 2
-            await self.quest_data.add_balance(user_id, guild_id, winnings)
-            profit = bet
-            title = "🎉 You Won!"
-            color = discord.Color.green()
-            #result_emoji = "" if result == "heads" else "🦅"
-        else:
-            winnings = 0
-            profit = -bet
-            title = "💸 You Lost!"
-            color = discord.Color.red()
-            #result_emoji = "👑" if result == "heads" else "🦅"
-        
-        new_balance = balance - bet + winnings
-        
-        embed = discord.Embed(
-            title=title,
-            description=f"The coin landed on **{result.upper()}**!\n"
-                       f"You called **{choice}**.",
-            color=color
-        )
-        
-        if profit > 0:
-            embed.add_field(name="💰 Won", value=f"+**{profit:,}** pts", inline=True)
-        else:
-            embed.add_field(name="📉 Lost", value=f"**{profit:,}** pts", inline=True)
-        
-        embed.add_field(name="💳 Balance", value=f"**{new_balance:,}** pts", inline=True)
-        
-        # Add Double or Nothing for winners
-        if won:
-            view = DoubleOrNothingView(self, user_id, guild_id, profit)
-            embed.set_footer(text="Double your winnings or cash out!")
-            await msg.edit(embed=embed, view=view, attachments=[])
-        else:
-            await msg.edit(embed=embed, attachments=[])
-    
-    @commands.command(name="dice", aliases=["roll", "d6"])
-    @commands.cooldown(1, 3, commands.BucketType.user)
-    async def dice_command(self, ctx, bet: str = "50", guess: int = None):
-        """🎲 Roll the dice! Guess 1-6 to win big."""
-        guild_id = str(ctx.guild.id)
-        user_id = str(ctx.author.id)
-        
-        if guess is None:
-            embed = discord.Embed(
-                title="🎲 Dice Game",
-                description=f"**How to play:**\n"
-                           f"`{ctx.prefix}dice <bet> <guess>`\n\n"
-                           f"Guess the exact number for **5x** your bet!\n"
-                           f"Off by 1 = **2x** your bet\n\n"
-                           f"**Example:** `{ctx.prefix}dice 100 4`",
-                color=discord.Color.blue()
-            )
-            return await ctx.reply(embed=embed, mention_author=False)
-        
-        # Parse bet
-        try:
-            bet = self.parse_bet(bet)
-        except ValueError:
-            return await ctx.reply("❌ Invalid bet amount!", mention_author=False)
-        
-        if guess < 1 or guess > 6:
-            return await ctx.reply("❌ Guess between **1** and **6**!", mention_author=False)
-        if bet < 10 or bet > 5000:
-            return await ctx.reply("❌ Bet between **10** and **5,000** pts!", mention_author=False)
-        
-        # Check timer (cooldown + daily limit)
-        timer_error = await self.check_timer(ctx, "dice")
-        if timer_error:
-            return await ctx.reply(timer_error, mention_author=False)
-        
-        balance = await self.quest_data.get_balance(user_id, guild_id)
-        if balance < bet:
-            return await ctx.reply(f"❌ Need **{bet:,}** but have **{balance:,}** pts!", mention_author=False)
-        
-        # Set command cooldown, deduct bet and increment plays
-        await self.set_cooldown(user_id, "dice_command")
-        await self.increment_plays(user_id, guild_id, "dice")
-        await self.quest_data.add_balance(user_id, guild_id, -bet)
-        
-        # Roll!
-        roll = random.randint(1, 6)
-        
-        # Generate dice GIF
-        gif_buffer = generate_dice_gif(roll)
-        file = discord.File(gif_buffer, filename="dice.gif")
-        
-        # Send rolling message first
-        roll_embed = discord.Embed(
-            title="🎲 Rolling...",
-            description=f"You guessed **{guess}**!",
-            color=discord.Color.blue()
-        )
-        roll_embed.set_image(url="attachment://dice.gif")
-        msg = await ctx.reply(embed=roll_embed, file=file, mention_author=False)
-        
-        # Wait for animation
-        await asyncio.sleep(1.3)
-        
-        # Calculate winnings
-        diff = abs(roll - guess)
-        if diff == 0:
-            winnings = bet * 5
-            result = "🎯 **PERFECT!**"
-            color = discord.Color.gold()
-        elif diff == 1:
-            winnings = bet * 2
-            result = "✨ **Close!**"
-            color = discord.Color.green()
-        else:
-            winnings = 0
-            result = "💨 **Miss!**"
-        if winnings > 0:
-            await self.quest_data.add_balance(user_id, guild_id, winnings)
-        
-        new_balance = balance - bet + winnings
-        
-        dice_faces = {1: "⚀", 2: "⚁", 3: "⚂", 4: "⚃", 5: "⚄", 6: "⚅"}
-        
-        embed = discord.Embed(
-            title=result,
-            description=f"{dice_faces[roll]} Rolled **{roll}** | You guessed **{guess}**",
-            color=color
-        )
-        
-        if winnings > 0:
-            embed.add_field(name="Won", value=f"+**{winnings:,}** pts", inline=True)
-        else:
-            embed.add_field(name="Lost", value=f"**-{bet:,}** pts", inline=True)
-        
-        embed.add_field(name="💳 Balance", value=f"**{new_balance:,}** pts", inline=True)
-        
-        await msg.edit(embed=embed, attachments=[])
-    
-    @commands.command(name="guess", aliases=["number", "guessnumber"])
-    @commands.cooldown(1, 5, commands.BucketType.user)
-    async def guess_command(self, ctx, bet: int = 50):
-        """🔢 Guess a number 1-100! Fewer attempts = bigger rewards!"""
-        guild_id = str(ctx.guild.id)
-        user_id = str(ctx.author.id)
-        
-        # Check timer (cooldown + daily limit)
-        timer_error = await self.check_timer(ctx, "guess")
-        if timer_error:
-            return await ctx.reply(timer_error, mention_author=False)
-        
-        # Validate bet
-        if bet < 20:
-            return await ctx.reply("❌ Minimum bet is **20** stella points!", mention_author=False)
-        if bet > 5000:
-            return await ctx.reply("❌ Maximum bet is **5,000** stella points!", mention_author=False)
-        
-        # Check balance
-        balance = await self.quest_data.get_balance(user_id, guild_id)
-        if balance < bet:
-            return await ctx.reply(f"❌ You need **{bet:,}** but only have **{balance:,}** stella points!", mention_author=False)
-        
-        # Set command cooldown and increment plays
-        await self.set_cooldown(user_id, "guess_command")
-        await self.increment_plays(user_id, guild_id, "guess")
-        
-        # Deduct bet upfront - no refunds!
-        await self.quest_data.add_balance(user_id, guild_id, -bet)
-        
-        # Generate secret number
-        secret = random.randint(1, 100)
-        total_attempts = 5
-        attempts_left = total_attempts
-        guesses_list = []
-        
-        # Generate initial thermometer
-        img_buffer = generate_guess_thermometer([], secret, attempts_left, total_attempts)
-        file = discord.File(img_buffer, filename="guess.png")
-        
-        embed = discord.Embed(
-            title="🔢 Number Guessing",
-            description=f"Guess a number between **1-100**\nBet: **{bet:,}** pts\nAttempts: **{total_attempts}**",
-            color=discord.Color.orange()
-        )
-        embed.set_image(url="attachment://guess.png")
-        msg = await ctx.reply(embed=embed, file=file, mention_author=False)
-        
-        def check(m):
-            return m.author == ctx.author and m.channel == ctx.channel and m.content.isdigit()
-        
-        perfect_win = False
-        while attempts_left > 0:
-            try:
-                guess_msg = await self.bot.wait_for("message", timeout=45.0, check=check)
-                guess = int(guess_msg.content)
-                
-                if guess < 1 or guess > 100:
-                    await ctx.send("Please guess between 1-100!", delete_after=3)
-                    continue
-                
-                guesses_list.append(guess)
-                attempts_left -= 1
-                diff = abs(secret - guess)
-                
-                if diff == 0:
-                    # Perfect guess!
-                    perfect_win = True
-                    # Calculate winnings based on attempts taken (1-5 attempts)
-                    attempts_taken = len(guesses_list)
-                    attempt_multiplier = max(1.0, 6.0 - (attempts_taken - 1) * 0.8)  # 5x, 4.2x, 3.4x, 2.6x, 1.8x
-                    winnings = int(bet * attempt_multiplier)
-                    await self.quest_data.add_balance(user_id, guild_id, winnings)
-                    new_balance = balance - bet + winnings
-                    
-                    # Generate result image
-                    img_buffer = generate_guess_result_image(guesses_list, secret, True, winnings - bet)
-                    file = discord.File(img_buffer, filename="guess_result.png")
-                    
-                    embed = discord.Embed(
-                        title="🎯 PERFECT!",
-                        description=f"You got it in **{attempts_taken}** {'guess' if attempts_taken == 1 else 'guesses'}!\n"
-                                   f"🎚️ Multiplier: **{attempt_multiplier:.1f}x**\n"
-                                   f"💰 Won: **+{winnings - bet:,}** pts\n💳 Balance: **{new_balance:,}** pts",
-                        color=discord.Color.gold()
-                    )
-                    embed.set_image(url="attachment://guess_result.png")
-                    return await msg.edit(embed=embed, attachments=[file])
-                
-                # Update thermometer with guess
-                img_buffer = generate_guess_thermometer(guesses_list, secret, attempts_left, total_attempts)
-                file = discord.File(img_buffer, filename="guess.png")
-                
-                # Temperature hint
-                if diff <= 5:
-                    temp = "🔥 **HOT!**"
-                elif diff <= 15:
-                    temp = "🌡️ Warm"
-                elif diff <= 30:
-                    temp = "☀️ Getting there"
-                else:
-                    temp = "❄️ Cold"
-                
-                direction = "⬆️ Higher" if guess < secret else "⬇️ Lower"
-                
-                embed = discord.Embed(
-                    title="🔢 Number Guessing",
-                    description=f"Your guess: **{guess}** → {direction}\n{temp}\n\n"
-                               f"Attempts left: **{attempts_left}**",
-                    color=discord.Color.orange()
-                )
-                embed.set_image(url="attachment://guess.png")
-                await msg.edit(embed=embed, attachments=[file])
-                
-            except asyncio.TimeoutError:
-                break
-        
-        # Game over - balanced winnings: reward close guesses fairly
-        if guesses_list:
-            closest = min(guesses_list, key=lambda x: abs(x - secret))
-            diff = abs(closest - secret)
-            attempts_taken = len(guesses_list)
-            
-            # Balanced base winnings from closeness (profit, not total payout)
-            if diff == 0:
-                base_winnings = bet * 4  # should be caught by perfect path, safe fallback
-            elif diff <= 2:
-                # Very close: excellent reward
-                base_winnings = int(bet * 1.0)  # 2x total payout = 1x profit
-            elif diff <= 5:
-                # Close: good reward
-                base_winnings = int(bet * 0.6)  # 1.6x total payout = 0.6x profit
-            elif diff <= 10:
-                # Somewhat close: small reward
-                base_winnings = int(bet * 0.2)  # 1.2x total payout = 0.2x profit
-            else:
-                # Too far: lose your bet
-                base_winnings = 0
-            
-            # Apply attempt-based scaling (fewer attempts = higher multiplier)
-            if base_winnings > 0:
-                attempt_multiplier = max(0.7, 1.0 - (attempts_taken - 1) * 0.08)  # 1.0x, 0.92x, 0.84x, 0.76x, 0.68x, 0.6x
-                profit = int(base_winnings * attempt_multiplier)
-                winnings = profit + bet  # Total payout = profit + original bet
-            else:
-                profit = 0
-                winnings = 0
-        else:
-            winnings = 0
-        
-        if winnings > 0:
-            await self.quest_data.add_balance(user_id, guild_id, winnings)
-        
-        new_balance = balance - bet + winnings
-        profit = winnings - bet
-        
-        # Generate result image
-        img_buffer = generate_guess_result_image(guesses_list, secret, False, profit)
-        file = discord.File(img_buffer, filename="guess_result.png")
-        
-        embed = discord.Embed(
-            title="💀 Game Over" if profit < 0 else "✅ Close!",
-            description=f"The number was **{secret}**\n"
-                       f"{'📉 Lost' if profit < 0 else '💰 Won'}: **{profit:+,}** pts\n"
-                       f"💳 Balance: **{new_balance:,}** pts",
-            color=discord.Color.green() if profit >= 0 else discord.Color.red()
-        )
-        embed.set_image(url="attachment://guess_result.png")
-        await msg.edit(embed=embed, attachments=[file])
-    
+    # coinflip and guess commands moved to gamble.py cog
+
     # ═══════════════════════════════════════════════════════════════
     # CARD DRAW GAMES (kept from original)
     # ═══════════════════════════════════════════════════════════════
-    
+
     @game.command(name="pokemon", aliases=["poke", "pkm"])
     @commands.cooldown(1, 3, commands.BucketType.user)
     async def pokemon_draw(self, ctx):
+        """Draw a random Pokémon card for 100 points."""
         """🃏 Draw a random Pokémon card for 100 points."""
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
-        cost = 100
+        cost = 500
         
         # Check timer (cooldown + daily limit)
         timer_error = await self.check_timer(ctx, "pokemon")
@@ -2162,7 +1759,8 @@ class Games(commands.Cog):
     async def draw_husbando(self, ctx):
         """🎴 Draw only male characters (husbandos)."""
         await self._execute_draw(ctx, gender_filter="Male")
-    
+
+
     async def update_character_rarities_in_db(self, user_id: str, guild_id: str, inventory: list) -> list:
         """Update character rarities in database with corrected values and return updated inventory."""
         
@@ -2197,19 +1795,18 @@ class Games(commands.Cog):
                 logger.info(f"Updated rarities for {len(updated_chars)} characters in user {user_id}'s collection")
             
             return updated_chars
-            
         except Exception as e:
-            logger.error(f"Error updating character rarities in database: {e}")
-            return inventory
-
+            print(e)
+            
     @draw.command(name="gallery", aliases=["g", "grid"])
     @commands.cooldown(1, 3, commands.BucketType.user)
     async def draw_gallery(self, ctx, page: int = 1, *, filter_args: str = None):
         """🖼️ View your card collection as a beautiful gallery image.
         
         Usage:
-        - `.draw gallery` - Show all cards (page 1)
-        - `.draw gallery 2` - Show page 2
+        - `.draw gallery` - Show all cards (page 1) in grid view
+        - `.draw gallery tree` - Show anime hierarchy tree view
+        - `.draw gallery 2` - Show page 2 in grid view
         - `.draw gallery waifu` - Show only female characters
         - `.draw gallery husbando` - Show only male characters
         - `.draw gallery legendary` - Show only legendary cards
@@ -2225,12 +1822,16 @@ class Games(commands.Cog):
         # Parse filter arguments
         filter_type = "all"
         search_query = None
+        use_tree_view = False
         
         if filter_args:
             filter_args_lower = filter_args.lower().strip()
             
+            # Check for tree view
+            if filter_args_lower == "tree":
+                use_tree_view = True
             # Check for gender filters
-            if filter_args_lower in ["waifu", "female", "girl"]:
+            elif filter_args_lower in ["waifu", "female", "girl"]:
                 filter_type = "waifu"
             elif filter_args_lower in ["husbando", "male", "boy"]:
                 filter_type = "husbando"
@@ -2318,33 +1919,57 @@ class Games(commands.Cog):
             except:
                 pass
             
-            # Generate initial gallery image
-            buffer = await generate_gallery_image(
-                characters=sorted_inventory,
-                page=page,
-                cards_per_page=cards_per_page,
-                user_name=ctx.author.display_name,
-                user_avatar_bytes=avatar_bytes,
-                filter_type=filter_type,
-                search_query=search_query
-            )
-            
-            # Create file
-            file = discord.File(buffer, filename=f"gallery_{user_id}_page_{page}.png")
-            
-            # Create interactive view with pagination and filters
-            view = GalleryView(
-                cog=self,
-                user=ctx.author,
-                guild_id=guild_id,
-                characters=sorted_inventory,
-                page=page,
-                filter_type=filter_type,
-                search_query=search_query
-            )
-            
-            # Send with view
-            await ctx.reply(file=file, view=view, mention_author=False)
+            # Check if tree view requested
+            if use_tree_view:
+                # Generate anime hierarchy tree
+                from bot.utils.cogs.game.anime_tree import generate_anime_hierarchy_tree
+                
+                async with ctx.typing():
+                    buffer = await generate_anime_hierarchy_tree(
+                        characters=sorted_inventory,
+                        user_name=ctx.author.display_name,
+                        user_avatar_bytes=avatar_bytes
+                    )
+                
+                file = discord.File(buffer, filename=f"anime_tree_{user_id}.png")
+                
+                embed = discord.Embed(
+                    title="🌳 Anime Hierarchy Tree",
+                    description=f"Your collection organized by anime series\n**{len(sorted_inventory)}** characters displayed",
+                    color=discord.Color.blue()
+                )
+                embed.set_image(url=f"attachment://anime_tree_{user_id}.png")
+                embed.set_footer(text="Characters grouped by anime using fuzzy matching")
+                
+                await ctx.reply(embed=embed, file=file, mention_author=False)
+            else:
+                # Generate regular grid gallery image
+                buffer = await generate_gallery_image(
+                    characters=sorted_inventory,
+                    page=page,
+                    cards_per_page=cards_per_page,
+                    user_name=ctx.author.display_name,
+                    user_avatar_bytes=avatar_bytes,
+                    filter_type=filter_type,
+                    search_query=search_query
+                )
+                
+                # Create file
+                file = discord.File(buffer, filename=f"gallery_{user_id}_page_{page}.png")
+                
+                # Create interactive view with pagination and filters
+                view = GalleryView(
+                    cog=self,
+                    user=ctx.author,
+                    guild_id=guild_id,
+                    characters=sorted_inventory,
+                    page=page,
+                    filter_type=filter_type,
+                    search_query=search_query
+                )
+                
+                # Send with view
+                await ctx.reply(file=file, view=view, mention_author=False)
             
         except Exception as e:
             logger.error(f"Error in draw gallery: {e}", exc_info=True)
@@ -2795,16 +2420,28 @@ class Games(commands.Cog):
                     # Create embed for this character
                     rarity = char.get("rarity", "common")
                     rarity_data = GACHA_RARITY_TIERS.get(rarity, GACHA_RARITY_TIERS["common"])
-                  
+                    rarity_emoji = rarity_data["emoji"]
+                    
                     embed = discord.Embed(
-                        title=f"{star} {char['name']} {action}!",
-                        description=f"*{char.get('anime', 'Unknown')}*\n\n"
-                                   f"**UID:** `{upper_uid}`",
+                        title=f"{char['name']} Favorited!",
+                        description=(
+                            f"**Series:** {char.get('anime', 'Unknown')}\n"
+                            f"**Rarity:** {rarity.title()} {rarity_emoji}\n"
+                            f"**UID:** `{upper_uid}`"
+                        ),
                         color=rarity_data["color"]
                     )
-                  
+                    
+                    # Add character image
                     if char.get("image_url"):
                         embed.set_thumbnail(url=char["image_url"])
+                    
+                    # Add footer with stats
+                    favorites = char.get("favorites", 0)
+                    embed.set_footer(
+                        text=f"❤️ {favorites:,} favorites • Added to favorites",
+                        icon_url=ctx.author.avatar.url if ctx.author.avatar else None
+                    )
                   
                     success_embeds.append(embed)
                     break
@@ -2941,16 +2578,28 @@ class Games(commands.Cog):
                     # Create embed for this character
                     rarity = char.get("rarity", "common")
                     rarity_data = GACHA_RARITY_TIERS.get(rarity, GACHA_RARITY_TIERS["common"])
-                  
+                    rarity_emoji = rarity_data["emoji"]
+                    
                     embed = discord.Embed(
-                        title=f"{star} {char['name']} {action}!",
-                        description=f"*{char.get('anime', 'Unknown')}*\n\n"
-                                   f"**UID:** `{upper_uid}`",
+                        title=f"{rarity_emoji} {char['name']} Favorited!",
+                        description=(
+                            f"**Series:** {char.get('anime', 'Unknown')}\n"
+                            f"**Rarity:** {rarity.title()} {rarity_emoji}\n"
+                            f"**UID:** `{upper_uid}`"
+                        ),
                         color=rarity_data["color"]
                     )
-                  
+                    
+                    # Add character image
                     if char.get("image_url"):
                         embed.set_thumbnail(url=char["image_url"])
+                    
+                    # Add footer with stats
+                    favorites = char.get("favorites", 0)
+                    embed.set_footer(
+                        text=f"❤️ {favorites:,} favorites • Added to favorites",
+                        icon_url=ctx.author.avatar.url if ctx.author.avatar else None
+                    )
                   
                     success_embeds.append(embed)
                     break
@@ -3173,7 +2822,7 @@ class Games(commands.Cog):
                                f"You lost **{sacrifice_name}** as punishment.",
                     color=discord.Color.red()
                 )
-                embed.add_field(name="Sacrificed Character", value=f"**{sacrifice_name}**\n{sacrifice_rarity_data['emoji']} {sacrifice_rarity.title()}", inline=True)
+                embed.add_field(name="Sacrificed Character", value=f"{sacrifice_rarity_data['emoji']} **{sacrifice_name}**", inline=True)
                 embed.add_field(name="Victim", value=target_name, inline=True)
                 embed.set_thumbnail(url=sacrifice_char.get("image_url"))
                 await ctx.reply(embed=embed, mention_author=False)
@@ -4816,9 +4465,6 @@ class Games(commands.Cog):
     # ERROR HANDLERS
     # ═══════════════════════════════════════════════════════════════
     
-    @slots_command.error
-    @coinflip_command.error
-    @guess_command.error
     @hangman_game.error
     @wordle_game.error
     @jobs_command.error
@@ -4843,11 +4489,22 @@ class Games(commands.Cog):
         elif isinstance(error, commands.MemberNotFound):
             await ctx.reply("❌ Member not found!", mention_author=False)
 
-    @commands.group(name="memo", invoke_without_command=True)
-    @commands.cooldown(1, 15, commands.BucketType.user)
-    async def memo_group(self, ctx):
+    @commands.group(name="reaction", aliases=["rea"], invoke_without_command=True)
+    @commands.cooldown(1, 4, commands.BucketType.user)
+    async def reaction_group(self, ctx):
+        """🧠 Reaction game - Remember the emoji! Matches get harder as you streak!"""
         
-        """🧠 Memory game - Remember the emoji!"""
+        # Get streak for difficulty scaling
+        reaction_data = Reaction_Data()
+        streak_doc = await reaction_data.mongo.streaks.find_one({"user_id": ctx.author.id, "guild_id": ctx.guild.id})
+        streak = streak_doc.get("streak", 0) if streak_doc else 0
+        
+        # Difficulty Scaling
+        # Base time: 10s. Reduces by 0.5s every streak point. Min 2.5s.
+        base_time = 10
+        param = streak * 0.5
+        play_time = max(2.5, base_time - param)
+        
         emojis = ["😀","😊","😂","😍","😎","😢","😠","😱","😡","😐","🥳","😏","🙃","😇","😅","😜","😌","😋"]
         shuffled = emojis * 2
         random.shuffle(shuffled)
@@ -4858,14 +4515,15 @@ class Games(commands.Cog):
         self.correct_emojis[ctx.channel.id] = chosen
 
         embed = discord.Embed(
-            description=f"Remember this emoji: {chosen}",
+            title=f"🧠 Level {streak + 1}",
+            description=f"Remember this emoji: {chosen}\n\nStreak: **{streak}** 🔥\nTime: **{play_time:.1f}s** ⏱️",
             color=primary_color()
         )
         msg = await ctx.reply(embed=embed, mention_author=False)
         await asyncio.sleep(2)
 
-        view = Memo(ctx, shuffled, chosen, msg, self.bot)
-        future = int((datetime.now(timezone.utc) + timedelta(seconds=13)).timestamp())
+        view = Reaction(ctx, shuffled, chosen, msg, self.bot)
+        future = int((datetime.now(timezone.utc) + timedelta(seconds=play_time)).timestamp())
         
         def timestamp_gen(ts: int) -> str:
             return f"<t:{int(ts)}:R>"
@@ -4874,22 +4532,42 @@ class Games(commands.Cog):
             description=f"React with the emoji you remembered.\n`Remaining Time:` {timestamp_gen(future)}",
             color=primary_color(),
         )
+        
         try:
             await msg.edit(embed=embed, view=view)
-            await asyncio.sleep(10)
+            
+            # Wait for user input or timeout
+            # We use view.wait() which returns True if stopped (answered), or None if timeout (if view has timeout)
+            # But we want custom timeout based on difficulty.
+            
+            passed = await asyncio.wait_for(view.wait(), timeout=play_time)
+            
+            if passed:
+                 # Interaction handled by View
+                 pass
+                 
         except asyncio.TimeoutError:
+            # Time's up!
             timeout_embed = discord.Embed(
                 title="⏰ Time's Up...",
-                description="||```You didn't click the emoji in time.```||",
-                color=primary_color()
+                description=f"||You didn't click {chosen} in time! Streak lost.||",
+                color=discord.Color.red()
             )
-            await msg.edit(embed=timeout_embed, view=None)
+            # Disable view
+            for child in view.children:
+                child.disabled = True
+            await msg.edit(embed=timeout_embed, view=view)
+            
+            # Reset streak logic (if not handled by View logic? 
+            # View likely resets on wrong answer, but here we enforce timeout reset)
+            # Safest is to let View handle it if possible, but we can force reset here.
+            await reaction_data.mongo.streaks.delete_one({"user_id": ctx.author.id, "guild_id": ctx.guild.id})
     
-    @memo_group.command(name="leaderboard")
-    async def memo_leaderboard(self, ctx):
-        """🏆 View memo streak leaderboard"""
+    @reaction_group.command(name="leaderboard", aliases=["lb"])
+    async def reaction_leaderboard(self, ctx):
+        """🏆 View reaction streak leaderboard"""
         
-        memo_data = Memo_Data()
+        reaction_data = Reaction_Data()
         
         try:
             # Get all users with streak data for this guild
@@ -4900,51 +4578,66 @@ class Games(commands.Cog):
                 {"$limit": 10}
             ]
             
-            cursor = memo_data.mongo.streaks.aggregate(pipeline)
+            cursor = reaction_data.mongo.highscores.aggregate(pipeline)
             top_players = await cursor.to_list(length=10)
             
             if not top_players:
                 embed = discord.Embed(
-                    title="🏆 Memo Streak Lea`derboard",
-                    description="No streak data found! Play `.memo` to set a streak!",
+                    title="🏆 Reaction Streak Leaderboard",
+                    description="No streak data found! Play `.reaction` to set a streak!",
                     color=discord.Color.orange()
                 )
                 return await ctx.reply(embed=embed, mention_author=False)
             
             embed = discord.Embed(
-                title="🏆 Memo Streak Leaderboard",
-                description="Top memory game streaks in this server!",
+                title="🏆 Reaction Streak Leaderboard",
+                description="Top reaction game streaks in this server!",
                 color=discord.Color.orange()
             )
             
+            user_in_top = False
             for i, player in enumerate(top_players, 1):
                 user_id = player["user_id"]
                 streak = player["streak"]
                 
+                if str(user_id) == str(ctx.author.id):
+                    user_in_top = True
+                
                 try:
                     user = ctx.guild.get_member(int(user_id))
-                    if user:
-                        username = user.display_name
-                        avatar = user.avatar.url if user.avatar else None
-                    else:
-                        username = f"User {user_id}"
-                        avatar = None
+                    username = user.display_name if user else f"User {user_id}"
                 except:
                     username = f"User {user_id}"
-                    avatar = None
                 
                 medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"#{i}"
                 embed.add_field(
-                    name=f"> {medal}. {username}",
-                    value=f"Streak: {streak} 🔥",
+                    name=f"{medal} {username}",
+                    value=f"Streak: **{streak}** 🔥",
                     inline=False
                 )
+            
+            # Show user's rank if not in top 10
+            if not user_in_top:
+                user_score_doc = await reaction_data.mongo.highscores.find_one({"user_id": ctx.author.id, "guild_id": ctx.guild.id})
+                if user_score_doc:
+                    user_streak = user_score_doc.get("streak", 0)
+                    # Calculate rank
+                    rank = await reaction_data.mongo.highscores.count_documents({
+                        "guild_id": ctx.guild.id, 
+                        "streak": {"$gt": user_streak}
+                    }) + 1
+                    
+                    embed.add_field(
+                        name="────────────────",
+                        value=f"**Your Rank:** #{rank}\n**Streak:** {user_streak} 🔥",
+                        inline=False
+                    )
             
             embed.set_footer(text=f"Requested by {ctx.author}", icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
             await ctx.reply(embed=embed, mention_author=False)
             
         except Exception as e:
-            logger.error(f"Error fetching memo leaderboard: {e}")
+            logger.error(f"Error fetching reaction leaderboard: {e}")
             embed = discord.Embed(
                 title="❌ Error",
                 description="Failed to fetch leaderboard. Try again later.",
@@ -4972,21 +4665,31 @@ class Games(commands.Cog):
         **Examples:**
         • `.draw cover F9D6E292`
         • `.draw cover anya forger`
+        • `.draw cover delete F9D6E292 C421FAFA7CB8684D`
+        
+        **Image Sources:**
+        • Safebooru, Danbooru, Gelbooru (Primary)
+        • Yande.re, Konachan (High Quality)
+        • TBIB, Anime-Pictures, Tumblr (Additional)
         """
         if not uid:
             embed = discord.Embed(
                 title="🎨 Cover Art System",
                 description="Browse and purchase beautiful cover art for your characters!\n\n"
                            "**Usage:**\n"
-                           f"• `{ctx.prefix}draw cover <UID or name>` - Browse art for your character\n\n"
+                           f"• `{ctx.prefix}draw cover <UID or name>` - Browse art for your character\n"
+                           f"• `{ctx.prefix}draw cover buy <UID> <code_hex>` - Buy art using the code shown\n"
+                           f"• `{ctx.prefix}draw cover delete <UID> <cover_id>` - Delete cover art for 10% refund\n\n"
                            "**Features:**\n"
+                           "• 🛒 **Safe Buying** - Use unique codes to buy exactly what you see\n"
+                           "• 🎲 **Random Page** - Jump to a random page to find new art\n"
                            "• 🔍 **Source Filtering** - Filter by Danbooru, Gelbooru, Yande.re, and more\n"
                            "• 👁️ **View Modes** - Gallery (3 images) or Single (1 image) view\n"
-                           "• ◀️ ▶️ **Navigation** - Easy page navigation with buttons\n"
-                           "• 🌐 **8 Sources** - Searches across 8 anime-specialized sources\n\n"
+                           "• 🗑️ **Deletion** - Delete unwanted cover art for 10% cash back\n\n"
                            "**Examples:**\n"
                            f"• `{ctx.prefix}draw cover F9D6E292`\n"
-                           f"• `{ctx.prefix}draw cover anya forger`\n\n"
+                           f"• `{ctx.prefix}draw cover buy F9D6E292 A1B2C3D4`\n"
+                           f"• `{ctx.prefix}draw cover delete F9D6E292 C421FAFA7CB8684D`\n\n"
                            "**Image Sources:**\n"
                            "• Safebooru, Danbooru, Gelbooru (Primary)\n"
                            "• Yande.re, Konachan (High Quality)\n"
@@ -5413,14 +5116,199 @@ class Games(commands.Cog):
                 
                 msg = await ctx.reply(embeds=embeds, view=view, mention_author=False)
                 view.message = msg
-                
             except Exception as e:
                 logger.error(f"[Cover Collection] Error for user {user_id}: {e}", exc_info=True)
                 await ctx.reply("❌ Error loading cover art collection! Please try again.", mention_author=False)
             finally:
                 # Clear active status
                 await self.set_cover_command_status(user_id, False)
-    
+
+    @draw_cover_group.command(name="buy", aliases=["purchase"])
+    @commands.cooldown(1, 3, commands.BucketType.user)
+    async def cover_buy(self, ctx, uid: str = None, hex_code: str = None):
+        """🛒 Purchase cover art using its unique hex code
+        
+        **Usage:**
+        • `.draw cover buy <UID> <hex_code>` - Purchase cover art by hex code
+        
+        **Examples:**
+        • `.draw cover buy F9D6E292 A1B2C3D4`
+        • `.draw cover buy BE1677D1 8F3E2A1C`
+        
+        **How to get the hex code:**
+        1. Use `.draw cover <UID>` to browse cover art
+        2. Each image shows its unique 8-character hex code
+        3. Use this command with that code to purchase
+        """
+        if not uid or not hex_code:
+            embed = discord.Embed(
+                title="🛒 Buy Cover Art",
+                description="Purchase cover art using its unique hex code.\n\n"
+                           "**Usage:**\n"
+                           f"• `{ctx.prefix}draw cover buy <UID> <hex_code>`\n\n"
+                           "**Examples:**\n"
+                           f"• `{ctx.prefix}draw cover buy F9D6E292 A1B2C3D4`\n"
+                           f"• `{ctx.prefix}draw cover buy BE1677D1 8F3E2A1C`\n\n"
+                           "**How to get the code:**\n"
+                           "Each image in the gallery shows a unique 8-character hex code.\n"
+                           "Copy that code and use it with this command!",
+                color=discord.Color.blue()
+            )
+            return await ctx.reply(embed=embed, mention_author=False)
+        
+        uid = uid.strip().upper()
+        hex_code = hex_code.strip().upper()
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        # Validate hex code format (8 hex characters)
+        if len(hex_code) != 8 or not all(c in '0123456789ABCDEF' for c in hex_code):
+            return await ctx.reply(
+                f"❌ Invalid hex code `{hex_code}`! Must be exactly 8 characters (0-9, A-F).\n"
+                f"Use `{ctx.prefix}draw cover {uid}` to browse and find valid codes.",
+                mention_author=False
+            )
+        
+        # Get character from inventory
+        char = await self._get_character_from_inventory(user_id, guild_id, uid)
+        if not char:
+            char = await self._get_character_from_name(user_id, guild_id, uid)
+            if not char:
+                return await ctx.reply(f"❌ No character found with UID or name `{uid}`", mention_author=False)
+        
+        # Check ownership
+        owner_id = await self._get_character_owner(guild_id, char['uid'])
+        if owner_id != user_id:
+            return await ctx.reply("❌ You don't own this character!", mention_author=False)
+        
+        try:
+            # Attempt purchase
+            success, message, purchase_data = await self.cover_art_system.purchase_cover_art_by_hex(
+                user_id, guild_id, char['uid'], hex_code
+            )
+            
+            if success:
+                # Create success embed
+                embed = discord.Embed(
+                    title="✅ Cover Art Purchased!",
+                    description=f"**{char.get('name')}** • `{char.get('uid').upper()}`",
+                    color=discord.Color.green()
+                )
+                
+                embed.add_field(
+                    name="Purchase Details",
+                    value=f"• **Cost:** {purchase_data.get('cost', 0)} pts\n"
+                          f"• **Code:** `{hex_code}`\n"
+                          f"• **ID:** `{purchase_data.get('unique_id', 'N/A')}`",
+                    inline=False
+                )
+                
+                if purchase_data.get('image_url'):
+                    embed.set_thumbnail(url=purchase_data['image_url'])
+                
+                embed.set_footer(text=f"Use .draw covers {char['uid'].upper()} to view your collection!")
+                
+                await ctx.reply(embed=embed, mention_author=False)
+            else:
+                await ctx.reply(f"{message}", mention_author=False)
+                
+        except Exception as e:
+            logger.error(f"Error in cover buy command: {e}", exc_info=True)
+            await ctx.reply("❌ Error processing purchase! Please try again.", mention_author=False)
+
+    @draw_cover_group.command(name="delete", aliases=["remove", "del"])
+    @commands.cooldown(1, 3, commands.BucketType.user)
+    async def cover_delete(self, ctx, uid: str, cover_id: str):
+        """🗑️ Delete cover art for 10% cash back refund
+        
+        **Usage:**
+        • `.draw cover delete <UID> <cover_id>` - Delete specific cover art
+        
+        **Examples:**
+        • `.draw cover delete F9D6E292 C421FAFA7CB8684D`
+        • `.draw cover delete F9D6E292 12345678`
+        
+        **Features:**
+        • 10% cash back refund of original purchase price
+        • Permanent deletion - cannot be recovered
+        • Works with both custom names and IDs
+        """
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        # Validate inputs
+        uid = uid.strip().upper()
+        cover_id = cover_id.strip().upper()
+        
+        if not uid or not cover_id:
+            return await ctx.reply(
+                f"❌ Usage: `{ctx.prefix}draw cover delete <UID> <cover_id>`\n"
+                f"Example: `{ctx.prefix}draw cover delete F9D6E292 C421FAFA7CB8684D`",
+                mention_author=False
+            )
+        
+        try:
+            # Check if user owns the character
+            char = await self._get_character_from_inventory(user_id, guild_id, uid)
+            if not char:
+                return await ctx.reply(f"❌ No character found with UID `{uid}`", mention_author=False)
+            
+            # Get user's cover arts for this character
+            user_arts = await self.cover_art_system._get_user_cover_arts_for_character(user_id, guild_id, uid)
+            
+            # Find the cover art to delete
+            target_art = None
+            for art in user_arts:
+                # Check both 'id' (new format) and 'unique_id' (legacy) fields
+                art_id = art.get('id', art.get('unique_id', '')).upper()
+                art_custom_name = art.get('custom_name', '').upper()
+                
+                if art_id == cover_id or art_custom_name == cover_id:
+                    target_art = art
+                    break
+            
+            if not target_art:
+                return await ctx.reply(
+                    f"❌ No cover art found with ID `{cover_id}` for character `{char.get('name')}`\n"
+                    f"Use `{ctx.prefix}draw cover collection {uid}` to see your cover art collection.",
+                    mention_author=False
+                )
+            
+            # Calculate refund (10% of original cost)
+            original_cost = target_art.get('cost', 0)
+            refund_amount = int(original_cost * 0.1)  # 10% refund
+            
+            if refund_amount <= 0:
+                refund_amount = 10  # Minimum refund of 10 pts
+            
+            # Check if this is the active cover art
+            is_active = target_art.get('selected', False)
+            
+            # Create confirmation embed
+            embed = discord.Embed(
+                title="🗑️ Confirm Cover Art Deletion",
+                description=f"Are you sure you want to delete this cover art?",
+                color=discord.Color.orange()
+            )
+            
+            embed.add_field(name="Character", value=f"**{char.get('name')}** (`{uid}`)", inline=False)
+            embed.add_field(name="Cover Art", value=f"ID: `{target_art.get('unique_id')}`", inline=False)
+            embed.add_field(name="Refund", value=f"**{refund_amount}** stella points (10% of {original_cost})", inline=False)
+            
+            if is_active:
+                embed.add_field(name="⚠️ Warning", value="This is your currently active cover art!", inline=False)
+            
+            embed.set_footer(text="This action cannot be undone!")
+            
+            # Add confirmation buttons
+            view = DeleteConfirmationView(self.cover_art_system, user_id, guild_id, uid, target_art, refund_amount, is_active)
+            
+            await ctx.reply(embed=embed, view=view, mention_author=False)
+            
+        except Exception as e:
+            logger.error(f"Error in cover delete command: {e}")
+            await ctx.reply("❌ Error processing deletion request! Please try again.", mention_author=False)
+
     @draw.command(name="covers")
     async def draw_covers(self, ctx, *, uid: str = None):
         """🖼️ View your cover art collection for a character (alias for .draw cover collection)

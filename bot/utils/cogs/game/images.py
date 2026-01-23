@@ -1440,7 +1440,7 @@ def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: 
         # Draw owner avatar if available
         if owner_data.get("avatar_img"):
             avatar_img = owner_data["avatar_img"]
-            card_bg.paste(avatar_img, (img_area_x + int(10 * (card_width / 220)), owner_banner_y + 2), avatar_img)
+            card_bg.paste(avatar_img, (img_area_x + int(10 * (card_width / 220)), owner_banner_y - 8), avatar_img)
         
         # Draw owned text - scale positions
         owned_text_x = img_area_x + int(52 * (card_width / 220))
@@ -2121,8 +2121,8 @@ async def generate_profile_card(
     Returns:
         BytesIO buffer containing the PNG image
     """
-    width = 400
-    height = 200
+    width = 420
+    height = 220
     
     # Colors
     bg_color = (24, 24, 28)
@@ -2137,10 +2137,10 @@ async def generate_profile_card(
     
     # Try to load emoji-compatible fonts
     try:
-        name_font = _load_emoji_font(20)
+        name_font = _load_emoji_font(18)
         stat_font = _load_emoji_font(14)
         small_font = _load_emoji_font(11)
-        big_font = _load_emoji_font(24)
+        big_font = _load_emoji_font(22)
     except:
         name_font = stat_font = small_font = big_font = ImageFont.load_default()
     
@@ -2148,9 +2148,8 @@ async def generate_profile_card(
     draw.rounded_rectangle([10, 10, width - 10, height - 10], radius=12, fill=card_bg)
     
     # Draw accent bar at top
-    draw.rectangle([10, 10, width - 10, 50], fill=accent)
-    draw.rounded_rectangle([10, 10, width - 10, 55], radius=12, fill=accent)
-    draw.rectangle([10, 45, width - 10, 55], fill=accent)
+    draw.rounded_rectangle([10, 10, width - 10, 60], radius=12, fill=accent)
+    draw.rectangle([10, 50, width - 10, 60], fill=card_bg)
     
     # Fetch and draw avatar
     avatar_size = 70
@@ -2200,11 +2199,10 @@ async def generate_profile_card(
     
     # ─── Improved Stats Layout ──────────────────────────────────────────────────
     
-    # Vertical positions
-    stats_start_y = 75
-    balance_y = stats_start_y - 38
-    stats_row_y = stats_start_y
-    label_offset_y = 24
+    # Vertical positions - below avatar area
+    balance_y = 110
+    stats_row_y = 155
+    label_offset_y = 20
     
     # Horizontal layout
     left_margin = 30
@@ -2954,7 +2952,7 @@ async def generate_gallery_image(
         "legendary": (255, 180, 50)
     }
 
-    # ── GRID DRAWING (Optimized) ─────────────────────────────────────────────
+    # ── GRID DRAWING (High Quality) ──────────────────────────────────────────
     grid_y = header_h + margin_y
 
     for i, char in enumerate(page_characters):
@@ -2962,164 +2960,20 @@ async def generate_gallery_image(
         x = margin_x + col * (card_w + spacing_x)
         y = grid_y + row * (card_h + spacing_y)
 
-        rarity = char.get("rarity", "common").lower()
-        rarity_color = rarity_colors.get(rarity, rarity_colors["common"])
-        is_favorite = char.get("favorite", False)
-
-        # ── CARD BACKGROUND ──────────────────────────────────────────────────
-        card = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
-        card_draw = ImageDraw.Draw(card)
-
-        # Card base with rounded corners effect
-        card_draw.rounded_rectangle([0, 0, card_w-1, card_h-1], radius=16, fill=(25, 25, 35))
-        
-        # Favorite glow effect - golden border for favorites
-        if is_favorite:
-            # Multiple golden glows
-            for glow in [6, 4, 2]:
-                glow_alpha = 80 + (6 - glow) * 30
-                card_draw.rounded_rectangle(
-                    [-glow, -glow, card_w-1+glow, card_h-1+glow], 
-                    radius=16+glow, 
-                    outline=(*gold_color, glow_alpha), 
-                    width=2
-                )
-            # Solid gold border
-            card_draw.rounded_rectangle([0, 0, card_w-1, card_h-1], radius=16, 
-                                       outline=gold_color, width=3)
-        else:
-            # Normal rarity border
-            card_draw.rounded_rectangle([0, 0, card_w-1, card_h-1], radius=16, 
-                                       outline=rarity_color, width=2)
-
-        # ── CHARACTER IMAGE ──────────────────────────────────────────────────
-        img_margin = 12
-        img_x, img_y = img_margin, img_margin
-        img_w, img_h = card_w - (img_margin * 2), card_h - 110
-
         char_img = char_images[i] if i < len(char_images) else None
         
-        if char_img:
-            try:
-                # Fast cover crop
-                ratio = max(img_w / char_img.width, img_h / char_img.height)
-                new_w, new_h = int(char_img.width * ratio), int(char_img.height * ratio)
-                resized = char_img.resize((new_w, new_h), Image.Resampling.BILINEAR)
-                
-                left = (new_w - img_w) // 2
-                top = (new_h - img_h) // 2
-                cropped = resized.crop((left, top, left + img_w, top + img_h))
-                
-                # Rounded corners for image
-                mask = Image.new("L", (img_w, img_h), 0)
-                mask_draw = ImageDraw.Draw(mask)
-                mask_draw.rounded_rectangle([0, 0, img_w-1, img_h-1], radius=12, fill=255)
-                
-                card.paste(cropped, (img_x, img_y), mask)
-            except:
-                card_draw.rounded_rectangle([img_x, img_y, img_x+img_w, img_y+img_h], 
-                                           radius=12, fill=(40, 40, 50))
-        else:
-            card_draw.rounded_rectangle([img_x, img_y, img_x+img_w, img_y+img_h], 
-                                       radius=12, fill=(40, 40, 50))
-            no_img_font = _load_font_from_assets(INTER_REGULAR_PATH, 16)
-            card_draw.text((img_x + img_w//2 - 30, img_y + img_h//2), "No Image", 
-                          fill=(80, 80, 100), font=no_img_font)
-
-        # ── FAVORITE STAR BADGE ──────────────────────────────────────────────
-        if is_favorite:
-            # Golden star badge in top-right corner (fully inside card)
-            star_size = 38
-            star_x = card_w - star_size - 16
-            star_y = 16
-            
-            # Star background circle with glow
-            for glow_offset in [6, 4, 2]:
-                glow_alpha = 40 + (6 - glow_offset) * 20
-                card_draw.ellipse(
-                    [star_x - glow_offset, star_y - glow_offset, 
-                     star_x + star_size + glow_offset, star_y + star_size + glow_offset],
-                    fill=(*gold_color, glow_alpha)
-                )
-            
-            # Solid background
-            card_draw.ellipse([star_x, star_y, star_x + star_size, star_y + star_size], 
-                             fill=gold_color)
-            
-            # Draw star symbol with proper font for star character - centered and white
-            star_emoji_font = _load_font_from_assets(SEGUIEMJ_PATH, 26)
-            star_text = "⭐"
-            star_bbox = card_draw.textbbox((0, 0), star_text, font=star_emoji_font)
-            star_text_w = star_bbox[2] - star_bbox[0]
-            star_text_h = star_bbox[3] - star_bbox[1]
-            star_text_x = star_x + (star_size - star_text_w) // 2
-            star_text_y = star_y + (star_size - star_text_h) // 2
-            card_draw.text((star_text_x, star_text_y), star_text, fill=(255, 255, 255), font=star_emoji_font)
-
-        # ── INFO SECTION ─────────────────────────────────────────────────────
-        info_y = img_y + img_h + 6
+        # Draw high-quality card using the shared renderer
+        # We disable 'is_owned' banner since this is the inventory view
+        card = _draw_individual_card(
+            char, 
+            char_img, 
+            is_claimed=False, 
+            is_owned=False, 
+            card_width=card_w, 
+            card_height=card_h
+        )
         
-        # Name (centered, truncated)
-        name = char.get("name", "Unknown")
-        if len(name) > 20:
-            name = name[:18] + "..."
-        name_bbox = card_draw.textbbox((0, 0), name, font=name_font)
-        name_x = (card_w - (name_bbox[2] - name_bbox[0])) // 2
-        card_draw.text((name_x, info_y), name, fill=text_color, font=name_font)
-
-        # Anime (smaller, muted)
-        anime = char.get("anime", "Unknown")
-        if len(anime) > 32:
-            anime = anime[:30] + "..."
-        anime_bbox = card_draw.textbbox((0, 0), anime, font=info_font)
-        anime_x = (card_w - (anime_bbox[2] - anime_bbox[0])) // 2
-        card_draw.text((anime_x, info_y + 26), anime, fill=(150, 150, 170), font=info_font)
-
-        # Bottom bar - Rarity indicator + favorites count + UID (better spacing)
-        bar_y = card_h - 42
-        bar_h = 30
-        
-        # Gradient background for bottom bar
-        for j in range(bar_h):
-            alpha = int(220 - (j / bar_h * 40))
-            card_draw.line(
-                [(img_margin, bar_y + j), (card_w - img_margin, bar_y + j)],
-                fill=(20, 20, 28, alpha)
-            )
-        
-        # Rarity dot (left side)
-        dot_size = 14
-        dot_y = bar_y + (bar_h - dot_size) // 2
-        card_draw.ellipse([img_margin + 10, dot_y, img_margin + 10 + dot_size, dot_y + dot_size], 
-                         fill=rarity_color)
-        
-        # Favorites count with heart (center-left, using emoji font)
-        favorites = char.get("favorites", 0)
-        heart_x = img_margin + 45  # Moved further right to give more space from rarity dot
-        heart_y = bar_y + (bar_h - 22) // 2
-        
-        # Draw heart emoji
-        card_draw.text((heart_x, heart_y), "❤️", fill=(255, 120, 150), font=emoji_font)
-        
-        # Calculate heart width for proper spacing
-        heart_bbox = card_draw.textbbox((heart_x, heart_y), "❤️", font=emoji_font)
-        heart_width = heart_bbox[2] - heart_bbox[0]
-        
-        # Draw favorites number with proper spacing (6px gap after heart)
-        fav_text = f"{favorites:,}"
-        fav_text_x = heart_x + heart_width + 3
-        fav_text_y = bar_y + (bar_h - 20) // 2
-        card_draw.text((fav_text_x, fav_text_y), fav_text, fill=(255, 120, 150), font=fav_font)
-
-        # UID on right side
-        uid = char.get("uid", "???")
-        uid_text = f"#{uid.upper()}"
-        uid_bbox = card_draw.textbbox((0, 0), uid_text, font=uid_font)
-        uid_x = card_w - img_margin - (uid_bbox[2] - uid_bbox[0]) - 10
-        uid_y = bar_y + (bar_h - (uid_bbox[3] - uid_bbox[1])) // 2
-        card_draw.text((uid_x, uid_y), uid_text, fill=(140, 140, 160), font=uid_font)
-
-        # Paste card to main image
+        # Paste card with alpha channel
         img.paste(card, (x, y), card)
 
     # ── FOOTER ───────────────────────────────────────────────────────────────
@@ -3151,9 +3005,420 @@ async def generate_gallery_image(
 
     logger.debug(f"Gallery generated in {time.perf_counter() - start_total:.2f}s")
     return buffer
-# ═══════════════════════════════════════════════════════════════
-# COINFLIP GIF GENERATOR & VIEW
-# ═══════════════════════════════════════════════════════════════
+
+CARD_SUITS = {
+    "♠": {"color": (30, 30, 30), "name": "spades"},
+    "♥": {"color": (220, 50, 50), "name": "hearts"},
+    "♣": {"color": (30, 30, 30), "name": "clubs"},
+    "♦": {"color": (220, 50, 50), "name": "diamonds"}
+}
+
+def generate_blackjack_image(player_hand: list, dealer_hand: list, player_value: int, dealer_value: int, 
+                             hide_dealer: bool = True, result: str = None, bet: int = 0, 
+                             winnings: int = 0, balance: int = 0) -> io.BytesIO:
+    """Generate a clean blackjack game image with proper containers and layout."""
+    
+    # Canvas dimensions - wider for better spacing
+    width, height = 700, 480
+    
+    # Colors
+    bg_color = (15, 45, 30)  # Dark casino green
+    felt_color = (25, 75, 50)  # Lighter felt
+    container_color = (20, 55, 40)  # Container background
+    container_border = (40, 100, 70)  # Container border
+    card_back = (35, 50, 100)
+    text_color = (255, 255, 255)
+    gold_color = (255, 215, 0)
+    muted_text = (180, 200, 180)
+    
+    # Create image
+    img = Image.new("RGB", (width, height), bg_color)
+    draw = ImageDraw.Draw(img)
+    
+    # Draw main felt area
+    draw.rounded_rectangle([15, 15, width-15, height-15], radius=20, fill=felt_color)
+    
+    # Load fonts
+    try:
+        title_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 20)
+        card_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 24)
+        small_font = _load_font_from_assets(INTER_REGULAR_PATH, 14)
+        value_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 18)
+        result_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 22)
+    except:
+        title_font = _load_emoji_font(20)
+        card_font = _load_emoji_font(24)
+        small_font = _load_emoji_font(14)
+        value_font = _load_emoji_font(18)
+        result_font = _load_emoji_font(22)
+    
+    # Card dimensions
+    card_w, card_h = 65, 90
+    card_spacing = 12
+    
+    # ═══════════════════════════════════════════════════════════════
+    # INFO PANEL (Top Right) - Contained box
+    # ═══════════════════════════════════════════════════════════════
+    info_box_w, info_box_h = 150, 100
+    info_x = width - info_box_w - 35
+    info_y = 35
+    
+    # Info container
+    draw.rounded_rectangle(
+        [info_x, info_y, info_x + info_box_w, info_y + info_box_h],
+        radius=10, fill=container_color, outline=container_border, width=2
+    )
+    
+    # Info content with padding
+    info_padding = 12
+    draw.text((info_x + info_padding, info_y + info_padding), 
+              "Bet", fill=muted_text, font=small_font)
+    draw.text((info_x + info_padding, info_y + info_padding + 16), 
+              f"{bet:,} pts", fill=gold_color, font=value_font)
+    
+    draw.text((info_x + info_padding, info_y + info_padding + 50), 
+              "Balance", fill=muted_text, font=small_font)
+    draw.text((info_x + info_padding, info_y + info_padding + 66), 
+              f"{balance:,} pts", fill=text_color, font=value_font)
+    
+    # ═══════════════════════════════════════════════════════════════
+    # DEALER SECTION - Contained box
+    # ═══════════════════════════════════════════════════════════════
+    dealer_box_x = 35
+    dealer_box_y = 35
+    dealer_box_w = info_x - dealer_box_x - 20
+    dealer_box_h = 130
+    
+    # Dealer container
+    draw.rounded_rectangle(
+        [dealer_box_x, dealer_box_y, dealer_box_x + dealer_box_w, dealer_box_y + dealer_box_h],
+        radius=10, fill=container_color, outline=container_border, width=2
+    )
+    
+    # Dealer label
+    draw.text((dealer_box_x + 15, dealer_box_y + 10), "DEALER", fill=muted_text, font=title_font)
+    
+    # Dealer value in a pill
+    if hide_dealer:
+        dealer_display = f"{dealer_hand[0].value}+?"
+    else:
+        dealer_display = str(dealer_value)
+    
+    value_bbox = draw.textbbox((0, 0), dealer_display, font=value_font)
+    value_w = value_bbox[2] - value_bbox[0] + 20
+    value_pill_x = dealer_box_x + dealer_box_w - value_w - 15
+    value_pill_y = dealer_box_y + 8
+    
+    draw.rounded_rectangle(
+        [value_pill_x, value_pill_y, value_pill_x + value_w, value_pill_y + 26],
+        radius=13, fill=(40, 80, 60)
+    )
+    draw.text((value_pill_x + 10, value_pill_y + 4), dealer_display, fill=gold_color, font=value_font)
+    
+    # Dealer cards - centered in container
+    total_cards_w = len(dealer_hand) * card_w + (len(dealer_hand) - 1) * card_spacing
+    dealer_cards_x = dealer_box_x + (dealer_box_w - total_cards_w) // 2
+    dealer_cards_y = dealer_box_y + 38
+    
+    for i, card in enumerate(dealer_hand):
+        x = dealer_cards_x + i * (card_w + card_spacing)
+        y = dealer_cards_y
+        
+        if hide_dealer and i == 1:
+            # Draw card back
+            draw.rounded_rectangle([x, y, x + card_w, y + card_h], radius=6, fill=card_back)
+            draw.rounded_rectangle([x+3, y+3, x + card_w-3, y + card_h-3], radius=4, outline=(55, 70, 130), width=1)
+            # Diamond pattern
+            for py in range(y+12, y+card_h-12, 10):
+                for px in range(x+12, x+card_w-12, 10):
+                    if (py + px) % 20 == 0:
+                        draw.rectangle([px, py, px+3, py+3], fill=(45, 60, 120))
+        else:
+            _draw_card(draw, x, y, card_w, card_h, str(card), card_font, small_font)
+    
+    # ═══════════════════════════════════════════════════════════════
+    # PLAYER SECTION - Contained box
+    # ═══════════════════════════════════════════════════════════════
+    player_box_x = 35
+    player_box_y = 180
+    player_box_w = width - 70
+    player_box_h = 130
+    
+    # Player container
+    draw.rounded_rectangle(
+        [player_box_x, player_box_y, player_box_x + player_box_w, player_box_y + player_box_h],
+        radius=10, fill=container_color, outline=container_border, width=2
+    )
+    
+    # Player label
+    draw.text((player_box_x + 15, player_box_y + 10), "YOUR HAND", fill=muted_text, font=title_font)
+    
+    # Player value in a pill
+    player_display = str(player_value)
+    if player_value == 21 and len(player_hand) == 2:
+        player_display = "BJ!"
+        pill_color = (180, 140, 40)
+    elif player_value > 21:
+        player_display = f"{player_value}"
+        pill_color = (140, 50, 50)
+    else:
+        pill_color = (40, 80, 60)
+    
+    value_bbox = draw.textbbox((0, 0), player_display, font=value_font)
+    value_w = value_bbox[2] - value_bbox[0] + 20
+    value_pill_x = player_box_x + player_box_w - value_w - 15
+    value_pill_y = player_box_y + 8
+    
+    draw.rounded_rectangle(
+        [value_pill_x, value_pill_y, value_pill_x + value_w, value_pill_y + 26],
+        radius=13, fill=pill_color
+    )
+    draw.text((value_pill_x + 10, value_pill_y + 4), player_display, fill=gold_color, font=value_font)
+    
+    # Player cards - centered in container
+    total_cards_w = len(player_hand) * card_w + (len(player_hand) - 1) * card_spacing
+    player_cards_x = player_box_x + (player_box_w - total_cards_w) // 2
+    player_cards_y = player_box_y + 38
+    
+    for i, card in enumerate(player_hand):
+        x = player_cards_x + i * (card_w + card_spacing)
+        y = player_cards_y
+        _draw_card(draw, x, y, card_w, card_h, str(card), card_font, small_font)
+    
+    # ═══════════════════════════════════════════════════════════════
+    # RESULT BANNER (Bottom) - Only if game over
+    # ═══════════════════════════════════════════════════════════════
+    if result:
+        result_box_x = 35
+        result_box_y = 325
+        result_box_w = width - 70
+        result_box_h = 65
+        
+        # Determine colors based on result
+        if "win" in result.lower() or "blackjack" in result.lower():
+            banner_color = (35, 100, 50)
+            banner_border = (60, 150, 80)
+            emoji = "🎉"
+        elif "push" in result.lower() or "tie" in result.lower():
+            banner_color = (100, 90, 35)
+            banner_border = (150, 140, 60)
+            emoji = "🤝"
+        else:
+            banner_color = (100, 40, 40)
+            banner_border = (150, 60, 60)
+            emoji = "💔"
+        
+        # Result container
+        draw.rounded_rectangle(
+            [result_box_x, result_box_y, result_box_x + result_box_w, result_box_y + result_box_h],
+            radius=10, fill=banner_color, outline=banner_border, width=2
+        )
+        
+        # Result text - centered
+        result_text = f"{emoji} {result}"
+        result_bbox = draw.textbbox((0, 0), result_text, font=result_font)
+        result_text_w = result_bbox[2] - result_bbox[0]
+        result_x = result_box_x + (result_box_w - result_text_w) // 2
+        draw.text((result_x, result_box_y + 12), result_text, fill=text_color, font=result_font)
+        
+        # Winnings info below result
+        if winnings != 0:
+            if winnings > 0:
+                win_text = f"+{winnings:,} pts"
+                win_color = (150, 255, 150)
+            else:
+                win_text = f"{winnings:,} pts"
+                win_color = (255, 150, 150)
+            
+            win_bbox = draw.textbbox((0, 0), win_text, font=value_font)
+            win_text_w = win_bbox[2] - win_bbox[0]
+            win_x = result_box_x + (result_box_w - win_text_w) // 2
+            draw.text((win_x, result_box_y + 38), win_text, fill=win_color, font=value_font)
+    
+    # ═══════════════════════════════════════════════════════════════
+    # FOOTER - Instructions or status
+    # ═══════════════════════════════════════════════════════════════
+    footer_y = height - 45
+    if not result:
+        footer_text = "Hit to draw • Stand to hold • Double to double bet"
+        footer_bbox = draw.textbbox((0, 0), footer_text, font=small_font)
+        footer_x = (width - (footer_bbox[2] - footer_bbox[0])) // 2
+        draw.text((footer_x, footer_y), footer_text, fill=muted_text, font=small_font)
+    else:
+        footer_text = f"Final Balance: {balance:,} pts"
+        footer_bbox = draw.textbbox((0, 0), footer_text, font=small_font)
+        footer_x = (width - (footer_bbox[2] - footer_bbox[0])) // 2
+        draw.text((footer_x, footer_y), footer_text, fill=gold_color, font=small_font)
+    
+    # Save to buffer
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+    return buffer
+
+
+def _draw_card(draw, x: int, y: int, w: int, h: int, card_str: str, card_font, small_font):
+    """Draw a single playing card."""
+    # Card background
+    draw.rounded_rectangle([x, y, x + w, y + h], radius=8, fill=(255, 255, 255))
+    draw.rounded_rectangle([x+2, y+2, x + w-2, y + h-2], radius=6, outline=(200, 200, 200), width=1)
+    
+    # Parse card string (e.g., "A♠", "10♥")
+    if len(card_str) >= 2:
+        if card_str[-1] in CARD_SUITS:
+            suit = card_str[-1]
+            rank = card_str[:-1]
+        else:
+            suit = "♠"
+            rank = card_str
+    else:
+        suit = "♠"
+        rank = card_str
+    
+    suit_color = CARD_SUITS.get(suit, {}).get("color", (30, 30, 30))
+    
+    # Draw rank in top-left
+    draw.text((x + 8, y + 5), rank, fill=suit_color, font=card_font)
+    
+    # Draw suit in center
+    suit_bbox = draw.textbbox((0, 0), suit, font=card_font)
+    suit_w = suit_bbox[2] - suit_bbox[0]
+    draw.text((x + (w - suit_w) // 2, y + h // 2 - 10), suit, fill=suit_color, font=card_font)
+    
+    # Draw rank in bottom-right (upside down effect - just smaller)
+    draw.text((x + w - 25, y + h - 35), rank, fill=suit_color, font=small_font)
+
+
+async def generate_gambling_stats_image(user_name: str, avatar_url: str, stats: dict) -> io.BytesIO:
+    """Generate a gambling statistics card for a user."""
+    
+    width, height = 500, 350
+    
+    # Colors
+    bg_gradient_top = (25, 25, 35)
+    bg_gradient_bottom = (15, 15, 25)
+    accent_color = (255, 180, 50)
+    text_color = (255, 255, 255)
+    subtext_color = (180, 180, 200)
+    positive_color = (100, 255, 100)
+    negative_color = (255, 100, 100)
+    
+    # Create image with gradient
+    img = Image.new("RGB", (width, height), bg_gradient_top)
+    draw = ImageDraw.Draw(img)
+    
+    # Simple gradient effect
+    for y in range(height):
+        ratio = y / height
+        r = int(bg_gradient_top[0] * (1 - ratio) + bg_gradient_bottom[0] * ratio)
+        g = int(bg_gradient_top[1] * (1 - ratio) + bg_gradient_bottom[1] * ratio)
+        b = int(bg_gradient_top[2] * (1 - ratio) + bg_gradient_bottom[2] * ratio)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+    
+    # Load fonts
+    try:
+        title_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 28)
+        stat_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 22)
+        label_font = _load_font_from_assets(INTER_REGULAR_PATH, 14)
+        value_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 18)
+    except:
+        title_font = _load_emoji_font(28)
+        stat_font = _load_emoji_font(22)
+        label_font = _load_emoji_font(14)
+        value_font = _load_emoji_font(18)
+    
+    # Draw border
+    draw.rounded_rectangle([5, 5, width-5, height-5], radius=15, outline=accent_color, width=2)
+    
+    # Avatar
+    avatar_size = 80
+    avatar_x, avatar_y = 30, 30
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(avatar_url) as resp:
+                if resp.status == 200:
+                    avatar_data = await resp.read()
+                    avatar = Image.open(io.BytesIO(avatar_data)).convert("RGBA")
+                    avatar = avatar.resize((avatar_size, avatar_size), Image.Resampling.LANCZOS)
+                    
+                    # Circular mask
+                    mask = Image.new("L", (avatar_size, avatar_size), 0)
+                    mask_draw = ImageDraw.Draw(mask)
+                    mask_draw.ellipse([0, 0, avatar_size, avatar_size], fill=255)
+                    
+                    # Border
+                    draw.ellipse([avatar_x-3, avatar_y-3, avatar_x+avatar_size+3, avatar_y+avatar_size+3], 
+                                fill=accent_color)
+                    
+                    img.paste(avatar, (avatar_x, avatar_y), mask)
+    except:
+        draw.ellipse([avatar_x, avatar_y, avatar_x+avatar_size, avatar_y+avatar_size], fill=(60, 60, 80))
+    
+    # Title
+    draw.text((avatar_x + avatar_size + 20, avatar_y + 10), f"{user_name}", fill=text_color, font=title_font)
+    draw.text((avatar_x + avatar_size + 20, avatar_y + 45), "Gambling Stats", fill=subtext_color, font=label_font)
+    
+    # Stats grid
+    stats_y = 130
+    col_width = (width - 60) // 3
+    
+    stat_items = [
+        ("🎰 Games", stats.get("total_games", 0)),
+        ("🏆 Wins", stats.get("wins", 0)),
+        ("💔 Losses", stats.get("losses", 0)),
+        ("💰 Total Bet", f"{stats.get('total_bet', 0):,}"),
+        ("📈 Total Won", f"{stats.get('total_won', 0):,}"),
+        ("📉 Net Profit", stats.get('net_profit', 0)),
+    ]
+    
+    for i, (label, value) in enumerate(stat_items):
+        row = i // 3
+        col = i % 3
+        x = 30 + col * col_width
+        y = stats_y + row * 80
+        
+        # Draw stat box
+        box_w, box_h = col_width - 20, 65
+        draw.rounded_rectangle([x, y, x + box_w, y + box_h], radius=10, fill=(40, 40, 55))
+        
+        # Label
+        draw.text((x + 10, y + 8), label, fill=subtext_color, font=label_font)
+        
+        # Value
+        if isinstance(value, int) and "Profit" in label:
+            value_color = positive_color if value >= 0 else negative_color
+            value_text = f"+{value:,}" if value >= 0 else f"{value:,}"
+        else:
+            value_color = text_color
+            value_text = str(value) if isinstance(value, str) else f"{value:,}"
+        
+        draw.text((x + 10, y + 32), value_text, fill=value_color, font=value_font)
+    
+    # Win rate bar
+    bar_y = height - 60
+    total_games = stats.get("total_games", 0)
+    wins = stats.get("wins", 0)
+    win_rate = (wins / total_games * 100) if total_games > 0 else 0
+    
+    draw.text((30, bar_y - 25), f"Win Rate: {win_rate:.1f}%", fill=text_color, font=label_font)
+    
+    # Progress bar background
+    bar_x, bar_w, bar_h = 30, width - 60, 20
+    draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], radius=10, fill=(50, 50, 70))
+    
+    # Progress bar fill
+    fill_w = int(bar_w * (win_rate / 100))
+    if fill_w > 0:
+        fill_color = positive_color if win_rate >= 50 else (255, 180, 50) if win_rate >= 30 else negative_color
+        draw.rounded_rectangle([bar_x, bar_y, bar_x + fill_w, bar_y + bar_h], radius=10, fill=fill_color)
+    
+    # Save to buffer
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+    return buffer
+
 
 def generate_coinflip_gif(result: str) -> io.BytesIO:
     pass

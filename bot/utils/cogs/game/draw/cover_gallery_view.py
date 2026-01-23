@@ -7,6 +7,124 @@ from typing import List, Dict, Optional
 logger = logging.getLogger(__name__)
 
 
+class DeleteConfirmationView(discord.ui.View):
+    """View for confirming cover art deletion with refund"""
+    
+    def __init__(self, cover_system, user_id: str, guild_id: str, character_uid: str, target_art: Dict, refund_amount: int, is_active: bool):
+        super().__init__(timeout=60)  # 60 second timeout
+        self.cover_system = cover_system
+        self.user_id = user_id
+        self.guild_id = guild_id
+        self.character_uid = character_uid
+        self.target_art = target_art
+        self.refund_amount = refund_amount
+        self.is_active = is_active
+        self.message: Optional[discord.Message] = None
+        
+        # Add confirmation buttons
+        self.add_item(ConfirmDeleteButton())
+        self.add_item(CancelDeleteButton())
+    
+    async def on_timeout(self):
+        """Disable all components when view times out"""
+        for child in self.children:
+            child.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self, content="⏰ Confirmation timed out!")
+            except:
+                pass
+
+
+class ConfirmDeleteButton(discord.ui.Button):
+    """Button to confirm cover art deletion"""
+    
+    def __init__(self):
+        super().__init__(
+            label="🗑️ Delete",
+            style=discord.ButtonStyle.danger,
+            row=0
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        view: DeleteConfirmationView = self.view
+        
+        try:
+            # Delete the cover art - use 'id' field (new format) with 'unique_id' fallback
+            success = await view.cover_system.delete_cover_art(
+                view.user_id,
+                view.guild_id,
+                view.character_uid,
+                view.target_art.get('id', view.target_art.get('unique_id'))
+            )
+            
+            if success:
+                # Process refund
+                await view.cover_system.quest_data.add_balance(view.user_id, view.guild_id, view.refund_amount)
+                
+                # Create success embed
+                embed = discord.Embed(
+                    title="✅ Cover Art Deleted",
+                    description=f"Successfully deleted cover art and received refund!",
+                    color=discord.Color.green()
+                )
+                
+                embed.add_field(name="Refund", value=f"**{view.refund_amount}** stella points", inline=False)
+                
+                if view.is_active:
+                    embed.add_field(
+                        name="📝 Note", 
+                        value="Your active cover art was removed. Use `.draw cover collection` to set a new one.",
+                        inline=False
+                    )
+                
+                embed.set_footer(text="The cover art has been permanently deleted.")
+                
+                # Disable all buttons
+                for child in view.children:
+                    child.disabled = True
+                
+                await interaction.response.edit_message(embed=embed, view=view)
+            else:
+                await interaction.response.send_message(
+                    "❌ Failed to delete cover art! Please try again.",
+                    ephemeral=True
+                )
+                
+        except Exception as e:
+            logger.error(f"Error confirming cover art deletion: {e}")
+            await interaction.response.send_message(
+                "❌ Error during deletion! Please try again.",
+                ephemeral=True
+            )
+
+
+class CancelDeleteButton(discord.ui.Button):
+    """Button to cancel cover art deletion"""
+    
+    def __init__(self):
+        super().__init__(
+            label="❌ Cancel",
+            style=discord.ButtonStyle.secondary,
+            row=0
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        view: DeleteConfirmationView = self.view
+        
+        # Disable all buttons
+        for child in view.children:
+            child.disabled = True
+        
+        embed = discord.Embed(
+            title="❌ Deletion Cancelled",
+            description="Cover art deletion has been cancelled.",
+            color=discord.Color.red()
+        )
+        
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
 class CoverCollectionView(discord.ui.View):
     """View for browsing a user's cover art collection with pagination"""
     
@@ -346,13 +464,9 @@ class CoverGalleryView(discord.ui.View):
         # Row 1: View Mode Select
         self.add_item(ViewModeSelect())
         
-        # Row 2: Purchase buttons (Buy 1, Buy 2, Buy 3)
-        self.add_item(BuyButton(1))
-        self.add_item(BuyButton(2))
-        self.add_item(BuyButton(3))
-        
-        # Row 3: Navigation buttons (Prev, Page, Next)
+        # Row 2: Navigation buttons (Prev, Random, Page, Next)
         self.add_item(PrevButton())
+        self.add_item(RandomPageButton())
         self.add_item(PageButton(self.current_page, self.total_pages))
         self.add_item(NextButton())
     
@@ -546,7 +660,7 @@ class PrevButton(discord.ui.Button):
         super().__init__(
             label="◀️ Prev",
             style=discord.ButtonStyle.primary,
-            row=3
+            row=2
         )
     
     async def callback(self, interaction: discord.Interaction):
@@ -563,6 +677,36 @@ class PrevButton(discord.ui.Button):
         await view.refresh_view(interaction)
 
 
+class RandomPageButton(discord.ui.Button):
+    """Random page button (dice) - jumps to a random page"""
+    
+    def __init__(self):
+        super().__init__(
+            label="🎲",
+            style=discord.ButtonStyle.secondary,
+            row=2
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        import random
+        view: CoverGalleryView = self.view
+        
+        if view.total_pages <= 1:
+            await interaction.response.send_message(
+                "❌ Only one page available!",
+                ephemeral=True
+            )
+            return
+        
+        # Pick a random page different from current
+        available_pages = [p for p in range(1, view.total_pages + 1) if p != view.current_page]
+        if available_pages:
+            view.current_page = random.choice(available_pages)
+            await view.refresh_view(interaction)
+        else:
+            await interaction.response.send_message("❌ No other pages to jump to!", ephemeral=True)
+
+
 class PageButton(discord.ui.Button):
     """Page indicator button - click to jump to a specific page"""
     
@@ -570,7 +714,7 @@ class PageButton(discord.ui.Button):
         super().__init__(
             label=f"{current_page}/{total_pages}",
             style=discord.ButtonStyle.secondary,
-            row=3
+            row=2
         )
     
     async def callback(self, interaction: discord.Interaction):
@@ -588,7 +732,7 @@ class NextButton(discord.ui.Button):
         super().__init__(
             label="Next ▶️",
             style=discord.ButtonStyle.primary,
-            row=3
+            row=2
         )
     
     async def callback(self, interaction: discord.Interaction):
@@ -605,75 +749,7 @@ class NextButton(discord.ui.Button):
         await view.refresh_view(interaction)
 
 
-class BuyButton(discord.ui.Button):
-    """Button to purchase cover art"""
-    
-    def __init__(self, option_number: int):
-        super().__init__(
-            label=f"{option_number}",
-            style=discord.ButtonStyle.success,
-            row=2,
-            custom_id=f"buy_{option_number}"
-        )
-        self.option_number = option_number
-    
-    async def callback(self, interaction: discord.Interaction):
-        view: CoverGalleryView = self.view
-        
-        # Get current page images
-        current_images = view._get_current_page_images()
-        
-        # Check if the requested option exists
-        if self.option_number > len(current_images):
-            await interaction.response.send_message(
-                f"❌ Option {self.option_number} is not available on this page!",
-                ephemeral=True
-            )
-            return
-        
-        # Get the selected image
-        selected_image = current_images[self.option_number - 1]
-        
-        # Get sequential ID for this image
-        seq_id = selected_image.get('sequential_id', selected_image['id'])
-        
-        # Attempt to purchase
-        try:
-            success, message = await view.cover_system.purchase_cover_art(
-                view.user_id, 
-                view.guild_id, 
-                view.character.get('uid', ''),
-                seq_id
-            )
-            
-            if success:
-                # Set the purchased cover art as active immediately
-                await view.cover_system.set_active_cover_art(
-                    view.user_id,
-                    view.guild_id,
-                    view.character.get('uid', ''),
-                    seq_id
-                )
-                
-                char_uid = view.character.get('uid', 'UNKNOWN').upper()
-                await interaction.response.send_message(
-                    f"✅ {message}\n\n"
-                    f"🎨 Your cover art is now active and ready to view!\n"
-                    f"Use `.draw cover collection {char_uid}` or `.draw covers {char_uid}` to see it.",
-                    ephemeral=True
-                )
-            else:
-                await interaction.response.send_message(
-                    f"❌ {message}",
-                    ephemeral=True
-                )
-                
-        except Exception as e:
-            logger.error(f"Error purchasing cover art: {e}")
-            await interaction.response.send_message(
-                "❌ Error purchasing cover art! Please try again.",
-                ephemeral=True
-            )
+
 
 
 class PageJumpModal(discord.ui.Modal, title="Jump to Page"):

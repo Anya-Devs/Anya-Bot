@@ -4,12 +4,23 @@
             "pat",
             "cuddle",
             "kiss",
-            "hug"
+            "hug",
+            "headpat",
+            "feed"
         ],
         ">:0": [
             "bite",
             "lick",
-            "slap"
+            "slap",
+            "punch",
+            "kick",
+            "bonk"
+        ],
+        "uwu": [
+            "poke",
+            "tickle",
+            "blush",
+            "pout"
         ]
     },
     "phrases": {
@@ -26,7 +37,26 @@
             "wave": "Waves cheerfully",
             "smug": "Looks smug with a cheeky grin",
             "dance": "Busts out some fun dance moves!",
-            "happy": "Smiles brightly, feeling happy!"
+            "happy": "Smiles brightly, feeling happy!",
+            "poke": "Pokes themselves curiously",
+            "tickle": "Tickles themselves and giggles",
+            "bonk": "Bonks themselves on the head",
+            "headpat": "Pats themselves on the head",
+            "feed": "Feeds themselves some snacks",
+            "punch": "Punches the air dramatically",
+            "kick": "Kicks the air with determination",
+            "stare": "Stares intensely into the distance",
+            "blush": "Blushes shyly",
+            "pout": "Pouts adorably",
+            "laugh": "Laughs heartily",
+            "sleep": "Falls asleep peacefully",
+            "wink": "Winks playfully",
+            "thumbsup": "Gives a thumbs up",
+            "facepalm": "Facepalms in disbelief",
+            "shrug": "Shrugs casually",
+            "nod": "Nods in agreement",
+            "yawn": "Yawns sleepily",
+            "run": "Runs around energetically"
         },
         "other": {
             "pat": "{user} gives a gentle pat to {target}",
@@ -41,7 +71,26 @@
             "wave": "{user} waves at {target}",
             "smug": "{user} smugs at {target}",
             "dance": "{user} is dancing, nice moves!",
-            "happy": "{user} is happy!"
+            "happy": "{user} is happy!",
+            "poke": "{user} pokes {target}",
+            "tickle": "{user} tickles {target}",
+            "bonk": "{user} bonks {target} on the head",
+            "headpat": "{user} gives {target} a gentle headpat",
+            "feed": "{user} feeds {target} some snacks",
+            "punch": "{user} punches {target}",
+            "kick": "{user} kicks {target}",
+            "stare": "{user} stares at {target}",
+            "blush": "{user} blushes at {target}",
+            "pout": "{user} pouts at {target}",
+            "laugh": "{user} laughs at {target}",
+            "sleep": "{user} falls asleep on {target}",
+            "wink": "{user} winks at {target}",
+            "thumbsup": "{user} gives {target} a thumbs up",
+            "facepalm": "{user} facepalms at {target}",
+            "shrug": "{user} shrugs at {target}",
+            "nod": "{user} nods at {target}",
+            "yawn": "{user} yawns at {target}",
+            "run": "{user} runs towards {target}"
         },
         "everyone": {
             "pat": "{user} gives a gentle pat to the whole server",
@@ -56,7 +105,26 @@
             "wave": "{user} waves at the whole server",
             "smug": "{user} looks smug",
             "dance": "{user} is dancing",
-            "happy": "{user} is happy"
+            "happy": "{user} is happy",
+            "poke": "{user} pokes the whole server",
+            "tickle": "{user} tickles the whole server",
+            "bonk": "{user} bonks the whole server",
+            "headpat": "{user} gives headpats to the whole server",
+            "feed": "{user} feeds the whole server",
+            "punch": "{user} punches the whole server",
+            "kick": "{user} kicks the whole server",
+            "stare": "{user} stares at the whole server",
+            "blush": "{user} blushes at the whole server",
+            "pout": "{user} pouts at the whole server",
+            "laugh": "{user} laughs at the whole server",
+            "sleep": "{user} falls asleep",
+            "wink": "{user} winks at the whole server",
+            "thumbsup": "{user} gives thumbs up to the whole server",
+            "facepalm": "{user} facepalms at the whole server",
+            "shrug": "{user} shrugs at the whole server",
+            "nod": "{user} nods at the whole server",
+            "yawn": "{user} yawns at the whole server",
+            "run": "{user} runs around the whole server"
         },
         "do_it_back": {
             "pat": [
@@ -123,6 +191,101 @@
                 "{user} feels happy with {target}",
                 "{user} shares the happiness with {target}",
                 "{user} smiles along with {target}"
+            ],
+            "poke": [
+                "{user} pokes {target} back",
+                "{user} returns the poke to {target}",
+                "{user} pokes {target} back playfully"
+            ],
+            "tickle": [
+                "{user} tickles {target} back",
+                "{user} returns the tickle to {target}",
+                "{user} tickles {target} back playfully"
+            ],
+            "bonk": [
+                "{user} bonks {target} back",
+                "{user} returns the bonk to {target}",
+                "{user} bonks {target} back on the head"
+            ],
+            "headpat": [
+                "{user} gives {target} a headpat back",
+                "{user} returns the headpat to {target}",
+                "{user} pats {target}'s head back"
+            ],
+            "feed": [
+                "{user} feeds {target} back",
+                "{user} shares snacks with {target}",
+                "{user} feeds {target} in return"
+            ],
+            "punch": [
+                "{user} punches {target} back",
+                "{user} returns the punch to {target}",
+                "{user} strikes {target} back"
+            ],
+            "kick": [
+                "{user} kicks {target} back",
+                "{user} returns the kick to {target}",
+                "{user} kicks {target} back"
+            ],
+            "stare": [
+                "{user} stares {target} back",
+                "{user} returns the stare to {target}",
+                "{user} stares back at {target} intensely"
+            ],
+            "blush": [
+                "{user} blushes back at {target}",
+                "{user} blushes along with {target}",
+                "{user} turns red at {target} too"
+            ],
+            "pout": [
+                "{user} pouts back at {target}",
+                "{user} returns the pout to {target}",
+                "{user} pouts at {target} too"
+            ],
+            "laugh": [
+                "{user} laughs along with {target}",
+                "{user} joins {target} in laughter",
+                "{user} laughs with {target}"
+            ],
+            "sleep": [
+                "{user} falls asleep with {target}",
+                "{user} sleeps alongside {target}",
+                "{user} dozes off with {target}"
+            ],
+            "wink": [
+                "{user} winks back at {target}",
+                "{user} returns the wink to {target}",
+                "{user} winks at {target} back"
+            ],
+            "thumbsup": [
+                "{user} gives {target} a thumbs up back",
+                "{user} returns the thumbs up to {target}",
+                "{user} thumbs up {target} back"
+            ],
+            "facepalm": [
+                "{user} facepalms along with {target}",
+                "{user} joins {target} in facepalming",
+                "{user} facepalms too at {target}"
+            ],
+            "shrug": [
+                "{user} shrugs back at {target}",
+                "{user} returns the shrug to {target}",
+                "{user} shrugs at {target} too"
+            ],
+            "nod": [
+                "{user} nods back at {target}",
+                "{user} returns the nod to {target}",
+                "{user} nods in agreement with {target}"
+            ],
+            "yawn": [
+                "{user} yawns along with {target}",
+                "{user} yawns back at {target}",
+                "{user} catches the yawn from {target}"
+            ],
+            "run": [
+                "{user} runs after {target}",
+                "{user} chases {target}",
+                "{user} runs along with {target}"
             ]
         }
     }

@@ -11,6 +11,7 @@ from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timezone, timedelta
 import asyncio
 import logging
+import hashlib
 from .api_client import get_api_client
 from .multisearch import MultiSourceImageSearch
 
@@ -139,8 +140,6 @@ class CoverArtSystem:
                                 'preview_url': img.get('preview_url', ''),
                                 'file_url': img.get('file_url', ''),
                                 'score': img.get('score', 0),
-                                'width': img.get('width', 0),
-                                'height': img.get('height', 0),
                                 'width': img.get('width', 0),
                                 'height': img.get('height', 0),
                                 'tags': img.get('tags', []),
@@ -452,7 +451,7 @@ class CoverArtSystem:
         page: int = 1,
         total_pages: int = 1
     ) -> List[discord.Embed]:
-        """Create embeds for cover art display with clear UID and character info"""
+        """Create embeds for cover art display with unique hex codes for purchasing"""
         try:
             char_name = character.get("name", "Unknown")
             rarity = character.get("rarity", "common")
@@ -475,27 +474,35 @@ class CoverArtSystem:
             is_search_mode = uid == "SEARCH"
 
             for i, img in enumerate(images[:10], start=1):
+                # Generate unique 8-char hex code for this image
+                hex_code = self._generate_image_hex_code(img)
+                
+                # Store hex_code in the image dict for later use
+                img['hex_code'] = hex_code
+                
                 # Create embed with character info in title
                 if is_search_mode:
                     title = f"🔍 {char_name} - Option {i}"
                     description = f"*{series}*\n**Preview Only** - Own this character to purchase"
+                    footer_text = "Use .draw cover gallery <UID> to purchase for your character"
                 else:
                     title = f"🎨 {char_name} [`{uid.upper()}`] - Option {i}"
                     description = f"*{series}* • {rarity_data['emoji']} {rarity.title()} • Cost: **{cost}** pts"
+                    # Show hex code prominently for purchase
+                    footer_text = f"🛒 To buy: .draw cover buy {uid.upper()} {hex_code}"
                 
                 embed = discord.Embed(
                     title=title,
-                    description=description,
+                    description=description + f"\n\n**Code:** `{hex_code}`",
                     color=rarity_data["color"]
                 )
 
-
                 if img.get("preview_url"):
                     embed.set_image(url=img["preview_url"])
-
-                # No footer needed - users can use the buy buttons (1, 2, 3)
+                
+                # Set footer with purchase command
+                embed.set_footer(text=footer_text)
                 embeds.append(embed)
-
 
             return embeds
 
@@ -507,6 +514,24 @@ class CoverArtSystem:
         """Generate a random 16-digit hexadecimal ID"""
         import secrets
         return secrets.token_hex(8).upper()
+    
+    def _generate_image_hex_code(self, image: Dict) -> str:
+        """Generate a unique 8-char hex code for an image based on its source data.
+        
+        The code is deterministic - same image always gets the same code.
+        Uses source, ID, and URL to generate a consistent hash.
+        """
+        # Create a unique string from image data
+        source = image.get('source', 'unknown')
+        # Check both 'id' (raw image) and 'source_id' (cached image map)
+        source_id = str(image.get('id', image.get('source_id', '')))
+        url = image.get('url', image.get('preview_url', ''))
+        
+        # Combine to create unique identifier
+        unique_str = f"{source}:{source_id}:{url}"
+        
+        # Generate 8-char hex code
+        return hashlib.md5(unique_str.encode()).hexdigest()[:8].upper()
 
     async def purchase_cover_art(self, user_id: str, guild_id: str, character_uid: str, image_id: int, custom_name: str = None) -> Tuple[bool, str]:
         """Purchase cover art for a character and store in database"""
@@ -557,6 +582,86 @@ class CoverArtSystem:
         unique_id = await self._unlock_cover_art(user_id, guild_id, character_uid, image_id, custom_name)
         
         return True, f"Successfully purchased cover art `{unique_id}` ('{custom_name}') for **{cost}** stella points!"
+    
+    async def purchase_cover_art_by_hex(self, user_id: str, guild_id: str, character_uid: str, hex_code: str) -> Tuple[bool, str, Optional[Dict]]:
+        """Purchase cover art using the unique 8-char hex code
+        
+        Args:
+            user_id: User ID
+            guild_id: Guild ID
+            character_uid: Character UID
+            hex_code: The unique 8-char hex code for the image
+            
+        Returns:
+            Tuple of (success, message, image_data)
+        """
+        # Check if user owns the character
+        char = await self._get_character(user_id, guild_id, character_uid)
+        if not char:
+            return False, "You don't own this character!", None
+        
+        # Find the image in character_image_map by hex code
+        hex_code = hex_code.upper()
+        target_image = None
+        target_seq_id = None
+        
+        if character_uid in self.character_image_map:
+            for seq_id, img_data in self.character_image_map[character_uid].items():
+                # Generate hex code for this cached image
+                img_hex = self._generate_image_hex_code(img_data)
+                if img_hex == hex_code:
+                    target_image = img_data
+                    target_seq_id = seq_id
+                    break
+        
+        if not target_image:
+            return False, f"❌ Image with code `{hex_code}` not found! Make sure you've viewed the gallery first.", None
+        
+        # Get image URL
+        image_url = target_image.get('url') or target_image.get('file_url') or target_image.get('preview_url', '')
+        
+        # Check if user already owns this image (duplicate prevention)
+        owned_arts = await self._get_user_cover_arts_for_character(user_id, guild_id, character_uid)
+        for owned_art in owned_arts:
+            # Check by URL
+            if image_url and owned_art.get('image_url') == image_url:
+                return False, "❌ You already own this cover art!", None
+            # Check by hex code match (regenerate for owned art)
+            owned_hash = owned_art.get('image_hash', '')
+            if owned_hash and owned_hash == target_image.get('hash', ''):
+                return False, "❌ You already own this cover art!", None
+        
+        # Calculate cost (based on character rarity)
+        from ..const import GACHA_RARITY_TIERS
+        rarity = char.get('rarity', 'common')
+        
+        costs = {
+            'common': 100,
+            'uncommon': 200,
+            'rare': 500,
+            'epic': 1000,
+            'legendary': 2000
+        }
+        cost = costs.get(rarity, 100)
+        
+        # Check user balance
+        balance = await self.quest_data.get_balance(user_id, guild_id)
+        if balance < cost:
+            return False, f"You need **{cost}** stella points but only have **{balance:,}**!", None
+        
+        # Generate custom name
+        custom_name = f"{char.get('name', 'Art')}_{hex_code}"
+        
+        # Deduct cost and unlock cover art
+        await self.quest_data.add_balance(user_id, guild_id, -cost)
+        unique_id = await self._unlock_cover_art(user_id, guild_id, character_uid, target_seq_id, custom_name)
+        
+        return True, f"Successfully purchased cover art `{unique_id}` for **{cost}** stella points!", {
+            'cost': cost,
+            'unique_id': unique_id,
+            'image_url': image_url,
+            'hex_code': hex_code
+        }
     
     async def _get_user_cover_arts_for_character(self, user_id: str, guild_id: str, character_uid: str) -> List[Dict]:
         """Get all cover arts owned by a user for a specific character"""
@@ -834,59 +939,122 @@ class CoverArtSystem:
         
         return None
     
-    async def delete_cover_art(self, user_id: str, guild_id: str, cover_id: str) -> bool:
-        """Delete a cover art and return success status"""
+    async def delete_cover_art(self, user_id: str, guild_id: str, character_uid: str, cover_id: str) -> bool:
+        """Delete a cover art and return success status
+        
+        Args:
+            user_id: User ID
+            guild_id: Guild ID
+            character_uid: Character UID the cover art belongs to
+            cover_id: The unique ID of the cover art to delete
+        """
         try:
             db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
             server_col = db["Servers"]
             
-            # Find which character this cover art belongs to
+            char_uid_lower = character_uid.lower()
+            
+            # Get character data to see if it uses cover_collection or legacy cover_art
             result = await server_col.find_one(
                 {"guild_id": guild_id},
-                {f"members.{user_id}.characters": 1}
+                {f"members.{user_id}.characters.{char_uid_lower}": 1}
             )
             
-            if result:
-                characters = result.get("members", {}).get(user_id, {}).get("characters", {})
+            if not result:
+                logger.warning(f"[Cover Art Delete] Character {character_uid} not found")
+                return False
+            
+            char_data = result.get("members", {}).get(user_id, {}).get("characters", {}).get(char_uid_lower, {})
+            
+            # Check new format: cover_collection list
+            if 'cover_collection' in char_data and isinstance(char_data['cover_collection'], list):
+                cover_collection = char_data['cover_collection']
                 
-                for char_uid, char_data in characters.items():
-                    if char_data.get('cover_art', {}).get('custom_name') == cover_id:
-                        # Delete the cover art
-                        await server_col.update_one(
-                            {"guild_id": guild_id},
-                            {
-                                "$unset": {
-                                    f"members.{user_id}.characters.{char_uid}.cover_art": "",
-                                    f"members.{user_id}.characters.{char_uid}.cover_unlocked": ""
+                # Find index of the cover art to delete
+                target_idx = None
+                for idx, art in enumerate(cover_collection):
+                    art_id = art.get('id', '').upper()
+                    if art_id == cover_id.upper():
+                        target_idx = idx
+                        break
+                
+                if target_idx is not None:
+                    # Remove from the list using $pull
+                    await server_col.update_one(
+                        {"guild_id": guild_id},
+                        {
+                            "$pull": {
+                                f"members.{user_id}.characters.{char_uid_lower}.cover_collection": {
+                                    "id": cover_collection[target_idx].get('id')
                                 }
                             }
+                        }
+                    )
+                    
+                    # Check if collection is now empty
+                    remaining = len(cover_collection) - 1
+                    if remaining <= 0:
+                        # Unset cover_unlocked
+                        await server_col.update_one(
+                            {"guild_id": guild_id},
+                            {"$set": {f"members.{user_id}.characters.{char_uid_lower}.cover_unlocked": False}}
                         )
-                        return True
+                    
+                    logger.info(f"[Cover Art Delete] Deleted cover art {cover_id} from cover_collection for {character_uid}")
+                    return True
             
+            # Fallback: Check legacy format (single cover_art object)
+            if char_data.get('cover_art', {}).get('id', '').upper() == cover_id.upper() or \
+               char_data.get('cover_art', {}).get('custom_name', '').upper() == cover_id.upper():
+                await server_col.update_one(
+                    {"guild_id": guild_id},
+                    {
+                        "$unset": {
+                            f"members.{user_id}.characters.{char_uid_lower}.cover_art": "",
+                            f"members.{user_id}.characters.{char_uid_lower}.cover_unlocked": ""
+                        }
+                    }
+                )
+                logger.info(f"[Cover Art Delete] Deleted legacy cover art for {character_uid}")
+                return True
+            
+            logger.warning(f"[Cover Art Delete] Cover art {cover_id} not found for {character_uid}")
             return False
             
         except Exception as e:
-            logger.error(f"Error deleting cover art: {e}")
+            logger.error(f"Error deleting cover art: {e}", exc_info=True)
             return False
     
     async def _get_image_url_by_id(self, image_id: int, character_uid: str = None) -> str:
         """Get image URL using character-specific sequential ID"""
         try:
+            logger.info(f"[Cover Art] Looking for sequential ID {image_id} for character {character_uid}")
+            
             # Check character-specific image map first
             if character_uid and character_uid in self.character_image_map:
-                if image_id in self.character_image_map[character_uid]:
-                    img_data = self.character_image_map[character_uid][image_id]
+                char_map = self.character_image_map[character_uid]
+                logger.info(f"[Cover Art] Character map has {len(char_map)} images")
+                logger.info(f"[Cover Art] Available IDs: {list(char_map.keys())[:10]}...")  # Show first 10 IDs
+                
+                if image_id in char_map:
+                    img_data = char_map[image_id]
                     # Get the actual URL from the mapped image
                     image_url = img_data.get('url') or img_data.get('file_url') or img_data.get('preview_url', '')
                     source = img_data.get('source', 'Unknown')
                     source_id = img_data.get('source_id', 'N/A')
-                    logger.info(f"[Cover Art] Found sequential ID {image_id} for character {character_uid}")
+                    logger.info(f"[Cover Art] ✅ Found sequential ID {image_id} for character {character_uid}")
                     logger.info(f"[Cover Art] Source: {source} (ID: {source_id})")
                     logger.info(f"[Cover Art] Using URL: {image_url[:80]}...")
                     return image_url
+                else:
+                    logger.error(f"[Cover Art] ❌ Sequential ID {image_id} not found in character map")
+                    logger.error(f"[Cover Art] Available IDs in map: {list(char_map.keys())}")
+            else:
+                logger.error(f"[Cover Art] ❌ Character {character_uid} not found in image map")
+                logger.error(f"[Cover Art] Available characters: {list(self.character_image_map.keys())}")
             
             # Not found in character map
-            logger.error(f"[Cover Art] Sequential ID {image_id} not found for character {character_uid}")
+            logger.error(f"[Cover Art] ❌ Sequential ID {image_id} not found for character {character_uid}")
             logger.error(f"[Cover Art] User must view gallery first with .cover gallery {character_uid}")
             return ''
         except Exception as e:

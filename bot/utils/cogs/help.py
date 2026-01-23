@@ -67,12 +67,25 @@ class HelpMenu(discord.ui.View):
             groups = [cmd for cmd in commands_list if isinstance(cmd, commands.Group)]
             regular = [cmd for cmd in commands_list if not isinstance(cmd, commands.Group)]
             
-            # Build all commands as simple inline code
-            all_cmds = [f"`{cmd.name}`" for cmd in regular]
-            all_cmds += [f"`{g.name}`" for g in groups]
+            # Build command display with aliases and descriptions
+            cmd_lines = []
             
-            value = " ".join(all_cmds) if all_cmds else "No commands."
-            embed.add_field(name=cog_name.replace("_", " "), value=value, inline=False)
+            # Regular commands with aliases
+            for cmd in regular[:10]:  # Limit to avoid embed size issues
+                aliases = f" ({', '.join(cmd.aliases)})" if cmd.aliases else ""
+                desc = (cmd.help or "No description")[:50]
+                cmd_lines.append(f"`{cmd.name}`{aliases} - {desc}")
+            
+            # Group commands with full subcommand names
+            for g in groups[:5]:
+                aliases = f" ({', '.join(g.aliases)})" if g.aliases else ""
+                desc = (g.help or "No description")[:50]
+                subcmds = [f"{g.name} {c.name}" for c in g.commands if not c.hidden][:4]
+                sub_str = f"\n  └ `{', '.join(subcmds)}`" if subcmds else ""
+                cmd_lines.append(f"`{g.name}`{aliases} - {desc}{sub_str}")
+            
+            value = "\n".join(cmd_lines) if cmd_lines else "No commands."
+            embed.add_field(name=cog_name.replace("_", " "), value=value[:1024], inline=False)
 
         total_pages = max(1, (len(self.cog_commands) - 1) // self.fields_per_page + 1)
         embed.set_footer(
@@ -162,25 +175,26 @@ class Select_Help(discord.ui.Select):
             groups = [cmd for cmd in visible_cmds if isinstance(cmd, commands.Group)]
             regular = [cmd for cmd in visible_cmds if not isinstance(cmd, commands.Group)]
             
-            # Build command display
+            # Build command display with details
             cmd_parts = []
             
-            # Regular commands inline
-            if regular:
-                cmd_parts.append(" ".join(f"`{cmd.name}`" for cmd in regular))
+            # Regular commands with aliases and descriptions
+            for cmd in regular[:15]:
+                aliases = f" ({', '.join(cmd.aliases)})" if cmd.aliases else ""
+                desc = (cmd.help or "No description")[:60]
+                cmd_parts.append(f"`{cmd.name}`{aliases} - {desc}")
             
-            # Group commands with subcommands shown inline
-            if groups:
-                for group in groups:
-                    subcmds = [c.name for c in group.commands if not c.hidden]
-                    if subcmds:
-                        cmd_parts.append(f"`{group.name}` > {' '.join(f'`{s}`' for s in subcmds)}")
-                    else:
-                        cmd_parts.append(f"`{group.name}`")
+            # Group commands with full subcommand names
+            for group in groups[:8]:
+                aliases = f" ({', '.join(group.aliases)})" if group.aliases else ""
+                desc = (group.help or "No description")[:60]
+                subcmds = [f"{group.name} {c.name}" for c in group.commands if not c.hidden][:4]
+                sub_str = f"\n  └ `{', '.join(subcmds)}`" if subcmds else ""
+                cmd_parts.append(f"`{group.name}`{aliases} - {desc}{sub_str}")
             
             commands_str = "\n".join(cmd_parts) if cmd_parts else "No commands."
             inline = False
-            fields.append((module.replace("_", " "), commands_str, inline))
+            fields.append((module.replace("_", " "), commands_str[:1024], inline))
         return fields
 
     async def callback(self, interaction: discord.Interaction):
