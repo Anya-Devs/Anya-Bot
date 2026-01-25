@@ -920,6 +920,11 @@ FONT_DIR = Path(__file__).parent.parent.parent / "data" / "assets" / "fonts"
 EMOJI_FONT_PATH = FONT_DIR / "seguiemj.ttf"
 PRIMARY_FONT_PATH = FONT_DIR / "arial.ttf"
 
+# Additional font paths for games
+POPPINS_SEMIBOLD_PATH = FONT_DIR / "Poppins-SemiBold.ttf"
+POPPINS_REGULAR_PATH = FONT_DIR / "Poppins-Regular.ttf"
+INTER_REGULAR_PATH = FONT_DIR / "Inter.ttf"
+
 def _load_emoji_font(size: int) -> ImageFont.ImageFont:
     """DEPRECATED: Use fonts._load_emoji_font() instead"""
     for font_path in (EMOJI_FONT_PATH, PRIMARY_FONT_PATH):

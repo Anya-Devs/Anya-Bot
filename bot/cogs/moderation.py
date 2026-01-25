@@ -625,45 +625,7 @@ class Moderation(commands.Cog):
         await ctx.reply(embed=embed, mention_author=False)
         await self.log_action(ctx.guild, embed)
     
-    @commands.command(name="nuke")
-    @commands.has_permissions(manage_channels=True)
-    async def nuke(self, ctx):
-        """Clone and delete channel (reset all messages)"""
-        view = ModerationViews.ConfirmAction(ctx.author)
-        embed = discord.Embed(
-            title="Confirm Channel Nuke",
-            description=f"This will **delete** {ctx.channel.mention} and create an identical copy.\n"
-                        f"All messages will be permanently lost.\n\n"
-                        f"**Are you sure?**",
-            color=discord.Color.red()
-        )
-        
-        msg = await ctx.reply(embed=embed, view=view, mention_author=False)
-        await view.wait()
-        
-        if view.value is None:
-            embed.title = "Timed Out"
-            embed.description = "Nuke cancelled - no response received."
-            embed.color = discord.Color.orange()
-            return await msg.edit(embed=embed, view=None)
-        
-        if not view.value:
-            embed.title = "Cancelled"
-            embed.description = "Channel nuke has been cancelled."
-            embed.color = discord.Color.green()
-            return await msg.edit(embed=embed, view=None)
-        
-        # Perform nuke
-        new_channel = await ctx.channel.clone(reason=f"Channel nuked by {ctx.author}")
-        await ctx.channel.delete(reason=f"Channel nuked by {ctx.author}")
-        
-        embed = discord.Embed(
-            title="Channel Nuked",
-            description=f"Channel has been reset by {ctx.author.mention}",
-            color=discord.Color.red()
-        )
-        await new_channel.send(embed=embed)
-
+ 
     # ═══════════════════════════════════════════════════════════════
     # ROLE MANAGEMENT
     # ═══════════════════════════════════════════════════════════════

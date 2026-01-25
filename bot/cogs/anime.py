@@ -96,12 +96,14 @@ class Anime(commands.Cog):
 
     @commands.group(name="anime", invoke_without_command=True)
     async def anime_group(self, ctx):
+        """Anime commands - search, recommendations, and character information"""
         await ctx.send("Use a subcommand: `search`, `recommend`, or `character`.")
     
     
 
     @anime_group.command(name="search")
     async def anime_search(self, ctx, *, query: Optional[str] = None):
+        """Search for anime by name or keyword"""
         query = query or await self.prompt_query(ctx, "anime")
         if not query: return
         await self.fetch_and_send(ctx, f"{self.api_url}anime?q={query}", query, AnimeView)
@@ -109,12 +111,14 @@ class Anime(commands.Cog):
    
     @anime_group.command(name="character")
     async def anime_character(self, ctx, *, query=None):
+        """Search for anime characters by name"""
         query = query or await self.prompt_query(ctx, "character")
         if not query: return
         await self.fetch_and_send(ctx, f"{self.api_url}characters?q={query}", query, CharacterView)
     
     @anime_group.command(name="recommend")
     async def anime_recommend(self, ctx):
+        """Get a random anime recommendation"""
         d = await self.ar.fetch_random_anime()
         m = await ctx.reply(embed=discord.Embed(description=f'{neko_lurk} Fetching anime...', color=primary_color()), mention_author=False)
         await self.ar.update_anime_embed(m, d)
@@ -123,17 +127,20 @@ class Anime(commands.Cog):
     # Manga commands
     @commands.group(name="manga")
     async def manga_group(self, ctx):
+        """Manga commands - search, read, and recommendations"""
         if ctx.invoked_subcommand is None:
             await ctx.send("Use a subcommand: `search`, `read`, or `recommend`.")
 
     @manga_group.command(name="search")
     async def manga_search(self, ctx, *, query=None):
+        """Search for manga by name or keyword"""
         query = query or await self.prompt_query(ctx, "manga")
         if not query: return
         await self.fetch_and_send(ctx, f"{self.api_url}manga?q={query}", query, MangaView)
 
     @manga_group.command(name="read")
     async def manga_read(self, ctx, *, query=None):
+        """Read manga chapters online"""
         query = query or await self.prompt_query(ctx, "manga")
         if not query:
             return await ctx.send("❌ No query provided.")
@@ -148,7 +155,7 @@ class Anime(commands.Cog):
 
         view = MangaSession(ctx, data)
         embed = discord.Embed(
-            title=f"📚 Search results for `{query}`",
+            title=f"Search results for `{query}`",
             description="Select a manga from the dropdown below.",
             color=primary_color()
         )
@@ -156,6 +163,7 @@ class Anime(commands.Cog):
 
     @manga_group.command(name="recommend")
     async def manga_recommend(self, ctx):
+        """Get a random manga recommendation"""
         d = await self.mr.fetch_random_manga()
         m = await ctx.reply(embed=discord.Embed(description=f'{neko_lurk} Fetching manga...', color=primary_color()), mention_author=False)
         await self.mr.update_manga_embed(m, d)
@@ -167,12 +175,12 @@ class Anime(commands.Cog):
     @commands.command(name="waifu")
     @commands.cooldown(1, 3, commands.BucketType.user)
     async def waifu(self, ctx, *, query: str = None):
-        """💕 Search for waifu characters with detailed info and image gallery
+        """Search for female anime characters with detailed information and image gallery
         
         Usage:
-        - `.waifu` - Random waifu image
-        - `.waifu Asuna` - Search for specific character
-        - `.waifu Rem Re:Zero` - Search with anime name
+          • .waifu - Random waifu image
+          • .waifu Asuna - Search for specific character
+          • .waifu Rem Re:Zero - Search with anime name
         """
         from bot.utils.cogs.anime_enhanced import CharacterInfo, CharacterSelectView
         
@@ -186,7 +194,7 @@ class Anime(commands.Cog):
                         url = data.get("url", "")
                         
                         embed = discord.Embed(
-                            title="💕 Random Waifu",
+                            title="Random Waifu",
                             description="Use `.waifu <name>` to search for specific characters!",
                             color=discord.Color.from_rgb(255, 182, 193),
                             timestamp=datetime.now(timezone.utc)
@@ -216,7 +224,7 @@ class Anime(commands.Cog):
             
             # Show character selection
             embed = discord.Embed(
-                title=f"💕 Waifu Search Results for '{query}'",
+                title=f"Waifu Search Results for '{query}'",
                 description="Select a character from the dropdown to view detailed information, anime appearances, and image gallery!",
                 color=discord.Color.from_rgb(255, 182, 193)
             )
@@ -228,12 +236,12 @@ class Anime(commands.Cog):
     @commands.command(name="husbando")
     @commands.cooldown(1, 3, commands.BucketType.user)
     async def husbando(self, ctx, *, query: str = None):
-        """💙 Search for husbando characters with detailed info and image gallery
+        """Search for male anime characters with detailed information and image gallery
         
         Usage:
-        - `.husbando` - Random husbando image
-        - `.husbando Kirito` - Search for specific character
-        - `.husbando Levi Attack on Titan` - Search with anime name
+          • .husbando - Random husbando image
+          • .husbando Kirito - Search for specific character
+          • .husbando Levi Attack on Titan - Search with anime name
         """
         from bot.utils.cogs.anime_enhanced import CharacterInfo, CharacterSelectView
         
@@ -250,7 +258,7 @@ class Anime(commands.Cog):
                             artist = results[0].get("artist_name", "Unknown")
                             
                             embed = discord.Embed(
-                                title="💙 Random Husbando",
+                                title="Random Husbando",
                                 description="Use `.husbando <name>` to search for specific characters!",
                                 color=discord.Color.blue(),
                                 timestamp=datetime.now(timezone.utc)
@@ -280,7 +288,7 @@ class Anime(commands.Cog):
             
             # Show character selection
             embed = discord.Embed(
-                title=f"💙 Husbando Search Results for '{query}'",
+                title=f"Husbando Search Results for '{query}'",
                 description="Select a character from the dropdown to view detailed information, anime appearances, and image gallery!",
                 color=discord.Color.blue()
             )
@@ -295,14 +303,17 @@ class Anime(commands.Cog):
     @commands.command(name="neko")
     @commands.cooldown(1, 3, commands.BucketType.user)
     async def neko(self, ctx):
-        """🐱 Get neko/catgirl images with artist credits and gallery
+        """Browse high-quality catgirl images with artist credits and source attribution
         
-        Features high-quality SFW images from multiple sources with artist attribution.
-        Use the navigation buttons to browse through multiple images!
+        Features:
+          • Multi-source image scraping for variety
+          • Artist attribution and source links
+          • Interactive gallery with navigation
+          • 100% SFW content
         """
         from bot.utils.cogs.anime_enhanced import ImageSource, NekoKitsuneGalleryView
         
-        loading_msg = await ctx.reply("🐱 Fetching neko images from multiple sources...", mention_author=False)
+        loading_msg = await ctx.reply("Fetching neko images from multiple sources...", mention_author=False)
         
         try:
             img_source = ImageSource()
@@ -317,7 +328,7 @@ class Anime(commands.Cog):
             # Build first image embed
             img = images[0]
             embed = discord.Embed(
-                title="🐱 Neko Gallery",
+                title="Neko Gallery",
                 color=discord.Color.from_rgb(255, 182, 193),
                 timestamp=datetime.now(timezone.utc)
             )
@@ -342,14 +353,17 @@ class Anime(commands.Cog):
     @commands.command(name="kitsune")
     @commands.cooldown(1, 3, commands.BucketType.user)
     async def anime_kitsune(self, ctx):
-        """🦊 Get kitsune/foxgirl images with artist credits and gallery
+        """Browse high-quality foxgirl images with artist credits and source attribution
         
-        Features high-quality SFW images from multiple sources with artist attribution.
-        Use the navigation buttons to browse through multiple images!
+        Features:
+          • Multi-source image scraping for variety
+          • Artist attribution and source links
+          • Interactive gallery with navigation
+          • 100% SFW content
         """
         from bot.utils.cogs.anime_enhanced import ImageSource, NekoKitsuneGalleryView
         
-        loading_msg = await ctx.reply("🦊 Fetching kitsune images from multiple sources...", mention_author=False)
+        loading_msg = await ctx.reply("Fetching kitsune images from multiple sources...", mention_author=False)
         
         try:
             img_source = ImageSource()

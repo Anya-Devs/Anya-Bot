@@ -146,7 +146,7 @@ class Gamble(commands.Cog):
     @commands.command(name="slots", aliases=["slot", "spin"])
     @commands.cooldown(3, 1800, commands.BucketType.user)
     async def slots_command(self, ctx, bet: int = 50):
-        """🎰 Spin the slot machine! Match symbols to win big."""
+        """Spin the slot machine and match symbols to win multiplied rewards"""
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
         
@@ -428,7 +428,7 @@ class Gamble(commands.Cog):
     @commands.command(name="coinflip", aliases=["cf", "flip"])
     @commands.cooldown(1, 2, commands.BucketType.user)
     async def coinflip_command(self, ctx, choice: str = None, bet: str = "50"):
-        """🪙 Flip a coin! Call heads or tails to double your bet."""
+        """Flip a coin and call heads or tails to double your bet"""
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
         
@@ -533,7 +533,7 @@ class Gamble(commands.Cog):
     @commands.command(name="dice", aliases=["roll", "d6"])
     @commands.cooldown(1, 3, commands.BucketType.user)
     async def dice_command(self, ctx, bet: str = "50", guess: int = None):
-        """🎲 Roll the dice! Guess 1-6 to win big."""
+        """Roll a six-sided die and guess the number to win multiplied rewards"""
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
         
@@ -616,7 +616,7 @@ class Gamble(commands.Cog):
     @commands.command(name="guess", aliases=["number", "guessnumber"])
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def guess_command(self, ctx, bet: int = 50):
-        """🔢 Guess a number 1-100! Fewer attempts = bigger rewards!"""
+        """Guess a number between 1-100 with rewards based on attempts taken"""
         guild_id = str(ctx.guild.id)
         user_id = str(ctx.author.id)
         

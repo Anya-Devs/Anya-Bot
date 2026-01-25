@@ -680,12 +680,6 @@
       "aliases": [],
       "related_commands": ".lock"
     },
-    "nuke": {
-      "description": "Delete and recreate a channel, removing all messages. Requires confirmation. Requires Manage Channels.",
-      "example": ".nuke",
-      "aliases": [],
-      "related_commands": ".purge"
-    },
     "role add": {
       "description": "Add a role to a user or multiple users. Requires Manage Roles.",
       "example": ".role add @user @RoleName",

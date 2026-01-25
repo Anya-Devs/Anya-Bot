@@ -1,4 +1,3 @@
- 
 import os
 import traceback
 import json
@@ -24,15 +23,18 @@ class HelpMenu(discord.ui.View):
         self.bot = bot
         self.ctx = ctx
 
-        # Keep only visible commands, including groups
+        # Keep only visible commands, including groups (filter out cogs with only 1 command)
         self.cog_commands = {
             k: [cmd for cmd in v if not cmd.hidden] 
             for k, v in cog_commands.items()
         }
-        self.cog_commands = {k: v for k, v in self.cog_commands.items() if v}
+        self.cog_commands = {k: v for k, v in self.cog_commands.items() if len(v) > 1}
 
         self.page = 0
-        self.fields_per_page = 4
+        self.fields_per_page = 10
+        
+        # Sort cogs by least to most commands
+        self.cog_commands = dict(sorted(self.cog_commands.items(), key=lambda x: len(x[1])))
         self.select_view = select_view
         self.embed_image_path = embed_image_path
         self.embed_color = embed_color
@@ -67,25 +69,28 @@ class HelpMenu(discord.ui.View):
             groups = [cmd for cmd in commands_list if isinstance(cmd, commands.Group)]
             regular = [cmd for cmd in commands_list if not isinstance(cmd, commands.Group)]
             
-            # Build command display with aliases and descriptions
-            cmd_lines = []
+            # Build all commands as simple inline code
+            all_cmds = [f"`{cmd.name}`" for cmd in regular]
+            all_cmds += [f"`{g.name}`" for g in groups]
             
-            # Regular commands with aliases
-            for cmd in regular[:10]:  # Limit to avoid embed size issues
-                aliases = f" ({', '.join(cmd.aliases)})" if cmd.aliases else ""
-                desc = (cmd.help or "No description")[:50]
-                cmd_lines.append(f"`{cmd.name}`{aliases} - {desc}")
-            
-            # Group commands with full subcommand names
-            for g in groups[:5]:
-                aliases = f" ({', '.join(g.aliases)})" if g.aliases else ""
-                desc = (g.help or "No description")[:50]
-                subcmds = [f"{g.name} {c.name}" for c in g.commands if not c.hidden][:4]
-                sub_str = f"\n  └ `{', '.join(subcmds)}`" if subcmds else ""
-                cmd_lines.append(f"`{g.name}`{aliases} - {desc}{sub_str}")
-            
-            value = "\n".join(cmd_lines) if cmd_lines else "No commands."
-            embed.add_field(name=cog_name.replace("_", " "), value=value[:1024], inline=False)
+            value = " ".join(all_cmds) if all_cmds else "No commands."
+            embed.add_field(name=cog_name.replace("_", " "), value=value, inline=False)
+
+        # Add special section for single-command cogs at bottom of page 1
+        if self.page == 0:
+            single_cmd_cogs = []
+            for cog_name, cog in self.bot.cogs.items():
+                visible_cmds = [cmd for cmd in cog.get_commands() if not cmd.hidden]
+                if len(visible_cmds) == 1:
+                    cmd = visible_cmds[0]
+                    single_cmd_cogs.append(f"`{cmd.name}` - {cmd.help or 'No description'}")
+
+            if single_cmd_cogs:
+                embed.add_field(
+                    name="Special Commands",
+                    value="\n".join(single_cmd_cogs),
+                    inline=False
+                )
 
         total_pages = max(1, (len(self.cog_commands) - 1) // self.fields_per_page + 1)
         embed.set_footer(
@@ -147,21 +152,26 @@ class Select_Help(discord.ui.Select):
     def map_modules_to_cogs(self):
         module_map = {}
         for cog in self.bot.cogs.values():
-            if any(not cmd.hidden for cmd in cog.get_commands()):
+            visible_cmds = [cmd for cmd in cog.get_commands() if not cmd.hidden]
+            # Only include cogs with more than 1 visible command
+            if len(visible_cmds) > 1:
                 mod = inspect.getmodule(cog.__class__).__name__.split('.')[-1]
                 module_map.setdefault(mod, []).append(cog)
         return module_map
 
     def build_options(self):
         opts = []
-        for module, cogs in self.module_to_cogs.items():
-            cog_name = cogs[0].qualified_name.lower() if cogs else "unknown"
-            emoji = Help_Select_Embed_Mapping.emojis.get(cog_name)
-            if emoji and emoji.startswith("<"):
-                emoji = None  # Skip custom emojis as Discord SelectOption doesn't support them
+        # Sort modules by command count (least to most)
+        sorted_modules = sorted(
+            self.module_to_cogs.items(),
+            key=lambda x: sum(len([c for c in cog.get_commands() if not c.hidden]) for cog in x[1])
+        )
+        for module, cogs in sorted_modules:
             label = module.replace("_", " ").replace(".py", "").title()
             label = f"{label} Commands" if "Help" not in label else label
-            opts.append(discord.SelectOption(label=label, value=module, emoji=emoji))
+            # Count commands for this module
+            cmd_count = sum(len([c for c in cog.get_commands() if not c.hidden]) for cog in cogs)
+            opts.append(discord.SelectOption(label=f"{label} ({cmd_count})", value=module))
         return opts
 
     def build_fields_for_module(self, module):
@@ -175,26 +185,25 @@ class Select_Help(discord.ui.Select):
             groups = [cmd for cmd in visible_cmds if isinstance(cmd, commands.Group)]
             regular = [cmd for cmd in visible_cmds if not isinstance(cmd, commands.Group)]
             
-            # Build command display with details
+            # Build command display
             cmd_parts = []
             
-            # Regular commands with aliases and descriptions
-            for cmd in regular[:15]:
-                aliases = f" ({', '.join(cmd.aliases)})" if cmd.aliases else ""
-                desc = (cmd.help or "No description")[:60]
-                cmd_parts.append(f"`{cmd.name}`{aliases} - {desc}")
+            # Regular commands inline
+            if regular:
+                cmd_parts.append(" ".join(f"`{cmd.name}`" for cmd in regular))
             
-            # Group commands with full subcommand names
-            for group in groups[:8]:
-                aliases = f" ({', '.join(group.aliases)})" if group.aliases else ""
-                desc = (group.help or "No description")[:60]
-                subcmds = [f"{group.name} {c.name}" for c in group.commands if not c.hidden][:4]
-                sub_str = f"\n  └ `{', '.join(subcmds)}`" if subcmds else ""
-                cmd_parts.append(f"`{group.name}`{aliases} - {desc}{sub_str}")
+            # Group commands with subcommands shown inline
+            if groups:
+                for group in groups:
+                    subcmds = [c.name for c in group.commands if not c.hidden]
+                    if subcmds:
+                        cmd_parts.append(f"`{group.name}` > {' '.join(f'`{s}`' for s in subcmds)}")
+                    else:
+                        cmd_parts.append(f"`{group.name}`")
             
             commands_str = "\n".join(cmd_parts) if cmd_parts else "No commands."
             inline = False
-            fields.append((module.replace("_", " "), commands_str[:1024], inline))
+            fields.append((module.replace("_", " "), commands_str, inline))
         return fields
 
     async def callback(self, interaction: discord.Interaction):
@@ -211,21 +220,6 @@ class Select_Help(discord.ui.Select):
         else:
             embed.description = "No visible commands found for this module."
 
-        filename = module.split('.')[0]
-        thumbs = Help_Thumbnails(self.thumbnail_file)
-        url = thumbs.get_image_url(filename)
-        if url:
-            embed.set_thumbnail(url=url)
-
-        Options_ImageGenerator(filename).save_image(self.image_path)
-        file = (
-            discord.File(open(self.image_path, "rb"), filename="cog_image.png")
-            if os.path.exists(self.image_path)
-            else None
-        )
-        if file:
-            embed.set_image(url="attachment://cog_image.png")
-
         self.help_view.clear_items()
         overview_btn = discord.ui.Button(label="Overview", style=discord.ButtonStyle.green)
 
@@ -235,7 +229,7 @@ class Select_Help(discord.ui.Select):
         overview_btn.callback = overview_callback
         self.help_view.add_item(self)
         self.help_view.add_item(overview_btn)
-        await interaction.response.edit_message(embed=embed, attachments=[file] if file else [], view=self.help_view)
+        await interaction.response.edit_message(embed=embed, attachments=[], view=self.help_view)
 
 
 class Options_ImageGenerator:

@@ -20,6 +20,7 @@ class Fun(commands.Cog):
 
     @commands.command(name='8ball')
     async def eight_ball(self, ctx, *, question):
+        """Ask the magic 8-ball a question and receive a mystical answer"""
         ans = await self.fun_cmd.eight_ball()
         embed = discord.Embed(
             title="🎱 8Ball",
@@ -37,6 +38,36 @@ class Fun(commands.Cog):
             with open(self._path, 'r+') as f:
                 data = json.load(f)
                 actions = list(data.get("phrases", {}).get("self", {}).keys())
+                # Action descriptions for help command
+                action_descriptions = {
+                    "pat": "Pat someone on the head affectionately",
+                    "cuddle": "Cuddle with someone warmly",
+                    "kiss": "Give someone a kiss",
+                    "hug": "Give someone a warm hug",
+                    "bite": "Playfully bite someone",
+                    "lick": "Lick someone playfully",
+                    "slap": "Slap someone",
+                    "cry": "Express sadness or cry",
+                    "poke": "Poke someone to get their attention",
+                    "tickle": "Tickle someone playfully",
+                    "wave": "Wave at someone in greeting",
+                    "wink": "Wink at someone",
+                    "blush": "Blush shyly or show embarrassment",
+                    "smile": "Smile at someone cheerfully",
+                    "happy": "Express happiness or joy",
+                    "dance": "Dance around energetically",
+                    "bored": "Show that you're bored",
+                    "sleep": "Go to sleep or rest",
+                    "think": "Think about something deeply",
+                    "highfive": "Give someone a high-five",
+                    "punch": "Punch someone playfully",
+                    "kick": "Kick someone",
+                    "feed": "Feed someone",
+                    "handhold": "Hold someone's hand",
+                    "bonk": "Bonk someone on the head",
+                    "yeet": "Yeet someone into orbit"
+                }
+                
                 for act in actions:
                     async def cmd(ctx, user: Union[discord.Member, Literal["everyone"]] = None, *, txt=""):
                         embed, msg, view = await self.fun_cmd.action_command(ctx, user or ctx.author, txt)
@@ -47,7 +78,8 @@ class Fun(commands.Cog):
                             mention_author=False
                         )
                     cmd.__name__ = act
-                    command = commands.Command(cmd, name=act)
+                    cmd.__doc__ = action_descriptions.get(act, f"✨ {act.title()} someone or yourself")
+                    command = commands.Command(cmd, name=act, help=action_descriptions.get(act, f"✨ {act.title()} someone or yourself"))
                     self._dynamic_commands.append(command)
                     self.bot.add_command(command)
 
@@ -72,6 +104,7 @@ class Fun(commands.Cog):
     @commands.command(name="qna")
     @commands.has_permissions(manage_channels=True)
     async def qna(self, ctx):
+        """Configure Q&A channels for your server with question and answer channels"""
         current_config = await self.collection.find_one({"guild_id": ctx.guild.id})
         view = QnAConfigView(self.bot, ctx.guild, current_config, self.collection, ctx.author)
 
@@ -146,11 +179,13 @@ class Fun(commands.Cog):
     # ---------------- Riddle Group Commands ----------------
     @commands.group(name="riddle", invoke_without_command=True)
     async def riddle_group(self, ctx):
+        """Post and manage riddles for server members to solve"""
         await ctx.send("Invalid subcommand. Use `setup` or `post`.")
 
     @riddle_group.command(name="setup")
     @commands.has_permissions(administrator=True)
     async def riddle_setup(self, ctx, channel: discord.TextChannel):
+        """Configure the channel where riddle answers will be collected"""
         client = AsyncIOMotorClient(self.mongo_url)
         collection = client["Commands"]["riddles"]
         await collection.update_one(
@@ -162,7 +197,7 @@ class Fun(commands.Cog):
 
     @riddle_group.command(name="post")
     async def riddle_post(self, ctx):
-        """Send an embed with a button to post a riddle via modal"""
+        """Submit a new riddle for server members to solve"""
         client = AsyncIOMotorClient(self.mongo_url)
         collection = client["Commands"]["riddles"]
         data = await collection.find_one({"guild_id": ctx.guild.id})

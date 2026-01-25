@@ -95,17 +95,37 @@ class Social(commands.Cog):
                 img.paste(av, (x, 25), mask)
             else:
                 draw.ellipse([x, 25, x+100, 125], fill=(80, 80, 100))
+        
+        # Draw a proper heart shape
         hx, hy, hs = 165, 35, 70
-        r = hs // 4
-        draw.ellipse([hx, hy, hx+hs//2, hy+hs//2], fill=(60, 60, 70))
-        draw.ellipse([hx+hs//2, hy, hx+hs, hy+hs//2], fill=(60, 60, 70))
-        draw.polygon([(hx, hy+r), (hx+hs, hy+r), (hx+hs//2, hy+hs)], fill=(60, 60, 70))
+        heart_color = (60, 60, 70)
+        fill_color = (255, 50, 80)
+        
+        # Heart shape using bezier curves approximation
+        # Left hump
+        draw.ellipse([hx, hy, hx + hs//2, hy + hs//2], fill=heart_color)
+        # Right hump  
+        draw.ellipse([hx + hs//2, hy, hx + hs, hy + hs//2], fill=heart_color)
+        # Bottom point
+        draw.polygon([
+            (hx, hy + hs//4), 
+            (hx + hs, hy + hs//4), 
+            (hx + hs//2, hy + hs)
+        ], fill=heart_color)
+        
+        # Fill heart based on percentage
         if pct > 0:
-            for py in range(hy + hs - int(hs * pct / 100), hy + hs):
+            fill_height = int(hs * pct / 100)
+            # Fill from bottom up
+            for py in range(hy + hs - fill_height, hy + hs):
                 for px in range(hx, hx + hs):
                     try:
-                        if img.getpixel((px, py)) == (60, 60, 70): img.putpixel((px, py), (255, 50, 80))
-                    except: pass
+                        if img.getpixel((px, py)) == heart_color: 
+                            img.putpixel((px, py), fill_color)
+                    except: 
+                        pass
+        
+        # Percentage text
         draw.text((hx + 25, hy + hs + 5), f"{pct}%", fill=(255, 255, 255))
         buf = io.BytesIO()
         img.save(buf, format="PNG")
@@ -128,39 +148,102 @@ class Social(commands.Cog):
         if not nodes: nodes[uid] = {"parent": None, "children": [], "partner": None, "depth": 0}
         depths = {}
         for nid, nd in nodes.items(): depths.setdefault(nd["depth"], []).append(nid)
-        nw, nh, hs, vs, pos = 110, 70, 30, 50, {}
+        
+        # Larger, cleaner layout
+        nw, nh, hs, vs = 130, 80, 50, 70
+        pos = {}
         for d, nlist in sorted(depths.items()):
-            y, tw, sx = (d + 4) * (nh + vs), len(nlist) * (nw + hs), -len(nlist) * (nw + hs) // 2
+            y = (d + 4) * (nh + vs)
+            sx = -len(nlist) * (nw + hs) // 2
             for i, nid in enumerate(nlist): pos[nid] = (sx + i * (nw + hs), y)
+        
         minx, maxx = min(p[0] for p in pos.values()) - nw, max(p[0] for p in pos.values()) + nw * 2
         miny, maxy = min(p[1] for p in pos.values()) - nh, max(p[1] for p in pos.values()) + nh * 2
-        w, h, ox, oy = max(400, maxx - minx + 80), max(300, maxy - miny + 80), -minx + 40, -miny + 40
-        img = Image.new("RGB", (w, h), (250, 250, 255))
+        legend_h = 60
+        w, h = max(500, maxx - minx + 100), max(400, maxy - miny + 100 + legend_h)
+        ox, oy = -minx + 50, -miny + 50
+        
+        # Dark theme background
+        img = Image.new("RGB", (w, h), (25, 28, 38))
         draw = ImageDraw.Draw(img)
+        
+        # Colors
+        parent_line = (100, 180, 255)  # Blue for parent-child
+        spouse_line = (255, 100, 150)  # Pink for spouse
+        card_bg = (40, 45, 60)
+        card_border = (70, 80, 100)
+        you_border = (139, 92, 246)  # Purple for "you"
+        text_color = (255, 255, 255)
+        
+        # Draw relationship lines FIRST (behind cards)
         for nid, nd in nodes.items():
             x, y = pos[nid][0] + ox, pos[nid][1] + oy
+            
+            # Parent-child lines (blue, dashed effect with arrow)
             if nd.get("parent") and nd["parent"] in pos:
                 px, py = pos[nd["parent"]][0] + ox, pos[nd["parent"]][1] + oy
-                mid = (y + py + nh) // 2
-                draw.line([(x + nw//2, y), (x + nw//2, mid)], fill=(100, 100, 100), width=2)
-                draw.line([(x + nw//2, mid), (px + nw//2, mid)], fill=(100, 100, 100), width=2)
-                draw.line([(px + nw//2, mid), (px + nw//2, py + nh)], fill=(100, 100, 100), width=2)
+                mid_y = (y + py + nh) // 2
+                # Vertical from child up
+                draw.line([(x + nw//2, y), (x + nw//2, mid_y)], fill=parent_line, width=3)
+                # Horizontal connector
+                draw.line([(x + nw//2, mid_y), (px + nw//2, mid_y)], fill=parent_line, width=3)
+                # Vertical down to parent
+                draw.line([(px + nw//2, mid_y), (px + nw//2, py + nh)], fill=parent_line, width=3)
+            
+            # Spouse lines (pink with heart indicator)
             if nd.get("partner") and nd["partner"] in pos and nid < nd["partner"]:
                 px, py = pos[nd["partner"]][0] + ox, pos[nd["partner"]][1] + oy
-                draw.line([(x + nw, y + nh//2), (px, py + nh//2)], fill=(255, 100, 100), width=3)
+                mid_x = (x + nw + px) // 2
+                draw.line([(x + nw, y + nh//2), (px, py + nh//2)], fill=spouse_line, width=4)
+                # Heart symbol in middle
+                draw.text((mid_x - 5, y + nh//2 - 8), "♥", fill=spouse_line)
+        
+        # Fetch avatars
         avs = {}
         for nid in nodes:
             m = guild.get_member(int(nid))
-            if m and m.display_avatar: avs[nid] = await self._fetch_av(m.display_avatar.url, 40)
+            if m and m.display_avatar: avs[nid] = await self._fetch_av(m.display_avatar.url, 45)
+        
+        # Draw cards
         for nid in nodes:
             x, y = pos[nid][0] + ox, pos[nid][1] + oy
             m = guild.get_member(int(nid))
-            name = m.display_name[:12] if m else "User"
-            draw.rounded_rectangle([x, y, x + nw, y + nh], radius=6, fill=(220, 220, 240), outline=(100, 100, 120), width=2)
-            ax, ay = x + (nw - 40) // 2, y + 3
+            name = m.display_name[:14] if m else "User"
+            is_target = nid == uid
+            
+            # Card with special border for target user
+            border = you_border if is_target else card_border
+            draw.rounded_rectangle([x, y, x + nw, y + nh], radius=10, fill=card_bg, outline=border, width=3 if is_target else 2)
+            
+            # "YOU" label for target
+            if is_target:
+                draw.rounded_rectangle([x + nw - 35, y - 8, x + nw + 5, y + 12], radius=6, fill=you_border)
+                draw.text((x + nw - 30, y - 6), "YOU", fill=(255, 255, 255))
+            
+            # Avatar
+            ax, ay = x + (nw - 45) // 2, y + 5
             if avs.get(nid): img.paste(avs[nid], (int(ax), int(ay)), avs[nid])
-            else: draw.ellipse([ax, ay, ax + 40, ay + 40], fill=(180, 180, 200))
-            draw.text((x + 5, y + 48), name, fill=(40, 40, 50))
+            else: draw.ellipse([ax, ay, ax + 45, ay + 45], fill=(80, 85, 100))
+            
+            # Name centered below avatar
+            bbox = draw.textbbox((0, 0), name)
+            tw = bbox[2] - bbox[0]
+            draw.text((x + (nw - tw) // 2, y + 54), name, fill=text_color)
+        
+        # Legend at bottom
+        ly = h - legend_h + 10
+        draw.rounded_rectangle([20, ly - 5, w - 20, h - 10], radius=8, fill=(35, 40, 55))
+        draw.text((35, ly + 5), "LEGEND:", fill=(180, 180, 200))
+        
+        # Parent-child legend
+        draw.line([(120, ly + 15), (160, ly + 15)], fill=parent_line, width=3)
+        draw.text((170, ly + 5), "Parent → Child", fill=parent_line)
+        
+        # Spouse legend
+        draw.line([(320, ly + 15), (360, ly + 15)], fill=spouse_line, width=4)
+        draw.text((365, ly + 5), "♥", fill=spouse_line)
+        draw.text((380, ly + 5), "Married/Partner", fill=spouse_line)
+        
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         buf.seek(0)
@@ -182,7 +265,7 @@ class Social(commands.Cog):
         embed.set_image(url="attachment://ship.png")
         await ctx.reply(embed=embed, file=discord.File(buf, "ship.png"), mention_author=False)
 
-    @commands.command(name="propose")
+    @commands.command(name="propose", aliases=["marry"])
     async def propose_cmd(self, ctx, target: discord.Member):
         if target.id == ctx.author.id or target.bot: return await ctx.reply("Invalid target!", mention_author=False)
         gid, uid, tid = str(ctx.guild.id), str(ctx.author.id), str(target.id)
@@ -225,17 +308,29 @@ class Social(commands.Cog):
         await self.data.disown(gid, uid, tid)
         await ctx.reply(embed=discord.Embed(description=f"{ctx.author.mention} disowned {target.mention}.", color=discord.Color.dark_gray()), mention_author=False)
 
-    @commands.command(name="emancipate")
-    async def emancipate_cmd(self, ctx, target: discord.Member = None):
+    @commands.command(name="runaway", aliases=["emancipate", "leavehome", "escape"])
+    async def runaway_cmd(self, ctx, target: discord.Member = None):
         gid, uid = str(ctx.guild.id), str(ctx.author.id)
         pid = (await self.data.get_rel(gid, uid)).get("parent")
-        if not pid: return await ctx.reply("You don't have a parent!", mention_author=False)
+        if not pid: return await ctx.reply("You don't have a parent to runaway from!", mention_author=False)
         if target and str(target.id) != pid: return await ctx.reply("That's not your parent!", mention_author=False)
         await self.data.emancipate(gid, uid)
         p = ctx.guild.get_member(int(pid))
-        await ctx.reply(embed=discord.Embed(description=f"{ctx.author.mention} ran away from {p.display_name if p else 'parent'}.", color=discord.Color.dark_gray()), mention_author=False)
+        runaway_messages = [
+            f"{ctx.author.mention} packed their bags and ran away from home!",
+            f"{ctx.author.mention} disappeared into the night...",
+            f"{ctx.author.mention} decided it's time to find their own path!",
+            f"{ctx.author.mention} broke free and started a new journey!",
+        ]
+        message = random.choice(runaway_messages)
+        embed = discord.Embed(
+            title="Runaway Success!",
+            description=f"{message}\n\nThey're no longer under {p.display_name if p else 'parent'}'s care.",
+            color=discord.Color.dark_gray()
+        )
+        await ctx.reply(embed=embed, mention_author=False)
 
-    @commands.command(name="partner")
+    @commands.command(name="partner", aliases=["lover", "spouse", "marriage"])
     async def partner_cmd(self, ctx, target: discord.Member = None):
         target = target or ctx.author
         pid = (await self.data.get_rel(str(ctx.guild.id), str(target.id))).get("partner")
@@ -266,87 +361,28 @@ class Social(commands.Cog):
         if r2.get("parent") == str(u1.id): rels.append(f"{u1.display_name} is {u2.display_name}'s parent")
         desc = "\n".join(rels) if rels else "No direct relationship."
         await ctx.reply(embed=discord.Embed(title=f"{u1.display_name} & {u2.display_name}", description=desc, color=discord.Color.purple()), mention_author=False)
+    
+    @commands.group(name="tree", aliases=['family'])
+    async def tree(self, ctx, target: discord.Member = None):
+        target = target or ctx.author
+        async with ctx.typing():
+            buf = await self._tree_img(ctx.guild, str(target.id), full=True)
+        embed = discord.Embed(title=f"{target.display_name}'s Full Family Tree", color=discord.Color.green())
+        embed.set_image(url="attachment://tree.png")
+        await ctx.reply(embed=embed, file=discord.File(buf, "tree.png"), mention_author=False)
 
-    @commands.command(name="familysize")
+    @tree.command(name="size")
     async def familysize_cmd(self, ctx, target: discord.Member = None):
         target = target or ctx.author
         size = await self.data.get_family_size(str(ctx.guild.id), str(target.id))
         await ctx.reply(embed=discord.Embed(description=f"{target.display_name}'s family has **{size}** members.", color=discord.Color.purple()), mention_author=False)
 
-    @commands.command(name="tree")
-    async def tree_cmd(self, ctx, target: discord.Member = None):
-        target = target or ctx.author
-        async with ctx.typing():
-            buf = await self._tree_img(ctx.guild, str(target.id), full=False)
-        embed = discord.Embed(title=f"{target.display_name}'s Family Tree", color=discord.Color.green())
-        embed.set_image(url="attachment://tree.png")
-        await ctx.reply(embed=embed, file=discord.File(buf, "tree.png"), mention_author=False)
-
-    @commands.command(name="stupidtree")
-    async def stupidtree_cmd(self, ctx, target: discord.Member = None):
-        target = target or ctx.author
-        async with ctx.typing():
-            buf = await self._tree_img(ctx.guild, str(target.id), full=True)
-        embed = discord.Embed(title=f"{target.display_name}'s Full Family Tree", description="Blood + Marriage", color=discord.Color.orange())
-        embed.set_image(url="attachment://tree.png")
-        await ctx.reply(embed=embed, file=discord.File(buf, "tree.png"), mention_author=False)
-
+    
     @commands.command(name="iq")
     async def iq_cmd(self, ctx, target: discord.Member = None):
         target = target or ctx.author
         iq = await self.data.maybe_change_iq(str(ctx.guild.id), str(target.id))
         await ctx.reply(embed=discord.Embed(description=f"**{target.display_name}**'s IQ is **{iq}**", color=discord.Color.blurple()), mention_author=False)
-
-    @commands.command(name="treefile")
-    async def treefile_cmd(self, ctx, target: discord.Member = None):
-        """Export family tree as GEDCOM file"""
-        target = target or ctx.author
-        gid, uid = str(ctx.guild.id), str(target.id)
-        
-        # Build family data
-        nodes, visited, queue = {}, set(), deque([uid])
-        while queue:
-            cur = queue.popleft()
-            if cur in visited: continue
-            visited.add(cur)
-            rel = await self.data.get_rel(gid, cur)
-            nodes[cur] = rel
-            if rel.get("parent") and rel["parent"] not in visited: queue.append(rel["parent"])
-            for c in rel.get("children", []):
-                if c not in visited: queue.append(c)
-            if rel.get("partner") and rel["partner"] not in visited: queue.append(rel["partner"])
-        
-        # Generate GEDCOM
-        lines = ["0 HEAD", "1 SOUR AnyaBot", "1 GEDC", "2 VERS 5.5.1", "1 CHAR UTF-8", "0 @SUB@ SUBM", "1 NAME AnyaBot"]
-        
-        # Individuals
-        for uid in nodes:
-            m = ctx.guild.get_member(int(uid))
-            name = m.display_name if m else f"User_{uid[:8]}"
-            lines.append(f"0 @I{uid}@ INDI")
-            lines.append(f"1 NAME {name}")
-        
-        # Families
-        fam_id = 1
-        processed = set()
-        for uid, rel in nodes.items():
-            if rel.get("partner") and uid < rel["partner"]:
-                pid = rel["partner"]
-                lines.append(f"0 @F{fam_id}@ FAM")
-                lines.append(f"1 HUSB @I{uid}@")
-                lines.append(f"1 WIFE @I{pid}@")
-                # Add children of this couple
-                for cid in rel.get("children", []):
-                    lines.append(f"1 CHIL @I{cid}@")
-                fam_id += 1
-        
-        lines.append("0 TRLR")
-        
-        content = "\n".join(lines)
-        buf = io.BytesIO(content.encode("utf-8"))
-        buf.seek(0)
-        
-        await ctx.reply(f"Family tree for {target.display_name}", file=discord.File(buf, f"{target.display_name}_family.ged"), mention_author=False)
 
 class ProposalView(discord.ui.View):
     def __init__(self, cog, proposer, target, gid):

@@ -216,7 +216,7 @@ async def generate_anime_hierarchy_tree(
             async with session.get(url, timeout=timeout) as resp:
                 if resp.status == 200:
                     data = await resp.read()
-                    return Image.open(io.BytesIO(data)).convert("RGB")
+                    return Image.open(io.BytesIO(data)).convert("RGBA")  # RGBA for transparency support
         except:
             pass
         return None

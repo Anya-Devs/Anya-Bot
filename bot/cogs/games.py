@@ -19,8 +19,75 @@ from bot.utils.cogs.game.view import *
 from bot.cogs.quest import Quest_Data
 from bot.utils.cogs.fun import Memo_Data, Memo, MemoEmbeds, Reaction_Data, Reaction
 from data.local.const import primary_color
+import discord
 
 logger = logging.getLogger(__name__)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 🐟 COMPREHENSIVE FISH DATABASE - Unique characteristics, rarities, and mechanics
+# ═══════════════════════════════════════════════════════════════════════════════
+
+FISH_DATABASE = {
+    # ═══ COMMON FISH (40% total) ═══
+    "anchovy": {"name": "Anchovy", "emoji": "🐟", "rarity": "common", "min_value": 5, "max_value": 15, "weight_range": (0.1, 0.5), "catch_style": "quick", "difficulty": 1, "description": "A tiny silver fish.", "rod_damage": 1, "spawn_rate": 0.12},
+    "sardine": {"name": "Sardine", "emoji": "🐟", "rarity": "common", "min_value": 8, "max_value": 20, "weight_range": (0.2, 0.8), "catch_style": "quick", "difficulty": 1, "description": "Small but nutritious.", "rod_damage": 1, "spawn_rate": 0.10},
+    "carp": {"name": "Carp", "emoji": "🐟", "rarity": "common", "min_value": 10, "max_value": 30, "weight_range": (1.0, 5.0), "catch_style": "steady", "difficulty": 2, "description": "A hardy freshwater fish.", "rod_damage": 2, "spawn_rate": 0.10},
+    "perch": {"name": "Perch", "emoji": "🐟", "rarity": "common", "min_value": 12, "max_value": 35, "weight_range": (0.5, 2.0), "catch_style": "steady", "difficulty": 2, "description": "A striped fish.", "rod_damage": 2, "spawn_rate": 0.08},
+    # ═══ UNCOMMON FISH (30% total) ═══
+    "bass": {"name": "Sea Bass", "emoji": "🐠", "rarity": "uncommon", "min_value": 25, "max_value": 60, "weight_range": (2.0, 8.0), "catch_style": "fight", "difficulty": 3, "description": "A popular sport fish.", "rod_damage": 5, "spawn_rate": 0.08},
+    "trout": {"name": "Rainbow Trout", "emoji": "🐠", "rarity": "uncommon", "min_value": 30, "max_value": 70, "weight_range": (1.5, 6.0), "catch_style": "quick", "difficulty": 3, "description": "Beautiful iridescent scales.", "rod_damage": 4, "spawn_rate": 0.07},
+    "salmon": {"name": "Salmon", "emoji": "🐠", "rarity": "uncommon", "min_value": 40, "max_value": 90, "weight_range": (3.0, 12.0), "catch_style": "fight", "difficulty": 4, "description": "A powerful swimmer.", "rod_damage": 6, "spawn_rate": 0.06},
+    "catfish": {"name": "Catfish", "emoji": "🐠", "rarity": "uncommon", "min_value": 35, "max_value": 80, "weight_range": (2.0, 15.0), "catch_style": "steady", "difficulty": 3, "description": "A bottom-dweller.", "rod_damage": 5, "spawn_rate": 0.05},
+    "flounder": {"name": "Flounder", "emoji": "🐠", "rarity": "uncommon", "min_value": 30, "max_value": 75, "weight_range": (1.0, 5.0), "catch_style": "patience", "difficulty": 3, "description": "A flat camouflaged fish.", "rod_damage": 4, "spawn_rate": 0.04},
+    # ═══ RARE FISH (18% total) ═══
+    "tuna": {"name": "Bluefin Tuna", "emoji": "🐡", "rarity": "rare", "min_value": 80, "max_value": 180, "weight_range": (20.0, 100.0), "catch_style": "fight", "difficulty": 5, "description": "A massive powerful fish.", "rod_damage": 12, "spawn_rate": 0.05},
+    "swordfish": {"name": "Swordfish", "emoji": "🐡", "rarity": "rare", "min_value": 100, "max_value": 220, "weight_range": (50.0, 200.0), "catch_style": "fight", "difficulty": 6, "description": "A fierce predator.", "rod_damage": 15, "spawn_rate": 0.04},
+    "pufferfish": {"name": "Pufferfish", "emoji": "🐡", "rarity": "rare", "min_value": 60, "max_value": 150, "weight_range": (0.5, 3.0), "catch_style": "careful", "difficulty": 4, "description": "Handle with care!", "rod_damage": 8, "spawn_rate": 0.04},
+    "electric_eel": {"name": "Electric Eel", "emoji": "⚡", "rarity": "rare", "min_value": 90, "max_value": 200, "weight_range": (5.0, 20.0), "catch_style": "careful", "difficulty": 5, "description": "Shocking! 600 volts.", "rod_damage": 10, "spawn_rate": 0.03},
+    "anglerfish": {"name": "Anglerfish", "emoji": "🐡", "rarity": "rare", "min_value": 70, "max_value": 160, "weight_range": (1.0, 8.0), "catch_style": "patience", "difficulty": 5, "description": "A deep-sea horror.", "rod_damage": 10, "spawn_rate": 0.02},
+    # ═══ EPIC FISH (9% total) ═══
+    "shark": {"name": "Great White Shark", "emoji": "🦈", "rarity": "epic", "min_value": 200, "max_value": 450, "weight_range": (500.0, 2000.0), "catch_style": "battle", "difficulty": 8, "description": "The apex predator!", "rod_damage": 25, "spawn_rate": 0.03},
+    "manta_ray": {"name": "Manta Ray", "emoji": "🦈", "rarity": "epic", "min_value": 180, "max_value": 400, "weight_range": (100.0, 500.0), "catch_style": "gentle", "difficulty": 6, "description": "A graceful giant.", "rod_damage": 18, "spawn_rate": 0.02},
+    "marlin": {"name": "Blue Marlin", "emoji": "🐟", "rarity": "epic", "min_value": 250, "max_value": 500, "weight_range": (100.0, 400.0), "catch_style": "battle", "difficulty": 7, "description": "Ultimate sport fish!", "rod_damage": 22, "spawn_rate": 0.02},
+    "giant_squid": {"name": "Giant Squid", "emoji": "🦑", "rarity": "epic", "min_value": 220, "max_value": 480, "weight_range": (50.0, 300.0), "catch_style": "battle", "difficulty": 7, "description": "Legendary deep creature.", "rod_damage": 20, "spawn_rate": 0.02},
+    # ═══ LEGENDARY FISH (3% total) ═══
+    "golden_koi": {"name": "Golden Koi", "emoji": "👑", "rarity": "legendary", "min_value": 500, "max_value": 1000, "weight_range": (5.0, 15.0), "catch_style": "zen", "difficulty": 8, "description": "Brings fortune!", "rod_damage": 30, "spawn_rate": 0.01},
+    "whale": {"name": "Blue Whale", "emoji": "🐋", "rarity": "legendary", "min_value": 800, "max_value": 1500, "weight_range": (50000.0, 150000.0), "catch_style": "epic", "difficulty": 10, "description": "The largest creature!", "rod_damage": 50, "spawn_rate": 0.008},
+    "dragon_fish": {"name": "Dragon Fish", "emoji": "🐉", "rarity": "legendary", "min_value": 1000, "max_value": 2000, "weight_range": (10.0, 50.0), "catch_style": "mythic", "difficulty": 10, "description": "Mythical flames!", "rod_damage": 40, "spawn_rate": 0.005},
+    "kraken": {"name": "Kraken", "emoji": "🦑", "rarity": "legendary", "min_value": 1500, "max_value": 3000, "weight_range": (1000.0, 5000.0), "catch_style": "mythic", "difficulty": 10, "description": "THE sea monster!", "rod_damage": 60, "spawn_rate": 0.002},
+}
+
+CATCH_STYLES = {
+    "quick": {"name": "Quick Catch", "window": 2.0}, "steady": {"name": "Steady Reel", "window": 3.0},
+    "fight": {"name": "Fighting Fish", "window": 2.5}, "patience": {"name": "Patient Wait", "window": 4.0},
+    "careful": {"name": "Careful Handling", "window": 3.5}, "battle": {"name": "Epic Battle", "window": 2.0},
+    "gentle": {"name": "Gentle Touch", "window": 3.5}, "zen": {"name": "Zen Focus", "window": 5.0},
+    "epic": {"name": "Epic Struggle", "window": 1.5}, "mythic": {"name": "Mythic Encounter", "window": 1.0},
+}
+
+FISH_RARITY_COLORS = {
+    "common": discord.Color.light_gray(), "uncommon": discord.Color.green(),
+    "rare": discord.Color.blue(), "epic": discord.Color.purple(), "legendary": discord.Color.gold(),
+}
+
+FISHING_SHOP = {
+    # Bait
+    "worms": {"name": "Worms", "emoji": "🪱", "type": "bait", "price": 10, "rarity_bonus": {"common": 1.2, "uncommon": 1.0}},
+    "shrimp": {"name": "Shrimp", "emoji": "🦐", "type": "bait", "price": 25, "rarity_bonus": {"common": 1.0, "uncommon": 1.3, "rare": 1.1}},
+    "squid": {"name": "Squid", "emoji": "🦑", "type": "bait", "price": 50, "rarity_bonus": {"uncommon": 1.2, "rare": 1.4, "epic": 1.1}},
+    "golden_lure": {"name": "Golden Lure", "emoji": "✨", "type": "bait", "price": 150, "rarity_bonus": {"rare": 1.3, "epic": 1.5, "legendary": 1.3}},
+    # Rods - with durability
+    "basic_rod": {"name": "Basic Rod", "emoji": "🎣", "type": "rod", "price": 100, "catch_bonus": 0, "weight_bonus": 1.0, "max_durability": 100},
+    "steel_rod": {"name": "Steel Rod", "emoji": "🎣", "type": "rod", "price": 300, "catch_bonus": 5, "weight_bonus": 1.1, "max_durability": 200},
+    "carbon_rod": {"name": "Carbon Fiber Rod", "emoji": "🎣", "type": "rod", "price": 750, "catch_bonus": 10, "weight_bonus": 1.25, "max_durability": 350},
+    "master_rod": {"name": "Master's Rod", "emoji": "🎣", "type": "rod", "price": 2000, "catch_bonus": 20, "weight_bonus": 1.5, "max_durability": 500},
+    "legendary_rod": {"name": "Legendary Rod", "emoji": "🎣", "type": "rod", "price": 6000, "catch_bonus": 35, "weight_bonus": 2.0, "max_durability": 1000},
+    # Hooks
+    "rusty_hook": {"name": "Rusty Hook", "emoji": "🪝", "type": "hook", "price": 0, "window_bonus": 0},
+    "iron_hook": {"name": "Iron Hook", "emoji": "🪝", "type": "hook", "price": 100, "window_bonus": 0.5},
+    "barbed_hook": {"name": "Barbed Hook", "emoji": "🪝", "type": "hook", "price": 300, "window_bonus": 1.0},
+    "diamond_hook": {"name": "Diamond Hook", "emoji": "🪝", "type": "hook", "price": 1000, "window_bonus": 2.0},
+}
 
 class Games(commands.Cog):
     """ Mini-games that use stella points - Gamble, Classic Games & Grounded Economy!"""
@@ -1800,7 +1867,7 @@ class Games(commands.Cog):
             
     @draw.command(name="gallery", aliases=["g", "grid"])
     @commands.cooldown(1, 3, commands.BucketType.user)
-    async def draw_gallery(self, ctx, page: int = 1, *, filter_args: str = None):
+    async def draw_gallery(self, ctx, page_or_filter: str = None, *, filter_args: str = None):
         """🖼️ View your card collection as a beautiful gallery image.
         
         Usage:
@@ -1819,10 +1886,19 @@ class Games(commands.Cog):
         user_id = str(ctx.author.id)
         guild_id = str(ctx.guild.id)
         
-        # Parse filter arguments
+        # Parse first argument - could be page number or filter
+        page = 1
         filter_type = "all"
         search_query = None
         use_tree_view = False
+        
+        if page_or_filter:
+            # Try to parse as integer (page number)
+            try:
+                page = int(page_or_filter)
+            except ValueError:
+                # Not a number, treat as filter
+                filter_args = page_or_filter if not filter_args else f"{page_or_filter} {filter_args}"
         
         if filter_args:
             filter_args_lower = filter_args.lower().strip()
@@ -1921,27 +1997,11 @@ class Games(commands.Cog):
             
             # Check if tree view requested
             if use_tree_view:
-                # Generate anime hierarchy tree
-                from bot.utils.cogs.game.anime_tree import generate_anime_hierarchy_tree
+                # Create paginated anime tree view
+                from bot.utils.cogs.game.anime_tree_view import create_anime_tree_view
                 
                 async with ctx.typing():
-                    buffer = await generate_anime_hierarchy_tree(
-                        characters=sorted_inventory,
-                        user_name=ctx.author.display_name,
-                        user_avatar_bytes=avatar_bytes
-                    )
-                
-                file = discord.File(buffer, filename=f"anime_tree_{user_id}.png")
-                
-                embed = discord.Embed(
-                    title="🌳 Anime Hierarchy Tree",
-                    description=f"Your collection organized by anime series\n**{len(sorted_inventory)}** characters displayed",
-                    color=discord.Color.blue()
-                )
-                embed.set_image(url=f"attachment://anime_tree_{user_id}.png")
-                embed.set_footer(text="Characters grouped by anime using fuzzy matching")
-                
-                await ctx.reply(embed=embed, file=file, mention_author=False)
+                    await create_anime_tree_view(self, ctx, sorted_inventory)
             else:
                 # Generate regular grid gallery image
                 buffer = await generate_gallery_image(
@@ -1972,8 +2032,12 @@ class Games(commands.Cog):
                 await ctx.reply(file=file, view=view, mention_author=False)
             
         except Exception as e:
-            logger.error(f"Error in draw gallery: {e}", exc_info=True)
-            await ctx.reply("❌ Error generating gallery image. Please try again.", mention_author=False)
+            import traceback
+            error_details = f"Error in draw gallery: {e}\n\nTraceback:\n{traceback.format_exc()}"
+            logger.error(error_details)
+            
+            # Send detailed error to user for debugging
+            await ctx.reply(f"❌ **Error generating gallery image:** `{e}`\n\nPlease try again. If this persists, check the bot logs for full details.", mention_author=False)
 
     @draw.command(name="collection", aliases=["c", "inv", "inventory"])
     @commands.cooldown(1, 5, commands.BucketType.user)
@@ -2652,8 +2716,212 @@ class Games(commands.Cog):
         )
         await ctx.reply(embed=embed, mention_author=False)
     
+    @draw.command(name="hierarchy", aliases=["hier", "fam"])
+    @commands.cooldown(1, 10, commands.BucketType.user)
+    async def draw_hierarchy(self, ctx, uid: str = None):
+        """🏛️ View character hierarchy for an anime series.
+        
+        Shows all characters from an anime organized by role:
+        - 👑 Main Characters
+        - ⭐ Supporting Characters  
+        - 🎭 Background Characters
+        
+        Characters you own are shown in color, missing ones are grayed out.
+        
+        Usage:
+        - `.draw hierarchy <UID>` - View hierarchy for anime of character with that UID
+        """
+        if not uid:
+            embed = discord.Embed(
+                title="🏛️ Character Hierarchy",
+                description=f"View all characters from an anime series!\n\n"
+                           f"**Usage:** `{ctx.prefix}draw hierarchy <UID>`\n\n"
+                           f"This will show the character hierarchy for the anime that the character belongs to.\n"
+                           f"• 👑 **Main Characters** - Protagonists and main cast\n"
+                           f"• ⭐ **Supporting Characters** - Important recurring characters\n"
+                           f"• 🎭 **Background Characters** - Minor/background roles\n\n"
+                           f"Characters you own are shown in full color.\n"
+                           f"Characters you're missing are grayed out.",
+                color=discord.Color.gold()
+            )
+            return await ctx.reply(embed=embed, mention_author=False)
+        
+        guild_id = str(ctx.guild.id)
+        user_id = str(ctx.author.id)
+        
+        # Get the character by UID to find the anime
+        owner_id, character = await self.get_character_by_uid(guild_id, uid)
+        
+        if not character:
+            return await ctx.reply(f"❌ No character found with UID `{uid.upper()}`", mention_author=False)
+        
+        anime_name = character.get("anime", "Unknown")
+        if anime_name == "Unknown":
+            return await ctx.reply("❌ This character doesn't have an associated anime.", mention_author=False)
+        
+        # Show loading message
+        loading_embed = discord.Embed(
+            title="🏛️ Loading Character Hierarchy...",
+            description=f"Fetching all characters from **{anime_name}**...\nThis may take a moment.",
+            color=discord.Color.blue()
+        )
+        loading_msg = await ctx.reply(embed=loading_embed, mention_author=False)
+        
+        try:
+            # Fetch all characters from this anime using Jikan API
+            session = await self.get_session()
+            
+            # First, search for the anime to get its ID
+            anime_search_url = f"https://api.jikan.moe/v4/anime"
+            params = {"q": anime_name, "limit": 5}
+            
+            anime_id = None
+            anime_image_url = None
+            
+            async with session.get(anime_search_url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    animes = data.get("data", [])
+                    
+                    if animes:
+                        # Find best match
+                        for anime in animes:
+                            title = anime.get("title", "")
+                            title_english = anime.get("title_english", "")
+                            
+                            if (anime_name.lower() in title.lower() or 
+                                anime_name.lower() in (title_english or "").lower() or
+                                title.lower() in anime_name.lower()):
+                                anime_id = anime.get("mal_id")
+                                anime_image_url = anime.get("images", {}).get("jpg", {}).get("large_image_url")
+                                break
+                        
+                        # If no exact match, use first result
+                        if not anime_id and animes:
+                            anime_id = animes[0].get("mal_id")
+                            anime_image_url = animes[0].get("images", {}).get("jpg", {}).get("large_image_url")
+            
+            if not anime_id:
+                await loading_msg.edit(embed=discord.Embed(
+                    title="❌ Anime Not Found",
+                    description=f"Could not find anime **{anime_name}** in the database.",
+                    color=discord.Color.red()
+                ))
+                return
+            
+            # Fetch all characters for this anime
+            characters_url = f"https://api.jikan.moe/v4/anime/{anime_id}/characters"
+            
+            all_characters = []
+            
+            async with session.get(characters_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status == 200:
+                    char_data = await resp.json()
+                    characters = char_data.get("data", [])
+                    
+                    for char_info in characters:
+                        char = char_info.get("character", {})
+                        role = char_info.get("role", "Supporting")
+                        
+                        # Get character details
+                        char_id = char.get("mal_id")
+                        char_name = char.get("name", "Unknown")
+                        char_image = char.get("images", {}).get("jpg", {}).get("image_url")
+                        
+                        # Estimate rarity based on role and favorites
+                        favorites = char_info.get("favorites", 0) or char.get("favorites", 0)
+                        
+                        # Determine rarity
+                        if favorites >= 15000:
+                            rarity = "legendary"
+                        elif favorites >= 8000:
+                            rarity = "epic"
+                        elif favorites >= 3000:
+                            rarity = "rare"
+                        elif favorites >= 1000:
+                            rarity = "uncommon"
+                        else:
+                            rarity = "common"
+                        
+                        all_characters.append({
+                            "id": char_id,
+                            "name": char_name,
+                            "image_url": char_image,
+                            "role": role,
+                            "favorites": favorites,
+                            "rarity": rarity,
+                            "anime": anime_name
+                        })
+            
+            if not all_characters:
+                await loading_msg.edit(embed=discord.Embed(
+                    title="❌ No Characters Found",
+                    description=f"Could not find any characters for **{anime_name}**.",
+                    color=discord.Color.red()
+                ))
+                return
+            
+            # Get user's owned characters from this anime
+            user_inventory = await self.get_user_inventory(user_id, guild_id)
+            owned_from_anime = [
+                char for char in user_inventory 
+                if char.get("anime", "").lower() == anime_name.lower()
+            ]
+            
+            # Get user avatar
+            avatar_bytes = None
+            try:
+                async with session.get(ctx.author.display_avatar.url) as resp:
+                    if resp.status == 200:
+                        avatar_bytes = await resp.read()
+            except:
+                pass
+            
+            # Generate the hierarchy image
+            from bot.utils.cogs.game.images import generate_character_hierarchy_image
+            
+            buffer = await generate_character_hierarchy_image(
+                anime_name=anime_name,
+                anime_image_url=anime_image_url,
+                all_characters=all_characters,
+                owned_characters=owned_from_anime,
+                user_name=ctx.author.display_name,
+                user_avatar_bytes=avatar_bytes
+            )
+            
+            # Create file and embed
+            file = discord.File(buffer, filename=f"hierarchy_{anime_id}.png")
+            
+            # Calculate stats
+            total_chars = len(all_characters)
+            owned_count = len(owned_from_anime)
+            completion = (owned_count / total_chars * 100) if total_chars > 0 else 0
+            
+            # Count by role
+            main_count = sum(1 for c in all_characters if c.get("role") == "Main")
+            supporting_count = sum(1 for c in all_characters if c.get("role") == "Supporting")
+            background_count = total_chars - main_count - supporting_count
+            
+            # Send image as attachment without embedding
+            await loading_msg.delete()
+            await ctx.send(
+                content=f"**🏛️ Character Hierarchy: {anime_name}**\n"
+                       f"**{owned_count}/{total_chars}** characters collected ({completion:.1f}% complete)\n"
+                       f"👑 Main: **{main_count}** | ⭐ Supporting: **{supporting_count}** | 🎭 Background: **{background_count}**\n"
+                       f"_Characters you own are shown in color • Requested by {ctx.author.display_name}_",
+                file=file
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in draw hierarchy: {e}", exc_info=True)
+            await loading_msg.edit(embed=discord.Embed(
+                title="❌ Error",
+                description="An error occurred while generating the hierarchy. Please try again.",
+                color=discord.Color.red()
+            ))
+    
     @draw.command(name="steal", aliases=["thief", "rob"])
-    @commands.cooldown(1, 1800, commands.BucketType.user)  # 30 minutes cooldown
+    @commands.cooldown(1, 1800, commands.BucketType.user)
     async def draw_steal(self, ctx, uid: str = None):
         """🎭 Attempt to steal a character from another player!
         
@@ -5525,6 +5793,281 @@ class Games(commands.Cog):
             logger.error(f"Error finding character owner: {e}")
         
         return None
+
+
+    # ═══ FISHING SYSTEM ═══
+    async def get_fishing_inventory(self, user_id: str, guild_id: str) -> dict:
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            result = await db["Servers"].find_one({"guild_id": guild_id}, {f"members.{user_id}.fishing": 1})
+            if result:
+                fishing = result.get("members", {}).get(user_id, {}).get("fishing", {})
+                if fishing:
+                    return fishing
+        except Exception as e:
+            logger.error(f"Error getting fishing inventory: {e}")
+        return {"bait": {}, "rod": "basic_rod", "rod_durability": 100, "hook": "rusty_hook"}
+    
+    async def save_fishing_inventory(self, user_id: str, guild_id: str, inventory: dict):
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            await db["Servers"].update_one({"guild_id": guild_id}, {"$set": {f"members.{user_id}.fishing": inventory}}, upsert=True)
+        except Exception as e:
+            logger.error(f"Error saving fishing inventory: {e}")
+    
+    async def damage_rod(self, user_id: str, guild_id: str, damage: int) -> tuple:
+        inventory = await self.get_fishing_inventory(user_id, guild_id)
+        new_dur = max(0, inventory.get("rod_durability", 100) - damage)
+        inventory["rod_durability"] = new_dur
+        if new_dur <= 0:
+            inventory["rod"] = None
+        await self.save_fishing_inventory(user_id, guild_id, inventory)
+        return new_dur, new_dur <= 0
+
+    @commands.command(name="fish", aliases=["fishing"])
+    @commands.cooldown(1, 15, commands.BucketType.user)
+    async def fish_cmd(self, ctx, bait: str = None):
+        """🎣 Go fishing! Rod breaks on fails."""
+        user_id, guild_id = str(ctx.author.id), str(ctx.guild.id)
+        inv = await self.get_fishing_inventory(user_id, guild_id)
+        
+        if not inv.get("rod"):
+            embed = discord.Embed(
+                title="🔧 Rod Broken!",
+                description="You need a fishing rod to go fishing!\n\nBuy one from the shop:\n`.fishshop buy basic_rod`",
+                color=discord.Color.red()
+            )
+            return await ctx.reply(embed=embed, mention_author=False)
+        if not inv.get("bait"):
+            embed = discord.Embed(
+                title="🎣 No Bait!",
+                description="You need bait to go fishing!\n\nBuy bait from the shop:\n`.fishshop` - View available items\n`.fishshop buy worms 10` - Buy 10 worms (100 pts)\n\n💡 **Starter Tip:** Worms are cheap and work great for common fish!",
+                color=discord.Color.orange()
+            )
+            return await ctx.reply(embed=embed, mention_author=False)
+        
+        bait = bait.lower() if bait else list(inv["bait"].keys())[0]
+        if bait not in inv.get("bait", {}) or inv["bait"].get(bait, 0) <= 0:
+            return await ctx.reply(f"❌ No **{bait}**!", mention_author=False)
+        
+        inv["bait"][bait] -= 1
+        if inv["bait"][bait] <= 0:
+            del inv["bait"][bait]
+        await self.save_fishing_inventory(user_id, guild_id, inv)
+        
+        rod_data = FISHING_SHOP.get(inv.get("rod", "basic_rod"), FISHING_SHOP["basic_rod"])
+        view = FishingGameView(self, ctx.author, guild_id, bait, inv)
+        embed = discord.Embed(title="🎣 Fishing", description=f"🎣 {rod_data['name']} ({inv.get('rod_durability', 100)} HP)\n\n**Press Cast Line!**", color=discord.Color.blue())
+        view.message = await ctx.reply(embed=embed, view=view, mention_author=False)
+
+    @commands.command(name="fishshop", aliases=["fs"])
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    async def fishshop_cmd(self, ctx, action: str = None, *, args: str = None):
+        """🏪 Buy fishing gear. Usage: .fishshop buy worms 10"""
+        user_id, guild_id = str(ctx.author.id), str(ctx.guild.id)
+        
+        if action and action.lower() == "buy" and args:
+            parts = args.split()
+            amount = int(parts[-1]) if parts[-1].isdigit() else 1
+            item_name = "_".join(parts[:-1] if parts[-1].isdigit() else parts).lower()
+            item_key = next((k for k in FISHING_SHOP if k == item_name), None)
+            if not item_key:
+                return await ctx.reply(f"❌ Item not found!", mention_author=False)
+            
+            item = FISHING_SHOP[item_key]
+            if item["type"] != "bait":
+                amount = 1
+            cost = item["price"] * amount
+            bal = await self.quest_data.get_balance(user_id, guild_id)
+            if bal < cost:
+                return await ctx.reply(f"❌ Need {cost:,} pts!", mention_author=False)
+            
+            await self.quest_data.add_balance(user_id, guild_id, -cost)
+            inv = await self.get_fishing_inventory(user_id, guild_id)
+            
+            new_bal = bal - cost
+            if item["type"] == "bait":
+                inv["bait"][item_key] = inv.get("bait", {}).get(item_key, 0) + amount
+                await self.save_fishing_inventory(user_id, guild_id, inv)
+                embed = discord.Embed(
+                    title="✅ Purchase Successful!",
+                    description=f"Bought {amount}x {item['emoji']} {item['name']}\n\n💰 **Cost:** {cost:,} pts\n💵 **Balance:** {new_bal:,} pts\n\nUse `.fish` to start fishing with your new bait!",
+                    color=discord.Color.green()
+                )
+                return await ctx.reply(embed=embed, mention_author=False)
+            elif item["type"] == "rod":
+                inv["rod"], inv["rod_durability"] = item_key, item["max_durability"]
+                await self.save_fishing_inventory(user_id, guild_id, inv)
+                embed = discord.Embed(
+                    title="✅ Equipment Upgraded!",
+                    description=f"Purchased {item['emoji']} {item['name']}!\n\n{item.get('description', 'A new fishing rod.')}\n\n💰 **Cost:** {cost:,} pts\n💵 **Balance:** {new_bal:,} pts\n\n🎣 **Rod Stats**\nCatch Bonus: +{item.get('catch_bonus', 0)}%\nWeight Bonus: +{item.get('weight_bonus', 0)}%\n\nUse `.fish` to start fishing with your new equipment!",
+                    color=discord.Color.green()
+                )
+                return await ctx.reply(embed=embed, mention_author=False)
+            elif item["type"] == "hook":
+                inv["hook"] = item_key
+                await self.save_fishing_inventory(user_id, guild_id, inv)
+                embed = discord.Embed(
+                    title="✅ Purchase Successful!",
+                    description=f"Bought 1x {item['emoji']} {item['name']}\n\n💰 **Cost:** {cost:,} pts\n💵 **Balance:** {new_bal:,} pts",
+                    color=discord.Color.green()
+                )
+                return await ctx.reply(embed=embed, mention_author=False)
+        
+        embed = discord.Embed(title="🏪 Fishing Shop", description="`.fishshop buy [item] [amount]`", color=discord.Color.blue())
+        embed.add_field(name="🪱 Bait", value="\n".join([f"{v['emoji']} {v['name']} - {v['price']} pts" for k,v in FISHING_SHOP.items() if v["type"]=="bait"]), inline=False)
+        embed.add_field(name="🎣 Rods", value="\n".join([f"🎣 {v['name']} - {v['price']} pts ({v['max_durability']} HP)" for k,v in FISHING_SHOP.items() if v["type"]=="rod"]), inline=False)
+        await ctx.reply(embed=embed, mention_author=False)
+
+    @commands.command(name="react", aliases=["reactiontime", "rt"])
+    @commands.cooldown(1, 10, commands.BucketType.user)
+    async def reaction_time_cmd(self, ctx, bet: int = 50):
+        """⚡ Test your reaction time! Click when it turns green."""
+        user_id, guild_id = str(ctx.author.id), str(ctx.guild.id)
+        if bet < 10 or bet > 1000:
+            return await ctx.reply("❌ Bet must be 10-1,000 pts!", mention_author=False)
+        bal = await self.quest_data.get_balance(user_id, guild_id)
+        if bal < bet:
+            return await ctx.reply(f"❌ Need **{bet:,}** pts!", mention_author=False)
+        await self.quest_data.add_balance(user_id, guild_id, -bet)
+        
+        embed = discord.Embed(title="⚡ Reaction Time", description="**Wait for it...**\n\nClick when it turns GREEN!", color=discord.Color.red())
+        view = ReactionTimeView(self, ctx.author, guild_id, bet)
+        view.message = await ctx.reply(embed=embed, view=view, mention_author=False)
+        
+        await asyncio.sleep(random.uniform(2, 5))
+        if view.clicked_early or view.is_finished():
+            return
+        view.ready = True
+        view.start_time = asyncio.get_event_loop().time()
+        view.children[0].style = discord.ButtonStyle.success
+        view.children[0].label = "CLICK NOW!"
+        embed.color = discord.Color.green()
+        embed.description = "**🟢 GO! CLICK NOW!**"
+        await view.message.edit(embed=embed, view=view)
+
+
+class FishingGameView(discord.ui.View):
+    def __init__(self, cog, user, guild_id, bait_id, inventory):
+        super().__init__(timeout=60)
+        self.cog, self.user, self.guild_id, self.bait_id, self.inventory = cog, user, guild_id, bait_id, inventory
+        self.message, self.fish_appeared, self.caught, self.current_fish, self.fish_id, self.catch_task = None, False, False, None, None, None
+
+    @discord.ui.button(label="🎣 Cast Line", style=discord.ButtonStyle.primary)
+    async def cast_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("Not yours!", ephemeral=True)
+        button.disabled = True
+        await interaction.response.edit_message(embed=discord.Embed(title="🎣 Waiting...", color=discord.Color.blue()), view=self)
+        await asyncio.sleep(random.uniform(2, 5))
+        if self.caught: return
+        
+        # Select fish
+        bait_data = FISHING_SHOP.get(self.bait_id, {})
+        fish_list = [(fid, fd, fd["spawn_rate"] * bait_data.get("rarity_bonus", {}).get(fd["rarity"], 1.0)) for fid, fd in FISH_DATABASE.items()]
+        total = sum(f[2] for f in fish_list)
+        roll, cum = random.random() * total, 0
+        for fid, fd, rate in fish_list:
+            cum += rate
+            if roll < cum:
+                self.fish_id, self.current_fish = fid, fd
+                break
+        
+        self.fish_appeared = True
+        self.children[1].disabled = False
+        embed = discord.Embed(title=f"🎣 {self.current_fish['emoji']} FISH ON!", description=f"**{self.current_fish['rarity'].title()}** - REEL NOW!", color=FISH_RARITY_COLORS.get(self.current_fish["rarity"]))
+        await self.message.edit(embed=embed, view=self)
+        self.catch_task = asyncio.create_task(self._timeout())
+
+    async def _timeout(self):
+        await asyncio.sleep(CATCH_STYLES.get(self.current_fish["catch_style"], {}).get("window", 3))
+        if self.caught or not self.fish_appeared: return
+        self.fish_appeared = False
+        damage = self.current_fish.get("rod_damage", 5)
+        new_dur, broken = await self.cog.damage_rod(str(self.user.id), self.guild_id, damage)
+        
+        fish_name = self.current_fish['name']
+        fish_emoji = self.current_fish['emoji']
+        rarity = self.current_fish['rarity']
+        
+        desc = f"{fish_emoji} **{fish_name}** escaped!\n\n"
+        if rarity in ['epic', 'legendary']:
+            desc += "Too slow! The epic fish slipped off the hook.\n\n💡 **Tip:** This is a FIGHT! Multiple reels needed!"
+        else:
+            desc += "The fish got away before you could reel it in."
+        
+        desc += f"\n\n🔧 Rod Damage: -{damage} HP"
+        if broken:
+            desc += "\n\n💔 **ROD BROKEN!** Buy a new one at `.fishshop`"
+        else:
+            desc += f"\n🎣 Rod HP: {new_dur}"
+        
+        desc += "\n\nTry again with `.fish`!"
+        
+        for c in self.children: c.disabled = True
+        embed = discord.Embed(title="🎣 The Fish Got Away!", description=desc, color=discord.Color.red())
+        await self.message.edit(embed=embed, view=self)
+        self.stop()
+
+    @discord.ui.button(label="🔄 Reel!", style=discord.ButtonStyle.secondary, disabled=True)
+    async def reel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user.id or not self.fish_appeared: return
+        self.caught = True
+        if self.catch_task: self.catch_task.cancel()
+        for c in self.children: c.disabled = True
+        
+        fish = self.current_fish
+        reward = random.randint(fish["min_value"], fish["max_value"])
+        await self.cog.quest_data.add_balance(str(self.user.id), self.guild_id, reward)
+        embed = discord.Embed(title=f"🎣 Caught {fish['emoji']} {fish['name']}!", description=f"💰 +**{reward}** pts", color=FISH_RARITY_COLORS.get(fish["rarity"]))
+        await interaction.response.edit_message(embed=embed, view=self)
+        self.stop()
+
+
+class ReactionTimeView(discord.ui.View):
+    def __init__(self, cog, user, guild_id, bet):
+        super().__init__(timeout=15)
+        self.cog, self.user, self.guild_id, self.bet = cog, user, guild_id, bet
+        self.message, self.ready, self.clicked_early, self.start_time = None, False, False, None
+
+    @discord.ui.button(label="Wait...", style=discord.ButtonStyle.danger)
+    async def click_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("Not your game!", ephemeral=True)
+        
+        if not self.ready:
+            self.clicked_early = True
+            for c in self.children: c.disabled = True
+            embed = discord.Embed(title="⚡ Too Early!", description=f"You clicked too soon!\n💸 Lost **{self.bet}** pts", color=discord.Color.red())
+            await interaction.response.edit_message(embed=embed, view=self)
+            self.stop()
+            return
+        
+        reaction_time = (asyncio.get_event_loop().time() - self.start_time) * 1000
+        for c in self.children: c.disabled = True
+        
+        if reaction_time < 200:
+            multiplier, result = 3.0, "⚡ INSANE!"
+        elif reaction_time < 300:
+            multiplier, result = 2.0, "🔥 Fast!"
+        elif reaction_time < 400:
+            multiplier, result = 1.5, "✅ Good"
+        elif reaction_time < 600:
+            multiplier, result = 1.0, "😐 Average"
+        else:
+            multiplier, result = 0.5, "🐢 Slow"
+        
+        winnings = int(self.bet * multiplier)
+        await self.cog.quest_data.add_balance(str(self.user.id), self.guild_id, winnings)
+        profit = winnings - self.bet
+        
+        embed = discord.Embed(
+            title=f"⚡ {result}",
+            description=f"⏱️ **{reaction_time:.0f}ms**\n💰 {'Won' if profit >= 0 else 'Lost'} **{profit:+,}** pts",
+            color=discord.Color.green() if profit >= 0 else discord.Color.red()
+        )
+        await interaction.response.edit_message(embed=embed, view=self)
+        self.stop()
 
 
 async def setup(bot):

@@ -734,7 +734,7 @@ class Quest(commands.Cog):
         """View your active character (standalone command)."""
         await self.quest_character(ctx)
 
-    @commands.command(name="feedback", aliases=["fb"])
+    @commands.command(name="feedback")
     async def quest_feedback(self, ctx: commands.Context):
         """Toggle quest feedback messages on/off."""
         try:

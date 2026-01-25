@@ -752,13 +752,56 @@ class CharacterSelectView(discord.ui.View):
         self.total_pages = (len(same_anime_chars) + self.per_page - 1) // self.per_page
         
         # Add dropdown and navigation buttons
-        self.add_item(CharacterSelectDropdown(cog, same_anime_chars, user_id, self.current_page, self.per_page))
+        try:
+            self.add_item(CharacterSelectDropdown(cog, same_anime_chars, user_id, self.current_page, self.per_page))
+            
+            # Only add navigation buttons if there are multiple pages
+            if self.total_pages > 1:
+                self.add_item(PreviousPageButton(self))
+                self.add_item(NextPageButton(self))
+                self.add_item(PageIndicator(self))
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error initializing CharacterSelectView: {e}")
+            raise
+    
+    async def on_timeout(self):
+        """Handle view timeout gracefully"""
+        try:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"CharacterSelectView timed out for user {self.user_id}")
+            
+            # Disable all buttons
+            for item in self.children:
+                item.disabled = True
+            
+            # Try to update the message if it exists
+            if hasattr(self, 'message') and self.message:
+                try:
+                    await self.message.edit(view=self, content="⏰ This selection menu has timed out. Please run the command again.")
+                except Exception as e:
+                    logger.warning(f"Could not edit message on timeout: {e}")
+        except Exception as e:
+            logger.error(f"Error in CharacterSelectView timeout handler: {e}")
+    
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item):
+        """Handle view errors gracefully"""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in CharacterSelectView interaction: {error}")
+        logger.error(f"Item: {item}")
+        logger.error(f"User: {interaction.user.id if interaction.user else 'Unknown'}")
         
-        # Only add navigation buttons if there are multiple pages
-        if self.total_pages > 1:
-            self.add_item(PreviousPageButton(self))
-            self.add_item(NextPageButton(self))
-            self.add_item(PageIndicator(self))
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "❌ An error occurred with the character selection. Please try again.", 
+                    ephemeral=True
+                )
+        except Exception as e:
+            logger.error(f"Could not send error response: {e}")
     
     async def update_dropdown(self, interaction: discord.Interaction):
         """Update the dropdown with new page data"""
@@ -849,29 +892,49 @@ class CharacterSelectDropdown(discord.ui.Select):
         
         options = []
         for char in display_chars:
-            # Get owner info - use display_owner_name if available, otherwise fetch it
-            owner_id = char.get("owner_id")
-            owner_name = char.get("display_owner_name", "Unknown")
+            # Get character info
+            char_name = char.get("name", "Unknown")
+            anime_name = char.get("anime", "Unknown")
+            rarity = char.get("rarity", "common").title()
+            favorites = char.get("favorites", 0)
+            uid = char.get("uid", "")
             
-            if owner_name == "Unknown" and owner_id:
-                try:
-                    # We can't fetch guild members here directly, so we'll use a simplified format
-                    # The actual names will be updated in the callback
-                    owner_name = f"ID: {owner_id}"
-                except:
-                    pass
+            # Get owner info
+            owner_id = char.get("owner_id")
+            owner_name = char.get("display_owner_name")
+            
+            # Create owner display text
+            if owner_name:
+                owner_text = owner_name[:15]  # Limit length
+            elif owner_id:
+                owner_text = f"User {str(owner_id)[-4:]}"  # Show last 4 digits of ID
+            else:
+                owner_text = "Unclaimed"
             
             # Create option label and description
-            label = char.get("name", "Unknown")[:25]  # Discord label limit
-            description = f"{char.get('anime', 'Unknown')} - {owner_name}"
-            if len(description) > 50:  # Discord description limit
+            label = f"{char_name[:20]} ({rarity})"  # Include rarity in label
+            description = f"{anime_name[:20]} • {favorites:,} favs • {owner_text}"
+            
+            # Truncate if too long
+            if len(description) > 50:
                 description = description[:47] + "..."
+            
+            # Add rarity emoji to description
+            rarity_emojis = {
+                "common": "⚪",
+                "uncommon": "🟢", 
+                "rare": "🔵",
+                "epic": "🟣",
+                "legendary": "🟡"
+            }
+            rarity_emoji = rarity_emojis.get(rarity.lower(), "⚪")
+            description = f"{rarity_emoji} {description}"
             
             options.append(
                 discord.SelectOption(
                     label=label,
                     description=description,
-                    value=char.get("uid", "")
+                    value=uid
                 )
             )
         
@@ -892,12 +955,30 @@ class CharacterSelectDropdown(discord.ui.Select):
             await interaction.response.send_message("Invalid character selection!", ephemeral=True)
             return
         
-        # Get the selected character
-        guild_id = str(interaction.guild.id)
-        owner_id, char = await self.cog.get_character_by_uid(guild_id, selected_uid)
-        
-        if not char:
-            await interaction.response.send_message("Character not found!", ephemeral=True)
+        try:
+            # Get the selected character
+            guild_id = str(interaction.guild.id)
+            owner_id, char = await self.cog.get_character_by_uid(guild_id, selected_uid)
+            
+            if not char:
+                await interaction.response.send_message("❌ Character not found!", ephemeral=True)
+                return
+                
+        except Exception as e:
+            import logging
+            import traceback
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in character select callback: {e}")
+            logger.error(f"Selected UID: {selected_uid}")
+            logger.error(f"Guild ID: {guild_id}")
+            logger.error(f"User ID: {interaction.user.id}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("❌ Error fetching character data. Please try again.", ephemeral=True)
+            except Exception as response_error:
+                logger.error(f"Could not send error response: {response_error}")
             return
         
         # Create character information embed
