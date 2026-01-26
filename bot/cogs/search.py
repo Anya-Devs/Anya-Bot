@@ -25,14 +25,14 @@ class Search(commands.Cog):
         # Processing gateway - Track active command executions per user
         self.active_art_searches = {}  # {user_id: timestamp}
         self.processing_lock = set()  # Set of user_ids currently processing
-        
-        # Art command access control
-        self.art_commands_public = True  # Public access enabled with proper TOS filtering
     
     async def cog_load(self):
         """Initialize session on load"""
         import aiohttp
         self.session = aiohttp.ClientSession()
+        
+        # Load art access setting from MongoDB
+        await self._load_art_access_setting()
     
     def cog_unload(self):
         """Cleanup sessions on unload"""
@@ -58,8 +58,51 @@ class Search(commands.Cog):
         self.processing_lock.discard(user_id)
         self.active_art_searches.pop(user_id, None)
     
+    async def _load_art_access_setting(self):
+        """Load art access setting from MongoDB"""
+        try:
+            from bot.utils.cogs.quest import Quest_Data
+            quest_data = Quest_Data(self.bot)
+            
+            # Get global settings document
+            doc = await quest_data.mongoConnect[quest_data.DB_NAME]["Global"].find_one({"type": "bot_settings"})
+            if doc:
+                self.art_commands_public = doc.get("art_commands_public", True)
+            else:
+                # Create default settings if none exist
+                self.art_commands_public = True
+                await quest_data.mongoConnect[quest_data.DB_NAME]["Global"].update_one(
+                    {"type": "bot_settings"},
+                    {"$set": {"art_commands_public": True}},
+                    upsert=True
+                )
+        except Exception as e:
+            # Fallback to True if MongoDB fails
+            self.art_commands_public = True
+            print(f"Failed to load art access setting: {e}")
+    
+    async def _save_art_access_setting(self, is_public: bool):
+        """Save art access setting to MongoDB"""
+        try:
+            from bot.utils.cogs.quest import Quest_Data
+            quest_data = Quest_Data(self.bot)
+            
+            await quest_data.mongoConnect[quest_data.DB_NAME]["Global"].update_one(
+                {"type": "bot_settings"},
+                {"$set": {"art_commands_public": is_public}},
+                upsert=True
+            )
+            self.art_commands_public = is_public
+            return True
+        except Exception as e:
+            print(f"Failed to save art access setting: {e}")
+            return False
+    
     async def check_art_access(self, ctx) -> bool:
         """Check if user has access to art commands based on public setting"""
+        # Ensure we have the latest setting
+        await self._load_art_access_setting()
+        
         if self.art_commands_public:
             return True  # Commands are public, everyone can access
         
@@ -79,7 +122,19 @@ class Search(commands.Cog):
                 embed.set_thumbnail(url=ctx.author.display_avatar.url)
             except:
                 pass
-            await ctx.reply(embed=embed, mention_author=False)
+            msg = await ctx.reply(embed=embed, mention_author=False)
+            
+            # Auto-delete for safety
+            import asyncio
+            async def delete_messages():
+                await asyncio.sleep(5)
+                try:
+                    await msg.delete()
+                    await ctx.message.delete()
+                except:
+                    pass
+            
+            asyncio.create_task(delete_messages())
             return False
         
         return True  # Owner access granted
@@ -298,10 +353,6 @@ class Search(commands.Cog):
             
             message = await ctx.reply(embeds=embeds, view=view, mention_author=False)
             
-            # Start background loading task to continue fetching more results
-            import asyncio
-            asyncio.create_task(self._background_load_and_update(view, message))
-            
         finally:
             # Always release the processing lock when done
             self.end_processing(user_id)
@@ -333,24 +384,28 @@ class Search(commands.Cog):
         
         status_lower = status.lower()
         if status_lower in ["on", "public", "enable", "true"]:
-            self.art_commands_public = True
-            embed = discord.Embed(
-                title="✅ Art Commands Now Public",
-                description="🎨 All art commands are now available to everyone!",
-                color=discord.Color.green()
-            )
-            embed.set_footer(text="Use .artaccess status to check current setting")
-            await ctx.reply(embed=embed, mention_author=False)
+            if await self._save_art_access_setting(True):
+                embed = discord.Embed(
+                    title="✅ Art Commands Now Public",
+                    description="🎨 All art commands are now available to everyone!",
+                    color=discord.Color.green()
+                )
+                embed.set_footer(text="Use .artaccess status to check current setting")
+                await ctx.reply(embed=embed, mention_author=False)
+            else:
+                await ctx.reply("❌ Failed to save setting to database.", mention_author=False)
             
         elif status_lower in ["off", "private", "disable", "false"]:
-            self.art_commands_public = False
-            embed = discord.Embed(
-                title="🔒 Art Commands Now Private",
-                description="🎨 Art commands are restricted to bot owner only.",
-                color=discord.Color.orange()
-            )
-            embed.set_footer(text="Use .artaccess status to check current setting")
-            await ctx.reply(embed=embed, mention_author=False)
+            if await self._save_art_access_setting(False):
+                embed = discord.Embed(
+                    title="🔒 Art Commands Now Private",
+                    description="🎨 Art commands are restricted to bot owner only.",
+                    color=discord.Color.orange()
+                )
+                embed.set_footer(text="Use .artaccess status to check current setting")
+                await ctx.reply(embed=embed, mention_author=False)
+            else:
+                await ctx.reply("❌ Failed to save setting to database.", mention_author=False)
             
         elif status_lower in ["status", "check", "current"]:
             status_text = "🔓 **PUBLIC** - Everyone can use art commands" if self.art_commands_public else "🔒 **PRIVATE** - Owner only"
@@ -496,7 +551,7 @@ class Search(commands.Cog):
             return await ctx.reply("❌ Please provide an art ID to save.", mention_author=False)
         
         # Save to MongoDB
-        from utils.cogs.quest import Quest_Data
+        from bot.utils.cogs.quest import Quest_Data
         if not hasattr(self, 'quest_data'):
             self.quest_data = Quest_Data(self.bot)
         
@@ -553,7 +608,7 @@ class Search(commands.Cog):
             )
             return await ctx.reply(embed=embed, mention_author=False)
         
-        from utils.cogs.quest import Quest_Data
+        from bot.utils.cogs.quest import Quest_Data
         if not hasattr(self, 'quest_data'):
             self.quest_data = Quest_Data(self.bot)
         
@@ -616,7 +671,7 @@ class Search(commands.Cog):
         if not await self.check_art_access(ctx):
             return
         
-        from utils.cogs.quest import Quest_Data
+        from bot.utils.cogs.quest import Quest_Data
         if not hasattr(self, 'quest_data'):
             self.quest_data = Quest_Data(self.bot)
         
