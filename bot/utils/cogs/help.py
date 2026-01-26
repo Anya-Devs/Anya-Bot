@@ -31,7 +31,7 @@ class HelpMenu(discord.ui.View):
         self.cog_commands = {k: v for k, v in self.cog_commands.items() if len(v) > 1}
 
         self.page = 0
-        self.fields_per_page = 10
+        self.fields_per_page = 5
         
         # Sort cogs by least to most commands
         self.cog_commands = dict(sorted(self.cog_commands.items(), key=lambda x: len(x[1])))

@@ -410,6 +410,380 @@ class Information(commands.Cog):
       )
       await ctx.reply(embed=embed, mention_author=False)
 
+    @commands.command(name="userinfo", aliases=["ui", "whois"])
+    async def userinfo(self, ctx, member: discord.Member = None):
+        """Get detailed information about a user."""
+        member = member or ctx.author
+        
+        # Get roles excluding @everyone
+        roles = [role.mention for role in member.roles[1:]]
+        roles_str = ", ".join(roles[:10]) if roles else "None"
+        if len(roles) > 10:
+            roles_str += f" (+{len(roles) - 10} more)"
+        
+        # Calculate account age
+        created_delta = datetime.now() - member.created_at.replace(tzinfo=None)
+        created_days = created_delta.days
+        
+        # Calculate join age
+        joined_delta = datetime.now() - member.joined_at.replace(tzinfo=None)
+        joined_days = joined_delta.days
+        
+        embed = discord.Embed(
+            title=f"{member.display_name}'s Information",
+            color=member.color if member.color != discord.Color.default() else primary_color(),
+            timestamp=datetime.now()
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        
+        # User info
+        embed.add_field(
+            name="User",
+            value=(
+                f"**Name:** {member.name}"
+                f"\n**ID:** `{member.id}`"
+                f"\n**Nickname:** {member.nick or 'None'}"
+                f"\n**Bot:** {'Yes' if member.bot else 'No'}"
+            ),
+            inline=True
+        )
+        
+        # Dates
+        embed.add_field(
+            name="Dates",
+            value=(
+                f"**Created:** <t:{int(member.created_at.timestamp())}:R>"
+                f"\n**Joined:** <t:{int(member.joined_at.timestamp())}:R>"
+                f"\n**Account Age:** {created_days} days"
+                f"\n**Server Age:** {joined_days} days"
+            ),
+            inline=True
+        )
+        
+        # Roles
+        embed.add_field(
+            name=f"Roles [{len(member.roles) - 1}]",
+            value=roles_str,
+            inline=False
+        )
+        
+        # Key permissions
+        perms = member.guild_permissions
+        key_perms = []
+        if perms.administrator:
+            key_perms.append("Administrator")
+        if perms.manage_guild:
+            key_perms.append("Manage Server")
+        if perms.manage_roles:
+            key_perms.append("Manage Roles")
+        if perms.manage_channels:
+            key_perms.append("Manage Channels")
+        if perms.kick_members:
+            key_perms.append("Kick Members")
+        if perms.ban_members:
+            key_perms.append("Ban Members")
+        
+        if key_perms:
+            embed.add_field(
+                name="Key Permissions",
+                value=", ".join(key_perms),
+                inline=False
+            )
+        
+        embed.set_footer(text=f"Requested by {ctx.author.display_name}", icon_url=ctx.author.display_avatar.url)
+        
+        await ctx.reply(embed=embed, mention_author=False)
+    
+    @commands.command(name="roleinfo", aliases=["ri"])
+    async def roleinfo(self, ctx, *, role: discord.Role):
+        """Get detailed information about a role."""
+        
+        # Count members with this role
+        member_count = len(role.members)
+        
+        # Get permissions
+        perms = role.permissions
+        key_perms = []
+        if perms.administrator:
+            key_perms.append("Administrator")
+        if perms.manage_guild:
+            key_perms.append("Manage Server")
+        if perms.manage_roles:
+            key_perms.append("Manage Roles")
+        if perms.manage_channels:
+            key_perms.append("Manage Channels")
+        if perms.kick_members:
+            key_perms.append("Kick Members")
+        if perms.ban_members:
+            key_perms.append("Ban Members")
+        if perms.mention_everyone:
+            key_perms.append("Mention Everyone")
+        
+        embed = discord.Embed(
+            title=f"Role Information: {role.name}",
+            color=role.color if role.color != discord.Color.default() else primary_color(),
+            timestamp=datetime.now()
+        )
+        
+        embed.add_field(
+            name="Details",
+            value=(
+                f"**ID:** `{role.id}`\n"
+                f"**Color:** {role.color}\n"
+                f"**Position:** {role.position}\n"
+                f"**Members:** {member_count}\n"
+                f"**Mentionable:** {'Yes' if role.mentionable else 'No'}\n"
+                f"**Hoisted:** {'Yes' if role.hoist else 'No'}\n"
+                f"**Managed:** {'Yes' if role.managed else 'No'}"
+            ),
+            inline=True
+        )
+        
+        embed.add_field(
+            name="Created",
+            value=f"<t:{int(role.created_at.timestamp())}:R>",
+            inline=True
+        )
+        
+        if key_perms:
+            embed.add_field(
+                name="Key Permissions",
+                value=", ".join(key_perms),
+                inline=False
+            )
+        
+        embed.set_footer(text=f"Requested by {ctx.author.display_name}", icon_url=ctx.author.display_avatar.url)
+        
+        await ctx.reply(embed=embed, mention_author=False)
+    
+    @commands.command(name="membercount", aliases=["mc", "members"])
+    async def membercount(self, ctx):
+        """Show detailed member statistics for the server."""
+        guild = ctx.guild
+        
+        # Count members by status
+        online = sum(1 for m in guild.members if m.status == discord.Status.online)
+        idle = sum(1 for m in guild.members if m.status == discord.Status.idle)
+        dnd = sum(1 for m in guild.members if m.status == discord.Status.dnd)
+        offline = sum(1 for m in guild.members if m.status == discord.Status.offline)
+        
+        # Count bots vs humans
+        bots = sum(1 for m in guild.members if m.bot)
+        humans = guild.member_count - bots
+        
+        embed = discord.Embed(
+            title=f"{guild.name} Member Statistics",
+            color=primary_color(),
+            timestamp=datetime.now()
+        )
+        
+        if guild.icon:
+            embed.set_thumbnail(url=guild.icon.url)
+        
+        embed.add_field(
+            name="Total Members",
+            value=f"**{guild.member_count:,}**",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="Humans / Bots",
+            value=f"👥 {humans:,} / 🤖 {bots:,}",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="\u200b",
+            value="\u200b",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="Member Status",
+            value=(
+                f"🟢 Online: **{online:,}**\n"
+                f"🟡 Idle: **{idle:,}**\n"
+                f"🔴 DND: **{dnd:,}**\n"
+                f"⚫ Offline: **{offline:,}**"
+            ),
+            inline=False
+        )
+        
+        embed.set_footer(text=f"Server ID: {guild.id}")
+        
+        await ctx.reply(embed=embed, mention_author=False)
+    
+    @commands.command(name="emojis", aliases=["emojilist"])
+    async def emojis(self, ctx):
+        """List all emojis in the server."""
+        guild = ctx.guild
+        
+        if not guild.emojis:
+            return await ctx.reply("This server has no custom emojis.", mention_author=False)
+        
+        # Separate static and animated
+        static = [e for e in guild.emojis if not e.animated]
+        animated = [e for e in guild.emojis if e.animated]
+        
+        embed = discord.Embed(
+            title=f"{guild.name} Emojis",
+            description=f"Total: **{len(guild.emojis)}** ({len(static)} static, {len(animated)} animated)",
+            color=primary_color(),
+            timestamp=datetime.now()
+        )
+        
+        if static:
+            static_str = " ".join(str(e) for e in static[:50])
+            if len(static) > 50:
+                static_str += f"\n... and {len(static) - 50} more"
+            embed.add_field(
+                name=f"Static Emojis [{len(static)}]",
+                value=static_str,
+                inline=False
+            )
+        
+        if animated:
+            animated_str = " ".join(str(e) for e in animated[:50])
+            if len(animated) > 50:
+                animated_str += f"\n... and {len(animated) - 50} more"
+            embed.add_field(
+                name=f"Animated Emojis [{len(animated)}]",
+                value=animated_str,
+                inline=False
+            )
+        
+        embed.set_footer(text=f"Emoji limit: {len(guild.emojis)}/100")
+        
+        await ctx.reply(embed=embed, mention_author=False)
+    
+    @commands.command(name="channelinfo", aliases=["ci"])
+    async def channelinfo(self, ctx, channel: Union[discord.TextChannel, discord.VoiceChannel, discord.CategoryChannel] = None):
+        """Get information about a channel."""
+        channel = channel or ctx.channel
+        
+        embed = discord.Embed(
+            title=f"Channel Information: #{channel.name}",
+            color=primary_color(),
+            timestamp=datetime.now()
+        )
+        
+        # Basic info
+        embed.add_field(
+            name="Details",
+            value=(
+                f"**ID:** `{channel.id}`\n"
+                f"**Type:** {channel.type.name.replace('_', ' ').title()}\n"
+                f"**Category:** {channel.category.name if channel.category else 'None'}\n"
+                f"**Position:** {channel.position}"
+            ),
+            inline=True
+        )
+        
+        embed.add_field(
+            name="Created",
+            value=f"<t:{int(channel.created_at.timestamp())}:R>",
+            inline=True
+        )
+        
+        # Channel-specific info
+        if isinstance(channel, discord.TextChannel):
+            embed.add_field(
+                name="Text Channel Info",
+                value=(
+                    f"**NSFW:** {'Yes' if channel.nsfw else 'No'}\n"
+                    f"**Slowmode:** {channel.slowmode_delay}s\n"
+                    f"**Topic:** {channel.topic[:100] if channel.topic else 'None'}"
+                ),
+                inline=False
+            )
+        elif isinstance(channel, discord.VoiceChannel):
+            embed.add_field(
+                name="Voice Channel Info",
+                value=(
+                    f"**Bitrate:** {channel.bitrate // 1000}kbps\n"
+                    f"**User Limit:** {channel.user_limit or 'Unlimited'}\n"
+                    f"**Connected:** {len(channel.members)}"
+                ),
+                inline=False
+            )
+        
+        embed.set_footer(text=f"Requested by {ctx.author.display_name}", icon_url=ctx.author.display_avatar.url)
+        
+        await ctx.reply(embed=embed, mention_author=False)
+    
+    @commands.command(name="boostinfo", aliases=["boosts", "boosters"])
+    async def boostinfo(self, ctx):
+        """Show server boost information."""
+        guild = ctx.guild
+        
+        embed = discord.Embed(
+            title=f"{guild.name} Boost Status",
+            color=discord.Color.pink(),
+            timestamp=datetime.now()
+        )
+        
+        if guild.icon:
+            embed.set_thumbnail(url=guild.icon.url)
+        
+        # Boost level and progress
+        boost_level = guild.premium_tier
+        boost_count = guild.premium_subscription_count or 0
+        
+        # Calculate progress to next level
+        level_requirements = {0: 2, 1: 7, 2: 14, 3: None}
+        next_level = boost_level + 1 if boost_level < 3 else None
+        
+        if next_level:
+            needed = level_requirements[boost_level]
+            progress = f"{boost_count}/{needed}"
+            progress_bar_length = 10
+            filled = int((boost_count / needed) * progress_bar_length)
+            progress_bar = "█" * filled + "░" * (progress_bar_length - filled)
+        else:
+            progress = "Max Level!"
+            progress_bar = "██████████"
+        
+        embed.add_field(
+            name="Boost Level",
+            value=f"**Level {boost_level}**",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="Total Boosts",
+            value=f"**{boost_count}**",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="\u200b",
+            value="\u200b",
+            inline=True
+        )
+        
+        if next_level:
+            embed.add_field(
+                name=f"Progress to Level {next_level}",
+                value=f"`{progress_bar}` {progress}",
+                inline=False
+            )
+        
+        # List boosters
+        boosters = guild.premium_subscribers
+        if boosters:
+            booster_list = ", ".join(m.mention for m in boosters[:10])
+            if len(boosters) > 10:
+                booster_list += f" (+{len(boosters) - 10} more)"
+            embed.add_field(
+                name=f"Boosters [{len(boosters)}]",
+                value=booster_list,
+                inline=False
+            )
+        
+        embed.set_footer(text=f"Server ID: {guild.id}")
+        
+        await ctx.reply(embed=embed, mention_author=False)
+    
     @commands.command(name="activity", aliases=["playing", "activities"])
     @commands.guild_only()
     async def activity_discovery(self, ctx, *, game_name: str = None):

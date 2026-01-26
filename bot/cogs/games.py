@@ -71,22 +71,74 @@ FISH_RARITY_COLORS = {
 }
 
 FISHING_SHOP = {
-    # Bait
-    "worms": {"name": "Worms", "emoji": "🪱", "type": "bait", "price": 10, "rarity_bonus": {"common": 1.2, "uncommon": 1.0}},
-    "shrimp": {"name": "Shrimp", "emoji": "🦐", "type": "bait", "price": 25, "rarity_bonus": {"common": 1.0, "uncommon": 1.3, "rare": 1.1}},
-    "squid": {"name": "Squid", "emoji": "🦑", "type": "bait", "price": 50, "rarity_bonus": {"uncommon": 1.2, "rare": 1.4, "epic": 1.1}},
-    "golden_lure": {"name": "Golden Lure", "emoji": "✨", "type": "bait", "price": 150, "rarity_bonus": {"rare": 1.3, "epic": 1.5, "legendary": 1.3}},
-    # Rods - with durability
-    "basic_rod": {"name": "Basic Rod", "emoji": "🎣", "type": "rod", "price": 100, "catch_bonus": 0, "weight_bonus": 1.0, "max_durability": 100},
-    "steel_rod": {"name": "Steel Rod", "emoji": "🎣", "type": "rod", "price": 300, "catch_bonus": 5, "weight_bonus": 1.1, "max_durability": 200},
-    "carbon_rod": {"name": "Carbon Fiber Rod", "emoji": "🎣", "type": "rod", "price": 750, "catch_bonus": 10, "weight_bonus": 1.25, "max_durability": 350},
-    "master_rod": {"name": "Master's Rod", "emoji": "🎣", "type": "rod", "price": 2000, "catch_bonus": 20, "weight_bonus": 1.5, "max_durability": 500},
-    "legendary_rod": {"name": "Legendary Rod", "emoji": "🎣", "type": "rod", "price": 6000, "catch_bonus": 35, "weight_bonus": 2.0, "max_durability": 1000},
-    # Hooks
-    "rusty_hook": {"name": "Rusty Hook", "emoji": "🪝", "type": "hook", "price": 0, "window_bonus": 0},
-    "iron_hook": {"name": "Iron Hook", "emoji": "🪝", "type": "hook", "price": 100, "window_bonus": 0.5},
-    "barbed_hook": {"name": "Barbed Hook", "emoji": "🪝", "type": "hook", "price": 300, "window_bonus": 1.0},
-    "diamond_hook": {"name": "Diamond Hook", "emoji": "🪝", "type": "hook", "price": 1000, "window_bonus": 2.0},
+    # Bait (Consumable)
+    "worms": {
+        "name": "Worms", "emoji": "🪱", "type": "bait", "price": 10,
+        "description": "Basic bait. Works for common fish.",
+        "rarity_bonus": {"common": 1.2, "uncommon": 1.0}
+    },
+    "shrimp": {
+        "name": "Shrimp", "emoji": "🦐", "type": "bait", "price": 25,
+        "description": "Quality bait. Attracts uncommon fish.",
+        "rarity_bonus": {"common": 1.0, "uncommon": 1.3, "rare": 1.1}
+    },
+    "squid": {
+        "name": "Squid", "emoji": "🦑", "type": "bait", "price": 50,
+        "description": "Premium bait. Attracts rare fish.",
+        "rarity_bonus": {"uncommon": 1.2, "rare": 1.4, "epic": 1.1}
+    },
+    "golden_lure": {
+        "name": "Golden Lure", "emoji": "✨", "type": "bait", "price": 150,
+        "description": "Legendary bait. Attracts epic and legendary fish!",
+        "rarity_bonus": {"rare": 1.3, "epic": 1.5, "legendary": 1.3}
+    },
+    # Fishing Rods (Permanent)
+    "basic_rod": {
+        "name": "Basic Rod", "emoji": "🎣", "type": "rod", "price": 50,
+        "description": "A simple wooden rod for beginners.",
+        "catch_bonus": 0, "weight_bonus": 0, "max_durability": 100
+    },
+    "steel_rod": {
+        "name": "Steel Rod", "emoji": "🎣", "type": "rod", "price": 200,
+        "description": "+5% rewards, +10% weight",
+        "catch_bonus": 5, "weight_bonus": 10, "max_durability": 200
+    },
+    "carbon_rod": {
+        "name": "Carbon Fiber Rod", "emoji": "🎣", "type": "rod", "price": 500,
+        "description": "+10% rewards, +25% weight",
+        "catch_bonus": 10, "weight_bonus": 25, "max_durability": 350
+    },
+    "master_rod": {
+        "name": "Master's Rod", "emoji": "🎣", "type": "rod", "price": 1500,
+        "description": "+20% rewards, +50% weight",
+        "catch_bonus": 20, "weight_bonus": 50, "max_durability": 500
+    },
+    "legendary_rod": {
+        "name": "Legendary Rod", "emoji": "🎣", "type": "rod", "price": 5000,
+        "description": "+35% rewards, +100% weight",
+        "catch_bonus": 35, "weight_bonus": 100, "max_durability": 1000
+    },
+    # Hooks (Permanent)
+    "rusty_hook": {
+        "name": "Rusty Hook", "emoji": "🪝", "type": "hook", "price": 0,
+        "description": "Basic hook. No bonuses.",
+        "window_bonus": 0
+    },
+    "iron_hook": {
+        "name": "Iron Hook", "emoji": "🪝", "type": "hook", "price": 100,
+        "description": "+0.5s catch window",
+        "window_bonus": 0.5
+    },
+    "barbed_hook": {
+        "name": "Barbed Hook", "emoji": "🪝", "type": "hook", "price": 300,
+        "description": "+1.0s catch window",
+        "window_bonus": 1.0
+    },
+    "diamond_hook": {
+        "name": "Diamond Hook", "emoji": "🪝", "type": "hook", "price": 1000,
+        "description": "+2.0s catch window",
+        "window_bonus": 2.0
+    },
 }
 
 class Games(commands.Cog):
@@ -5855,16 +5907,68 @@ class Games(commands.Cog):
             del inv["bait"][bait]
         await self.save_fishing_inventory(user_id, guild_id, inv)
         
-        rod_data = FISHING_SHOP.get(inv.get("rod", "basic_rod"), FISHING_SHOP["basic_rod"])
+        # Get equipment data for display
+        rod_key = inv.get("rod", "basic_rod")
+        rod_data = FISHING_SHOP.get(rod_key, FISHING_SHOP["basic_rod"])
+        rod_durability = inv.get("rod_durability", 100)
+        rod_max = rod_data.get("max_durability", 100)
+        
+        hook_key = inv.get("hook", "rusty_hook")
+        hook_data = FISHING_SHOP.get(hook_key, FISHING_SHOP["rusty_hook"])
+        
+        bait_data = FISHING_SHOP.get(bait, {})
+        
+        # Get user stats
+        db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+        result = await db["Servers"].find_one({"guild_id": guild_id}, {f"members.{user_id}.fishing_stats": 1})
+        fishing_stats = result.get("members", {}).get(user_id, {}).get("fishing_stats", {"caught": 0, "species": 0}) if result else {"caught": 0, "species": 0}
+        
+        # Calculate bait remaining
+        bait_count = sum(inv.get("bait", {}).values())
+        
         view = FishingGameView(self, ctx.author, guild_id, bait, inv)
-        embed = discord.Embed(title="🎣 Fishing", description=f"🎣 {rod_data['name']} ({inv.get('rod_durability', 100)} HP)\n\n**Press Cast Line!**", color=discord.Color.blue())
+        embed = discord.Embed(
+            title="🎣 Fishing Adventure",
+            description="Cast your line into the waters and see what you catch!\n\nPress 🎣 Cast Line to begin!",
+            color=0x3498db
+        )
+        
+        # Equipment column
+        equipment_text = (
+            f"🎣 **{rod_data['name']}**\n"
+            f"⚙️ **Hook:** {hook_data['name']}\n"
+            f"{bait_data.get('emoji', '🪱')} **Bait:** {bait_data.get('name', bait)} ({bait_count} left)"
+        )
+        embed.add_field(name="Equipment", value=equipment_text, inline=True)
+        
+        # Stats column
+        stats_text = (
+            f"📊 **Caught:** {fishing_stats.get('caught', 0)}\n"
+            f"🐟 **Species:** {fishing_stats.get('species', 0)}/22\n"
+            f"✅ **Progress:** {(fishing_stats.get('species', 0) / 22 * 100):.1f}%"
+        )
+        embed.add_field(name="Your Stats", value=stats_text, inline=True)
+        
+        # Active bonuses
+        bonuses_text = (
+            f"✨ +{rod_data.get('catch_bonus', 0)}% rewards\n"
+            f"⚖️ +{rod_data.get('weight_bonus', 0)}% weight"
+        )
+        embed.add_field(name="Active Bonuses", value=bonuses_text, inline=False)
+        
+        embed.set_footer(text=f"Better equipment = better catches! Use .fishshop to upgrade")
         view.message = await ctx.reply(embed=embed, view=view, mention_author=False)
 
     @commands.command(name="fishshop", aliases=["fs"])
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def fishshop_cmd(self, ctx, action: str = None, *, args: str = None):
+# ... (rest of the code remains the same)
         """🏪 Buy fishing gear. Usage: .fishshop buy worms 10"""
         user_id, guild_id = str(ctx.author.id), str(ctx.guild.id)
+        
+        # Handle inventory subcommand
+        if action and action.lower() in ["inv", "inventory", "i"]:
+            return await self.show_fishing_inventory(ctx, user_id, guild_id)
         
         if action and action.lower() == "buy" and args:
             parts = args.split()
@@ -5880,136 +5984,312 @@ class Games(commands.Cog):
             cost = item["price"] * amount
             bal = await self.quest_data.get_balance(user_id, guild_id)
             if bal < cost:
-                return await ctx.reply(f"❌ Need {cost:,} pts!", mention_author=False)
+                embed = discord.Embed(
+                    title="❌ Insufficient Funds",
+                    description=f"You need **{cost:,}** pts but only have **{bal:,}** pts.\n\n💡 Earn more by fishing or completing quests!",
+                    color=discord.Color.red()
+                )
+                return await ctx.reply(embed=embed, mention_author=False)
             
             await self.quest_data.add_balance(user_id, guild_id, -cost)
             inv = await self.get_fishing_inventory(user_id, guild_id)
-            
             new_bal = bal - cost
+            
             if item["type"] == "bait":
                 inv["bait"][item_key] = inv.get("bait", {}).get(item_key, 0) + amount
                 await self.save_fishing_inventory(user_id, guild_id, inv)
                 embed = discord.Embed(
                     title="✅ Purchase Successful!",
-                    description=f"Bought {amount}x {item['emoji']} {item['name']}\n\n💰 **Cost:** {cost:,} pts\n💵 **Balance:** {new_bal:,} pts\n\nUse `.fish` to start fishing with your new bait!",
+                    description=(
+                        f"Bought **{amount}x** {item['emoji']} **{item['name']}**\n\n"
+                        f"💰 **Cost:** {cost:,} pts\n"
+                        f"📊 **Balance:** {new_bal:,} pts\n\n"
+                        f"Use .fish to start fishing with your new equipment!"
+                    ),
                     color=discord.Color.green()
                 )
                 return await ctx.reply(embed=embed, mention_author=False)
+            
             elif item["type"] == "rod":
+                old_rod = inv.get("rod")
                 inv["rod"], inv["rod_durability"] = item_key, item["max_durability"]
                 await self.save_fishing_inventory(user_id, guild_id, inv)
                 embed = discord.Embed(
-                    title="✅ Equipment Upgraded!",
-                    description=f"Purchased {item['emoji']} {item['name']}!\n\n{item.get('description', 'A new fishing rod.')}\n\n💰 **Cost:** {cost:,} pts\n💵 **Balance:** {new_bal:,} pts\n\n🎣 **Rod Stats**\nCatch Bonus: +{item.get('catch_bonus', 0)}%\nWeight Bonus: +{item.get('weight_bonus', 0)}%\n\nUse `.fish` to start fishing with your new equipment!",
+                    title="✅ Purchase Successful!",
+                    description=(
+                        f"**{item['emoji']} {item['name']}**\n\n"
+                        f"💰 **Cost:** {cost:,} pts\n"
+                        f"💵 **New Balance:** {new_bal:,} pts"
+                    ),
                     color=discord.Color.green()
                 )
+                embed.add_field(name="Rod Stats", value=(
+                        f"- Reward Bonus: **+{item.get('catch_bonus', 0)}%**\n"
+                        f"- Weight Bonus: **+{item.get('weight_bonus', 0)}%**\n"
+                        f"- Durability: **{item['max_durability']}/{item['max_durability']} HP**\n\n")
+                       )
+                embed.set_footer(text="Better equipment = better catches!")
                 return await ctx.reply(embed=embed, mention_author=False)
+            
             elif item["type"] == "hook":
                 inv["hook"] = item_key
                 await self.save_fishing_inventory(user_id, guild_id, inv)
                 embed = discord.Embed(
                     title="✅ Purchase Successful!",
-                    description=f"Bought 1x {item['emoji']} {item['name']}\n\n💰 **Cost:** {cost:,} pts\n💵 **Balance:** {new_bal:,} pts",
+                    description=(
+                        f"**{item['emoji']} {item['name']}**\n\n"
+                        f"💰 **Cost:** {cost:,} pts\n"
+                        f"💵 **New Balance:** {new_bal:,} pts"
+                    ),
                     color=discord.Color.green()
                 )
+                embed.set_footer(text="Longer catch windows = easier catches!")
                 return await ctx.reply(embed=embed, mention_author=False)
         
-        embed = discord.Embed(title="🏪 Fishing Shop", description="`.fishshop buy [item] [amount]`", color=discord.Color.blue())
-        embed.add_field(name="🪱 Bait", value="\n".join([f"{v['emoji']} {v['name']} - {v['price']} pts" for k,v in FISHING_SHOP.items() if v["type"]=="bait"]), inline=False)
-        embed.add_field(name="🎣 Rods", value="\n".join([f"🎣 {v['name']} - {v['price']} pts ({v['max_durability']} HP)" for k,v in FISHING_SHOP.items() if v["type"]=="rod"]), inline=False)
+        # Show shop with exact format requested
+        embed = discord.Embed(
+            title="🏪 Fishing Shop",
+            description=(
+                "Buy bait and upgrade your equipment!\n\n"
+                f"**Usage:** `{ctx.prefix}fishshop buy [item] [amount]`\n"
+                f"**Example:** `{ctx.prefix}fishshop buy worms 10`"
+            ),
+            color=0x3498db
+        )
+        
+        # Bait section
+        bait_lines = []
+        for k, v in FISHING_SHOP.items():
+            if v["type"] == "bait":
+                bait_lines.append(f"{v['emoji']} **{v['name']}** - {v['price']} pts/ea\n*{v.get('description', '')}*")
+        embed.add_field(
+            name="🪱 Bait (Consumable)",
+            value="\n\n".join(bait_lines),
+            inline=False
+        )
+        
+        # Rods section
+        rod_lines = []
+        for k, v in FISHING_SHOP.items():
+            if v["type"] == "rod":
+                rod_lines.append(f"🎣 **{v['name']}** - {v['price']:,} pts\n*{v.get('description', '')}*")
+        embed.add_field(
+            name="🎣 Fishing Rods (Permanent)",
+            value="\n\n".join(rod_lines),
+            inline=False
+        )
+        
+        # Hooks section
+        hook_lines = []
+        for k, v in FISHING_SHOP.items():
+            if v["type"] == "hook" and v["price"] > 0:
+                hook_lines.append(f"🪝 **{v['name']}** - {v['price']:,} pts\n*{v.get('description', '')}*")
+        embed.add_field(
+            name="🪝 Hooks (Permanent)",
+            value="\n\n".join(hook_lines),
+            inline=False
+        )
+        
+        embed.set_footer(text=f"Better equipment = better catches! • Use {ctx.prefix}fishshop inv to view your equipment")
         await ctx.reply(embed=embed, mention_author=False)
 
-    @commands.command(name="react", aliases=["reactiontime", "rt"])
-    @commands.cooldown(1, 10, commands.BucketType.user)
-    async def reaction_time_cmd(self, ctx, bet: int = 50):
-        """⚡ Test your reaction time! Click when it turns green."""
-        user_id, guild_id = str(ctx.author.id), str(ctx.guild.id)
-        if bet < 10 or bet > 1000:
-            return await ctx.reply("❌ Bet must be 10-1,000 pts!", mention_author=False)
+    async def show_fishing_inventory(self, ctx, user_id: str, guild_id: str):
+        """Show detailed fishing inventory with equipment status"""
+        inv = await self.get_fishing_inventory(user_id, guild_id)
         bal = await self.quest_data.get_balance(user_id, guild_id)
-        if bal < bet:
-            return await ctx.reply(f"❌ Need **{bet:,}** pts!", mention_author=False)
-        await self.quest_data.add_balance(user_id, guild_id, -bet)
         
-        embed = discord.Embed(title="⚡ Reaction Time", description="**Wait for it...**\n\nClick when it turns GREEN!", color=discord.Color.red())
-        view = ReactionTimeView(self, ctx.author, guild_id, bet)
-        view.message = await ctx.reply(embed=embed, view=view, mention_author=False)
+        # Get equipment data
+        rod_key = inv.get("rod", "basic_rod")
+        rod_data = FISHING_SHOP.get(rod_key, FISHING_SHOP["basic_rod"])
+        rod_durability = inv.get("rod_durability", 100)
+        rod_max = rod_data.get("max_durability", 100)
         
-        await asyncio.sleep(random.uniform(2, 5))
-        if view.clicked_early or view.is_finished():
-            return
-        view.ready = True
-        view.start_time = asyncio.get_event_loop().time()
-        view.children[0].style = discord.ButtonStyle.success
-        view.children[0].label = "CLICK NOW!"
-        embed.color = discord.Color.green()
-        embed.description = "**🟢 GO! CLICK NOW!**"
-        await view.message.edit(embed=embed, view=view)
+        hook_key = inv.get("hook", "rusty_hook")
+        hook_data = FISHING_SHOP.get(hook_key, FISHING_SHOP["rusty_hook"])
+        
+        # Calculate durability percentage and status
+        dur_pct = (rod_durability / rod_max) * 100 if rod_max > 0 else 0
+        if dur_pct > 75:
+            dur_status = "🟢 Excellent"
+            dur_bar = "████████░░"
+        elif dur_pct > 50:
+            dur_status = "🟡 Good"
+            dur_bar = "██████░░░░"
+        elif dur_pct > 25:
+            dur_status = "🟠 Worn"
+            dur_bar = "████░░░░░░"
+        elif dur_pct > 0:
+            dur_status = "🔴 Critical"
+            dur_bar = "██░░░░░░░░"
+        else:
+            dur_status = "💀 Broken"
+            dur_bar = "░░░░░░░░░░"
+        
+        # Estimate casts remaining
+        avg_damage = 5  # Average rod damage per fish
+        casts_remaining = max(0, rod_durability // avg_damage) if rod_durability > 0 else 0
+        
+        embed = discord.Embed(
+            title="Fishing Equipment",
+            description=f"**Balance:** {bal:,} pts",
+            color=0x2ecc71
+        )
+        
+        # Rod section
+        rod_status = "**BROKEN** - Buy a new rod!" if rod_durability <= 0 else ""
+        embed.add_field(
+            name="Fishing Rod",
+            value=(
+                f"**{rod_data['name']}**\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"**Durability:** {rod_durability}/{rod_max} HP\n"
+                f"`[{dur_bar}]` {dur_pct:.0f}%\n"
+                f"**Status:** {dur_status}\n"
+                f"**Est. Casts Left:** ~{casts_remaining}\n\n"
+                f"**Bonuses:**\n"
+                f"• Reward: +{rod_data.get('catch_bonus', 0)}%\n"
+                f"• Weight: +{rod_data.get('weight_bonus', 0)}%\n"
+                f"{rod_status}"
+            ),
+            inline=False
+        )
+        
+        # Hook section
+        embed.add_field(
+            name="Hook",
+            value=(
+                f"**{hook_data['name']}**\n"
+                f"• Catch Window: +{hook_data.get('window_bonus', 0)}s"
+            ),
+            inline=True
+        )
+        
+        # Bait section
+        bait_inv = inv.get("bait", {})
+        if bait_inv:
+            bait_lines = []
+            for bait_key, amount in bait_inv.items():
+                bait_data = FISHING_SHOP.get(bait_key, {})
+                if amount > 0:
+                    bait_lines.append(f"**{bait_data.get('name', bait_key)}**: {amount}x")
+            bait_text = "\n".join(bait_lines) if bait_lines else "*No bait - buy some!*"
+        else:
+            bait_text = "*No bait - buy some!*"
+        
+        embed.add_field(
+            name="Bait Supply",
+            value=bait_text,
+            inline=True
+        )
+        
+        # Tips based on status
+        tips = []
+        if rod_durability <= 0:
+            tips.append("Your rod is broken! Buy a new one with `.fishshop buy basic_rod`")
+        elif dur_pct <= 25:
+            tips.append(f"Rod nearly broken! Consider buying a replacement.")
+        if not bait_inv or all(v <= 0 for v in bait_inv.values()):
+            tips.append("You need bait to fish! Try `.fishshop buy worms 10`")
+        
+        if tips:
+            embed.add_field(name="Tips", value="\n".join(tips), inline=False)
+        
+        embed.set_footer(text=f"Use {ctx.prefix}fish to start fishing! • {ctx.prefix}fishshop to buy gear")
+        await ctx.reply(embed=embed, mention_author=False)
 
-
+  
 class FishingGameView(discord.ui.View):
     def __init__(self, cog, user, guild_id, bait_id, inventory):
         super().__init__(timeout=60)
         self.cog, self.user, self.guild_id, self.bait_id, self.inventory = cog, user, guild_id, bait_id, inventory
         self.message, self.fish_appeared, self.caught, self.current_fish, self.fish_id, self.catch_task = None, False, False, None, None, None
+        self.fish_weight = 0
 
-    @discord.ui.button(label="🎣 Cast Line", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Cast Line", style=discord.ButtonStyle.primary)
     async def cast_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.user.id:
-            return await interaction.response.send_message("Not yours!", ephemeral=True)
-        button.disabled = True
-        await interaction.response.edit_message(embed=discord.Embed(title="🎣 Waiting...", color=discord.Color.blue()), view=self)
-        await asyncio.sleep(random.uniform(2, 5))
-        if self.caught: return
-        
-        # Select fish
-        bait_data = FISHING_SHOP.get(self.bait_id, {})
-        fish_list = [(fid, fd, fd["spawn_rate"] * bait_data.get("rarity_bonus", {}).get(fd["rarity"], 1.0)) for fid, fd in FISH_DATABASE.items()]
-        total = sum(f[2] for f in fish_list)
-        roll, cum = random.random() * total, 0
-        for fid, fd, rate in fish_list:
-            cum += rate
-            if roll < cum:
-                self.fish_id, self.current_fish = fid, fd
-                break
-        
-        self.fish_appeared = True
-        self.children[1].disabled = False
-        embed = discord.Embed(title=f"🎣 {self.current_fish['emoji']} FISH ON!", description=f"**{self.current_fish['rarity'].title()}** - REEL NOW!", color=FISH_RARITY_COLORS.get(self.current_fish["rarity"]))
-        await self.message.edit(embed=embed, view=self)
-        self.catch_task = asyncio.create_task(self._timeout())
+        try:
+            if interaction.user.id != self.user.id:
+                return await interaction.response.send_message("Not yours!", ephemeral=True)
+            button.disabled = True
+            
+            # Waiting embed
+            wait_embed = discord.Embed(
+                title="🎣 Casting Line...",
+                description="Waiting for a bite...",
+                color=0x3498db
+            )
+            await interaction.response.edit_message(embed=wait_embed, view=self)
+            await asyncio.sleep(random.uniform(2, 5))
+            if self.caught: return
+            
+            # Select fish based on bait
+            bait_data = FISHING_SHOP.get(self.bait_id, {})
+            fish_list = [(fid, fd, fd["spawn_rate"] * bait_data.get("rarity_bonus", {}).get(fd["rarity"], 1.0)) for fid, fd in FISH_DATABASE.items()]
+            total = sum(f[2] for f in fish_list)
+            roll, cum = random.random() * total, 0
+            for fid, fd, rate in fish_list:
+                cum += rate
+                if roll < cum:
+                    self.fish_id, self.current_fish = fid, fd
+                    break
+            
+            # Calculate fish weight
+            weight_range = self.current_fish.get("weight_range", (1.0, 5.0))
+            rod_key = self.inventory.get("rod", "basic_rod")
+            rod_data = FISHING_SHOP.get(rod_key, FISHING_SHOP["basic_rod"])
+            weight_bonus = 1 + (rod_data.get("weight_bonus", 0) / 100)
+            self.fish_weight = round(random.uniform(weight_range[0], weight_range[1]) * weight_bonus, 2)
+            
+            # Get catch window with hook bonus
+            hook_key = self.inventory.get("hook", "rusty_hook")
+            hook_data = FISHING_SHOP.get(hook_key, FISHING_SHOP["rusty_hook"])
+            catch_window = CATCH_STYLES.get(self.current_fish["catch_style"], {}).get("window", 3) + hook_data.get("window_bonus", 0)
+            
+            self.fish_appeared = True
+            self.children[1].disabled = False
+            
+            # Don't reveal fish identity - just show status
+            rarity = self.current_fish['rarity']
+            
+            embed = discord.Embed(
+                description=f"Something's biting! Quick, reel it in!\n\n**Catch Window:** {catch_window:.1f}s",
+                color=FISH_RARITY_COLORS.get(rarity)
+            )
+            await self.message.edit(embed=embed, view=self)
+            self.catch_task = asyncio.create_task(self._timeout(catch_window))
+        except Exception as e:
+            logging.error(f"FishingGameView cast_btn error: {e}", exc_info=True)
+            try:
+                await interaction.response.send_message("❌ An error occurred!", ephemeral=True)
+            except:
+                pass
 
-    async def _timeout(self):
-        await asyncio.sleep(CATCH_STYLES.get(self.current_fish["catch_style"], {}).get("window", 3))
+    async def _timeout(self, window: float = 3.0):
+        await asyncio.sleep(window)
         if self.caught or not self.fish_appeared: return
         self.fish_appeared = False
         damage = self.current_fish.get("rod_damage", 5)
         new_dur, broken = await self.cog.damage_rod(str(self.user.id), self.guild_id, damage)
         
-        fish_name = self.current_fish['name']
-        fish_emoji = self.current_fish['emoji']
-        rarity = self.current_fish['rarity']
+        rod_key = self.inventory.get("rod", "basic_rod")
+        rod_data = FISHING_SHOP.get(rod_key, FISHING_SHOP["basic_rod"])
+        rod_max = rod_data.get("max_durability", 100)
+        rod_pct = (new_dur / rod_max * 100) if rod_max > 0 else 0
         
-        desc = f"{fish_emoji} **{fish_name}** escaped!\n\n"
-        if rarity in ['epic', 'legendary']:
-            desc += "Too slow! The epic fish slipped off the hook.\n\n💡 **Tip:** This is a FIGHT! Multiple reels needed!"
-        else:
-            desc += "The fish got away before you could reel it in."
-        
-        desc += f"\n\n🔧 Rod Damage: -{damage} HP"
-        if broken:
-            desc += "\n\n💔 **ROD BROKEN!** Buy a new one at `.fishshop`"
-        else:
-            desc += f"\n🎣 Rod HP: {new_dur}"
-        
-        desc += "\n\nTry again with `.fish`!"
+        embed = discord.Embed(
+            description=(
+                f"The fish escaped before you could reel it in!\n\n"
+                f"**Rod Health:** {rod_pct:.1f}%\n"
+                + (f"**ROD BROKEN!** Buy a new one: `.fishshop buy basic_rod`" if broken else "")
+            ),
+            color=discord.Color.red()
+        )
         
         for c in self.children: c.disabled = True
-        embed = discord.Embed(title="🎣 The Fish Got Away!", description=desc, color=discord.Color.red())
         await self.message.edit(embed=embed, view=self)
         self.stop()
 
-    @discord.ui.button(label="🔄 Reel!", style=discord.ButtonStyle.secondary, disabled=True)
+    @discord.ui.button(label="Reel!", style=discord.ButtonStyle.success, disabled=True)
     async def reel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user.id or not self.fish_appeared: return
         self.caught = True
@@ -6017,9 +6297,74 @@ class FishingGameView(discord.ui.View):
         for c in self.children: c.disabled = True
         
         fish = self.current_fish
-        reward = random.randint(fish["min_value"], fish["max_value"])
-        await self.cog.quest_data.add_balance(str(self.user.id), self.guild_id, reward)
-        embed = discord.Embed(title=f"🎣 Caught {fish['emoji']} {fish['name']}!", description=f"💰 +**{reward}** pts", color=FISH_RARITY_COLORS.get(fish["rarity"]))
+        rarity = fish['rarity']
+        
+        # Calculate reward with rod bonus
+        rod_key = self.inventory.get("rod", "basic_rod")
+        rod_data = FISHING_SHOP.get(rod_key, FISHING_SHOP["basic_rod"])
+        catch_bonus = 1 + (rod_data.get("catch_bonus", 0) / 100)
+        
+        base_reward = random.randint(fish["min_value"], fish["max_value"])
+        bonus_reward = int(base_reward * catch_bonus) - base_reward
+        total_reward = base_reward + bonus_reward
+        
+        await self.cog.quest_data.add_balance(str(self.user.id), self.guild_id, total_reward)
+        
+        # Get new balance
+        new_bal = await self.cog.quest_data.get_balance(str(self.user.id), self.guild_id)
+        
+        # Format weight nicely
+        if self.fish_weight >= 1000:
+            weight_str = f"{self.fish_weight/1000:.2f} kg"
+        else:
+            weight_str = f"{self.fish_weight:.2f} g"
+        
+        # Update fishing stats
+        db = self.cog.quest_data.mongoConnect[self.cog.quest_data.DB_NAME]
+        user_id = str(self.user.id)
+        await db["Servers"].update_one(
+            {"guild_id": self.guild_id},
+            {
+                "$inc": {f"members.{user_id}.fishing_stats.caught": 1},
+                "$addToSet": {f"members.{user_id}.fishing_stats.species_caught": self.fish_id}
+            },
+            upsert=True
+        )
+        
+        # Get updated species count
+        result = await db["Servers"].find_one({"guild_id": self.guild_id}, {f"members.{user_id}.fishing_stats": 1})
+        species_count = len(result.get("members", {}).get(user_id, {}).get("fishing_stats", {}).get("species_caught", [])) if result else 1
+        
+        # ANSI color codes based on rarity
+        rarity_colors = {
+            "common": "\u001b[0;37m",      # White
+            "uncommon": "\u001b[0;32m",    # Green
+            "rare": "\u001b[0;34m",        # Blue
+            "epic": "\u001b[0;35m",        # Magenta
+            "legendary": "\u001b[0;33m"    # Yellow/Gold
+        }
+        ansi_color = rarity_colors.get(rarity, "\u001b[0;37m")
+        ansi_reset = "\u001b[0m"
+        
+        embed = discord.Embed(
+            title=f"🎣  {fish['emoji']}  Caught!",
+            description=f"**{fish['name']}** ({rarity.title()})\n```ansi\n{ansi_color}{fish.get('description', '')}{ansi_reset}\n```",
+            color=FISH_RARITY_COLORS.get(rarity)
+        )
+        
+        embed.add_field(
+            name="Catch Info",
+            value=f"**Weight:** {weight_str}\n**Value:** +{total_reward} pts" + (f" (+{bonus_reward} bonus)" if bonus_reward > 0 else ""),
+            inline=True
+        )
+        
+        embed.add_field(
+            name="Your Progress",
+            value=f"**Species:** {species_count}/22\n**Balance:** {new_bal:,} pts",
+            inline=True
+        )
+        
+        embed.set_footer(text="Keep fishing with .fish!")
         await interaction.response.edit_message(embed=embed, view=self)
         self.stop()
 
@@ -6032,42 +6377,170 @@ class ReactionTimeView(discord.ui.View):
 
     @discord.ui.button(label="Wait...", style=discord.ButtonStyle.danger)
     async def click_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.user.id:
-            return await interaction.response.send_message("Not your game!", ephemeral=True)
-        
-        if not self.ready:
-            self.clicked_early = True
+        try:
+            if interaction.user.id != self.user.id:
+                return await interaction.response.send_message("Not your game!", ephemeral=True)
+            
+            if not self.ready:
+                self.clicked_early = True
+                for c in self.children: c.disabled = True
+                embed = discord.Embed(title="⚡ Too Early!", description=f"You clicked too soon!\n💸 Lost **{self.bet}** pts", color=discord.Color.red())
+                await interaction.response.edit_message(embed=embed, view=self)
+                self.stop()
+                return
+            
+            reaction_time = (asyncio.get_event_loop().time() - self.start_time) * 1000
             for c in self.children: c.disabled = True
-            embed = discord.Embed(title="⚡ Too Early!", description=f"You clicked too soon!\n💸 Lost **{self.bet}** pts", color=discord.Color.red())
+            
+            if reaction_time < 200:
+                multiplier, result = 3.0, "⚡ INSANE!"
+            elif reaction_time < 300:
+                multiplier, result = 2.0, "🔥 Fast!"
+            elif reaction_time < 400:
+                multiplier, result = 1.5, "✅ Good"
+            elif reaction_time < 600:
+                multiplier, result = 1.0, "😐 Average"
+            else:
+                multiplier, result = 0.5, "🐢 Slow"
+            
+            winnings = int(self.bet * multiplier)
+            await self.cog.quest_data.add_balance(str(self.user.id), self.guild_id, winnings)
+            profit = winnings - self.bet
+            
+            embed = discord.Embed(
+                title=f"⚡ {result}",
+                description=f"⏱️ **{reaction_time:.0f}ms**\n💰 {'Won' if profit >= 0 else 'Lost'} **{profit:+,}** pts",
+                color=discord.Color.green() if profit >= 0 else discord.Color.red()
+            )
             await interaction.response.edit_message(embed=embed, view=self)
             self.stop()
-            return
+        except Exception as e:
+            logging.error(f"ReactionTimeView button error: {e}", exc_info=True)
+            try:
+                await interaction.response.send_message("❌ An error occurred!", ephemeral=True)
+            except:
+                pass
+
+
+class BlackjackView(discord.ui.View):
+    def __init__(self, cog, ctx, bet, player_hand, dealer_hand, card_value, draw_card):
+        super().__init__(timeout=60)
+        self.cog = cog
+        self.ctx = ctx
+        self.bet = bet
+        self.player_hand = player_hand
+        self.dealer_hand = dealer_hand
+        self.card_value = card_value
+        self.draw_card = draw_card
+        self.message = None
+        self.game_over = False
+    
+    def build_embed(self, reveal_dealer=False):
+        player_val = self.card_value(self.player_hand)
+        dealer_val = self.card_value(self.dealer_hand) if reveal_dealer else self.card_value([self.dealer_hand[0]])
         
-        reaction_time = (asyncio.get_event_loop().time() - self.start_time) * 1000
-        for c in self.children: c.disabled = True
-        
-        if reaction_time < 200:
-            multiplier, result = 3.0, "⚡ INSANE!"
-        elif reaction_time < 300:
-            multiplier, result = 2.0, "🔥 Fast!"
-        elif reaction_time < 400:
-            multiplier, result = 1.5, "✅ Good"
-        elif reaction_time < 600:
-            multiplier, result = 1.0, "😐 Average"
+        player_cards = " ".join(self.player_hand)
+        if reveal_dealer:
+            dealer_cards = " ".join(self.dealer_hand)
         else:
-            multiplier, result = 0.5, "🐢 Slow"
+            dealer_cards = f"{self.dealer_hand[0]} 🂠"
         
-        winnings = int(self.bet * multiplier)
-        await self.cog.quest_data.add_balance(str(self.user.id), self.guild_id, winnings)
-        profit = winnings - self.bet
-        
-        embed = discord.Embed(
-            title=f"⚡ {result}",
-            description=f"⏱️ **{reaction_time:.0f}ms**\n💰 {'Won' if profit >= 0 else 'Lost'} **{profit:+,}** pts",
-            color=discord.Color.green() if profit >= 0 else discord.Color.red()
+        embed = discord.Embed(title="🃏 Blackjack", color=primary_color())
+        embed.add_field(
+            name=f"Your Hand ({player_val})",
+            value=player_cards,
+            inline=False
         )
+        embed.add_field(
+            name=f"Dealer ({dealer_val if reveal_dealer else '?'})",
+            value=dealer_cards,
+            inline=False
+        )
+        embed.set_footer(text=f"Bet: {self.bet:,} pts")
+        return embed
+    
+    async def end_game(self, interaction, result, multiplier):
+        self.game_over = True
+        for c in self.children:
+            c.disabled = True
+        
+        user_id = str(self.ctx.author.id)
+        guild_id = str(self.ctx.guild.id)
+        
+        if multiplier > 0:
+            winnings = int(self.bet * multiplier)
+            await self.cog.quest_data.add_balance(user_id, guild_id, winnings)
+            profit = winnings - self.bet
+            color = discord.Color.green()
+        else:
+            profit = -self.bet
+            color = discord.Color.red()
+        
+        new_bal = await self.cog.quest_data.get_balance(user_id, guild_id)
+        
+        embed = self.build_embed(reveal_dealer=True)
+        embed.color = color
+        embed.add_field(
+            name=result,
+            value=f"**{'Won' if profit >= 0 else 'Lost'}:** {abs(profit):,} pts\n**Balance:** {new_bal:,} pts",
+            inline=False
+        )
+        
         await interaction.response.edit_message(embed=embed, view=self)
         self.stop()
+    
+    @discord.ui.button(label="Hit", style=discord.ButtonStyle.primary)
+    async def hit_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        try:
+            if interaction.user.id != self.ctx.author.id:
+                return await interaction.response.send_message("Not your game!", ephemeral=True)
+            
+            self.player_hand.append(self.draw_card())
+            player_val = self.card_value(self.player_hand)
+            
+            if player_val > 21:
+                await self.end_game(interaction, "💥 Bust!", 0)
+            elif player_val == 21:
+                await self.end_game(interaction, "🎉 Blackjack!", 2.5)
+            else:
+                embed = self.build_embed()
+                await interaction.response.edit_message(embed=embed, view=self)
+        except Exception as e:
+            logging.error(f"BlackjackView hit_btn error: {e}", exc_info=True)
+            try:
+                await interaction.response.send_message(" An error occurred!", ephemeral=True)
+            except:
+                pass
+    
+    @discord.ui.button(label="Stand", style=discord.ButtonStyle.secondary)
+    async def stand_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        try:
+            if interaction.user.id != self.ctx.author.id:
+                return await interaction.response.send_message("Not your game!", ephemeral=True)
+            
+            # Dealer draws until 17+
+            while self.card_value(self.dealer_hand) < 17:
+                self.dealer_hand.append(self.draw_card())
+            
+            player_val = self.card_value(self.player_hand)
+            dealer_val = self.card_value(self.dealer_hand)
+            
+            if dealer_val > 21:
+                await self.end_game(interaction, " Dealer Bust!", 2)
+            elif player_val > dealer_val:
+                await self.end_game(interaction, " You Win!", 2)
+            elif player_val < dealer_val:
+                await self.end_game(interaction, " Dealer Wins", 0)
+            else:
+                # Push - return bet
+                await self.cog.quest_data.add_balance(str(self.ctx.author.id), str(self.ctx.guild.id), self.bet)
+                await self.end_game(interaction, " Push (Tie)", 1)
+        except Exception as e:
+            logging.error(f"BlackjackView stand_btn error: {e}", exc_info=True)
+            try:
+                await interaction.response.send_message(" An error occurred!", ephemeral=True)
+            except:
+                pass
 
 
 async def setup(bot):

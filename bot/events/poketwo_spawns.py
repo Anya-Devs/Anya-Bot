@@ -31,7 +31,7 @@ from cachetools import TTLCache
 
 from imports.discord_imports import *
 from bot.token import use_test_bot as ut
-from bot.cogs.pokemon import PoketwoCommands
+from bot.cogs.pokemon import Pokemon
 from bot.utils.subcogs.pokemon import MongoHelper
 from data.events.poketwo_spawns.predict import Prediction
 from bot.utils.events.poketwo_spawns import PokemonImageBuilder, PokemonUtils, PokemonSpawnView
@@ -74,7 +74,7 @@ class PoketwoSpawnDetector(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.predictor = Prediction()
-        self.pp = PoketwoCommands(bot)
+        self.pp = Pokemon(bot)
         self.mongo = MongoHelper(AsyncIOMotorClient(os.getenv("MONGO_URI"))["Commands"]["pokemon"])
 
         self.pokemon_utils = PokemonUtils(

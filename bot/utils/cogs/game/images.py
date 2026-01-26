@@ -46,6 +46,7 @@ import json
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple, Any
 from datetime import datetime
+from PIL import Image
 from concurrent.futures import ThreadPoolExecutor
 import multiprocessing as mp
 from functools import partial

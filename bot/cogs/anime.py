@@ -1,15 +1,14 @@
 # Anime & Manga Commands
-# Commands: anime, manga, waifu, husbando, quote, schedule, wallpaper, gif, neko, smug, cuddle
 import asyncio, aiohttp, logging, random
 from datetime import datetime, timezone
-from typing import Optional, Literal
+from typing import Optional
 from imports.discord_imports import *
 from bot.utils.cogs.anime import *
 from data.local.const import primary_color
 
 
 class Anime(commands.Cog):
-    """🎌 Anime & Manga - Search anime, manga, get waifus, quotes, and more"""
+    """🎌 Anime & Manga - Search shows, get waifus, quotes, and more!"""
     
     def __init__(self, bot):
         self.bot = bot
@@ -32,10 +31,8 @@ class Anime(commands.Cog):
             asyncio.create_task(self.session.close())
 
     async def prompt_query(self, ctx, item):
-        prompt = f"{ctx.author.display_name.title()}, enter the `name` of the {item} you're looking for."
-        embed = discord.Embed(description=prompt)
-        if item == "anime":
-            embed.set_footer(text=f"Try {ctx.prefix}anime recommend for a random anime")
+        prompt = f"What {item} are you looking for?"
+        embed = discord.Embed(description=prompt, color=primary_color())
         message = await ctx.reply(embed=embed, mention_author=False)
 
         def check(m): return m.author == ctx.author and m.channel == ctx.channel
@@ -49,69 +46,66 @@ class Anime(commands.Cog):
             await msg.delete()
             return query
         except asyncio.TimeoutError:
-            await message.edit(embed=discord.Embed(description=f"Time's Up! No {item} title provided.", color=self.red))
+            await message.edit(embed=discord.Embed(description=f"⏰ Timeout - no {item} name provided.", color=self.red))
         except ValueError as e:
-            await message.edit(embed=discord.Embed(description=f"Error: {e}", color=self.red))
+            await message.edit(embed=discord.Embed(description=f"❌ {e}", color=self.red))
         return None
 
     async def fetch_and_send(self, ctx, url, query, view_cls):
-     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as r:
-                r.raise_for_status()
-                data = await r.json()
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as r:
+                    r.raise_for_status()
+                    data = await r.json()
 
-        if not data.get("data"):
-            await ctx.reply(f"No results found for '{query}'.")
-            return
+            if not data.get("data"):
+                return await ctx.reply(f"No results found for `{query}` 😕", mention_author=False)
 
-        # Instantiate view depending on type
-        if view_cls == CharacterView:
-            view = view_cls(character_data=data)
+            if view_cls == CharacterView:
+                view = view_cls(character_data=data)
+            elif view_cls == AnimeView:
+                view = view_cls(anime_data=data)
+            elif view_cls == MangaView:
+                view = view_cls(manga_data=data)
+            else:
+                return await ctx.reply(f"No results found for `{query}`", mention_author=False)
+            
             embed = await view.update_embed()
             await ctx.reply(embed=embed, view=view, mention_author=False)
-        elif view_cls == AnimeView:
-            view = view_cls(anime_data=data)
-            embed = await view.update_embed()
-            await ctx.reply(embed=embed, view=view, mention_author=False)
-        elif view_cls == MangaView:
-            view = view_cls(manga_data=data)
-            embed = await view.update_embed()
-            await ctx.reply(embed=embed, view=view, mention_author=False)
-        else:
-            # Fallback for unknown views
-            embed = discord.Embed(
-                title=f"Search Results for: {query}",
-                color=primary_color(),
-                description="No interactive view available."
-            )
-            await ctx.reply(embed=embed)
 
-     except aiohttp.ClientError as e:
-        logging.error(f"HTTP error: {e}")
-        await ctx.send(f"HTTP error occurred: {e}")
-     except Exception as e:
-        logging.error(f"Unexpected error: {e}")
-        await ctx.send(f"Unexpected error occurred: {e}")
+        except Exception as e:
+            logging.error(f"Error: {e}")
+            await ctx.send(f"Oops! Something went wrong: {e}")
 
+    # ═══════════════════════════════════════════════════════════════
+    # ANIME COMMANDS
+    # ═══════════════════════════════════════════════════════════════
     @commands.group(name="anime", invoke_without_command=True)
     async def anime_group(self, ctx):
-        """Anime commands - search, recommendations, and character information"""
-        await ctx.send("Use a subcommand: `search`, `recommend`, or `character`.")
-    
-    
+        """Anime commands - search, recommendations, quotes & more"""
+        embed = discord.Embed(
+            title="Commands",
+            description=(
+                f"`{ctx.prefix}anime search <name>` - Find an anime\n"
+                f"`{ctx.prefix}anime recommend` - Get random anime\n"
+                f"`{ctx.prefix}anime character <name>` - Search characters\n"
+                f"`{ctx.prefix}anime quote` - Random anime quote\n"
+                f"`{ctx.prefix}anime schedule` - Today's airing anime"
+            ),
+            color=primary_color()
+        )
+        await ctx.reply(embed=embed, mention_author=False)
 
     @anime_group.command(name="search")
     async def anime_search(self, ctx, *, query: Optional[str] = None):
-        """Search for anime by name or keyword"""
+        """Search for anime by name"""
         query = query or await self.prompt_query(ctx, "anime")
         if not query: return
         await self.fetch_and_send(ctx, f"{self.api_url}anime?q={query}", query, AnimeView)
 
-   
     @anime_group.command(name="character")
     async def anime_character(self, ctx, *, query=None):
-        """Search for anime characters by name"""
+        """Search for anime characters"""
         query = query or await self.prompt_query(ctx, "character")
         if not query: return
         await self.fetch_and_send(ctx, f"{self.api_url}characters?q={query}", query, CharacterView)
@@ -120,364 +114,13 @@ class Anime(commands.Cog):
     async def anime_recommend(self, ctx):
         """Get a random anime recommendation"""
         d = await self.ar.fetch_random_anime()
-        m = await ctx.reply(embed=discord.Embed(description=f'{neko_lurk} Fetching anime...', color=primary_color()), mention_author=False)
+        m = await ctx.reply(embed=discord.Embed(description=f'🔍 Finding you an anime...', color=primary_color()), mention_author=False)
         await self.ar.update_anime_embed(m, d)
 
-
-    # Manga commands
-    @commands.group(name="manga")
-    async def manga_group(self, ctx):
-        """Manga commands - search, read, and recommendations"""
-        if ctx.invoked_subcommand is None:
-            await ctx.send("Use a subcommand: `search`, `read`, or `recommend`.")
-
-    @manga_group.command(name="search")
-    async def manga_search(self, ctx, *, query=None):
-        """Search for manga by name or keyword"""
-        query = query or await self.prompt_query(ctx, "manga")
-        if not query: return
-        await self.fetch_and_send(ctx, f"{self.api_url}manga?q={query}", query, MangaView)
-
-    @manga_group.command(name="read")
-    async def manga_read(self, ctx, *, query=None):
-        """Read manga chapters online"""
-        query = query or await self.prompt_query(ctx, "manga")
-        if not query:
-            return await ctx.send("❌ No query provided.")
-
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.mangadex_url}/manga?title={query}&limit=25"
-            async with session.get(url) as resp:
-                data = await resp.json()
-
-        if not data.get("data"):
-            return await ctx.send(f"❌ No manga found for `{query}`.")
-
-        view = MangaSession(ctx, data)
-        embed = discord.Embed(
-            title=f"Search results for `{query}`",
-            description="Select a manga from the dropdown below.",
-            color=primary_color()
-        )
-        await ctx.reply(embed=embed, view=view, mention_author=False)
-
-    @manga_group.command(name="recommend")
-    async def manga_recommend(self, ctx):
-        """Get a random manga recommendation"""
-        d = await self.mr.fetch_random_manga()
-        m = await ctx.reply(embed=discord.Embed(description=f'{neko_lurk} Fetching manga...', color=primary_color()), mention_author=False)
-        await self.mr.update_manga_embed(m, d)
-
-
-    # ═══════════════════════════════════════════════════════════════
-    # WAIFU / HUSBANDO COMMANDS (Enhanced)
-    # ═══════════════════════════════════════════════════════════════
-    @commands.command(name="waifu")
-    @commands.cooldown(1, 3, commands.BucketType.user)
-    async def waifu(self, ctx, *, query: str = None):
-        """Search for female anime characters with detailed information and image gallery
-        
-        Usage:
-          • .waifu - Random waifu image
-          • .waifu Asuna - Search for specific character
-          • .waifu Rem Re:Zero - Search with anime name
-        """
-        from bot.utils.cogs.anime_enhanced import CharacterInfo, CharacterSelectView
-        
-        if not query:
-            # Random waifu image (fallback to simple mode)
-            session = await self.get_session()
-            try:
-                async with session.get(f"{self.waifu_api}/sfw/waifu") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        url = data.get("url", "")
-                        
-                        embed = discord.Embed(
-                            title="Random Waifu",
-                            description="Use `.waifu <name>` to search for specific characters!",
-                            color=discord.Color.from_rgb(255, 182, 193),
-                            timestamp=datetime.now(timezone.utc)
-                        )
-                        embed.set_image(url=url)
-                        embed.set_footer(text=f"Requested by {ctx.author}")
-                        
-                        return await ctx.reply(embed=embed, mention_author=False)
-            except Exception as e:
-                logging.error(f"Waifu API error: {e}")
-                return await ctx.reply("❌ Could not fetch waifu image", mention_author=False)
-        
-        # Character search mode
-        async with ctx.typing():
-            char_info = CharacterInfo()
-            characters = await char_info.search_characters(query, limit=25)
-            
-            if not characters:
-                return await ctx.reply(f"❌ No characters found for `{query}`", mention_author=False)
-            
-            # Filter for female characters
-            female_chars = [c for c in characters if "Female" in str(c.get("name_kanji", "")) or 
-                           any("female" in str(a.get("role", "")).lower() for a in c.get("anime", []))]
-            
-            if not female_chars:
-                female_chars = characters  # Fallback to all results
-            
-            # Show character selection
-            embed = discord.Embed(
-                title=f"Waifu Search Results for '{query}'",
-                description="Select a character from the dropdown to view detailed information, anime appearances, and image gallery!",
-                color=discord.Color.from_rgb(255, 182, 193)
-            )
-            embed.set_footer(text=f"Found {len(female_chars)} character(s)")
-            
-            view = CharacterSelectView(female_chars, ctx)
-            await ctx.reply(embed=embed, view=view, mention_author=False)
-
-    @commands.command(name="husbando")
-    @commands.cooldown(1, 3, commands.BucketType.user)
-    async def husbando(self, ctx, *, query: str = None):
-        """Search for male anime characters with detailed information and image gallery
-        
-        Usage:
-          • .husbando - Random husbando image
-          • .husbando Kirito - Search for specific character
-          • .husbando Levi Attack on Titan - Search with anime name
-        """
-        from bot.utils.cogs.anime_enhanced import CharacterInfo, CharacterSelectView
-        
-        if not query:
-            # Random husbando image (fallback to simple mode)
-            session = await self.get_session()
-            try:
-                async with session.get(f"{self.nekos_api}/husbando") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        results = data.get("results", [])
-                        if results:
-                            url = results[0].get("url", "")
-                            artist = results[0].get("artist_name", "Unknown")
-                            
-                            embed = discord.Embed(
-                                title="Random Husbando",
-                                description="Use `.husbando <name>` to search for specific characters!",
-                                color=discord.Color.blue(),
-                                timestamp=datetime.now(timezone.utc)
-                            )
-                            embed.set_image(url=url)
-                            embed.set_footer(text=f"Artist: {artist} • Requested by {ctx.author}")
-                            
-                            return await ctx.reply(embed=embed, mention_author=False)
-            except Exception as e:
-                logging.error(f"Husbando API error: {e}")
-                return await ctx.reply("❌ Could not fetch husbando image", mention_author=False)
-        
-        # Character search mode
-        async with ctx.typing():
-            char_info = CharacterInfo()
-            characters = await char_info.search_characters(query, limit=25)
-            
-            if not characters:
-                return await ctx.reply(f"❌ No characters found for `{query}`", mention_author=False)
-            
-            # Filter for male characters
-            male_chars = [c for c in characters if "Male" in str(c.get("name_kanji", "")) or 
-                         any("male" in str(a.get("role", "")).lower() for a in c.get("anime", []))]
-            
-            if not male_chars:
-                male_chars = characters  # Fallback to all results
-            
-            # Show character selection
-            embed = discord.Embed(
-                title=f"Husbando Search Results for '{query}'",
-                description="Select a character from the dropdown to view detailed information, anime appearances, and image gallery!",
-                color=discord.Color.blue()
-            )
-            embed.set_footer(text=f"Found {len(male_chars)} character(s)")
-            
-            view = CharacterSelectView(male_chars, ctx)
-            await ctx.reply(embed=embed, view=view, mention_author=False)
-
-    # ═══════════════════════════════════════════════════════════════
-    # ANIME REACTION GIFS
-    # ═══════════════════════════════════════════════════════════════
-    @commands.command(name="neko")
-    @commands.cooldown(1, 3, commands.BucketType.user)
-    async def neko(self, ctx):
-        """Browse high-quality catgirl images with artist credits and source attribution
-        
-        Features:
-          • Multi-source image scraping for variety
-          • Artist attribution and source links
-          • Interactive gallery with navigation
-          • 100% SFW content
-        """
-        from bot.utils.cogs.anime_enhanced import ImageSource, NekoKitsuneGalleryView
-        
-        loading_msg = await ctx.reply("Fetching neko images from multiple sources...", mention_author=False)
-        
-        try:
-            img_source = ImageSource()
-            images = await img_source.fetch_neko_images(limit=20)
-            
-            if not images:
-                return await loading_msg.edit(content="❌ Could not fetch neko images")
-            
-            # Create gallery view and show first image
-            view = NekoKitsuneGalleryView(images, "neko", ctx)
-            
-            # Build first image embed
-            img = images[0]
-            embed = discord.Embed(
-                title="Neko Gallery",
-                color=discord.Color.from_rgb(255, 182, 193),
-                timestamp=datetime.now(timezone.utc)
-            )
-            embed.set_image(url=img["url"])
-            
-            artist = img.get("artist", "Unknown")
-            source = img.get("source", "")
-            site = img.get("site", "Unknown")
-            score = img.get("score", 0)
-            
-            footer_text = f"Artist: {artist} • Source: {site}"
-            if score > 0:
-                footer_text += f" • Score: {score}"
-            footer_text += f" • Image 1/{len(images)}"
-            embed.set_footer(text=footer_text)
-            
-            await loading_msg.edit(content=None, embed=embed, view=view)
-        except Exception as e:
-            logging.error(f"Neko command error: {e}")
-            await loading_msg.edit(content="❌ Error fetching neko images")
-
-    @commands.command(name="kitsune")
-    @commands.cooldown(1, 3, commands.BucketType.user)
-    async def anime_kitsune(self, ctx):
-        """Browse high-quality foxgirl images with artist credits and source attribution
-        
-        Features:
-          • Multi-source image scraping for variety
-          • Artist attribution and source links
-          • Interactive gallery with navigation
-          • 100% SFW content
-        """
-        from bot.utils.cogs.anime_enhanced import ImageSource, NekoKitsuneGalleryView
-        
-        loading_msg = await ctx.reply("Fetching kitsune images from multiple sources...", mention_author=False)
-        
-        try:
-            img_source = ImageSource()
-            images = await img_source.fetch_kitsune_images(limit=20)
-            
-            if not images:
-                return await loading_msg.edit(content="❌ Could not fetch kitsune images")
-            
-            # Create gallery view and show first image
-            view = NekoKitsuneGalleryView(images, "kitsune", ctx)
-            
-            # Build first image embed
-            img = images[0]
-            embed = discord.Embed(
-                title="🦊 Kitsune Gallery",
-                color=discord.Color.from_rgb(255, 182, 193),
-                timestamp=datetime.now(timezone.utc)
-            )
-            embed.set_image(url=img["url"])
-            
-            artist = img.get("artist", "Unknown")
-            source = img.get("source", "")
-            site = img.get("site", "Unknown")
-            score = img.get("score", 0)
-            
-            footer_text = f"Artist: {artist} • Source: {site}"
-            if score > 0:
-                footer_text += f" • Score: {score}"
-            footer_text += f" • Image 1/{len(images)}"
-            embed.set_footer(text=footer_text)
-            
-            await loading_msg.edit(content=None, embed=embed, view=view)
-        except Exception as e:
-            logging.error(f"Kitsune command error: {e}")
-            await loading_msg.edit(content="❌ Error fetching kitsune images")
-
-    @anime_group.command(name="smug")
-    @commands.cooldown(1, 3, commands.BucketType.user)
-    async def anime_smug(self, ctx):
-        """😏 Get a smug anime reaction"""
-        await self._send_waifu_gif(ctx, "smug", "😏 Smug")
-
-    @anime_group.command(name="cry")
-    @commands.cooldown(1, 3, commands.BucketType.user)
-    async def anime_cry(self, ctx):
-        """😢 Get a crying anime reaction"""
-        await self._send_waifu_gif(ctx, "cry", "T w T Cry")
-
-    @anime_group.command(name="blush")
-    @commands.cooldown(1, 3, commands.BucketType.user)
-    async def anime_blush(self, ctx):
-        """😊 Get a blushing anime reaction"""
-        await self._send_nekos_image(ctx, "blush", ">///< Blush")
-
-    @anime_group.command(name="happy")
-    @commands.cooldown(1, 3, commands.BucketType.user)
-    async def anime_happy(self, ctx):
-        """😄 Get a happy anime reaction"""
-        await self._send_waifu_gif(ctx, "happy", "^w^ Happy")
-
-    @anime_group.command(name="dance")
-    @commands.cooldown(1, 3, commands.BucketType.user)
-    async def anime_dance(self, ctx):
-        """💃 Get a dancing anime reaction"""
-        await self._send_waifu_gif(ctx, "dance", "💃 Dance")
-
-    async def _send_waifu_gif(self, ctx, category: str, title: str):
-        """Helper to send waifu.pics gifs"""
-        session = await self.get_session()
-        try:
-            async with session.get(f"{self.waifu_api}/sfw/{category}") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    url = data.get("url", "")
-                    
-                    embed = discord.Embed(title=title, color=primary_color())
-                    embed.set_image(url=url)
-                    embed.set_footer(text=f"Requested by {ctx.author}")
-                    
-                    return await ctx.reply(embed=embed, mention_author=False)
-        except Exception as e:
-            logging.error(f"Waifu API error: {e}")
-        
-        await ctx.reply(f"❌ Could not fetch {category} gif", mention_author=False)
-
-    async def _send_nekos_image(self, ctx, category: str, title: str):
-        """Helper to send nekos.best images"""
-        session = await self.get_session()
-        try:
-            async with session.get(f"{self.nekos_api}/{category}") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    results = data.get("results", [])
-                    if results:
-                        url = results[0].get("url", "")
-                        artist = results[0].get("artist_name", "Unknown")
-                        
-                        embed = discord.Embed(title=title, color=primary_color())
-                        embed.set_image(url=url)
-                        embed.set_footer(text=f"Artist: {artist} • Requested by {ctx.author}")
-                        
-                        return await ctx.reply(embed=embed, mention_author=False)
-        except Exception as e:
-            logging.error(f"Nekos API error: {e}")
-        
-        await ctx.reply(f"❌ Could not fetch {category} image", mention_author=False)
-
-    # ═══════════════════════════════════════════════════════════════
-    # ANIME QUOTE
-    # ═══════════════════════════════════════════════════════════════
     @anime_group.command(name="quote")
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def anime_quote(self, ctx):
-        """💬 Get a random anime quote"""
+        """Get a random anime quote"""
         session = await self.get_session()
         try:
             async with session.get("https://animechan.io/api/v1/quotes/random") as resp:
@@ -490,11 +133,10 @@ class Anime(commands.Cog):
                     anime = quote_data.get("anime", {}).get("name", "Unknown Anime")
                     
                     embed = discord.Embed(
-                        description=f"*\"{quote}\"*",
+                        description=f"💬 *\"{quote}\"*",
                         color=primary_color(),
                         timestamp=datetime.now(timezone.utc)
                     )
-                    embed.set_author(name=f"💬 Anime Quote")
                     embed.add_field(name="Character", value=character, inline=True)
                     embed.add_field(name="Anime", value=anime, inline=True)
                     embed.set_footer(text=f"Requested by {ctx.author}")
@@ -512,77 +154,140 @@ class Anime(commands.Cog):
         ]
         q = random.choice(fallback_quotes)
         embed = discord.Embed(
-            description=f"*\"{q['quote']}\"*",
+            description=f"💬 *\"{q['quote']}\"*",
             color=primary_color()
         )
         embed.add_field(name="Character", value=q["character"], inline=True)
         embed.add_field(name="Anime", value=q["anime"], inline=True)
         await ctx.reply(embed=embed, mention_author=False)
 
-    # ═══════════════════════════════════════════════════════════════
-    # ANIME SCHEDULE
-    # ═══════════════════════════════════════════════════════════════
     @anime_group.command(name="schedule", aliases=["airing"])
     @commands.cooldown(1, 10, commands.BucketType.user)
     async def anime_schedule(self, ctx, day: str = None):
-        """📅 Get anime airing schedule
-        
-        Days: monday, tuesday, wednesday, thursday, friday, saturday, sunday
-        """
+        """Check what's airing today (or specify a day)"""
         days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
         
         if day is None:
             day = days[datetime.now().weekday()]
         elif day.lower() not in days:
-            return await ctx.reply(f"❌ Invalid day. Use: {', '.join(days)}", mention_author=False)
+            return await ctx.reply(f"❌ Use: {', '.join(days)}", mention_author=False)
         
         day = day.lower()
         
         session = await self.get_session()
         try:
-            async with session.get(f"{self.api_url}schedules?filter={day}&limit=15") as resp:
+            async with session.get(f"{self.api_url}schedules?filter={day}&limit=10") as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     anime_list = data.get("data", [])
                     
                     if not anime_list:
-                        return await ctx.reply(f"No anime airing on {day.title()}", mention_author=False)
+                        return await ctx.reply(f"No anime airing on {day.title()} 🤔", mention_author=False)
                     
                     embed = discord.Embed(
-                        title=f"Anime Schedule - {day.title()}",
-                        color=primary_color(),
-                        timestamp=datetime.now(timezone.utc)
+                        title=f"📅 Airing on {day.title()}",
+                        color=primary_color()
                     )
                     
-                    for anime in anime_list[:10]:
-                        title = anime.get("title", "Unknown")[:40]
-                        episodes = anime.get("episodes", "?")
+                    description = []
+                    for i, anime in enumerate(anime_list[:8], 1):
+                        title = anime.get("title", "Unknown")[:35]
                         score = anime.get("score", "N/A")
-                        
-                        embed.add_field(
-                            name=title,
-                            value=f"Episodes: {episodes} | Score: {score}",
-                            inline=True
-                        )
+                        description.append(f"`{i}.` **{title}** (⭐ {score})")
                     
+                    embed.description = "\n".join(description)
                     embed.set_footer(text=f"Requested by {ctx.author}")
                     return await ctx.reply(embed=embed, mention_author=False)
         except Exception as e:
             logging.error(f"Schedule API error: {e}")
         
-        await ctx.reply("❌ Could not fetch anime schedule", mention_author=False)
+        await ctx.reply("❌ Couldn't fetch the schedule", mention_author=False)
 
     # ═══════════════════════════════════════════════════════════════
-    # ANIME WALLPAPER
+    # MANGA COMMANDS
     # ═══════════════════════════════════════════════════════════════
-    @anime_group.command(name="wallpaper", aliases=["wall"])
-    @commands.cooldown(1, 5, commands.BucketType.user)
-    async def anime_wallpaper(self, ctx):
-        """🖼️ Get random anime wallpapers"""
+    @commands.group(name="manga", invoke_without_command=True)
+    async def manga_group(self, ctx):
+        """Manga commands - search, read, and recommendations"""
+        embed = discord.Embed(
+            title="📚 Manga Commands",
+            description=(
+                f"`{ctx.prefix}manga search <name>` - Find a manga\n"
+                f"`{ctx.prefix}manga recommend` - Get random manga\n"
+                f"`{ctx.prefix}manga read <name>` - Read manga chapters"
+            ),
+            color=primary_color()
+        )
+        await ctx.reply(embed=embed, mention_author=False)
+
+    @manga_group.command(name="search")
+    async def manga_search(self, ctx, *, query=None):
+        """Search for manga by name"""
+        query = query or await self.prompt_query(ctx, "manga")
+        if not query: return
+        await self.fetch_and_send(ctx, f"{self.api_url}manga?q={query}", query, MangaView)
+
+    @manga_group.command(name="read")
+    async def manga_read(self, ctx, *, query=None):
+        """Read manga chapters online"""
+        query = query or await self.prompt_query(ctx, "manga")
+        if not query:
+            return await ctx.send("❌ No manga name provided.")
+
+        async with aiohttp.ClientSession() as session:
+            url = f"{self.mangadex_url}/manga?title={query}&limit=25"
+            async with session.get(url) as resp:
+                data = await resp.json()
+
+        if not data.get("data"):
+            return await ctx.send(f"❌ No manga found for `{query}`.")
+
+        view = MangaSession(ctx, data)
+        embed = discord.Embed(
+            title=f"📖 Results for `{query}`",
+            description="Pick a manga from the dropdown below!",
+            color=primary_color()
+        )
+        await ctx.reply(embed=embed, view=view, mention_author=False)
+
+    @manga_group.command(name="recommend")
+    async def manga_recommend(self, ctx):
+        """Get a random manga recommendation"""
+        d = await self.mr.fetch_random_manga()
+        m = await ctx.reply(embed=discord.Embed(description=f'🔍 Finding you a manga...', color=primary_color()), mention_author=False)
+        await self.mr.update_manga_embed(m, d)
+
+    # ═══════════════════════════════════════════════════════════════
+    # FUN IMAGE COMMANDS
+    # ═══════════════════════════════════════════════════════════════
+    @commands.command(name="waifu")
+    @commands.cooldown(1, 3, commands.BucketType.user)
+    async def waifu(self, ctx):
+        """Get a random waifu image"""
         session = await self.get_session()
         try:
-            # Use nekos.best wallpaper endpoint
-            async with session.get(f"{self.nekos_api}/wallpaper") as resp:
+            async with session.get(f"{self.waifu_api}/sfw/waifu") as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    embed = discord.Embed(
+                        title="Waifu",
+                        color=discord.Color.from_rgb(255, 182, 193),
+                        timestamp=datetime.now(timezone.utc)
+                    )
+                    embed.set_image(url=data.get("url", ""))
+                    embed.set_footer(text=f"Requested by {ctx.author}")
+                    return await ctx.reply(embed=embed, mention_author=False)
+        except Exception as e:
+            logging.error(f"Waifu API error: {e}")
+        await ctx.reply("❌ Couldn't fetch waifu image", mention_author=False)
+
+    @commands.command(name="neko")
+    @commands.cooldown(1, 3, commands.BucketType.user)
+    async def neko(self, ctx):
+        """Get a random neko image"""
+        session = await self.get_session()
+        try:
+            async with session.get(f"{self.nekos_api}/neko") as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     results = data.get("results", [])
@@ -591,93 +296,80 @@ class Anime(commands.Cog):
                         artist = results[0].get("artist_name", "Unknown")
                         
                         embed = discord.Embed(
-                            title="🖼️ Anime Wallpaper",
-                            color=primary_color(),
+                            title="Neko",
+                            color=discord.Color.from_rgb(255, 182, 193),
                             timestamp=datetime.now(timezone.utc)
                         )
                         embed.set_image(url=url)
                         embed.set_footer(text=f"Artist: {artist} • Requested by {ctx.author}")
-                        
-                        view = discord.ui.View()
-                        view.add_item(discord.ui.Button(label="Download", style=discord.ButtonStyle.link, url=url))
-                        
-                        return await ctx.reply(embed=embed, view=view, mention_author=False)
         except Exception as e:
-            logging.error(f"Wallpaper API error: {e}")
-        
-        await ctx.reply("❌ Could not fetch wallpaper", mention_author=False)
-
-    # ═══════════════════════════════════════════════════════════════
-    # ANIME TRIVIA
-    # ═══════════════════════════════════════════════════════════════
-    @anime_group.command(name="trivia")
-    @commands.cooldown(1, 10, commands.BucketType.user)
-    async def anime_trivia(self, ctx):
-        """🎯 Anime trivia game - Guess the anime from the character"""
+            print(e)
+             
+    @commands.command(name="wallpaper")
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    async def wallpaper(self, ctx):
+        """Get a random anime wallpaper"""
         session = await self.get_session()
         
-        try:
-            # Get a random character
-            char_id = random.randint(1, 5000)
-            async with session.get(f"{self.api_url}characters/{char_id}/full") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    char_data = data.get("data", {})
-                    
-                    if not char_data:
-                        return await ctx.reply("❌ Could not fetch trivia", mention_author=False)
-                    
-                    name = char_data.get("name", "Unknown")
-                    image = char_data.get("images", {}).get("jpg", {}).get("image_url", "")
-                    anime_list = char_data.get("anime", [])
-                    
-                    if not anime_list:
-                        return await ctx.reply("❌ Could not fetch trivia", mention_author=False)
-                    
-                    correct_anime = anime_list[0].get("anime", {}).get("title", "Unknown")
-                    
-                    embed = discord.Embed(
-                        title="🎯 Anime Trivia",
-                        description=f"**Which anime is this character from?**\n\nCharacter: **{name}**",
-                        color=primary_color()
-                    )
-                    embed.set_image(url=image)
-                    embed.set_footer(text="Type your answer in chat! (30 seconds)")
-                    
-                    await ctx.reply(embed=embed, mention_author=False)
-                    
-                    def check(m):
-                        return m.author == ctx.author and m.channel == ctx.channel
-                    
-                    try:
-                        msg = await self.bot.wait_for("message", timeout=30, check=check)
-                        
-                        if correct_anime.lower() in msg.content.lower() or msg.content.lower() in correct_anime.lower():
-                            embed = discord.Embed(
-                                title="✅ Correct!",
-                                description=f"The anime is **{correct_anime}**!",
-                                color=discord.Color.green()
-                            )
-                        else:
-                            embed = discord.Embed(
-                                title="❌ Wrong!",
-                                description=f"The correct answer was **{correct_anime}**",
-                                color=discord.Color.red()
-                            )
-                        
-                        await ctx.reply(embed=embed, mention_author=False)
-                    except asyncio.TimeoutError:
-                        embed = discord.Embed(
-                            title="⏰ Time's Up!",
-                            description=f"The correct answer was **{correct_anime}**",
-                            color=discord.Color.orange()
-                        )
-                        await ctx.reply(embed=embed, mention_author=False)
-                    return
-        except Exception as e:
-            logging.error(f"Trivia error: {e}")
+        # Try multiple APIs for better reliability
+        apis = [
+            "https://nekos.best/api/v2/wallpaper",  # Nekos.best - backup
+            "https://api.waifu.im/search/?included_tags=wallpaper&limit=1",  # Waifu.im - fallback
+        ]
         
-        await ctx.reply("❌ Could not start trivia", mention_author=False)
+        for i, api_url in enumerate(apis):
+            try:
+                async with session.get(api_url, timeout=10) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        
+                        # Handle different API response formats
+                        url = None
+                        artist = "Unknown"
+                        
+                        if "waifu.pics" in api_url:
+                            url = data.get("url", "")
+                            artist = "Waifu.pics"
+                        elif "nekos.best" in api_url:
+                            results = data.get("results", [])
+                            if results:
+                                url = results[0].get("url", "")
+                                artist = results[0].get("artist_name", "Nekos.best")
+                        elif "waifu.im" in api_url:
+                            results = data.get("results", [])
+                            if results:
+                                url = results[0].get("url", "")
+                                artist = results[0].get("artist", "Waifu.im")
+                        
+                        if url:
+                            embed = discord.Embed(
+                                title="🖼️ Anime Wallpaper",
+                                color=primary_color(),
+                                timestamp=datetime.now(timezone.utc)
+                            )
+                            embed.set_image(url=url)
+                            embed.set_footer(text=f"Source: {artist} • Requested by {ctx.author}")
+                            
+                            view = discord.ui.View()
+                            view.add_item(discord.ui.Button(
+                                label="Download",
+                                style=discord.ButtonStyle.link,
+                                url=url,
+                                emoji="⬇️"
+                            ))
+                            
+                            return await ctx.reply(embed=embed, view=view, mention_author=False)
+                    else:
+                        logging.warning(f"Wallpaper API {i+1} returned status {resp.status}: {api_url}")
+                        
+            except asyncio.TimeoutError:
+                logging.warning(f"Wallpaper API {i+1} timeout: {api_url}")
+                continue
+            except Exception as e:
+                logging.error(f"Wallpaper API {i+1} error: {e}", exc_info=True)
+                continue
+        
+        await ctx.reply("❌ Couldn't fetch wallpaper from any source", mention_author=False)
 
 
 async def setup(bot):

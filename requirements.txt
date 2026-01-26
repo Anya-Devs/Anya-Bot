@@ -19,7 +19,6 @@ aiofiles
 psutil
 pandas
 fuzzywuzzy
-pilmoji==2.0.5
 tqdm
 colorlog
 colorama
