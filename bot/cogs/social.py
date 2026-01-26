@@ -13,7 +13,7 @@ class Social_Data:
     
     async def get_rel(self, gid, uid):
         doc = await self.mongo.relationships.find_one({"guild_id": gid, "user_id": uid})
-        return doc or {"partner": None, "parent": None, "children": []}
+        return doc or {"partner": None, "parent": None, "children": [], "friends": []}
     
     async def set_partner(self, gid, uid, pid):
         now = datetime.utcnow()
@@ -42,6 +42,14 @@ class Social_Data:
         await self.mongo.relationships.update_one({"guild_id": gid, "user_id": child}, {"$set": {"parent": None}})
         return pid
     
+    async def add_friend(self, gid, uid, fid):
+        await self.mongo.relationships.update_one({"guild_id": gid, "user_id": uid}, {"$addToSet": {"friends": fid}}, upsert=True)
+        await self.mongo.relationships.update_one({"guild_id": gid, "user_id": fid}, {"$addToSet": {"friends": uid}}, upsert=True)
+    
+    async def remove_friend(self, gid, uid, fid):
+        await self.mongo.relationships.update_one({"guild_id": gid, "user_id": uid}, {"$pull": {"friends": fid}})
+        await self.mongo.relationships.update_one({"guild_id": gid, "user_id": fid}, {"$pull": {"friends": uid}})
+    
     async def get_family_size(self, gid, uid):
         visited, queue = set(), deque([uid])
         while queue:
@@ -52,6 +60,7 @@ class Social_Data:
             if rel.get("parent"): queue.append(rel["parent"])
             for c in rel.get("children", []): queue.append(c)
             if rel.get("partner"): queue.append(rel["partner"])
+            for f in rel.get("friends", []): queue.append(f)
         return len(visited)
     
     async def maybe_change_iq(self, gid, uid):
@@ -65,6 +74,18 @@ class Social_Data:
             iq = max(50, min(200, iq + random.randint(-10, 10)))
             await self.mongo.iq.update_one({"guild_id": gid, "user_id": uid}, {"$set": {"iq": iq}})
         return iq
+    
+    async def get_stat(self, gid, uid, stat_name, min_val=1, max_val=100):
+        doc = await self.mongo.stats.find_one({"guild_id": gid, "user_id": uid})
+        if not doc or stat_name not in doc:
+            val = random.randint(min_val, max_val)
+            await self.mongo.stats.update_one({"guild_id": gid, "user_id": uid}, {"$set": {stat_name: val}}, upsert=True)
+            return val
+        val = doc.get(stat_name, (min_val + max_val) // 2)
+        if random.random() < 0.08:
+            val = max(min_val, min(max_val, val + random.randint(-5, 5)))
+            await self.mongo.stats.update_one({"guild_id": gid, "user_id": uid}, {"$set": {stat_name: val}})
+        return val
 
 class Social(commands.Cog):
     def __init__(self, bot):
@@ -140,12 +161,15 @@ class Social(commands.Cog):
             if cur in visited or abs(depth) > 4: continue
             visited.add(cur)
             rel = await self.data.get_rel(gid, cur)
-            nodes[cur] = {"parent": rel.get("parent"), "children": rel.get("children", []), "partner": rel.get("partner") if full else None, "depth": depth}
+            nodes[cur] = {"parent": rel.get("parent"), "children": rel.get("children", []), "partner": rel.get("partner") if full else None, "friends": rel.get("friends", []) if full else [], "depth": depth}
             if rel.get("parent") and rel["parent"] not in visited: queue.append((rel["parent"], depth - 1))
             for c in rel.get("children", []):
                 if c not in visited: queue.append((c, depth + 1))
             if full and rel.get("partner") and rel["partner"] not in visited: queue.append((rel["partner"], depth))
-        if not nodes: nodes[uid] = {"parent": None, "children": [], "partner": None, "depth": 0}
+            if full:
+                for f in rel.get("friends", []):
+                    if f not in visited: queue.append((f, depth))
+        if not nodes: nodes[uid] = {"parent": None, "children": [], "partner": None, "friends": [], "depth": 0}
         depths = {}
         for nid, nd in nodes.items(): depths.setdefault(nd["depth"], []).append(nid)
         
@@ -170,6 +194,7 @@ class Social(commands.Cog):
         # Colors
         parent_line = (100, 180, 255)  # Blue for parent-child
         spouse_line = (255, 100, 150)  # Pink for spouse
+        friend_line = (100, 255, 150)  # Green for friends
         card_bg = (40, 45, 60)
         card_border = (70, 80, 100)
         you_border = (139, 92, 246)  # Purple for "you"
@@ -197,6 +222,24 @@ class Social(commands.Cog):
                 draw.line([(x + nw, y + nh//2), (px, py + nh//2)], fill=spouse_line, width=4)
                 # Heart symbol in middle
                 draw.text((mid_x - 5, y + nh//2 - 8), "♥", fill=spouse_line)
+            
+            # Friend lines (green, dashed)
+            if nd.get("friends"):
+                for fid in nd["friends"]:
+                    if fid in pos and nid < fid:
+                        fx, fy = pos[fid][0] + ox, pos[fid][1] + oy
+                        # Dashed line effect
+                        x1, y1, x2, y2 = x + nw, y + nh//2, fx, fy + nh//2
+                        dash_len = 8
+                        total_len = ((x2-x1)**2 + (y2-y1)**2)**0.5
+                        if total_len > 0:
+                            num_dashes = int(total_len / (dash_len * 2))
+                            for i in range(num_dashes):
+                                t1 = i * 2 * dash_len / total_len
+                                t2 = (i * 2 + 1) * dash_len / total_len
+                                dx1, dy1 = int(x1 + t1 * (x2-x1)), int(y1 + t1 * (y2-y1))
+                                dx2, dy2 = int(x1 + t2 * (x2-x1)), int(y1 + t2 * (y2-y1))
+                                draw.line([(dx1, dy1), (dx2, dy2)], fill=friend_line, width=3)
         
         # Fetch avatars
         avs = {}
@@ -233,16 +276,21 @@ class Social(commands.Cog):
         # Legend at bottom
         ly = h - legend_h + 10
         draw.rounded_rectangle([20, ly - 5, w - 20, h - 10], radius=8, fill=(35, 40, 55))
-        draw.text((35, ly + 5), "LEGEND:", fill=(180, 180, 200))
+        draw.text((30, ly + 5), "LEGEND:", fill=(180, 180, 200))
         
         # Parent-child legend
-        draw.line([(120, ly + 15), (160, ly + 15)], fill=parent_line, width=3)
-        draw.text((170, ly + 5), "Parent → Child", fill=parent_line)
+        draw.line([(110, ly + 15), (150, ly + 15)], fill=parent_line, width=3)
+        draw.text((160, ly + 5), "Parent → Child", fill=parent_line)
         
         # Spouse legend
-        draw.line([(320, ly + 15), (360, ly + 15)], fill=spouse_line, width=4)
-        draw.text((365, ly + 5), "♥", fill=spouse_line)
-        draw.text((380, ly + 5), "Married/Partner", fill=spouse_line)
+        draw.line([(290, ly + 15), (320, ly + 15)], fill=spouse_line, width=4)
+        draw.text((325, ly + 5), "♥", fill=spouse_line)
+        draw.text((340, ly + 5), "Partner", fill=spouse_line)
+        
+        # Friend legend (dashed)
+        for i in range(4):
+            draw.line([(450 + i*10, ly + 15), (456 + i*10, ly + 15)], fill=friend_line, width=3)
+        draw.text((500, ly + 5), "Friends", fill=friend_line)
         
         buf = io.BytesIO()
         img.save(buf, format="PNG")
@@ -265,7 +313,7 @@ class Social(commands.Cog):
         embed.set_image(url="attachment://ship.png")
         await ctx.reply(embed=embed, file=discord.File(buf, "ship.png"), mention_author=False)
 
-    @commands.command(name="propose", aliases=["marry"])
+    @commands.command(name="marry", aliases=["propose", "marriage"])
     async def propose_cmd(self, ctx, target: discord.Member):
         if target.id == ctx.author.id or target.bot: return await ctx.reply("Invalid target!", mention_author=False)
         gid, uid, tid = str(ctx.guild.id), str(ctx.author.id), str(target.id)
@@ -284,7 +332,7 @@ class Social(commands.Cog):
         p = ctx.guild.get_member(int(pid))
         await ctx.reply(embed=discord.Embed(title="Divorce Finalized", description=f"{ctx.author.mention} divorced {p.display_name if p else 'partner'}.", color=discord.Color.dark_gray()), mention_author=False)
 
-    @commands.command(name="adopt")
+    @commands.command(name="adopt", aliases=["adoptchild"])
     async def adopt_cmd(self, ctx, target: discord.Member):
         if target.id == ctx.author.id or target.bot: return await ctx.reply("Invalid target!", mention_author=False)
         gid, uid, tid = str(ctx.guild.id), str(ctx.author.id), str(target.id)
@@ -293,7 +341,7 @@ class Social(commands.Cog):
         view = AdoptView(self, ctx.author, target, gid)
         view.message = await ctx.send(embed=discord.Embed(title="Adoption Request", description=f"{ctx.author.mention} wants to adopt {target.mention}!", color=discord.Color.blue()), view=view)
 
-    @commands.command(name="makeparent")
+    @commands.command(name="makeparent", aliases=["getparent", "findparent"])
     async def makeparent_cmd(self, ctx, target: discord.Member):
         if target.id == ctx.author.id or target.bot: return await ctx.reply("Invalid target!", mention_author=False)
         gid, uid, tid = str(ctx.guild.id), str(ctx.author.id), str(target.id)
@@ -301,7 +349,7 @@ class Social(commands.Cog):
         view = MakeParentView(self, ctx.author, target, gid)
         view.message = await ctx.send(embed=discord.Embed(title="Parent Request", description=f"{ctx.author.mention} asks {target.mention} to be their parent!", color=discord.Color.blue()), view=view)
 
-    @commands.command(name="disown")
+    @commands.command(name="disown", aliases=["disownchild"])
     async def disown_cmd(self, ctx, target: discord.Member):
         gid, uid, tid = str(ctx.guild.id), str(ctx.author.id), str(target.id)
         if tid not in (await self.data.get_rel(gid, uid)).get("children", []): return await ctx.reply(f"{target.display_name} is not your child!", mention_author=False)
@@ -367,7 +415,7 @@ class Social(commands.Cog):
         target = target or ctx.author
         async with ctx.typing():
             buf = await self._tree_img(ctx.guild, str(target.id), full=True)
-        embed = discord.Embed(title=f"{target.display_name}'s Full Family Tree", color=discord.Color.green())
+        embed = discord.Embed(title=f"{target.display_name}'s Family & Friends Tree", color=discord.Color.green())
         embed.set_image(url="attachment://tree.png")
         await ctx.reply(embed=embed, file=discord.File(buf, "tree.png"), mention_author=False)
 
@@ -378,11 +426,80 @@ class Social(commands.Cog):
         await ctx.reply(embed=discord.Embed(description=f"{target.display_name}'s family has **{size}** members.", color=discord.Color.purple()), mention_author=False)
 
     
+    @commands.command(name="befriend", aliases=["addfriend"])
+    async def befriend_cmd(self, ctx, target: discord.Member):
+        if target.id == ctx.author.id or target.bot: return await ctx.reply("Invalid target!", mention_author=False)
+        gid, uid, tid = str(ctx.guild.id), str(ctx.author.id), str(target.id)
+        rel = await self.data.get_rel(gid, uid)
+        if tid in rel.get("friends", []): return await ctx.reply(f"You're already friends with {target.display_name}!", mention_author=False)
+        if len(rel.get("friends", [])) >= 20: return await ctx.reply("Max 20 friends!", mention_author=False)
+        view = BefriendView(self, ctx.author, target, gid)
+        view.message = await ctx.send(embed=discord.Embed(title="Friend Request", description=f"{ctx.author.mention} wants to be friends with {target.mention}!", color=discord.Color.green()), view=view)
+    
+    @commands.command(name="unfriend", aliases=["removefriend"])
+    async def unfriend_cmd(self, ctx, target: discord.Member):
+        gid, uid, tid = str(ctx.guild.id), str(ctx.author.id), str(target.id)
+        rel = await self.data.get_rel(gid, uid)
+        if tid not in rel.get("friends", []): return await ctx.reply(f"{target.display_name} is not your friend!", mention_author=False)
+        await self.data.remove_friend(gid, uid, tid)
+        await ctx.reply(embed=discord.Embed(description=f"{ctx.author.mention} unfriended {target.mention}.", color=discord.Color.dark_gray()), mention_author=False)
+    
+    @commands.command(name="friends", aliases=["friendlist"])
+    async def friends_cmd(self, ctx, target: discord.Member = None):
+        target = target or ctx.author
+        friends = (await self.data.get_rel(str(ctx.guild.id), str(target.id))).get("friends", [])
+        if friends:
+            friend_mentions = []
+            for fid in friends[:20]:
+                f = ctx.guild.get_member(int(fid))
+                friend_mentions.append(f.mention if f else f"<@{fid}>")
+            desc = "\n".join(friend_mentions)
+        else:
+            desc = f"{target.display_name} has no friends yet."
+        embed = discord.Embed(title=f"{target.display_name}'s Friends ({len(friends)})", description=desc, color=discord.Color.green())
+        await ctx.reply(embed=embed, mention_author=False)
+    
     @commands.command(name="iq")
     async def iq_cmd(self, ctx, target: discord.Member = None):
         target = target or ctx.author
         iq = await self.data.maybe_change_iq(str(ctx.guild.id), str(target.id))
-        await ctx.reply(embed=discord.Embed(description=f"**{target.display_name}**'s IQ is **{iq}**", color=discord.Color.blurple()), mention_author=False)
+        rating = "Genius" if iq >= 140 else "Very Smart" if iq >= 120 else "Above Average" if iq >= 110 else "Average" if iq >= 90 else "Below Average" if iq >= 70 else "Low"
+        await ctx.reply(embed=discord.Embed(description=f"**{target.display_name}**'s IQ: **{iq}** ({rating})", color=discord.Color.blurple()), mention_author=False)
+    
+    @commands.command(name="strength", aliases=["str"])
+    async def strength_cmd(self, ctx, target: discord.Member = None):
+        target = target or ctx.author
+        strength = await self.data.get_stat(str(ctx.guild.id), str(target.id), "strength", 1, 100)
+        rating = "Godlike" if strength >= 95 else "Superhuman" if strength >= 85 else "Very Strong" if strength >= 70 else "Strong" if strength >= 50 else "Average" if strength >= 30 else "Weak"
+        await ctx.reply(embed=discord.Embed(description=f"💪 **{target.display_name}**'s Strength: **{strength}/100** ({rating})", color=discord.Color.red()), mention_author=False)
+    
+    @commands.command(name="speed", aliases=["spd"])
+    async def speed_cmd(self, ctx, target: discord.Member = None):
+        target = target or ctx.author
+        speed = await self.data.get_stat(str(ctx.guild.id), str(target.id), "speed", 1, 100)
+        rating = "Lightning Fast" if speed >= 95 else "Very Fast" if speed >= 85 else "Fast" if speed >= 70 else "Quick" if speed >= 50 else "Average" if speed >= 30 else "Slow"
+        await ctx.reply(embed=discord.Embed(description=f"⚡ **{target.display_name}**'s Speed: **{speed}/100** ({rating})", color=discord.Color.gold()), mention_author=False)
+    
+    @commands.command(name="charisma", aliases=["cha"])
+    async def charisma_cmd(self, ctx, target: discord.Member = None):
+        target = target or ctx.author
+        charisma = await self.data.get_stat(str(ctx.guild.id), str(target.id), "charisma", 1, 100)
+        rating = "Legendary Charm" if charisma >= 95 else "Very Charismatic" if charisma >= 85 else "Charismatic" if charisma >= 70 else "Charming" if charisma >= 50 else "Average" if charisma >= 30 else "Awkward"
+        await ctx.reply(embed=discord.Embed(description=f"✨ **{target.display_name}**'s Charisma: **{charisma}/100** ({rating})", color=discord.Color.purple()), mention_author=False)
+    
+    @commands.command(name="luck", aliases=["lck"])
+    async def luck_cmd(self, ctx, target: discord.Member = None):
+        target = target or ctx.author
+        luck = await self.data.get_stat(str(ctx.guild.id), str(target.id), "luck", 1, 100)
+        rating = "Blessed" if luck >= 95 else "Very Lucky" if luck >= 85 else "Lucky" if luck >= 70 else "Fortunate" if luck >= 50 else "Average" if luck >= 30 else "Unlucky"
+        await ctx.reply(embed=discord.Embed(description=f"🍀 **{target.display_name}**'s Luck: **{luck}/100** ({rating})", color=discord.Color.green()), mention_author=False)
+    
+    @commands.command(name="rizz")
+    async def rizz_cmd(self, ctx, target: discord.Member = None):
+        target = target or ctx.author
+        rizz = await self.data.get_stat(str(ctx.guild.id), str(target.id), "rizz", 1, 100)
+        rating = "Unmatched Rizz" if rizz >= 95 else "Insane Rizz" if rizz >= 85 else "W Rizz" if rizz >= 70 else "Mid Rizz" if rizz >= 50 else "L Rizz" if rizz >= 30 else "No Rizz"
+        await ctx.reply(embed=discord.Embed(description=f"😏 **{target.display_name}**'s Rizz: **{rizz}/100** ({rating})", color=discord.Color.from_rgb(255, 105, 180)), mention_author=False)
 
 class ProposalView(discord.ui.View):
     def __init__(self, cog, proposer, target, gid):
@@ -437,6 +554,26 @@ class MakeParentView(discord.ui.View):
     @discord.ui.button(label="Decline", style=discord.ButtonStyle.red)
     async def decline(self, i, b):
         if i.user.id != self.parent.id: return await i.response.send_message("Not for you!", ephemeral=True)
+        await i.response.edit_message(embed=discord.Embed(title="Declined", color=discord.Color.dark_gray()), view=None)
+        self.stop()
+    async def on_timeout(self):
+        if self.message:
+            try: await self.message.edit(embed=discord.Embed(title="Expired", color=discord.Color.dark_gray()), view=None)
+            except: pass
+
+class BefriendView(discord.ui.View):
+    def __init__(self, cog, requester, target, gid):
+        super().__init__(timeout=60)
+        self.cog, self.requester, self.target, self.gid, self.message = cog, requester, target, gid, None
+    @discord.ui.button(label="Accept", style=discord.ButtonStyle.green)
+    async def accept(self, i, b):
+        if i.user.id != self.target.id: return await i.response.send_message("Not for you!", ephemeral=True)
+        await self.cog.data.add_friend(self.gid, str(self.requester.id), str(self.target.id))
+        await i.response.edit_message(embed=discord.Embed(title="Friends!", description=f"{self.requester.mention} and {self.target.mention} are now friends!", color=discord.Color.green()), view=None)
+        self.stop()
+    @discord.ui.button(label="Decline", style=discord.ButtonStyle.red)
+    async def decline(self, i, b):
+        if i.user.id != self.target.id: return await i.response.send_message("Not for you!", ephemeral=True)
         await i.response.edit_message(embed=discord.Embed(title="Declined", color=discord.Color.dark_gray()), view=None)
         self.stop()
     async def on_timeout(self):
