@@ -533,9 +533,13 @@ class Pokemon(commands.Cog):
                 
                 cards.sort(key=lambda x: x.get("_price_sort", 0), reverse=True)
                 
-                view = PokemonTCGCardView(ctx, cards, pokemon_name)
-                embed = view.build_embed()
-                view.message = await ctx.reply(embed=embed, view=view, mention_author=False)
+                # Create initial embed showing first card with button to open browser
+                initial_view = PokemonTCGCardView(ctx, cards, pokemon_name)
+                initial_embed = initial_view.build_embed()
+                
+                # Add button to open card browser
+                browser_button_view = CardBrowserButtonView(ctx, cards, pokemon_name)
+                await ctx.reply(embed=initial_embed, view=browser_button_view, mention_author=False)
                 
             except Exception as e:
                 logger.error(f"Pokemon TCG card error: {e}")

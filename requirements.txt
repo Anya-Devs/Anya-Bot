@@ -26,3 +26,4 @@ python-Levenshtein
 yt-dlp>=2023.12.30
 PyNaCl
 onnxruntime
+cairosvg

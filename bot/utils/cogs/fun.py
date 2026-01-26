@@ -224,7 +224,7 @@ class Mini_Games:
 class Reaction(discord.ui.View):
     """Reaction game view with save streak and continue playing features"""
     def __init__(self, ctx, emojis, chosen_emoji, message, bot=None):
-        super().__init__(timeout=None)  # No timeout - handled by command
+        super().__init__(timeout=None)  # No timeout - handled externally
         self.ctx = ctx
         self.emojis = list(emojis)
         self.chosen_emoji = chosen_emoji
@@ -237,75 +237,209 @@ class Reaction(discord.ui.View):
         self.base_points = 5
         self.points_multiplier = 2
         self.answered = False
+        self.expired = False  # Track if game expired
 
         # Shuffle and create emoji buttons
-        options = random.sample(list(set(self.emojis) - {chosen_emoji}), min(4, len(set(self.emojis))-1))
+        unique_emojis = list(set(self.emojis) - {chosen_emoji})
+        num_options = min(4, len(unique_emojis))
+        options = random.sample(unique_emojis, num_options) if num_options > 0 else []
         all_options = options + [chosen_emoji]
         random.shuffle(all_options)
         
         for idx, emoji in enumerate(all_options):
+            # Use custom_id to identify the button
+            custom_id = f"react_{emoji}_{idx}"
+            print(f"[REACTION DEBUG] Creating button with custom_id: {custom_id}, emoji: {emoji}")
             btn = discord.ui.Button(
-                style=discord.ButtonStyle.gray,
-                custom_id="correct_emoji" if emoji == chosen_emoji else f"emoji_{idx}",
+                style=discord.ButtonStyle.secondary,
                 emoji=emoji,
+                custom_id=custom_id,
                 row=0
             )
+            # Override the callback to use our handler
             btn.callback = self.on_button_click
             self.add_item(btn)
-
-    async def on_button_click(self, inter: discord.Interaction):
-        if inter.user != self.ctx.author:
-            return await inter.response.send_message("This isn't your game!", ephemeral=True)
         
-        self.answered = True
-        cid = inter.data["custom_id"]
+        print(f"[REACTION DEBUG] Created {len(all_options)} buttons for reaction game")
+    
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Check if the interaction is from the correct user."""
+        print(f"[REACTION DEBUG] Interaction check - User: {interaction.user.id}, Author: {self.ctx.author.id}")
+        if interaction.user != self.ctx.author:
+            print(f"[REACTION DEBUG] User not authorized!")
+            await interaction.response.send_message("This isn't your game!", ephemeral=True)
+            return False
+        print(f"[REACTION DEBUG] User authorized, proceeding...")
+        return True
+    
+    async def on_button_click(self, interaction: discord.Interaction):
+        """Handle button click with proper error handling."""
+        print(f"[REACTION DEBUG] Button clicked by {interaction.user.id}")
+        try:
+            if self.answered:
+                print(f"[REACTION DEBUG] Already answered, ignoring click")
+                await interaction.response.send_message("You already answered!", ephemeral=True)
+                return
+            
+            self.answered = True
+            print(f"[REACTION DEBUG] Looking for button with custom_id: {interaction.data.get('custom_id')}")
+            
+            # Get the button that was clicked
+            button = None
+            for child in self.children:
+                if child.custom_id == interaction.data["custom_id"]:
+                    button = child
+                    print(f"[REACTION DEBUG] Found button: {button.emoji}")
+                    break
+            
+            if not button:
+                print(f"[REACTION DEBUG] ERROR: Button not found!")
+                return
+            
+            # Get the emoji from the button
+            button_emoji = button.emoji
+            print(f"[REACTION DEBUG] Button emoji: {button_emoji}, Chosen emoji: {self.chosen_emoji}")
+            print(f"[REACTION DEBUG] Button emoji type: {type(button_emoji)}, Chosen emoji type: {type(self.chosen_emoji)}")
+            
+            # Check if correct - ensure both are strings
+            button_emoji_str = str(button_emoji) if button_emoji else ""
+            chosen_emoji_str = str(self.chosen_emoji) if self.chosen_emoji else ""
+            is_correct = button_emoji_str == chosen_emoji_str
+            print(f"[REACTION DEBUG] Is correct: {is_correct}")
+            
+            # Get IDs once for both cases
+            guild_id, user_id = str(interaction.guild.id), str(interaction.user.id)
+            
+            if is_correct:
+                # Correct answer - increment streak
+                current_streak = await self.reaction_data.get_streak(guild_id, user_id)
+                new_streak = current_streak + self.streak_increment
+                await self.reaction_data.set_streak(guild_id, user_id, new_streak)
+                
+                # Update best streak if needed
+                best_streak = await self.reaction_data.get_best_streak(guild_id, user_id)
+                if new_streak > best_streak:
+                    await self.reaction_data.set_best_streak(guild_id, user_id, new_streak)
+                
+                # Calculate points
+                pts = self.base_points if new_streak <= 1 else int(new_streak * self.points_multiplier)
+                await self.quest_data.add_balance(user_id, guild_id, pts)
+                bal = await self.quest_data.get_balance(user_id, guild_id)
+                
+                # Show success with save/continue options
+                print(f"[REACTION DEBUG] Creating success embed...")
+                embed = discord.Embed(
+                    title="✅ Correct!",
+                    description=f"You earned **+{pts}** pts!\n\n"
+                               f"🔥 **Streak:** {new_streak}\n"
+                               f"💰 **Balance:** {bal:,} pts",
+                    color=discord.Color.green()
+                )
+                
+                # Create new view with Save and Continue buttons
+                print(f"[REACTION DEBUG] Creating continue view...")
+                continue_view = ReactionContinueView(self.ctx, self.emojis, self.message, self.bot, new_streak)
+                
+                print(f"[REACTION DEBUG] Clearing items and editing message...")
+                self.clear_items()
+                try:
+                    await interaction.response.edit_message(embed=embed, view=continue_view)
+                except discord.errors.NotFound as e:
+                    print(f"[REACTION DEBUG] Interaction not found, editing original message instead")
+                    await interaction.edit_original_response(embed=embed, view=continue_view)
+            else:
+                # Wrong answer - reset streak
+                print(f"[REACTION DEBUG] Wrong answer - resetting streak...")
+                old_streak = await self.reaction_data.get_streak(guild_id, user_id)
+                await self.reaction_data.set_streak(guild_id, user_id, 0)
+                
+                print(f"[REACTION DEBUG] Creating wrong answer embed...")
+                embed = discord.Embed(
+                    title="❌ Wrong!",
+                    description=f"The correct emoji was {self.chosen_emoji}\n\n"
+                               f"💔 **Streak Lost:** {old_streak} → 0",
+                    color=discord.Color.red()
+                )
+                
+                print(f"[REACTION DEBUG] Clearing items and editing message for wrong answer...")
+                self.clear_items()
+                try:
+                    await interaction.response.edit_message(embed=embed, view=None)
+                except discord.errors.NotFound as e:
+                    print(f"[REACTION DEBUG] Interaction not found, editing original message instead")
+                    await interaction.edit_original_response(embed=embed, view=None)
+            
+            self.stop()
+            
+        except discord.errors.InteractionResponded:
+            print(f"[REACTION DEBUG] ERROR: Interaction already responded to!")
+            import traceback
+            traceback.print_exc()
+            try:
+                await interaction.followup.send("⚠️ Button already clicked!", ephemeral=True)
+            except:
+                pass
+        except discord.errors.NotFound as e:
+            print(f"[REACTION DEBUG] ERROR: NotFound - {e}")
+            import traceback
+            traceback.print_exc()
+            # Check if it's actually a message not found error
+            if "Unknown Message" in str(e) or "Message not found" in str(e):
+                print(f"[REACTION DEBUG] Message was actually deleted")
+                self.expired = True
+                self.stop()
+            else:
+                # Some other NotFound error, try to continue
+                print(f"[REACTION DEBUG] Other NotFound error, trying to continue")
+                try:
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message("❌ An error occurred!", ephemeral=True)
+                except:
+                    pass
+        except Exception as e:
+            print(f"[REACTION DEBUG] ERROR: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("❌ An error occurred processing your answer!", ephemeral=True)
+                else:
+                    await interaction.followup.send("❌ An error occurred processing your answer!", ephemeral=True)
+            except:
+                pass
+    
+    async def on_timeout(self):
+        """Handle view timeout by disabling all buttons"""
+        if self.expired or self.answered:
+            return
         
-        if cid == "correct_emoji":
-            # Correct answer - increment streak
-            current_streak = await self.reaction_data.get_streak(inter.guild.id, inter.user.id)
-            new_streak = current_streak + self.streak_increment
-            await self.reaction_data.set_streak(inter.guild.id, inter.user.id, new_streak)
+        try:
+            # Disable all buttons
+            for child in self.children:
+                child.disabled = True
             
-            # Update best streak if needed
-            best_streak = await self.reaction_data.get_best_streak(inter.guild.id, inter.user.id)
-            if new_streak > best_streak:
-                await self.reaction_data.set_best_streak(inter.guild.id, inter.user.id, new_streak)
+            # Reset streak on timeout
+            try:
+                await self.reaction_data.set_streak(self.ctx.guild.id, self.ctx.author.id, 0)
+            except:
+                pass
             
-            # Calculate points
-            pts = self.base_points if new_streak <= 1 else int(new_streak * self.points_multiplier)
-            await self.quest_data.add_balance(str(inter.user.id), str(inter.guild.id), pts)
-            bal = await self.quest_data.get_balance(str(inter.user.id), str(inter.guild.id))
-            
-            # Show success with save/continue options
-            embed = discord.Embed(
-                title="✅ Correct!",
-                description=f"You earned **+{pts}** pts!\n\n"
-                           f"🔥 **Streak:** {new_streak}\n"
-                           f"💰 **Balance:** {bal:,} pts",
-                color=discord.Color.green()
-            )
-            
-            # Create new view with Save and Continue buttons
-            continue_view = ReactionContinueView(self.ctx, self.emojis, self.message, self.bot, new_streak)
-            
-            self.clear_items()
-            await inter.response.edit_message(embed=embed, view=continue_view)
-        else:
-            # Wrong answer - reset streak
-            old_streak = await self.reaction_data.get_streak(inter.guild.id, inter.user.id)
-            await self.reaction_data.set_streak(inter.guild.id, inter.user.id, 0)
-            
-            embed = discord.Embed(
-                title="❌ Wrong!",
-                description=f"The correct emoji was {self.chosen_emoji}\n\n"
-                           f"💔 **Streak Lost:** {old_streak} → 0",
+            # Update message with timeout embed (remove buttons)
+            timeout_embed = discord.Embed(
+                title="⏰ Time's Up!",
+                description=f"You didn't click {self.chosen_emoji} in time!\n\n💔 **Streak Lost**",
                 color=discord.Color.red()
             )
             
-            self.clear_items()
-            await inter.response.edit_message(embed=embed, view=None)
-        
-        self.stop()
+            if self.message:
+                try:
+                    await self.message.edit(embed=timeout_embed, view=None)
+                except discord.NotFound:
+                    pass  # Message was deleted, ignore
+                except:
+                    pass
+        except:
+            pass  # Silently handle any errors during timeout
 
 
 class ReactionContinueView(discord.ui.View):
@@ -322,73 +456,91 @@ class ReactionContinueView(discord.ui.View):
 
     @discord.ui.button(label="🛑 Save Streak", style=discord.ButtonStyle.red, row=0)
     async def save_streak(self, inter: discord.Interaction, button: discord.ui.Button):
-        if inter.user != self.ctx.author:
-            return await inter.response.send_message("This isn't your game!", ephemeral=True)
-        
-        best_streak = await self.reaction_data.get_best_streak(inter.guild.id, inter.user.id)
-        
-        embed = discord.Embed(
-            title="🏆 Streak Saved!",
-            description=f"You saved your streak of **{self.current_streak}**!\n\n"
-                       f"🏅 **Best Streak:** {max(best_streak, self.current_streak)}",
-            color=discord.Color.gold()
-        )
-        
-        self.clear_items()
-        await inter.response.edit_message(embed=embed, view=None)
-        self.stop()
+        try:
+            if inter.user != self.ctx.author:
+                return await inter.response.send_message("This isn't your game!", ephemeral=True)
+            
+            best_streak = await self.reaction_data.get_best_streak(inter.guild.id, inter.user.id)
+            
+            embed = discord.Embed(
+                title="🏆 Streak Saved!",
+                description=f"You saved your streak of **{self.current_streak}**!\n\n"
+                           f"🏅 **Best Streak:** {max(best_streak, self.current_streak)}",
+                color=discord.Color.gold()
+            )
+            
+            self.clear_items()
+            if not inter.response.is_done():
+                await inter.response.edit_message(embed=embed, view=None)
+            else:
+                await inter.edit_original_response(embed=embed, view=None)
+            self.stop()
+        except discord.errors.NotFound:
+            # Silently handle - game expired or message deleted
+            self.stop()
+        except Exception as e:
+            logging.error(f"Error in ReactionContinueView.save_streak: {type(e).__name__}: {e}", exc_info=True)
+            try:
+                if not inter.response.is_done():
+                    await inter.response.send_message("❌ Error saving streak!", ephemeral=True)
+                else:
+                    await inter.followup.send("❌ Error saving streak!", ephemeral=True)
+            except:
+                pass
 
     @discord.ui.button(label="▶️ Continue Playing", style=discord.ButtonStyle.green, row=0)
     async def continue_playing(self, inter: discord.Interaction, button: discord.ui.Button):
-        if inter.user != self.ctx.author:
-            return await inter.response.send_message("This isn't your game!", ephemeral=True)
-        
-        await inter.response.defer()
-        
-        # Calculate difficulty based on streak
-        base_time = 10
-        param = self.current_streak * 0.5
-        play_time = max(2.5, base_time - param)
-        
-        # Pick new emoji
-        chosen = random.choice(self.emojis)
-        
-        # Show the emoji to remember
-        embed = discord.Embed(
-            title=f"🧠 Level {self.current_streak + 1}",
-            description=f"Remember this emoji: {chosen}\n\n"
-                       f"🔥 **Streak:** {self.current_streak}\n"
-                       f"⏱️ **Time:** {play_time:.1f}s",
-            color=discord.Color.blue()
-        )
-        
-        self.clear_items()
-        await self.message.edit(embed=embed, view=None)
-        
-        await asyncio.sleep(2)
-        
-        # Create new game view
-        new_view = Reaction(self.ctx, self.emojis, chosen, self.message, self.bot)
-        future = int((datetime.now(timezone.utc) + timedelta(seconds=play_time)).timestamp())
-        
-        embed = discord.Embed(
-            description=f"Click the emoji you remembered!\n`Remaining Time:` <t:{future}:R>",
-            color=discord.Color.blue()
-        )
-        
-        await self.message.edit(embed=embed, view=new_view)
-        
-        # Wait for answer or timeout
         try:
-            await asyncio.wait_for(new_view.wait(), timeout=play_time)
-        except asyncio.TimeoutError:
-            if not new_view.answered:
-                # Time's up - reset streak
-                await self.reaction_data.set_streak(inter.guild.id, inter.user.id, 0)
+            if inter.user != self.ctx.author:
+                return await inter.response.send_message("This isn't your game!", ephemeral=True)
+            
+            if not inter.response.is_done():
+                await inter.response.defer()
+            
+            # Calculate difficulty based on streak
+            base_time = 10
+            param = self.current_streak * 0.5
+            play_time = max(2.5, base_time - param)
+            
+            # Pick new emoji
+            chosen = random.choice(self.emojis)
+            
+            # Show the emoji to remember (same format as initial command, no level)
+            embed = discord.Embed(
+                description=f"```Remember this emoji: {chosen}```\n\nStreak: **{self.current_streak}**\nTime: **{play_time:.1f}s**",
+                color=primary_color()
+            )
+            
+            self.clear_items()
+            await self.message.edit(embed=embed, view=None)
+            
+            await asyncio.sleep(2)
+            
+            # Create new game view
+            new_view = Reaction(self.ctx, self.emojis, chosen, self.message, self.bot)
+            future = int((datetime.now(timezone.utc) + timedelta(seconds=play_time)).timestamp())
+            
+            def timestamp_gen(ts: int) -> str:
+                return f"<t:{int(ts)}:R>"
+            
+            embed = discord.Embed(
+                description=f"React with the emoji you remembered.\n`Remaining Time:` {timestamp_gen(future)}",
+                color=primary_color(),
+            )
+            
+            await self.message.edit(embed=embed, view=new_view)
+            
+            # Wait for answer or timeout
+            try:
+                await asyncio.wait_for(new_view.wait(), timeout=play_time)
+            except asyncio.TimeoutError:
+                if not new_view.answered:
+                    # Time's up - reset streak
+                    await self.reaction_data.set_streak(inter.guild.id, inter.user.id, 0)
                 
                 timeout_embed = discord.Embed(
                     title="⏰ Time's Up!",
-                    description=f"You didn't click {chosen} in time!\n\n"
+                    description=f"You didn't click ```{chosen}``` in time!\n\n"
                                f"💔 **Streak Lost:** {self.current_streak} → 0",
                     color=discord.Color.red()
                 )
@@ -396,8 +548,20 @@ class ReactionContinueView(discord.ui.View):
                 for child in new_view.children:
                     child.disabled = True
                 await self.message.edit(embed=timeout_embed, view=None)
-        
-        self.stop()
+            
+            self.stop()
+        except discord.errors.NotFound:
+            # Silently handle - game expired or message deleted
+            self.stop()
+        except Exception as e:
+            logging.error(f"Error in ReactionContinueView.continue_playing: {type(e).__name__}: {e}", exc_info=True)
+            try:
+                if not inter.response.is_done():
+                    await inter.response.send_message("❌ Error continuing game!", ephemeral=True)
+                else:
+                    await inter.followup.send("❌ Error continuing game!", ephemeral=True)
+            except:
+                pass
 
     async def on_timeout(self):
         # If they don't choose, save their streak

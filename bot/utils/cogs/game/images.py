@@ -1324,11 +1324,6 @@ def _draw_textured_card_frame(draw, card_width: int, card_height: int, frame: di
 
 
 def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: bool = False, is_owned: bool = False, owner_data: dict = None, card_width: int = 280, card_height: int = 400) -> Image.Image:
-    """
-    Draw a premium trading card where the CHARACTER IMAGE is the main showcase.
-    Text overlays in thin, semi-transparent mint containers that don't obstruct the image.
-    """
-    
     rarity = char.get("rarity", "common")
     frame = RARITY_FRAMES.get(rarity, RARITY_FRAMES["common"])
     
@@ -1339,27 +1334,146 @@ def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: 
     # Scale factor for responsive sizing
     scale = card_width / 280
     
-    # Load fonts - scale with card size
-    # Use same font for both name and anime plates for consistency
-    try:
-        name_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, int(18 * scale))
-        anime_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, int(14 * scale))  # Same font family, slightly smaller
-        tiny_font = _load_font_from_assets(INTER_REGULAR_PATH, int(11 * scale))
-        emoji_font = _load_emoji_font(int(16 * scale))  # For emoji rendering
-    except:
-        name_font = anime_font = tiny_font = emoji_font = ImageFont.load_default()
+    # ═══════════════════════════════════════════════════════════════════════════
+    # CLAIMED CARDS: Use old simple style
+    # ═══════════════════════════════════════════════════════════════════════════
+    if is_claimed:
+        # Load fonts for old style
+        try:
+            name_font = _load_emoji_font(int(16 * scale))
+            small_font = _load_emoji_font(int(12 * scale))
+            tiny_font = _load_emoji_font(int(10 * scale))
+        except:
+            name_font = small_font = tiny_font = ImageFont.load_default()
+        
+        # Draw simple textured frame
+        _draw_textured_card_frame(card_draw, card_width, card_height, frame, is_claimed=True)
+        
+        # Draw top banner
+        banner_h = int(36 * scale)
+        banner_margin = int(12 * scale)
+        card_draw.rounded_rectangle(
+            [banner_margin, banner_margin, card_width - banner_margin, banner_margin + banner_h],
+            6,
+            fill=(40, 40, 45, 240)
+        )
+        
+        # Draw character name
+        name = char.get("name", "Unknown")
+        max_name_length = int(16 * scale)
+        if len(name) > max_name_length:
+            name = name[:max_name_length-2] + "..."
+        name_bbox = card_draw.textbbox((0, 0), name, font=name_font)
+        name_x = (card_width - (name_bbox[2] - name_bbox[0])) // 2
+        name_y_offset = int(10 * scale)
+        card_draw.text((name_x + 1, banner_margin + name_y_offset + 1), name, fill=(0, 0, 0, 180), font=name_font)
+        card_draw.text((name_x, banner_margin + name_y_offset), name, fill=(255, 255, 255), font=name_font)
+        
+        # Draw UID in top right
+        uid = char.get("uid", "UNKNOWN")
+        uid_text = uid[:6]
+        uid_bbox = card_draw.textbbox((0, 0), uid_text, font=tiny_font)
+        uid_x = card_width - banner_margin - (uid_bbox[2] - uid_bbox[0]) - 5
+        uid_y = banner_margin + 5
+        
+        # UID background
+        uid_bg_margin = 2
+        card_draw.rounded_rectangle(
+            [uid_x - uid_bg_margin, uid_y - uid_bg_margin, 
+             uid_x + (uid_bbox[2] - uid_bbox[0]) + uid_bg_margin, uid_y + (uid_bbox[3] - uid_bbox[1]) + uid_bg_margin],
+            4,
+            fill=(10, 10, 15, 200)
+        )
+        card_draw.text((uid_x + 1, uid_y + 1), uid_text, fill=(0, 0, 0, 180), font=tiny_font)
+        card_draw.text((uid_x, uid_y), uid_text, fill=(200, 200, 200), font=tiny_font)
+        
+        # Draw favorite star if favorited
+        if char.get("favorite", False):
+            star_text = "⭐"
+            star_bbox = card_draw.textbbox((0, 0), star_text, font=tiny_font)
+            star_x = uid_x - star_bbox[2] - 8
+            star_y = uid_y
+            card_draw.text((star_x + 1, star_y + 1), star_text, fill=(0, 0, 0, 180), font=tiny_font)
+            card_draw.text((star_x, star_y), star_text, fill=(255, 215, 0), font=tiny_font)
+        
+        # Character image area
+        img_area_x = int(10 * scale)
+        img_area_y = banner_margin + banner_h + int(8 * scale)
+        img_area_w = card_width - int(20 * scale)
+        img_area_h = card_height - (banner_margin + banner_h) - int(68 * scale)
+        
+        if char_img:
+            # Convert to grayscale for claimed cards
+            char_img = char_img.convert('L').convert('RGBA')
+            gray_overlay = Image.new('RGBA', char_img.size, (128, 128, 128, 100))
+            char_img = Image.alpha_composite(char_img, gray_overlay)
+            char_img = char_img.resize((img_area_w, img_area_h), Image.Resampling.LANCZOS)
+            card_bg.paste(char_img, (img_area_x, img_area_y), char_img)
+        else:
+            placeholder_margin = int(20 * scale)
+            card_draw.ellipse([img_area_x + placeholder_margin, img_area_y + placeholder_margin, 
+                              img_area_x + img_area_w - placeholder_margin, img_area_y + img_area_h - placeholder_margin],
+                            fill=(50, 50, 55))
+        
+        # Draw CLAIMED stamp
+        try:
+            stamp_font = _load_emoji_font(int(48 * scale))
+        except:
+            stamp_font = ImageFont.load_default()
+        
+        stamp_img = Image.new('RGBA', (card_width, card_height), (0, 0, 0, 0))
+        stamp_draw = ImageDraw.Draw(stamp_img)
+        
+        stamp_text = "CLAIMED"
+        text_bbox = stamp_draw.textbbox((0, 0), stamp_text, font=stamp_font)
+        text_x = (card_width - (text_bbox[2] - text_bbox[0])) // 2
+        text_y = (card_height - (text_bbox[3] - text_bbox[1])) // 2
+        
+        shadow_offset = int(3 * scale)
+        stamp_draw.text((text_x + shadow_offset, text_y + shadow_offset), stamp_text, fill=(0, 0, 0, 180), font=stamp_font)
+        stamp_draw.text((text_x, text_y), stamp_text, fill=(220, 20, 60, 230), font=stamp_font)
+        
+        rotated_stamp = stamp_img.rotate(-30, expand=False, fillcolor=(0, 0, 0, 0))
+        card_bg.paste(rotated_stamp, (0, 0), rotated_stamp)
+        
+        # Draw bottom banner with anime name
+        bottom_banner_h = int(32 * scale)
+        bottom_banner_y = card_height - int(48 * scale)
+        card_draw.rounded_rectangle(
+            [banner_margin, bottom_banner_y, card_width - banner_margin, bottom_banner_y + bottom_banner_h],
+            6,
+            fill=(20, 20, 25, 240)
+        )
+        
+        anime = char.get("anime", "Unknown")
+        max_anime_length = int(20 * scale)
+        if len(anime) > max_anime_length:
+            anime = anime[:max_anime_length-2] + "..."
+        anime_bbox = card_draw.textbbox((0, 0), anime, font=small_font)
+        anime_x = (card_width - (anime_bbox[2] - anime_bbox[0])) // 2
+        anime_y_offset = int(10 * scale)
+        card_draw.text((anime_x + 1, bottom_banner_y + anime_y_offset + 1), anime, fill=(0, 0, 0, 180), font=small_font)
+        card_draw.text((anime_x, bottom_banner_y + anime_y_offset), anime, fill=(240, 240, 240), font=small_font)
+        
+        return card_bg
     
     # ═══════════════════════════════════════════════════════════════════════════
-    # DRAW RARITY FRAME FIRST (Border around the entire card)
+    # UNCLAIMED CARDS: Use new premium mint-themed style
     # ═══════════════════════════════════════════════════════════════════════════
+    
+    # Load fonts for premium style
+    try:
+        name_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, int(18 * scale))
+        anime_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, int(14 * scale))
+        tiny_font = _load_font_from_assets(INTER_REGULAR_PATH, int(11 * scale))
+        emoji_font = _load_emoji_font(int(16 * scale))
+    except:
+        name_font = anime_font = tiny_font = emoji_font = ImageFont.load_default()
     
     border_width = int(8 * scale)
     
     # Draw premium frame
-    if is_claimed:
-        _draw_textured_card_frame(card_draw, card_width, card_height, frame, is_claimed=True)
-    else:
-        _draw_premium_card_frame(card_bg, card_width, card_height, frame, is_claimed=False)
+    _draw_premium_card_frame(card_bg, card_width, card_height, frame, is_claimed=False)
     
     # ═══════════════════════════════════════════════════════════════════════════
     # CHARACTER IMAGE - FULL CARD SHOWCASE (Main focus!)
@@ -1451,9 +1565,9 @@ def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: 
     
     # Center horizontally and vertically
     name_text_w = name_bbox[2] - name_bbox[0]
-    name_text_h = name_bbox[3] - name_bbox[1]
     name_x = name_banner_margin + (card_width - name_banner_margin * 2 - name_text_w) // 2
-    name_y = name_banner_y + (name_banner_h - name_text_h) // 2
+    # Use baseline offset for consistent vertical centering (accounts for ascenders, not descenders)
+    name_y = name_banner_y + (name_banner_h // 2) - int(9 * scale)
     
     # Stronger shadow + brighter text for better visibility
     card_draw.text((name_x + 1, name_y + 1), name, fill=(0, 0, 0, 200), font=name_font)
@@ -1487,9 +1601,9 @@ def _draw_individual_card(char: dict, char_img: Image.Image = None, is_claimed: 
     
     # Center horizontally and vertically
     anime_text_w = anime_bbox[2] - anime_bbox[0]
-    anime_text_h = anime_bbox[3] - anime_bbox[1]
     anime_x = anime_banner_margin + (card_width - anime_banner_margin * 2 - anime_text_w) // 2
-    anime_y = anime_banner_y + (anime_banner_h - anime_text_h) // 2
+    # Use baseline offset for consistent vertical centering (accounts for ascenders, not descenders)
+    anime_y = anime_banner_y + (anime_banner_h // 2) - int(7 * scale)
     
     card_draw.text((anime_x + 1, anime_y + 1), anime, fill=(0, 0, 0, 180), font=anime_font)
     card_draw.text((anime_x, anime_y), anime, fill=(255, 255, 255), font=anime_font)
@@ -1589,6 +1703,7 @@ async def fetch_image(session, url, idx):
         logger.error(f"Error fetching image {url}: {e}")
     return None
 
+
 async def generate_gacha_draw_image(characters: list, claimed_indices: list = None, ownership_info: dict = None) -> io.BytesIO:
     """Generate premium trading cards with realistic metallic finishes.
     
@@ -1620,13 +1735,12 @@ async def generate_gacha_draw_image(characters: list, claimed_indices: list = No
     draw = ImageDraw.Draw(img)
 
     try:
-        title_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 24)
-        name_font = _load_font_from_assets(POPPINS_REGULAR_PATH, 22)  # Increased from 16 for better visibility
-        small_font = _load_font_from_assets(POPPINS_REGULAR_PATH, 16)  # Increased from 12 for anime name
-        tiny_font = _load_font_from_assets(INTER_REGULAR_PATH, 12)  # Increased from 10
-        number_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, 32)
-    except Exception as e:
-        print(e)
+        title_font = _load_emoji_font(24)
+        name_font = _load_emoji_font(22)  # Increased from 16 for better visibility
+        small_font = _load_emoji_font(16)  # Increased from 12 for anime name
+        tiny_font = _load_emoji_font(12)  # Increased from 10
+        number_font = _load_emoji_font(32)
+    except:
         title_font = name_font = small_font = tiny_font = number_font = ImageFont.load_default()
 
     char_images = []
@@ -3699,7 +3813,8 @@ CARD_SUITS = {
 }
 
 def _draw_card(draw, x: int, y: int, w: int, h: int, card_str: str, card_font, small_font):
-    """Draw a realistic playing card with proper styling like real poker cards."""
+    """Draw a realistic playing card with proper styling like real poker cards.
+    Uses drawn shapes for suit symbols instead of font characters for reliability."""
     
     # Parse card string (e.g., "A♠", "10♥")
     if len(card_str) >= 2:
@@ -3739,67 +3854,119 @@ def _draw_card(draw, x: int, y: int, w: int, h: int, card_str: str, card_font, s
     
     # Load fonts scaled to card size
     try:
-        # Scale fonts based on card width
         rank_size = max(16, int(w * 0.24))
-        suit_small_size = max(12, int(w * 0.18))
-        suit_large_size = max(32, int(w * 0.50))
-        
         rank_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, rank_size)
-        suit_small_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, suit_small_size)
-        suit_large_font = _load_font_from_assets(POPPINS_SEMIBOLD_PATH, suit_large_size)
     except:
         rank_font = card_font
-        suit_small_font = small_font
-        suit_large_font = card_font
+    
+    # ═══════════════════════════════════════════════════════════════
+    # HELPER: Draw suit shape at given position and size
+    # ═══════════════════════════════════════════════════════════════
+    def draw_suit_shape(cx, cy, size, suit_char, color):
+        """Draw a suit symbol using shapes instead of fonts."""
+        if suit_char == "♥":  # Heart
+            # Heart shape using two circles and a triangle
+            r = size // 3
+            # Left circle
+            draw.ellipse([cx - r - r//2, cy - r, cx + r//2 - r//2, cy + r], fill=color)
+            # Right circle
+            draw.ellipse([cx - r//2 + r//2, cy - r, cx + r + r//2, cy + r], fill=color)
+            # Bottom triangle
+            draw.polygon([
+                (cx - r - r//2, cy),
+                (cx + r + r//2, cy),
+                (cx, cy + size - r//2)
+            ], fill=color)
+        elif suit_char == "♦":  # Diamond
+            draw.polygon([
+                (cx, cy - size//2),
+                (cx + size//3, cy),
+                (cx, cy + size//2),
+                (cx - size//3, cy)
+            ], fill=color)
+        elif suit_char == "♣":  # Club
+            r = size // 4
+            # Three circles
+            draw.ellipse([cx - r, cy - size//3 - r, cx + r, cy - size//3 + r], fill=color)  # Top
+            draw.ellipse([cx - size//3 - r, cy - r, cx - size//3 + r, cy + r], fill=color)  # Left
+            draw.ellipse([cx + size//3 - r, cy - r, cx + size//3 + r, cy + r], fill=color)  # Right
+            # Stem
+            stem_w = size // 6
+            draw.polygon([
+                (cx - stem_w, cy),
+                (cx + stem_w, cy),
+                (cx + stem_w + 2, cy + size//2),
+                (cx - stem_w - 2, cy + size//2)
+            ], fill=color)
+        elif suit_char == "♠":  # Spade
+            # Inverted heart + stem
+            r = size // 3
+            # Left circle
+            draw.ellipse([cx - r - r//2, cy - r + r//2, cx + r//2 - r//2, cy + r + r//2], fill=color)
+            # Right circle
+            draw.ellipse([cx - r//2 + r//2, cy - r + r//2, cx + r + r//2, cy + r + r//2], fill=color)
+            # Top triangle (inverted)
+            draw.polygon([
+                (cx - r - r//2, cy + r//2),
+                (cx + r + r//2, cy + r//2),
+                (cx, cy - size//2)
+            ], fill=color)
+            # Stem
+            stem_w = size // 6
+            draw.polygon([
+                (cx - stem_w, cy + r//2),
+                (cx + stem_w, cy + r//2),
+                (cx + stem_w + 2, cy + size//2),
+                (cx - stem_w - 2, cy + size//2)
+            ], fill=color)
     
     # ═══════════════════════════════════════════════════════════════
     # TOP-LEFT CORNER: Rank + Small Suit (stacked vertically)
     # ═══════════════════════════════════════════════════════════════
-    corner_padding = 7
+    corner_padding = 8
     corner_x = x + corner_padding
     corner_y = y + corner_padding
     
-    # Rank text (centered in corner area)
+    # Rank text
     rank_bbox = draw.textbbox((0, 0), rank, font=rank_font)
     rank_w = rank_bbox[2] - rank_bbox[0]
     rank_h = rank_bbox[3] - rank_bbox[1]
     
-    # Center the rank horizontally in corner
-    rank_x = corner_x + (12 - rank_w) // 2 if rank != "10" else corner_x - 2
+    rank_x = corner_x + (14 - rank_w) // 2 if rank != "10" else corner_x - 2
     draw.text((rank_x, corner_y), rank, fill=suit_color, font=rank_font)
     
-    # Small suit below rank (centered)
-    suit_small_bbox = draw.textbbox((0, 0), suit, font=suit_small_font)
-    suit_small_w = suit_small_bbox[2] - suit_small_bbox[0]
-    suit_small_x = corner_x + (12 - suit_small_w) // 2
-    draw.text((suit_small_x, corner_y + rank_h + 1), suit, fill=suit_color, font=suit_small_font)
+    # Small suit below rank (drawn shape)
+    small_suit_size = max(10, int(w * 0.14))
+    small_suit_cx = corner_x + 7
+    small_suit_cy = corner_y + rank_h + small_suit_size // 2 + 2
+    draw_suit_shape(small_suit_cx, small_suit_cy, small_suit_size, suit, suit_color)
     
     # ═══════════════════════════════════════════════════════════════
     # CENTER: Large Decorative Suit Symbol
     # ═══════════════════════════════════════════════════════════════
-    suit_bbox = draw.textbbox((0, 0), suit, font=suit_large_font)
-    suit_w = suit_bbox[2] - suit_bbox[0]
-    suit_h = suit_bbox[3] - suit_bbox[1]
-    center_x = x + (w - suit_w) // 2
-    center_y = y + (h - suit_h) // 2
+    large_suit_size = max(28, int(w * 0.45))
+    center_x = x + w // 2
+    center_y = y + h // 2
     
-    # Draw large center suit with slight shadow for depth
-    draw.text((center_x + 1, center_y + 1), suit, fill=(200, 200, 200), font=suit_large_font)
-    draw.text((center_x, center_y), suit, fill=suit_color, font=suit_large_font)
+    # Draw shadow
+    draw_suit_shape(center_x + 1, center_y + 1, large_suit_size, suit, (200, 200, 200))
+    # Draw main suit
+    draw_suit_shape(center_x, center_y, large_suit_size, suit, suit_color)
     
     # ═══════════════════════════════════════════════════════════════
     # BOTTOM-RIGHT CORNER: Rank + Small Suit (inverted position)
     # ═══════════════════════════════════════════════════════════════
-    br_corner_x = x + w - corner_padding - 12
-    br_corner_y = y + h - corner_padding - rank_h - suit_small_bbox[3] - 3
+    br_corner_x = x + w - corner_padding - 14
+    br_corner_y = y + h - corner_padding - rank_h - small_suit_size - 6
     
-    # Small suit on top (in bottom-right, it's inverted)
-    br_suit_x = br_corner_x + (12 - suit_small_w) // 2
-    draw.text((br_suit_x, br_corner_y), suit, fill=suit_color, font=suit_small_font)
+    # Small suit on top
+    br_suit_cx = br_corner_x + 7
+    br_suit_cy = br_corner_y + small_suit_size // 2
+    draw_suit_shape(br_suit_cx, br_suit_cy, small_suit_size, suit, suit_color)
     
     # Rank below suit
-    br_rank_x = br_corner_x + (12 - rank_w) // 2 if rank != "10" else br_corner_x - 2
-    draw.text((br_rank_x, br_corner_y + suit_small_bbox[3] + 1), rank, fill=suit_color, font=rank_font)
+    br_rank_x = br_corner_x + (14 - rank_w) // 2 if rank != "10" else br_corner_x - 2
+    draw.text((br_rank_x, br_corner_y + small_suit_size + 2), rank, fill=suit_color, font=rank_font)
 
 
 async def generate_gambling_stats_image(user_name: str, avatar_url: str, stats: dict) -> io.BytesIO:

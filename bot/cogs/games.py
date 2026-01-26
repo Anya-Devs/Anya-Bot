@@ -715,6 +715,101 @@ class Games(commands.Cog):
             logger.error(f"Error resetting session claims: {e}")
 
     # ===================================================================
+    # FISHING SESSION TRACKING (Similar to Gacha)
+    # ===================================================================
+    
+    async def get_fish_session_uses(self, user_id: str, guild_id: str) -> int:
+        """Get the number of fish attempts in the current fishing session."""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.fish_session_uses": 1, f"members.{user_id}.fish_session_start": 1}
+            )
+            if result:
+                member_data = result.get("members", {}).get(user_id, {})
+                session_start = member_data.get("fish_session_start")
+                uses = member_data.get("fish_session_uses", 0)
+                
+                # Check if session is still valid (within cooldown period)
+                if session_start:
+                    from datetime import datetime, timezone, timedelta
+                    fish_config = get_timer_config("fish")
+                    cooldown_seconds = fish_config["cooldown"]
+                    
+                    # Ensure session_start is timezone-aware
+                    if session_start.tzinfo is None:
+                        session_start = session_start.replace(tzinfo=timezone.utc)
+                    
+                    session_expiry = session_start + timedelta(seconds=cooldown_seconds)
+                    
+                    if datetime.now(timezone.utc) > session_expiry:
+                        # Session expired, reset uses
+                        await self.reset_fish_session(user_id, guild_id)
+                        return 0
+                
+                return uses
+        except Exception as e:
+            logger.error(f"Error getting fish session uses: {e}")
+        return 0
+    
+    async def increment_fish_session(self, user_id: str, guild_id: str):
+        """Increment the number of fish attempts in the current session."""
+        try:
+            from datetime import datetime, timezone
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            
+            # Check if session exists
+            result = await server_col.find_one(
+                {"guild_id": guild_id},
+                {f"members.{user_id}.fish_session_start": 1}
+            )
+            
+            session_start = result.get("members", {}).get(user_id, {}).get("fish_session_start") if result else None
+            
+            if not session_start:
+                # Start new session
+                await server_col.update_one(
+                    {"guild_id": guild_id},
+                    {
+                        "$set": {
+                            f"members.{user_id}.fish_session_start": datetime.now(timezone.utc),
+                            f"members.{user_id}.fish_session_uses": 1
+                        }
+                    },
+                    upsert=True
+                )
+            else:
+                # Increment existing session
+                await server_col.update_one(
+                    {"guild_id": guild_id},
+                    {"$inc": {f"members.{user_id}.fish_session_uses": 1}},
+                    upsert=True
+                )
+        except Exception as e:
+            logger.error(f"Error incrementing fish session: {e}")
+    
+    async def reset_fish_session(self, user_id: str, guild_id: str):
+        """Reset fishing session uses."""
+        try:
+            db = self.quest_data.mongoConnect[self.quest_data.DB_NAME]
+            server_col = db["Servers"]
+            await server_col.update_one(
+                {"guild_id": guild_id},
+                {
+                    "$unset": {
+                        f"members.{user_id}.fish_session_uses": "",
+                        f"members.{user_id}.fish_session_start": ""
+                    }
+                },
+                upsert=True
+            )
+        except Exception as e:
+            logger.error(f"Error resetting fish session: {e}")
+
+    # ===================================================================
     # GACHA SYSTEM - EXTREMELY RARE (Shiny Pokemon level)
     # ===================================================================
     
@@ -3586,6 +3681,7 @@ class Games(commands.Cog):
             "players": {},
             "channel": ctx.channel,
             "guild_id": guild_id,
+            "host_id": str(ctx.author.id),
             "started": False,
             "game_msg": None
         }
@@ -3751,10 +3847,23 @@ class Games(commands.Cog):
             winner = await self.bot.fetch_user(int(winner_user_id))
             winner_name = winner.display_name
             
+            # Calculate and award winner reward (10% + 250 of host's balance)
+            guild_id = game.get("guild_id")
+            host_id = game.get("host_id")
+            reward = 250  # Base reward
+            
+            if host_id and guild_id:
+                try:
+                    host_balance = await self.quest_data.get_balance(host_id, guild_id)
+                    reward = int(host_balance * 0.10) + 250
+                    await self.quest_data.add_balance(winner_user_id, guild_id, reward)
+                except Exception as e:
+                    logger.error(f"Error calculating hangman reward: {e}")
+            
             # Send notification to channel
             embed = discord.Embed(
                 title="🏆 Hangman Game Won!",
-                description=f"**{winner_name}** solved the word first!\n\n**Word:** `{game['word']}`\n\nGame ended automatically for all players.",
+                description=f"**{winner_name}** solved the word first!\n\n**Word:** `{game['word']}`\n**Reward:** +{reward:,} points\n\nGame ended automatically for all players.",
                 color=discord.Color.green()
             )
             await channel.send(embed=embed)
@@ -3815,6 +3924,7 @@ class Games(commands.Cog):
             "players": {},
             "channel": ctx.channel,
             "guild_id": guild_id,
+            "host_id": str(ctx.author.id),
             "started": False,
             "game_msg": None
         }
@@ -3953,6 +4063,19 @@ class Games(commands.Cog):
         except:
             winner_mention = f"<@{winner_id}>"
             winner_name = "Unknown"
+        
+        # Calculate and award winner reward (10% + 250 of host's balance)
+        guild_id = game.get("guild_id")
+        host_id = game.get("host_id")
+        reward = 250  # Base reward
+        
+        if host_id and guild_id:
+            try:
+                host_balance = await self.quest_data.get_balance(host_id, guild_id)
+                reward = int(host_balance * 0.10) + 250
+                await self.quest_data.add_balance(winner_id, guild_id, reward)
+            except Exception as e:
+                logger.error(f"Error calculating wordle reward: {e}")
         
         # End game for all other players - delete old DM and send new final one
         for user_id, player_data in game["players"].items():
@@ -4835,8 +4958,7 @@ class Games(commands.Cog):
         self.correct_emojis[ctx.channel.id] = chosen
 
         embed = discord.Embed(
-            title=f"🧠 Level {streak + 1}",
-            description=f"Remember this emoji: {chosen}\n\nStreak: **{streak}** 🔥\nTime: **{play_time:.1f}s** ⏱️",
+            description=f"```Remember this emoji: {chosen}```\n\nStreak: **{streak}**\nTime: **{play_time:.1f}s**",
             color=primary_color()
         )
         msg = await ctx.reply(embed=embed, mention_author=False)
@@ -4863,26 +4985,11 @@ class Games(commands.Cog):
             passed = await asyncio.wait_for(view.wait(), timeout=play_time)
             
             if passed:
-                 # Interaction handled by View
-                 pass
-                 
-        except asyncio.TimeoutError:
-            # Time's up!
-            timeout_embed = discord.Embed(
-                title="⏰ Time's Up...",
-                description=f"||You didn't click {chosen} in time! Streak lost.||",
-                color=discord.Color.red()
-            )
-            # Disable view
-            for child in view.children:
-                child.disabled = True
-            await msg.edit(embed=timeout_embed, view=view)
+                # Interaction handled by View
+                pass
+        except Exception as e:
+            print(e)
             
-            # Reset streak logic (if not handled by View logic? 
-            # View likely resets on wrong answer, but here we enforce timeout reset)
-            # Safest is to let View handle it if possible, but we can force reset here.
-            await reaction_data.mongo.streaks.delete_one({"user_id": ctx.author.id, "guild_id": ctx.guild.id})
-    
     @reaction_group.command(name="leaderboard", aliases=["lb"])
     async def reaction_leaderboard(self, ctx):
         """🏆 View reaction streak leaderboard"""
@@ -5877,10 +5984,29 @@ class Games(commands.Cog):
         return new_dur, new_dur <= 0
 
     @commands.command(name="fish", aliases=["fishing"])
-    @commands.cooldown(1, 15, commands.BucketType.user)
     async def fish_cmd(self, ctx, bait: str = None):
-        """🎣 Go fishing! Rod breaks on fails."""
+        """🎣 Go fishing! Rod breaks on fails. Limited to 5 fish per hour."""
         user_id, guild_id = str(ctx.author.id), str(ctx.guild.id)
+        
+        # Check if user has reached fish session limit (similar to gacha)
+        fish_config = get_timer_config("fish")
+        max_fish = fish_config["max_uses"]
+        session_uses = await self.get_fish_session_uses(user_id, guild_id)
+        
+        if session_uses >= max_fish:
+            # Check remaining cooldown time
+            remaining = await self.check_cooldown(user_id, "fish_main", fish_config["cooldown"], guild_id)
+            if remaining:
+                wait_time = self.format_time(remaining)
+                message = (
+                    f"⏰ **Fishing is cooling down!** Wait **{wait_time}** before fishing again.\n"
+                    f"> You've used all **{max_fish} fishing attempts** this session. Please wait to fish again."
+                )
+                return await ctx.reply(message, mention_author=False)
+            else:
+                # Cooldown expired, reset session
+                await self.reset_fish_session(user_id, guild_id)
+        
         inv = await self.get_fishing_inventory(user_id, guild_id)
         
         if not inv.get("rod"):
@@ -6063,7 +6189,7 @@ class Games(commands.Cog):
             if v["type"] == "bait":
                 bait_lines.append(f"{v['emoji']} **{v['name']}** - {v['price']} pts/ea\n*{v.get('description', '')}*")
         embed.add_field(
-            name="🪱 Bait (Consumable)",
+            name="Bait (Consumable)",
             value="\n\n".join(bait_lines),
             inline=False
         )
@@ -6074,7 +6200,7 @@ class Games(commands.Cog):
             if v["type"] == "rod":
                 rod_lines.append(f"🎣 **{v['name']}** - {v['price']:,} pts\n*{v.get('description', '')}*")
         embed.add_field(
-            name="🎣 Fishing Rods (Permanent)",
+            name="Fishing Rods (Permanent)",
             value="\n\n".join(rod_lines),
             inline=False
         )
@@ -6085,7 +6211,7 @@ class Games(commands.Cog):
             if v["type"] == "hook" and v["price"] > 0:
                 hook_lines.append(f"🪝 **{v['name']}** - {v['price']:,} pts\n*{v.get('description', '')}*")
         embed.add_field(
-            name="🪝 Hooks (Permanent)",
+            name="Hooks (Permanent)",
             value="\n\n".join(hook_lines),
             inline=False
         )
@@ -6285,7 +6411,7 @@ class FishingGameView(discord.ui.View):
             color=discord.Color.red()
         )
         
-        for c in self.children: c.disabled = True
+        self.clear_items()
         await self.message.edit(embed=embed, view=self)
         self.stop()
 
@@ -6294,7 +6420,7 @@ class FishingGameView(discord.ui.View):
         if interaction.user.id != self.user.id or not self.fish_appeared: return
         self.caught = True
         if self.catch_task: self.catch_task.cancel()
-        for c in self.children: c.disabled = True
+        self.clear_items()
         
         fish = self.current_fish
         rarity = fish['rarity']
@@ -6330,6 +6456,9 @@ class FishingGameView(discord.ui.View):
             },
             upsert=True
         )
+        
+        # Increment fish session uses (for cooldown tracking)
+        await self.cog.increment_fish_session(user_id, self.guild_id)
         
         # Get updated species count
         result = await db["Servers"].find_one({"guild_id": self.guild_id}, {f"members.{user_id}.fishing_stats": 1})

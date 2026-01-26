@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="trophyGold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFD700"/>
+      <stop offset="50%" style="stop-color:#FFA500"/>
+      <stop offset="100%" style="stop-color:#FFD700"/>
+    </linearGradient>
+    <filter id="trophyGlow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Cup body -->
+  <path d="M16 8H48V12C48 24 44 36 32 40C20 36 16 24 16 12V8Z" fill="url(#trophyGold)" filter="url(#trophyGlow)"/>
+  <!-- Left handle -->
+  <path d="M16 12H12C8 12 6 16 6 20C6 24 8 28 12 28H16" fill="none" stroke="url(#trophyGold)" stroke-width="4" stroke-linecap="round"/>
+  <!-- Right handle -->
+  <path d="M48 12H52C56 12 58 16 58 20C58 24 56 28 52 28H48" fill="none" stroke="url(#trophyGold)" stroke-width="4" stroke-linecap="round"/>
+  <!-- Stem -->
+  <rect x="28" y="40" width="8" height="10" fill="url(#trophyGold)"/>
+  <!-- Base -->
+  <rect x="20" y="50" width="24" height="6" rx="2" fill="url(#trophyGold)"/>
+  <!-- Shine -->
+  <ellipse cx="26" cy="18" rx="4" ry="8" fill="#FFF5CC" opacity="0.6"/>
+</svg>

@@ -170,6 +170,7 @@ TIMER_CONFIG = {
     "crime": {"max_uses": 3, "command_cooldown": 5, "cooldown": 3600},
     "gacha": {"max_uses": 100 if ut else 5, "command_cooldown": 5, "cooldown": 1800},
     "claim": {"max_uses": 1, "command_cooldown": 5, "cooldown": 86400},
+    "fish": {"max_uses": 5, "command_cooldown": 5, "cooldown": 3600},  # 5 fish per hour
 }
 
 def get_timer_config(command: str) -> dict:
@@ -306,7 +307,7 @@ GACHA_API_CONFIG = {
     },
 }
 
-GACHA_COST = 1000
+GACHA_COST = 25
 GACHA_CARDS_PER_DRAW = 3
 GACHA_CLAIM_TIMEOUT = 30
 

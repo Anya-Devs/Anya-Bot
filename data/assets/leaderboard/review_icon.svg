@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="reviewPink" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF69B4"/>
+      <stop offset="100%" style="stop-color:#FF1493"/>
+    </linearGradient>
+  </defs>
+  <!-- Chat bubble -->
+  <path d="M4 6C4 4.89543 4.89543 4 6 4H26C27.1046 4 28 4.89543 28 6V20C28 21.1046 27.1046 22 26 22H12L6 28V22H6C4.89543 22 4 21.1046 4 20V6Z" fill="#1a1a2e" stroke="url(#reviewPink)" stroke-width="1.5"/>
+  <!-- Stars -->
+  <path d="M10 12L11 14.5L13.5 14.5L11.5 16L12.5 18.5L10 17L7.5 18.5L8.5 16L6.5 14.5L9 14.5L10 12Z" fill="#FFD700"/>
+  <path d="M18 12L19 14.5L21.5 14.5L19.5 16L20.5 18.5L18 17L15.5 18.5L16.5 16L14.5 14.5L17 14.5L18 12Z" fill="#FFD700"/>
+</svg>

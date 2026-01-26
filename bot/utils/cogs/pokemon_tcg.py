@@ -1,14 +1,15 @@
 """
 Pokemon TCG Card View UI
-Handles the interactive card browsing interface with pagination and sorting
+Handles the interactive card browsing interface with paginated select dropdowns
 """
 
 import discord
 import random
+import math
 
 
 class PokemonTCGCardView(discord.ui.View):
-    """Navigation view for Pokemon TCG cards with pricing and sorting"""
+    """Navigation view for Pokemon TCG cards with paginated select dropdowns"""
     
     def __init__(self, ctx, cards: list, pokemon_name: str):
         super().__init__(timeout=180)
@@ -16,18 +17,44 @@ class PokemonTCGCardView(discord.ui.View):
         self.cards = cards
         self.pokemon_name = pokemon_name
         self.current_index = 0
+        self.current_page = 0
         self.message = None
         self.sort_mode = "price"  # price, rarity, set, name
+        self.items_per_page = 25  # Discord select menu limit
         
-        # Update button states
-        self.update_buttons()
+        # Calculate total pages
+        self.total_pages = math.ceil(len(self.cards) / self.items_per_page)
+        
+        # Build the view with select and navigation
+        self.rebuild_view()
     
-    def update_buttons(self):
-        """Update button states based on current index"""
-        # Disable prev/next if at boundaries
-        self.children[0].disabled = len(self.cards) <= 1  # Prev
-        self.children[2].disabled = len(self.cards) <= 1  # Next
-        self.children[1].disabled = len(self.cards) <= 1  # Random
+    def rebuild_view(self):
+        """Rebuild the view with current page's select menu"""
+        self.clear_items()
+        
+        if not self.cards:
+            return
+        
+        # Add card select dropdown for current page
+        start_idx = self.current_page * self.items_per_page
+        end_idx = min(start_idx + self.items_per_page, len(self.cards))
+        page_cards = self.cards[start_idx:end_idx]
+        
+        if page_cards:
+            select = CardSelectDropdown(self, page_cards, start_idx)
+            self.add_item(select)
+        
+        # Add pagination buttons if multiple pages
+        if self.total_pages > 1:
+            self.add_item(PrevPageButton())
+            self.add_item(PageInfoButton(self.current_page + 1, self.total_pages))
+            self.add_item(NextPageButton())
+        
+        # Add sort button
+        self.add_item(SortButton())
+        
+        # Add random button
+        self.add_item(RandomButton())
     
     def build_embed(self):
         """Build embed for current card"""
@@ -157,57 +184,217 @@ class PokemonTCGCardView(discord.ui.View):
         elif self.sort_mode == "name":
             self.cards.sort(key=lambda x: x.get("name", ""))
     
-    @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary)
-    async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.ctx.author.id:
+    async def on_timeout(self):
+        """Disable all components when the view times out"""
+        try:
+            for child in self.children:
+                child.disabled = True
+            
+            if self.message:
+                await self.message.edit(view=self)
+        except discord.NotFound:
+            pass  # Message was deleted
+        except:
+            pass  # Silently handle other errors
+
+
+class CardSelectDropdown(discord.ui.Select):
+    """Select dropdown for choosing cards from current page"""
+    
+    def __init__(self, view: PokemonTCGCardView, cards: list, start_idx: int):
+        self.parent_view = view
+        
+        # Build options from cards
+        options = []
+        for i, card in enumerate(cards):
+            card_idx = start_idx + i
+            name = card.get("name", "Unknown")
+            card_set = card.get("set", {}).get("name", "Unknown Set")
+            rarity = card.get("rarity", "Common")
+            
+            # Get price for label
+            price_val = card.get("_price_sort", 0)
+            price_str = f"${price_val:.2f}" if price_val > 0 else "N/A"
+            
+            # Rarity emoji
+            rarity_emoji = {
+                "Common": "⚪", "Uncommon": "🟢", "Rare": "🔵",
+                "Rare Holo": "🟣", "Rare Ultra": "🔴", "Rare Secret": "🟡",
+                "Rare Rainbow": "🌈", "Amazing Rare": "⭐", "Radiant Rare": "✨"
+            }.get(rarity, "⚪")
+            
+            label = f"{name[:50]}"  # Limit to 50 chars
+            description = f"{rarity_emoji} {rarity} • {card_set[:30]} • {price_str}"[:100]
+            
+            options.append(discord.SelectOption(
+                label=label,
+                description=description,
+                value=str(card_idx)
+            ))
+        
+        super().__init__(
+            placeholder=f"Select a card ({start_idx + 1}-{start_idx + len(cards)} of {len(view.cards)})",
+            options=options,
+            row=0
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.parent_view.ctx.author.id:
             return await interaction.response.send_message("This isn't your card browser!", ephemeral=True)
         
-        self.current_index = (self.current_index - 1) % len(self.cards)
-        embed = self.build_embed()
-        await interaction.response.edit_message(embed=embed, view=self)
+        # Update current index
+        self.parent_view.current_index = int(self.values[0])
+        
+        # Update page if needed
+        self.parent_view.current_page = self.parent_view.current_index // self.parent_view.items_per_page
+        
+        # Rebuild view and update message
+        self.parent_view.rebuild_view()
+        embed = self.parent_view.build_embed()
+        await interaction.response.edit_message(embed=embed, view=self.parent_view)
+
+
+class PrevPageButton(discord.ui.Button):
+    """Button to go to previous page"""
     
-    @discord.ui.button(label="Random", style=discord.ButtonStyle.primary)
-    async def random_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.ctx.author.id:
+    def __init__(self):
+        super().__init__(label="◀ Prev Page", style=discord.ButtonStyle.secondary, row=1)
+    
+    async def callback(self, interaction: discord.Interaction):
+        view: PokemonTCGCardView = self.view
+        
+        if interaction.user.id != view.ctx.author.id:
             return await interaction.response.send_message("This isn't your card browser!", ephemeral=True)
         
-        self.current_index = random.randint(0, len(self.cards) - 1)
-        embed = self.build_embed()
-        await interaction.response.edit_message(embed=embed, view=self)
+        # Go to previous page
+        view.current_page = (view.current_page - 1) % view.total_pages
+        view.rebuild_view()
+        
+        # Update current index to first card of new page
+        view.current_index = view.current_page * view.items_per_page
+        
+        embed = view.build_embed()
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
+class PageInfoButton(discord.ui.Button):
+    """Button showing current page info (disabled, for display only)"""
     
-    @discord.ui.button(label="Next", style=discord.ButtonStyle.secondary)
-    async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.ctx.author.id:
+    def __init__(self, current_page: int, total_pages: int):
+        super().__init__(
+            label=f"Page {current_page}/{total_pages}",
+            style=discord.ButtonStyle.secondary,
+            disabled=True,
+            row=1
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        pass  # Disabled button, no action
+
+
+class NextPageButton(discord.ui.Button):
+    """Button to go to next page"""
+    
+    def __init__(self):
+        super().__init__(label="Next Page ▶", style=discord.ButtonStyle.secondary, row=1)
+    
+    async def callback(self, interaction: discord.Interaction):
+        view: PokemonTCGCardView = self.view
+        
+        if interaction.user.id != view.ctx.author.id:
             return await interaction.response.send_message("This isn't your card browser!", ephemeral=True)
         
-        self.current_index = (self.current_index + 1) % len(self.cards)
-        embed = self.build_embed()
-        await interaction.response.edit_message(embed=embed, view=self)
+        # Go to next page
+        view.current_page = (view.current_page + 1) % view.total_pages
+        view.rebuild_view()
+        
+        # Update current index to first card of new page
+        view.current_index = view.current_page * view.items_per_page
+        
+        embed = view.build_embed()
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
+class SortButton(discord.ui.Button):
+    """Button to cycle through sort modes"""
     
-    @discord.ui.button(label="Sort", style=discord.ButtonStyle.success)
-    async def sort_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.ctx.author.id:
+    def __init__(self):
+        super().__init__(label="🔄 Sort", style=discord.ButtonStyle.success, row=2)
+    
+    async def callback(self, interaction: discord.Interaction):
+        view: PokemonTCGCardView = self.view
+        
+        if interaction.user.id != view.ctx.author.id:
             return await interaction.response.send_message("This isn't your card browser!", ephemeral=True)
         
         # Cycle through sort modes
         sort_modes = ["price", "rarity", "set", "name"]
-        current_idx = sort_modes.index(self.sort_mode)
-        self.sort_mode = sort_modes[(current_idx + 1) % len(sort_modes)]
+        current_idx = sort_modes.index(view.sort_mode)
+        view.sort_mode = sort_modes[(current_idx + 1) % len(sort_modes)]
         
         # Re-sort cards
-        self.sort_cards()
-        self.current_index = 0  # Reset to first card after sorting
+        view.sort_cards()
+        view.current_index = 0
+        view.current_page = 0
+        view.rebuild_view()
         
-        embed = self.build_embed()
-        await interaction.response.edit_message(embed=embed, view=self)
+        embed = view.build_embed()
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
+class RandomButton(discord.ui.Button):
+    """Button to jump to random card"""
     
-    async def on_timeout(self):
-        """Disable all buttons when the view times out"""
-        for child in self.children:
-            child.disabled = True
+    def __init__(self):
+        super().__init__(label="🎲 Random", style=discord.ButtonStyle.primary, row=2)
+    
+    async def callback(self, interaction: discord.Interaction):
+        view: PokemonTCGCardView = self.view
         
-        if self.message:
+        if interaction.user.id != view.ctx.author.id:
+            return await interaction.response.send_message("This isn't your card browser!", ephemeral=True)
+        
+        # Pick random card
+        view.current_index = random.randint(0, len(view.cards) - 1)
+        view.current_page = view.current_index // view.items_per_page
+        view.rebuild_view()
+        
+        embed = view.build_embed()
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
+class CardBrowserButtonView(discord.ui.View):
+    """View with a button that opens an ephemeral card browser"""
+    
+    def __init__(self, ctx, cards: list, pokemon_name: str):
+        super().__init__(timeout=180)
+        self.ctx = ctx
+        self.cards = cards
+        self.pokemon_name = pokemon_name
+    
+    @discord.ui.button(label="📋 Browse All Cards", style=discord.ButtonStyle.primary, row=0)
+    async def browse_cards_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            return await interaction.response.send_message("This isn't your card search!", ephemeral=True)
+        
+        try:
+            # Create the paginated select view
+            browser_view = PokemonTCGCardView(self.ctx, self.cards, self.pokemon_name)
+            browser_embed = browser_view.build_embed()
+            
+            # Send ephemeral message with select UI
+            await interaction.response.send_message(
+                embed=browser_embed,
+                view=browser_view,
+                ephemeral=True
+            )
+            
+            # Store message reference for timeout handling
+            browser_view.message = await interaction.original_response()
+        except discord.NotFound:
+            pass  # Interaction expired
+        except Exception as e:
             try:
-                await self.message.edit(view=self)
+                await interaction.response.send_message(f"❌ Error loading card browser: {e}", ephemeral=True)
             except:
                 pass

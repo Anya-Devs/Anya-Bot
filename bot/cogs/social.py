@@ -105,51 +105,100 @@ class Social(commands.Cog):
         except: pass
         return None
 
-    def _ship_img(self, av1, av2, pct):
-        img = Image.new("RGB", (400, 150), (30, 30, 40))
-        draw = ImageDraw.Draw(img)
-        for av, x in [(av1, 30), (av2, 270)]:
-            if av:
-                mask = Image.new("L", (100, 100), 0)
-                ImageDraw.Draw(mask).ellipse([0, 0, 100, 100], fill=255)
-                av = av.resize((100, 100))
-                img.paste(av, (x, 25), mask)
+    def _draw_heart(self, draw, cx, cy, size, color, percentage=100):
+        """Draw a proper heart shape centered at (cx, cy) with given size and optional fill percentage."""
+        import math
+        # Heart parametric equation points
+        points = []
+        for i in range(100):
+            t = i * 2 * math.pi / 100
+            # Heart parametric equations
+            x = 16 * (math.sin(t) ** 3)
+            y = -(13 * math.cos(t) - 5 * math.cos(2*t) - 2 * math.cos(3*t) - math.cos(4*t))
+            # Scale and translate
+            px = cx + int(x * size / 32)
+            py = cy + int(y * size / 32)
+            
+            # Only include points below the fill percentage
+            if percentage >= 100:
+                points.append((px, py))
             else:
-                draw.ellipse([x, 25, x+100, 125], fill=(80, 80, 100))
+                # Calculate if this point should be included based on percentage
+                # Heart extends from top to bottom, we want to fill from bottom up
+                heart_height = size * 1.85  # Approximate heart height
+                bottom_y = cy + size * 0.95
+                fill_y = bottom_y - (heart_height * percentage / 100)
+                
+                if py >= fill_y:
+                    points.append((px, py))
         
-        # Draw a proper heart shape
-        hx, hy, hs = 165, 35, 70
-        heart_color = (60, 60, 70)
-        fill_color = (255, 50, 80)
+        if points:
+            draw.polygon(points, fill=color)
+    
+    def _ship_img(self, av1, av2, pct):
+        # Larger canvas to fit full avatars and bigger heart
+        img = Image.new("RGBA", (500, 200), (30, 30, 40, 255))
+        draw = ImageDraw.Draw(img)
         
-        # Heart shape using bezier curves approximation
-        # Left hump
-        draw.ellipse([hx, hy, hx + hs//2, hy + hs//2], fill=heart_color)
-        # Right hump  
-        draw.ellipse([hx + hs//2, hy, hx + hs, hy + hs//2], fill=heart_color)
-        # Bottom point
-        draw.polygon([
-            (hx, hy + hs//4), 
-            (hx + hs, hy + hs//4), 
-            (hx + hs//2, hy + hs)
-        ], fill=heart_color)
+        avatar_size = 100
+        # Position avatars with proper spacing
+        for av, x in [(av1, 30), (av2, 370)]:
+            if av:
+                # Create circular mask for perfect circle
+                mask = Image.new("L", (avatar_size, avatar_size), 0)
+                ImageDraw.Draw(mask).ellipse([0, 0, avatar_size, avatar_size], fill=255)
+                # Resize avatar to fit without cropping
+                av = av.resize((avatar_size, avatar_size), Image.Resampling.LANCZOS)
+                img.paste(av, (x, 30), mask)
+            else:
+                draw.ellipse([x, 30, x+avatar_size, 30+avatar_size], fill=(80, 80, 100))
         
-        # Fill heart based on percentage
+        # Heart position and size (much bigger and centered)
+        hx, hy, hs = 250, 75, 85  # center x, center y, size
+        
+        # Draw gray background heart (always 100% filled)
+        gray_color = (60, 60, 70)
+        self._draw_heart(draw, hx, hy, hs, gray_color, percentage=100)
+        
+        # Draw filled heart overlay based on percentage
         if pct > 0:
-            fill_height = int(hs * pct / 100)
-            # Fill from bottom up
-            for py in range(hy + hs - fill_height, hy + hs):
-                for px in range(hx, hx + hs):
-                    try:
-                        if img.getpixel((px, py)) == heart_color: 
-                            img.putpixel((px, py), fill_color)
-                    except: 
-                        pass
+            # Color gradient based on percentage
+            if pct >= 80:
+                fill_color = (255, 50, 100)  # Hot pink/red
+            elif pct >= 60:
+                fill_color = (255, 100, 120)  # Pink
+            elif pct >= 40:
+                fill_color = (255, 150, 100)  # Peachy
+            elif pct >= 20:
+                fill_color = (200, 150, 100)  # Muted
+            else:
+                fill_color = (150, 100, 100)  # Dull
+            
+            # Draw filled heart with percentage (no mask that affects avatars)
+            self._draw_heart(draw, hx, hy, hs, fill_color, percentage=pct)
         
-        # Percentage text
-        draw.text((hx + 25, hy + hs + 5), f"{pct}%", fill=(255, 255, 255))
+        # Percentage text centered below heart
+        try:
+            from pathlib import Path
+            font_path = Path("data/assets/fonts/Poppins-SemiBold.ttf")
+            if font_path.exists():
+                font = ImageFont.truetype(str(font_path), 22)
+            else:
+                font = ImageFont.load_default()
+        except:
+            font = ImageFont.load_default()
+        
+        text = f"{pct}%"
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_w = bbox[2] - bbox[0]
+        draw.text((hx - text_w // 2, hy + hs + 5), text, fill=(255, 255, 255), font=font)
+        
+        # Convert to RGB for saving
+        rgb_img = Image.new("RGB", img.size, (30, 30, 40))
+        rgb_img.paste(img, (0, 0), img)
+        
         buf = io.BytesIO()
-        img.save(buf, format="PNG")
+        rgb_img.save(buf, format="PNG")
         buf.seek(0)
         return buf
 
@@ -220,8 +269,8 @@ class Social(commands.Cog):
                 px, py = pos[nd["partner"]][0] + ox, pos[nd["partner"]][1] + oy
                 mid_x = (x + nw + px) // 2
                 draw.line([(x + nw, y + nh//2), (px, py + nh//2)], fill=spouse_line, width=4)
-                # Heart symbol in middle
-                draw.text((mid_x - 5, y + nh//2 - 8), "♥", fill=spouse_line)
+                # Simple line indicator
+                draw.text((mid_x - 2, y + nh//2 - 8), "—", fill=spouse_line)
             
             # Friend lines (green, dashed)
             if nd.get("friends"):
@@ -251,7 +300,7 @@ class Social(commands.Cog):
         for nid in nodes:
             x, y = pos[nid][0] + ox, pos[nid][1] + oy
             m = guild.get_member(int(nid))
-            name = m.display_name[:14] if m else "User"
+            name = m.name[:14] if m else "User"
             is_target = nid == uid
             
             # Card with special border for target user
@@ -284,7 +333,7 @@ class Social(commands.Cog):
         
         # Spouse legend
         draw.line([(290, ly + 15), (320, ly + 15)], fill=spouse_line, width=4)
-        draw.text((325, ly + 5), "♥", fill=spouse_line)
+        draw.text((325, ly + 5), "—", fill=spouse_line)
         draw.text((340, ly + 5), "Partner", fill=spouse_line)
         
         # Friend legend (dashed)
@@ -313,7 +362,7 @@ class Social(commands.Cog):
         embed.set_image(url="attachment://ship.png")
         await ctx.reply(embed=embed, file=discord.File(buf, "ship.png"), mention_author=False)
 
-    @commands.command(name="marry", aliases=["propose", "marriage"])
+    @commands.command(name="marry", aliases=["propose"])
     async def propose_cmd(self, ctx, target: discord.Member):
         if target.id == ctx.author.id or target.bot: return await ctx.reply("Invalid target!", mention_author=False)
         gid, uid, tid = str(ctx.guild.id), str(ctx.author.id), str(target.id)
@@ -341,7 +390,7 @@ class Social(commands.Cog):
         view = AdoptView(self, ctx.author, target, gid)
         view.message = await ctx.send(embed=discord.Embed(title="Adoption Request", description=f"{ctx.author.mention} wants to adopt {target.mention}!", color=discord.Color.blue()), view=view)
 
-    @commands.command(name="makeparent", aliases=["getparent", "findparent"])
+    @commands.command(name="parentme", aliases=["makeparent", "getparent", "askparent"])
     async def makeparent_cmd(self, ctx, target: discord.Member):
         if target.id == ctx.author.id or target.bot: return await ctx.reply("Invalid target!", mention_author=False)
         gid, uid, tid = str(ctx.guild.id), str(ctx.author.id), str(target.id)
@@ -415,7 +464,7 @@ class Social(commands.Cog):
         target = target or ctx.author
         async with ctx.typing():
             buf = await self._tree_img(ctx.guild, str(target.id), full=True)
-        embed = discord.Embed(title=f"{target.display_name}'s Family & Friends Tree", color=discord.Color.green())
+        embed = discord.Embed(title=f"{target.name}'s Family & Friends Tree", color=discord.Color.green())
         embed.set_image(url="attachment://tree.png")
         await ctx.reply(embed=embed, file=discord.File(buf, "tree.png"), mention_author=False)
 
@@ -480,7 +529,7 @@ class Social(commands.Cog):
         rating = "Lightning Fast" if speed >= 95 else "Very Fast" if speed >= 85 else "Fast" if speed >= 70 else "Quick" if speed >= 50 else "Average" if speed >= 30 else "Slow"
         await ctx.reply(embed=discord.Embed(description=f"⚡ **{target.display_name}**'s Speed: **{speed}/100** ({rating})", color=discord.Color.gold()), mention_author=False)
     
-    @commands.command(name="charisma", aliases=["cha"])
+    @commands.command(name="charisma", aliases=["rizz"])
     async def charisma_cmd(self, ctx, target: discord.Member = None):
         target = target or ctx.author
         charisma = await self.data.get_stat(str(ctx.guild.id), str(target.id), "charisma", 1, 100)
@@ -494,12 +543,7 @@ class Social(commands.Cog):
         rating = "Blessed" if luck >= 95 else "Very Lucky" if luck >= 85 else "Lucky" if luck >= 70 else "Fortunate" if luck >= 50 else "Average" if luck >= 30 else "Unlucky"
         await ctx.reply(embed=discord.Embed(description=f"🍀 **{target.display_name}**'s Luck: **{luck}/100** ({rating})", color=discord.Color.green()), mention_author=False)
     
-    @commands.command(name="rizz")
-    async def rizz_cmd(self, ctx, target: discord.Member = None):
-        target = target or ctx.author
-        rizz = await self.data.get_stat(str(ctx.guild.id), str(target.id), "rizz", 1, 100)
-        rating = "Unmatched Rizz" if rizz >= 95 else "Insane Rizz" if rizz >= 85 else "W Rizz" if rizz >= 70 else "Mid Rizz" if rizz >= 50 else "L Rizz" if rizz >= 30 else "No Rizz"
-        await ctx.reply(embed=discord.Embed(description=f"😏 **{target.display_name}**'s Rizz: **{rizz}/100** ({rating})", color=discord.Color.from_rgb(255, 105, 180)), mention_author=False)
+ 
 
 class ProposalView(discord.ui.View):
     def __init__(self, cog, proposer, target, gid):

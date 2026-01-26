@@ -4,11 +4,8 @@ from imports.discord_imports import *
 from datetime import datetime, timezone
 from typing import Optional, Literal, Set
 from io import BytesIO
-from bot.utils.cogs.search import (
-    GoogleSearch, YouTubeSearch, TranslationAPI,
-    DictionaryAPI, ArtGalleryAPI, UrbanDictionaryAPI,
-    SearchViews
-)
+from bot.utils.cogs.search import *
+
 from bot.utils.cogs.art import ART_SOURCES, ArtAggregator
 from data.local.const import primary_color
 import re

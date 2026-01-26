@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="bronzeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#CD7F32"/>
+      <stop offset="50%" style="stop-color:#A0522D"/>
+      <stop offset="100%" style="stop-color:#CD7F32"/>
+    </linearGradient>
+  </defs>
+  <path d="M8 48L4 20L18 32L32 12L46 32L60 20L56 48H8Z" fill="url(#bronzeGrad)"/>
+  <rect x="8" y="48" width="48" height="8" rx="2" fill="url(#bronzeGrad)"/>
+  <circle cx="18" cy="32" r="4" fill="#DEB887"/>
+  <circle cx="32" cy="16" r="5" fill="#DEB887"/>
+  <circle cx="46" cy="32" r="4" fill="#DEB887"/>
+</svg>

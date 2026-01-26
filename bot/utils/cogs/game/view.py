@@ -380,6 +380,12 @@ class GachaClaimView(discord.ui.View):
                     ephemeral=True
                 )
         
+        # Defer the interaction immediately to prevent timeout
+        try:
+            await interaction.response.defer()
+        except discord.InteractionResponded:
+            pass
+        
         self.claimed = True
         self.claimed_indices.append(index)
         self.session_claims += 1  # Increment session claims
@@ -398,7 +404,8 @@ class GachaClaimView(discord.ui.View):
         uid = await self.cog.add_character_to_inventory(user_id, self.guild_id, char)
         
         # Regenerate image with claimed card marked
-        img_buffer = await generate_gacha_draw_image(self.characters, claimed_indices=self.claimed_indices)
+        ownership_info = await self.cog.check_character_ownership(interaction.guild, self.characters)
+        img_buffer = await generate_gacha_draw_image(self.characters, claimed_indices=self.claimed_indices, ownership_info=ownership_info)
         file = discord.File(img_buffer, filename="gacha_claimed.png")
         
         rarity_data = GACHA_RARITY_TIERS.get(char.get("rarity", "common"))
@@ -408,13 +415,14 @@ class GachaClaimView(discord.ui.View):
         info_view = CharacterInfoView(self.cog, char, uid, self.user, self.draws_left, self.guild_id, session_claims=self.session_claims)
         
         try:
-            await interaction.response.edit_message(attachments=[file], view=info_view)
+            # Since we deferred, use edit_original_response
+            await interaction.edit_original_response(attachments=[file], view=info_view)
             # Set the message reference to the interaction's message
             info_view.message = interaction.message
-        except discord.InteractionResponded:
+        except Exception as e:
+            logger.error(f"Error editing message after claim: {e}")
             try:
-                await interaction.followup.send("Character claimed! Check the updated message above.", ephemeral=True)
-                # Try to edit the original message if possible
+                # Fallback: try to edit the original message directly
                 if self.message:
                     await self.message.edit(attachments=[file], view=info_view)
                     info_view.message = self.message

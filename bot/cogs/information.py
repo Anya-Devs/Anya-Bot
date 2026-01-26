@@ -179,14 +179,17 @@ class Information(commands.Cog):
                 except Exception:
                     cards = 0
                 
-                # Get review count
+                # Get average rating (out of 5)
                 reviews = 0
                 try:
-                    review_count = await reviews_col.count_documents({
-                        "target_id": user_id,
-                        "guild_id": guild_id
-                    })
-                    reviews = review_count
+                    # Calculate average rating from all reviews for this user
+                    pipeline = [
+                        {"$match": {"target_id": user_id, "guild_id": guild_id}},
+                        {"$group": {"_id": None, "avg_rating": {"$avg": "$stars"}, "count": {"$sum": 1}}}
+                    ]
+                    result = await reviews_col.aggregate(pipeline).to_list(length=1)
+                    if result and result[0]["count"] > 0:
+                        reviews = result[0]["avg_rating"]  # This will be a float like 4.5
                 except Exception:
                     reviews = 0
                 
